@@ -118,8 +118,8 @@ func (s *service) checkResourceSecretUniqueness(kt *kit.Kit, accountID string) e
 
 // createAccountSecretByVendor creates account secret by vendor.
 func (s *service) createAccountSecretByVendor(kt *kit.Kit, req *proto.AccountSecretCreateReq, vendor enumor.Vendor) (
-	string, error) {
-
+	string, error,
+) {
 	// 资源管理密钥唯一性校验
 	if req.Type == enumor.ResourceSecretType {
 		if err := s.checkResourceSecretUniqueness(kt, req.AccountID); err != nil {
@@ -145,13 +145,12 @@ func (s *service) createAccountSecretByVendor(kt *kit.Kit, req *proto.AccountSec
 	}
 
 	return secretID, nil
-
 }
 
 // createTCloudAccountSecret creates tcloud account secret.
 func (s *service) createTCloudAccountSecret(kt *kit.Kit, req *proto.AccountSecretCreateReq, checkResult interface{}) (
-	string, error) {
-
+	string, error,
+) {
 	ext := new(proto.TCloudAccountSecretExtension)
 	if err := common.DecodeExtension(kt, req.Extension, ext); err != nil {
 		logs.Errorf("decode tcloud extension failed, err: %v, rid: %s", err, kt.Rid)
@@ -213,8 +212,8 @@ func (s *service) createTCloudAccountSecret(kt *kit.Kit, req *proto.AccountSecre
 }
 
 func (s *service) updateTCloudAccountExt(kt *kit.Kit, accountID string,
-	ext *protocloud.TCloudAccountExtensionUpdateReq) error {
-
+	ext *protocloud.TCloudAccountExtensionUpdateReq,
+) error {
 	updateReq := &protocloud.AccountUpdateReq[protocloud.TCloudAccountExtensionUpdateReq]{Extension: ext}
 	if _, err := s.client.DataService().TCloud.Account.Update(kt.Ctx, kt.Header(), accountID, updateReq); err != nil {
 		logs.Errorf("update tcloud account extension failed, account_id: %s, err: %v, rid: %s", accountID, err, kt.Rid)

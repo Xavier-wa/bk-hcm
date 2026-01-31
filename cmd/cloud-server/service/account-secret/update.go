@@ -112,8 +112,8 @@ func (s *service) UpdateBizAccountSecret(cts *rest.Contexts) (interface{}, error
 }
 
 func (s *service) updateAccountSecretByType(kt *kit.Kit, vendor enumor.Vendor, secret *coreas.BaseAccountSecret,
-	req *proto.AccountSecretUpdateReq) error {
-
+	req *proto.AccountSecretUpdateReq,
+) error {
 	finalType := secret.Type
 	if req.Type != nil {
 		finalType = cvt.PtrToVal(req.Type)
@@ -140,8 +140,8 @@ func (s *service) updateAccountSecretByType(kt *kit.Kit, vendor enumor.Vendor, s
 }
 
 func (s *service) updateSecretToRes(kt *kit.Kit, vendor enumor.Vendor, secret *coreas.BaseAccountSecret,
-	req *proto.AccountSecretUpdateReq) error {
-
+	req *proto.AccountSecretUpdateReq,
+) error {
 	// 如果密钥原来不是资源管理类型，需要检验资源密钥的唯一性
 	if secret.Type != enumor.ResourceSecretType {
 		if err := s.checkResourceSecretUniqueness(kt, secret.AccountID); err != nil {
@@ -160,8 +160,8 @@ func (s *service) updateSecretToRes(kt *kit.Kit, vendor enumor.Vendor, secret *c
 }
 
 func (s *service) updateTCloudSecretToRes(kt *kit.Kit, secret *coreas.BaseAccountSecret,
-	req *proto.AccountSecretUpdateReq) error {
-
+	req *proto.AccountSecretUpdateReq,
+) error {
 	// 更新密钥
 	secretExt, err := s.updateTCloudSecret(kt, secret, req)
 	if err != nil {
@@ -185,8 +185,8 @@ func (s *service) updateTCloudSecretToRes(kt *kit.Kit, secret *coreas.BaseAccoun
 }
 
 func (s *service) updateSecretResToNonRes(kt *kit.Kit, vendor enumor.Vendor, secret *coreas.BaseAccountSecret,
-	req *proto.AccountSecretUpdateReq) error {
-
+	req *proto.AccountSecretUpdateReq,
+) error {
 	switch vendor {
 	case enumor.TCloud:
 		return s.updateTCloudSecretResToNonRes(kt, secret, req)
@@ -196,8 +196,8 @@ func (s *service) updateSecretResToNonRes(kt *kit.Kit, vendor enumor.Vendor, sec
 }
 
 func (s *service) updateTCloudSecretResToNonRes(kt *kit.Kit, secret *coreas.BaseAccountSecret,
-	req *proto.AccountSecretUpdateReq) error {
-
+	req *proto.AccountSecretUpdateReq,
+) error {
 	// 更新密钥信息
 	if _, err := s.updateTCloudSecret(kt, secret, req); err != nil {
 		logs.Errorf("update tcloud secret failed, err: %v, secret_id: %s, rid: %s", err, secret.ID, kt.Rid)
@@ -231,8 +231,8 @@ func (s *service) clearTCloudAccountExtension(kt *kit.Kit, accountID string) err
 }
 
 func (s *service) updateSecretNonResToNonRes(kt *kit.Kit, vendor enumor.Vendor, secret *coreas.BaseAccountSecret,
-	req *proto.AccountSecretUpdateReq) error {
-
+	req *proto.AccountSecretUpdateReq,
+) error {
 	switch vendor {
 	case enumor.TCloud:
 		if _, err := s.updateTCloudSecret(kt, secret, req); err != nil {
@@ -246,8 +246,8 @@ func (s *service) updateSecretNonResToNonRes(kt *kit.Kit, vendor enumor.Vendor, 
 }
 
 func (s *service) updateTCloudSecret(kt *kit.Kit, secret *coreas.BaseAccountSecret,
-	req *proto.AccountSecretUpdateReq) (*coreas.TCloudAccountSecretExtension, error) {
-
+	req *proto.AccountSecretUpdateReq,
+) (*coreas.TCloudAccountSecretExtension, error) {
 	secretExt, err := s.getTCloudSecretExt(kt, secret.ID, req)
 	if err != nil {
 		logs.Errorf("get tcloud secret extension failed, err: %v, secret_id: %s, rid: %s", err, secret.ID, kt.Rid)
@@ -276,8 +276,8 @@ func (s *service) updateTCloudSecret(kt *kit.Kit, secret *coreas.BaseAccountSecr
 }
 
 func (s *service) getTCloudSecretExt(kt *kit.Kit, secretID string, req *proto.AccountSecretUpdateReq) (
-	*coreas.TCloudAccountSecretExtension, error) {
-
+	*coreas.TCloudAccountSecretExtension, error,
+) {
 	secret, err := s.getTCloudAccountSecretByID(kt, secretID)
 	if err != nil {
 		logs.Errorf("list account secret failed, err: %v, secret_id: %s, rid: %s", err, secretID, kt.Rid)

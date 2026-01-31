@@ -96,8 +96,8 @@ func (s *service) BatchDeleteBizAccountSecret(cts *rest.Contexts) (interface{}, 
 
 // validAndCollectClearExtAccountIDs validates secrets and collects account ids that need Extension clearing.
 func (s *service) validAndCollectClearExtAccountIDs(kt *kit.Kit, vendor enumor.Vendor, bizID int64,
-	secretIDs []string) ([]string, error) {
-
+	secretIDs []string,
+) ([]string, error) {
 	listReq := &protocloud.AccountSecretListReq{
 		Filter: tools.ExpressionAnd(tools.RuleIn("id", secretIDs)),
 		Page:   core.NewDefaultBasePage(),

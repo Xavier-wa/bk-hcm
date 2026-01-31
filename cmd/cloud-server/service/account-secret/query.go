@@ -53,8 +53,8 @@ func (s *service) getAccountSecretByID(kt *kit.Kit, id string) (*coreas.BaseAcco
 }
 
 func (s *service) getTCloudAccountSecretByID(kt *kit.Kit, id string) (
-	*coreas.AccountSecret[coreas.TCloudAccountSecretExtension], error) {
-
+	*coreas.AccountSecret[coreas.TCloudAccountSecretExtension], error,
+) {
 	req := &protocloud.AccountSecretExtListReq{
 		Filter: tools.EqualExpression("id", id),
 		Page:   core.NewDefaultBasePage(),
@@ -162,8 +162,8 @@ func buildAccountIDsFilter(accountIDs []string) filter.RuleFactory {
 
 // listTCloudAccountSecret list tcloud account secret.
 func (s *service) listTCloudAccountSecret(kt *kit.Kit, filter *filter.Expression, page *core.BasePage) (
-	interface{}, error) {
-
+	interface{}, error,
+) {
 	listReq := &protocloud.AccountSecretExtListReq{Filter: filter, Page: page}
 	secretResp, err := s.client.DataService().TCloud.AccountSecret.ListAccountSecretWithExtension(kt, listReq)
 	if err != nil {

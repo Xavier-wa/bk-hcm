@@ -127,8 +127,8 @@ func (svc *subAccountSecretSvc) ListSubAccountSecretWithExtension(cts *rest.Cont
 }
 
 func convSubAccountSecretListResult[T coresass.Extension](tables []tablesass.Table) (
-	*protocloud.SubAccountSecretExtListResult[T], error) {
-
+	*protocloud.SubAccountSecretExtListResult[T], error,
+) {
 	details := make([]coresass.SubAccountSecret[T], 0, len(tables))
 	for _, one := range tables {
 		extension := new(T)
