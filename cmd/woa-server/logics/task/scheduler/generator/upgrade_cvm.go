@@ -23,7 +23,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"hcm/pkg/tools/maps"
 	"strconv"
 	"time"
 
@@ -37,6 +36,7 @@ import (
 	"hcm/pkg/thirdparty/api-gateway/cmdb"
 	"hcm/pkg/thirdparty/cvmapi"
 	cvt "hcm/pkg/tools/converter"
+	"hcm/pkg/tools/maps"
 	"hcm/pkg/tools/utils"
 
 	"go.mongodb.org/mongo-driver/mongo"

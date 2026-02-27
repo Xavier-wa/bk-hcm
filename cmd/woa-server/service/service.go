@@ -48,6 +48,7 @@ import (
 	"hcm/cmd/woa-server/service/capability"
 	"hcm/cmd/woa-server/service/config"
 	"hcm/cmd/woa-server/service/cvm"
+	datamigration "hcm/cmd/woa-server/service/data-migration"
 	"hcm/cmd/woa-server/service/dissolve"
 	greenchannel "hcm/cmd/woa-server/service/green-channel"
 	"hcm/cmd/woa-server/service/meta"
@@ -97,6 +98,7 @@ import (
 type Service struct {
 	client         *client.ClientSet
 	dao            dao.Set
+	mongodb        *local.Mongo
 	planController planctrl.Logics
 	cmdbCli        cmdb.Client
 	itsmCli        itsm.Client
@@ -361,6 +363,7 @@ func initLogics(sd serviced.State, apiClientSet *client.ClientSet, clients *clie
 type mongoComponentSet struct {
 	informerIf  informer.Interface
 	schedulerIf scheduler.Interface
+	mongodb     *local.Mongo
 }
 
 // initMongoComponents 初始化涉及MongoDB的逻辑
@@ -395,6 +398,7 @@ func initMongoComponents(dis serviced.ServiceDiscover, clients *clientSet, apiCl
 	return &mongoComponentSet{
 		informerIf:  informerIf,
 		schedulerIf: schedulerIf,
+		mongodb:     watchDB,
 	}, nil
 }
 
@@ -404,6 +408,7 @@ func assembleService(apiClientSet *client.ClientSet, clients *clientSet, logics 
 	return &Service{
 		client:         apiClientSet,
 		dao:            clients.daoSet,
+		mongodb:        mongoComponents.mongodb,
 		cmdbCli:        clients.cmdbCli,
 		itsmCli:        clients.itsmCli,
 		finOpsCli:      clients.finOpsCli,
@@ -592,6 +597,7 @@ func (s *Service) apiSet() *restful.Container {
 
 	c := &capability.Capability{
 		Dao:            s.dao,
+		MongoDB:        s.mongodb,
 		WebService:     ws,
 		Authorizer:     s.authorizer,
 		PlanController: s.planController,
@@ -627,6 +633,7 @@ func (s *Service) apiSet() *restful.Container {
 	rollingserver.InitService(c)
 	greenchannel.InitService(c)
 	ressync.InitService(c)
+	datamigration.InitService(c)
 
 	return restful.NewContainer().Add(c.WebService)
 }

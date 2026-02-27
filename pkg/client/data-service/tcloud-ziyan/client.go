@@ -35,6 +35,14 @@ type Client struct {
 	LoadBalancer  *LoadBalancerClient
 	Cvm           *CvmClient
 	DeviceType    *DeviceTypeClient
+	ZiyanCvmApplyOrder      *ZiyanCvmApplyOrderClient
+	ZiyanCvmApplySuborder   *ZiyanCvmApplySuborderClient
+	ZiyanCvmApplyStep       *ZiyanCvmApplyStepClient
+	ZiyanCvmGenerateRecord  *ZiyanCvmGenerateRecordClient
+	ZiyanCvmApplyInitTask   *ZiyanCvmApplyInitTaskClient
+	ZiyanCvmDeviceInfo      *ZiyanCvmDeviceInfoClient
+	ZiyanCvmDeliverRecord   *ZiyanCvmDeliverRecordClient
+	ZiyanCvmModifyRecord    *ZiyanCvmModifyRecordClient
 }
 
 type restClient struct {
@@ -54,5 +62,13 @@ func NewClient(client rest.ClientInterface) *Client {
 		LoadBalancer:  NewLoadBalancerClient(client),
 		Cvm:           NewCloudCvmClient(client),
 		DeviceType:    NewDeviceTypeClient(client),
+		ZiyanCvmApplyOrder:      NewZiyanCvmApplyOrderClient(client),
+		ZiyanCvmApplySuborder:   NewZiyanCvmApplySuborderClient(client),
+		ZiyanCvmApplyStep:       NewZiyanCvmApplyStepClient(client),
+		ZiyanCvmGenerateRecord:  NewZiyanCvmGenerateRecordClient(client),
+		ZiyanCvmApplyInitTask:   NewZiyanCvmApplyInitTaskClient(client),
+		ZiyanCvmDeviceInfo:      NewZiyanCvmDeviceInfoClient(client),
+		ZiyanCvmDeliverRecord:   NewZiyanCvmDeliverRecordClient(client),
+		ZiyanCvmModifyRecord:    NewZiyanCvmModifyRecordClient(client),
 	}
 }
