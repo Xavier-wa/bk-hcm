@@ -21,6 +21,7 @@ package service
 
 import (
 	"fmt"
+	"hcm/pkg/criteria/enumor"
 	"io"
 	"net/http"
 	"strings"
@@ -62,6 +63,11 @@ func newProxy(dis serviced.Discover, cli *http.Client) (*proxy, error) {
 // Do proxy restful request to target server.
 func (p *proxy) Do(req *restful.Request, resp *restful.Response) {
 	r, w := req.Request, resp.ResponseWriter
+
+	//区分请求来源为webcall
+	if enumor.RequestSourceType(r.Header.Get(constant.RequestSourceKey)) == enumor.ApiCall {
+		req.Request.Header.Set(constant.RequestSourceKey, string(enumor.WebCall))
+	}
 
 	p.proxyRequest(req, w)
 

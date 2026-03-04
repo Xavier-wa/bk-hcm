@@ -23,7 +23,6 @@ package loadbalancer
 import (
 	"encoding/json"
 	"fmt"
-
 	actionlb "hcm/cmd/task-server/logics/action/load-balancer"
 	cloudserver "hcm/pkg/api/cloud-server"
 	cslb "hcm/pkg/api/cloud-server/load-balancer"
@@ -180,7 +179,7 @@ func (svc *lbSvc) buildModifyTCloudTargetTasksPort(kt *kit.Kit, req *cslb.TCloud
 	}
 
 	taskManagementID, err := svc.createTaskManagement(kt, bkBizID, vendor, accountID,
-		enumor.TaskManagementSourceAPI, enumor.TaskTargetGroupModifyPort)
+		svc.getTaskSource(kt), enumor.TaskTargetGroupModifyPort)
 	if err != nil {
 		logs.Errorf("create task management failed, err: %v, rid: %s", err, kt.Rid)
 		return "", err
