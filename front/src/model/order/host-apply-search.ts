@@ -66,7 +66,7 @@ export class HostApplySearch {
     },
     index: 1,
   })
-  create_at: [Date, Date];
+  created_at: [Date, Date];
 
   @Column('user', { name: '申请人', index: 1 })
   bk_username: string;
@@ -103,4 +103,14 @@ export class HostApplySearchNonBusiness extends HostApplySearch {
     index: 1,
   })
   source: string;
+
+  @Column('enum', {
+    name: '生产类型',
+    option: {
+      business: '业务生产',
+      admin: '管理员生产',
+    },
+    index: 1,
+  })
+  product_type: string;
 }

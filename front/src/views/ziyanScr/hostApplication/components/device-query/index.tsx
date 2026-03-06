@@ -2,11 +2,11 @@ import { defineComponent, computed, onMounted } from 'vue';
 import './index.scss';
 import useColumns from '@/views/resource/resource-manage/hooks/use-scr-columns';
 import { useTable } from '@/hooks/useTable/useTable';
-import { transferSimpleConditions } from '@/utils/scr/simple-query-builder';
 import { Button, Form, TagInput } from 'bkui-vue';
 import useFormModel from '@/hooks/useFormModel';
 import { useBusinessGlobalStore } from '@/store/business-global';
-import { timeFormatter, applicationTime, isEmpty } from '@/common/util';
+import dayjs from 'dayjs';
+import { applicationTime, isEmpty } from '@/common/util';
 import ExportToExcelBatchButton from '@/components/export-to-excel-batch-button/index.vue';
 import RequirementTypeSelector from '@/components/scr/requirement-type-selector';
 import useSelection from '@/views/resource/resource-manage/hooks/use-selection';
@@ -39,26 +39,32 @@ export default defineComponent({
       assetId: [],
     });
 
-    // 构建查询条件的函数
     const buildFilterPayload = () => ({
-      filter: transferSimpleConditions([
-        'AND',
-        [
-          'bk_biz_id',
-          'in',
-          formModel.bkBizId?.[0] === 0 || isEmpty(formModel.bkBizId)
-            ? businessGlobalStore.businessAuthorizedList.map((item: any) => item.id)
-            : formModel.bkBizId,
-        ],
-        ['require_type', '=', formModel.requireType],
-        ['order_id', '=', formModel.orderId],
-        ['suborder_id', '=', formModel.suborderId],
-        ['bk_username', 'in', formModel.bkUsername],
-        ['ip', 'in', formModel.ip],
-        ['update_at', 'd>=', timeFormatter(formModel.dateRange[0], 'YYYY-MM-DD')],
-        ['update_at', 'd<=', timeFormatter(formModel.dateRange[1], 'YYYY-MM-DD')],
-        ['asset_id', 'in', formModel.assetId],
-      ]),
+      bk_biz_ids:
+        formModel.bkBizId?.[0] === 0 || isEmpty(formModel.bkBizId)
+          ? businessGlobalStore.businessAuthorizedList.map((item: any) => item.id)
+          : formModel.bkBizId,
+      filter: {
+        op: 'and',
+        rules: [
+          formModel.requireType && { field: 'require_type', op: 'eq', value: formModel.requireType },
+          formModel.orderId && { field: 'order_id', op: 'eq', value: formModel.orderId },
+          formModel.suborderId && { field: 'suborder_id', op: 'eq', value: formModel.suborderId },
+          formModel.bkUsername.length && { field: 'bk_username', op: 'in', value: formModel.bkUsername },
+          formModel.ip.length && { field: 'ip', op: 'in', value: formModel.ip },
+          formModel.dateRange[0] && {
+            field: 'updated_at',
+            op: 'gte',
+            value: dayjs(formModel.dateRange[0]).toISOString(),
+          },
+          formModel.dateRange[1] && {
+            field: 'updated_at',
+            op: 'lte',
+            value: dayjs(formModel.dateRange[1]).endOf('day').toISOString(),
+          },
+          formModel.assetId.length && { field: 'asset_id', op: 'in', value: formModel.assetId },
+        ].filter(Boolean),
+      },
     });
 
     const { CommonTable, getListData, isLoading, pagination } = useTable({
@@ -76,8 +82,9 @@ export default defineComponent({
       requestOption: {
         dataPath: 'data.info',
         sortOption: {
-          sort: 'create_at',
+          sort: 'created_at',
           order: 'DESC',
+          legacy: false,
         },
         immediate: false,
       },
@@ -85,6 +92,7 @@ export default defineComponent({
         return {
           url: '/api/v1/woa/task/findmany/apply/device',
           payload: buildFilterPayload(),
+          pageEnableCountKey: 'count',
         };
       },
     });
@@ -98,7 +106,7 @@ export default defineComponent({
     const exportAllRequest = async (signal: AbortSignal) => {
       const list = await rollRequest({
         httpClient: http,
-        pageEnableCountKey: 'enable_count',
+        pageEnableCountKey: 'count',
       }).rollReqUseTotalCount(
         '/api/v1/woa/task/findmany/apply/device',
         {

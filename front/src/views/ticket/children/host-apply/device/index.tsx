@@ -12,9 +12,9 @@ import { useUserStore, useZiyanScrStore } from '@/store';
 import useFormModel from '@/hooks/useFormModel';
 import { useTable } from '@/hooks/useTable/useTable';
 import useSelection from '@/views/resource/resource-manage/hooks/use-selection';
-import { transferSimpleConditions } from '@/utils/scr/simple-query-builder';
 import rollRequest from '@blueking/roll-request';
 import http from '@/http';
+import dayjs from 'dayjs';
 import { applicationTime } from '@/common/util';
 import { useRoute } from 'vue-router';
 import { useWhereAmI } from '@/hooks/useWhereAmI';
@@ -51,6 +51,31 @@ export default defineComponent({
 
     const { columns } = useScrColumns('hostApplyDevice');
 
+    const buildFilterPayload = () => ({
+      bk_biz_ids: [getBizsId()],
+      filter: {
+        op: 'and',
+        rules: [
+          formModel.requireType && { field: 'require_type', op: 'eq', value: formModel.requireType },
+          formModel.orderId && { field: 'order_id', op: 'eq', value: formModel.orderId },
+          formModel.suborderId && { field: 'suborder_id', op: 'eq', value: formModel.suborderId },
+          formModel.bkUsername.length && { field: 'bk_username', op: 'in', value: formModel.bkUsername },
+          formModel.ip.length && { field: 'ip', op: 'in', value: formModel.ip },
+          formModel.dateRange[0] && {
+            field: 'updated_at',
+            op: 'gte',
+            value: dayjs(formModel.dateRange[0]).toISOString(),
+          },
+          formModel.dateRange[1] && {
+            field: 'updated_at',
+            op: 'lte',
+            value: dayjs(formModel.dateRange[1]).endOf('day').toISOString(),
+          },
+          formModel.assetId.length && { field: 'asset_id', op: 'in', value: formModel.assetId },
+        ].filter(Boolean),
+      },
+    });
+
     const { CommonTable, getListData, isLoading, pagination } = useTable({
       tableOptions: {
         columns,
@@ -66,29 +91,17 @@ export default defineComponent({
       requestOption: {
         dataPath: 'data.info',
         sortOption: {
-          sort: 'create_at',
+          sort: 'created_at',
           order: 'DESC',
+          legacy: false,
         },
         immediate: false,
       },
       scrConfig: () => {
         return {
           url: `/api/v1/woa/${getBusinessApiPath()}task/findmany/apply/device`,
-          payload: {
-            filter: transferSimpleConditions([
-              'AND',
-              ['bk_biz_id', 'in', [getBizsId()]],
-              ['require_type', '=', formModel.requireType],
-              ['order_id', '=', formModel.orderId],
-              ['suborder_id', '=', formModel.suborderId],
-              ['bk_username', 'in', formModel.bkUsername],
-              ['ip', 'in', formModel.ip],
-              ['update_at', 'd>=', formModel.dateRange[0]],
-              ['update_at', 'd<=', formModel.dateRange[1]],
-              ['asset_id', 'in', formModel.assetId],
-            ]),
-            page: { start: 0, limit: 10 },
-          },
+          payload: buildFilterPayload(),
+          pageEnableCountKey: 'count',
         };
       },
     });
@@ -100,27 +113,11 @@ export default defineComponent({
     };
     const { saveSearchRules, clearSearchRules } = useSaveSearchRules(searchRulesKey, filterOrders, formModel);
 
-    // 构建查询条件的函数
-    const buildFilterPayload = () => ({
-      filter: transferSimpleConditions([
-        'AND',
-        ['bk_biz_id', 'in', [getBizsId()]],
-        ['require_type', '=', formModel.requireType],
-        ['order_id', '=', formModel.orderId],
-        ['suborder_id', '=', formModel.suborderId],
-        ['bk_username', 'in', formModel.bkUsername],
-        ['ip', 'in', formModel.ip],
-        ['update_at', 'd>=', formModel.dateRange[0]],
-        ['update_at', 'd<=', formModel.dateRange[1]],
-        ['asset_id', 'in', formModel.assetId],
-      ]),
-    });
-
     // 导出全部的请求函数
     const exportAllRequest = async (signal: AbortSignal) => {
       const list = await rollRequest({
         httpClient: http,
-        pageEnableCountKey: 'enable_count',
+        pageEnableCountKey: 'count',
       }).rollReqUseTotalCount(
         `/api/v1/woa/${getBusinessApiPath()}task/findmany/apply/device`,
         {

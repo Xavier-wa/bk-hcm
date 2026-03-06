@@ -35,18 +35,22 @@ export default defineComponent({
     const { columns: deliveryColumns } = useColumns('scrDelivery');
 
     const fetchData = ref<Function>();
+    const sortConfig = ref({ sort: 'created_at', order: 'DESC' });
     const tableColumns = ref([]);
     const { pagination, handlePageLimitChange, handlePageValueChange } = usePagination(() => getListData());
     const getListData = async () => {
       isLoading.value = true;
       try {
-        const { data } = await fetchData.value(
-          props.suborderId,
-          { limit: pagination.limit, start: pagination.start },
-          curStatus.value,
-        );
-        list.value = data.info;
-        pagination.count = data?.count;
+        const [detailsRes, countRes] = await Promise.all([
+          fetchData.value(
+            props.suborderId,
+            { limit: pagination.limit, start: pagination.start, count: false, ...sortConfig.value },
+            curStatus.value,
+          ),
+          fetchData.value(props.suborderId, { limit: 0, start: 0, count: true }, curStatus.value),
+        ]);
+        list.value = detailsRes.data.info;
+        pagination.count = countRes.data?.count;
       } catch (error) {
         list.value = [];
         pagination.count = 0;
@@ -70,17 +74,19 @@ export default defineComponent({
           switch (props.stepId) {
             case 2: {
               fetchData.value = scrStore.getProductionDetails;
-              // 增加折叠列，显示crp审批流信息
+              sortConfig.value = { sort: 'generate_id', order: 'ASC' };
               tableColumns.value = [{ type: 'expand', minWidth: 50 }, ...producingColumns];
               break;
             }
             case 3: {
               fetchData.value = scrStore.getInitializationDetails;
+              sortConfig.value = { sort: 'ip', order: 'ASC' };
               tableColumns.value = initialColumns;
               break;
             }
             case 4: {
               fetchData.value = scrStore.getDeliveryDetails;
+              sortConfig.value = { sort: 'ip', order: 'ASC' };
               tableColumns.value = deliveryColumns;
               break;
             }

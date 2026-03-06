@@ -148,8 +148,9 @@ export default defineComponent({
       requestOption: {
         dataPath: 'data.info',
         sortOption: {
-          sort: 'create_at',
+          sort: 'created_at',
           order: 'DESC',
+          legacy: false,
         },
       },
       scrConfig: () => {
@@ -158,6 +159,7 @@ export default defineComponent({
           payload: {
             ...requestListParams.value,
           },
+          pageEnableCountKey: 'count',
         };
       },
     });
@@ -221,7 +223,9 @@ export default defineComponent({
       const newPage = {
         start: pagination.start,
         limit: pagination.limit,
-        sort: `${sort.value}:${order.value === 'ASC' ? 1 : -1}`,
+        sort: sort.value,
+        order: order.value,
+        count: false,
       };
       const params = Object.assign(requestListParams.value, { page: newPage });
       getCvmProduceOrderList(params).then((res) => {

@@ -501,6 +501,11 @@ export default defineComponent({
       },
       requestOption: {
         dataPath: 'data.info',
+        sortOption: {
+          sort: 'created_at',
+          order: 'DESC',
+          legacy: false,
+        },
         immediate: false,
       },
       scrConfig: () => {
@@ -511,6 +516,7 @@ export default defineComponent({
         return {
           url: '/api/v1/woa/task/findmany/apply',
           payload,
+          pageEnableCountKey: 'count',
         };
       },
     });
@@ -532,7 +538,7 @@ export default defineComponent({
           option: field.option,
         };
       }
-      if (field.id === 'create_at') {
+      if (field.id === 'created_at') {
         return {
           type: 'daterange',
           format: 'yyyy-MM-dd',
@@ -639,21 +645,18 @@ export default defineComponent({
     // 查询交付IP和固号IP
     const getDeliveredHostField = (row, fieldKey) => {
       const params = {
+        bk_biz_ids: [row.bk_biz_id],
         filter: {
-          condition: 'AND',
+          op: 'and',
           rules: [
             {
               field: 'suborder_id',
-              operator: 'equal',
+              op: 'eq',
               value: row.suborder_id,
-            },
-            {
-              field: 'bk_biz_id',
-              operator: 'in',
-              value: [row.bk_biz_id],
             },
           ],
         },
+        page: { start: 0, limit: 500, count: false },
       };
       return getDeliveredDevices(params).then((res) => {
         const value = res?.data?.info?.map((item) => item[fieldKey]) || [];
@@ -691,7 +694,7 @@ export default defineComponent({
       }
       const list = await rollRequest({
         httpClient: http,
-        pageEnableCountKey: 'enable_count',
+        pageEnableCountKey: 'count',
       }).rollReqUseTotalCount(
         '/api/v1/woa/task/findmany/apply',
         payload,
