@@ -26,6 +26,7 @@ import (
 	rstypes "hcm/cmd/woa-server/types/rolling-server"
 	taskTypes "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/cc"
+	"hcm/pkg/client"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/mapstr"
 	"hcm/pkg/kit"
@@ -63,12 +64,13 @@ type logics struct {
 	rsLogic        rollingserver.Logics
 	taskLogic      taskLogics.Logics
 	schedulerLogic scheduler.Interface
+	client         *client.ClientSet
 }
 
 // New create a logics manager
 func New(thirdCli *thirdparty.Client, cliConf cc.ClientConfig, confLogic config.Logics,
 	cmdbCli cmdb.Client, rsLogic rollingserver.Logics, taskLogic taskLogics.Logics,
-	schedulerLogic scheduler.Interface) Logics {
+	schedulerLogic scheduler.Interface, client *client.ClientSet) Logics {
 
 	return &logics{
 		cvm:            thirdCli.CVM,
@@ -78,6 +80,7 @@ func New(thirdCli *thirdparty.Client, cliConf cc.ClientConfig, confLogic config.
 		rsLogic:        rsLogic,
 		taskLogic:      taskLogic,
 		schedulerLogic: schedulerLogic,
+		client:         client,
 	}
 }
 
