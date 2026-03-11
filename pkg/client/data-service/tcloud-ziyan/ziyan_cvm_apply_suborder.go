@@ -185,3 +185,51 @@ func (c *ZiyanCvmApplySuborderClient) GetOrderTimeCostCompare(ctx context.Contex
 
 	return resp.Details, nil
 }
+
+// GetPercentileTimeConsumptionOverview get percentile time consumption overview by month.
+func (c *ZiyanCvmApplySuborderClient) GetPercentileTimeConsumptionOverview(ctx context.Context, h http.Header,
+	filterExpr *filter.Expression) (*cvmapplyproto.ZiyanCvmApplyPercentileTimeOverviewResult, error) {
+
+	resp := new(cvmapplyproto.ZiyanCvmApplyPercentileTimeOverviewResp)
+
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(filterExpr).
+		SubResourcef("/cvm_apply/suborders/statistics/percentile_time/overview").
+		WithHeaders(h).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != errf.OK {
+		return nil, errf.New(resp.Code, resp.Message)
+	}
+
+	return resp.Data, nil
+}
+
+// GetPercentileTimeConsumptionCompare get percentile time consumption compare by biz.
+func (c *ZiyanCvmApplySuborderClient) GetPercentileTimeConsumptionCompare(ctx context.Context, h http.Header,
+	filterExpr *filter.Expression) (*cvmapplyproto.ZiyanCvmApplyPercentileTimeCompareResult, error) {
+
+	resp := new(cvmapplyproto.ZiyanCvmApplyPercentileTimeCompareResp)
+
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(filterExpr).
+		SubResourcef("/cvm_apply/suborders/statistics/percentile_time/compare").
+		WithHeaders(h).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != errf.OK {
+		return nil, errf.New(resp.Code, resp.Message)
+	}
+
+	return resp.Data, nil
+}

@@ -247,3 +247,44 @@ type OrderTimeCostCompareItem struct {
 	DoneOrders       int64   `json:"done_orders" db:"done_orders"`
 	AvgDurationHours float64 `json:"avg_duration_hours" db:"avg_duration_hours"`
 }
+
+// PercentileTimeConsumptionItem one month aggregated metrics for percentile time consumption overview
+type PercentileTimeConsumptionItem struct {
+	YearMonth string  `json:"year_month" db:"yearmonth"`
+	P90Hours  float64 `json:"p90_hours" db:"p90_hours"`
+	P95Hours  float64 `json:"p95_hours" db:"p95_hours"`
+	P99Hours  float64 `json:"p99_hours" db:"p99_hours"`
+}
+
+// ZiyanCvmApplyPercentileTimeOverviewResult list ziyan cvm apply percentile time overview result
+type ZiyanCvmApplyPercentileTimeOverviewResult struct {
+	Details []*PercentileTimeConsumptionItem `json:"details"`
+}
+
+// ZiyanCvmApplyPercentileTimeOverviewResp define ziyan cvm apply percentile time overview resp.
+type ZiyanCvmApplyPercentileTimeOverviewResp struct {
+	rest.BaseResp `json:",inline"`
+	Data          *ZiyanCvmApplyPercentileTimeOverviewResult `json:"data"`
+}
+
+// PercentileTimeConsumptionCompareItem one month aggregated metrics by biz for percentile time consumption compare
+type PercentileTimeConsumptionCompareItem struct {
+	BkBizID    int64   `json:"bk_biz_id" db:"bk_biz_id"`
+	YearMonth  string  `json:"year_month" db:"yearmonth"`
+	DoneOrders int64   `json:"done_orders" db:"done_orders"`
+	P90Hours   float64 `json:"p90_hours" db:"p90_hours"`
+	P95Hours   float64 `json:"p95_hours" db:"p95_hours"`
+	P99Hours   float64 `json:"p99_hours" db:"p99_hours"`
+}
+
+// ZiyanCvmApplyPercentileTimeCompareResult list ziyan cvm apply percentile time compare result
+type ZiyanCvmApplyPercentileTimeCompareResult struct {
+	Current []*PercentileTimeConsumptionCompareItem `json:"current"`
+	Compare []*PercentileTimeConsumptionCompareItem `json:"compare"`
+}
+
+// ZiyanCvmApplyPercentileTimeCompareResp define ziyan cvm apply percentile time compare resp.
+type ZiyanCvmApplyPercentileTimeCompareResp struct {
+	rest.BaseResp `json:",inline"`
+	Data          *ZiyanCvmApplyPercentileTimeCompareResult `json:"data"`
+}

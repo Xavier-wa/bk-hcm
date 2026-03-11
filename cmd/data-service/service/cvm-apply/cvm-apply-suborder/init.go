@@ -47,6 +47,10 @@ func InitService(cap *capability.Capability) {
 		"/cvm_apply/analysis/order_time_cost/overview", svc.GetOrderTimeCostOverview)
 	h.Add("GetOrderTimeCostCompare", http.MethodPost,
 		"/cvm_apply/analysis/order_time_cost/compares", svc.GetOrderTimeCostCompare)
+	h.Add("GetPercentileTimeConsumptionOverview", http.MethodPost,
+		"/cvm_apply/suborders/statistics/percentile_time/overview", svc.GetPercentileTimeConsumptionOverview)
+	h.Add("GetPercentileTimeConsumptionCompare", http.MethodPost,
+		"/cvm_apply/suborders/statistics/percentile_time/compare", svc.GetPercentileTimeConsumptionCompare)
 
 	h.Load(cap.WebService)
 }

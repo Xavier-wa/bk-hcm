@@ -48,6 +48,10 @@ type ZiyanCvmApplySuborderInterface interface {
 	DeleteWithTx(kt *kit.Kit, tx *sqlx.Tx, expr *filter.Expression) error
 	GetOrderTimeCostOverview(kt *kit.Kit, expr *filter.Expression) ([]*cvmapplyproto.OrderTimeCostItem, error)
 	GetOrderTimeCostCompare(kt *kit.Kit, expr *filter.Expression) ([]*cvmapplyproto.OrderTimeCostCompareItem, error)
+	GetPercentileTimeConsumptionOverview(kt *kit.Kit, expr *filter.Expression) (
+		*cvmapplyproto.ZiyanCvmApplyPercentileTimeOverviewResult, error)
+	GetPercentileTimeConsumptionCompare(kt *kit.Kit, expr *filter.Expression) (
+		*cvmapplyproto.ZiyanCvmApplyPercentileTimeCompareResult, error)
 }
 
 var _ ZiyanCvmApplySuborderInterface = new(ZiyanCvmApplySuborderDao)
@@ -265,4 +269,112 @@ func (d ZiyanCvmApplySuborderDao) GetOrderTimeCostCompare(kt *kit.Kit, expr *fil
 	}
 
 	return details, nil
+}
+
+// GetPercentileTimeConsumptionOverview get percentile time consumption overview by month.
+func (d ZiyanCvmApplySuborderDao) GetPercentileTimeConsumptionOverview(kt *kit.Kit, expr *filter.Expression) (
+	*cvmapplyproto.ZiyanCvmApplyPercentileTimeOverviewResult, error) {
+
+	if expr == nil {
+		return nil, errf.New(errf.InvalidParameter, "filter expr is required")
+	}
+
+	whereExpr, whereValue, err := expr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		logs.ErrorJson("get percentile time consumption overview failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	// 按月统计百分位耗时
+	sql := fmt.Sprintf(`
+		WITH duration_data AS (
+			-- 第一步：计算每个子单的耗时
+			SELECT 
+				DATE_FORMAT(created_at, '%%Y-%%m') as yearmonth,
+				TIMESTAMPDIFF(SECOND, created_at, updated_at) / 3600.0 as duration_hours 
+			FROM %s %s
+			  AND TIMESTAMPDIFF(SECOND, created_at, updated_at) > 0
+		), 
+		ranked_data AS (
+			-- 第二步：为每个月的数据排序并计算百分位排名
+			SELECT 
+				yearmonth,
+				duration_hours, 
+				ROW_NUMBER() OVER (PARTITION BY yearmonth ORDER BY duration_hours) as row_num,
+				COUNT(*) OVER (PARTITION BY yearmonth) as total_count
+			FROM duration_data 
+		) 
+		-- 第三步：计算 P90、P95、P99
+		SELECT 
+			yearmonth,
+			ROUND(MAX(CASE WHEN row_num = FLOOR((total_count - 1) * 0.90) + 1 THEN duration_hours END), 2) as p90_hours, 
+			ROUND(MAX(CASE WHEN row_num = FLOOR((total_count - 1) * 0.95) + 1 THEN duration_hours END), 2) as p95_hours, 
+			ROUND(MAX(CASE WHEN row_num = FLOOR((total_count - 1) * 0.99) + 1 THEN duration_hours END), 2) as p99_hours 
+		FROM ranked_data 
+		GROUP BY yearmonth
+		ORDER BY yearmonth ASC`,
+		table.ZiyanCvmApplySuborderTable, whereExpr)
+
+	details := make([]*cvmapplyproto.PercentileTimeConsumptionItem, 0)
+	if err = d.Orm.Do().Select(kt.Ctx, &details, sql, whereValue); err != nil {
+		logs.Errorf("get percentile time consumption overview failed, sql: %s, err: %v, whereValue: %+v, rid: %s",
+			sql, err, whereValue, kt.Rid)
+		return nil, err
+	}
+
+	return &cvmapplyproto.ZiyanCvmApplyPercentileTimeOverviewResult{Details: details}, nil
+}
+
+// GetPercentileTimeConsumptionCompare get percentile time consumption compare by biz.
+func (d ZiyanCvmApplySuborderDao) GetPercentileTimeConsumptionCompare(kt *kit.Kit, expr *filter.Expression) (
+	*cvmapplyproto.ZiyanCvmApplyPercentileTimeCompareResult, error) {
+
+	if expr == nil {
+		return nil, errf.New(errf.InvalidParameter, "current_expr are required")
+	}
+
+	whereExpr, whereValue, err := expr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		logs.Errorf("get percentile time consumption compare failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	sql := fmt.Sprintf(`
+		WITH duration_data AS (
+			SELECT 
+				bk_biz_id, 
+				DATE_FORMAT(created_at, '%%Y-%%m') as yearmonth, 
+				TIMESTAMPDIFF(SECOND, created_at, updated_at) / 3600.0 as duration_hours 
+			FROM %s %s
+			  AND TIMESTAMPDIFF(SECOND, created_at, updated_at) > 0
+		), 
+		ranked_data AS (
+			SELECT 
+				bk_biz_id, 
+				yearmonth, 
+				duration_hours, 
+				ROW_NUMBER() OVER (PARTITION BY bk_biz_id, yearmonth ORDER BY duration_hours) as row_num, 
+				COUNT(*) OVER (PARTITION BY bk_biz_id, yearmonth) as total_count 
+			FROM duration_data 
+		) 
+		SELECT 
+			bk_biz_id, 
+			yearmonth, 
+			MAX(total_count) as done_orders, 
+			ROUND(MAX(CASE WHEN row_num = FLOOR((total_count - 1) * 0.90) + 1 THEN duration_hours END), 2) as p90_hours, 
+			ROUND(MAX(CASE WHEN row_num = FLOOR((total_count - 1) * 0.95) + 1 THEN duration_hours END), 2) as p95_hours, 
+			ROUND(MAX(CASE WHEN row_num = FLOOR((total_count - 1) * 0.99) + 1 THEN duration_hours END), 2) as p99_hours 
+		FROM ranked_data 
+		GROUP BY bk_biz_id, yearmonth 
+		ORDER BY bk_biz_id ASC, yearmonth ASC`,
+		table.ZiyanCvmApplySuborderTable, whereExpr)
+
+	items := make([]*cvmapplyproto.PercentileTimeConsumptionCompareItem, 0)
+	if err := d.Orm.Do().Select(kt.Ctx, &items, sql, whereValue); err != nil {
+		logs.Errorf("get percentile time consumption compare failed, sql: %s, err: %v, whereValue: %+v, rid: %s",
+			sql, err, whereValue, kt.Rid)
+		return nil, err
+	}
+
+	return &cvmapplyproto.ZiyanCvmApplyPercentileTimeCompareResult{Current: items, Compare: nil}, nil
 }

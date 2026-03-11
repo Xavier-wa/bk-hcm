@@ -21,6 +21,7 @@
 package cvmapplysuborder
 
 import (
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/criteria/errf"
 	cvmapplytable "hcm/pkg/dal/table/cvm-apply"
 	"hcm/pkg/logs"
@@ -73,4 +74,55 @@ func (svc *service) GetOrderTimeCostCompare(cts *rest.Contexts) (interface{}, er
 		return nil, err
 	}
 	return result, nil
+}
+
+// GetPercentileTimeConsumptionOverview get percentile time consumption overview by month.
+func (svc *service) GetPercentileTimeConsumptionOverview(cts *rest.Contexts) (interface{}, error) {
+	req := new(filter.Expression)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	exprOpt := filter.NewExprOption(
+		filter.RuleFields(cvmapplytable.ZiyanCvmApplySuborderColumns.ColumnTypes()),
+	)
+	if err := req.Validate(exprOpt); err != nil {
+		logs.Errorf("invalid percentile time consumption overview request, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	result, err := svc.dao.ZiyanCvmApplySuborder().GetPercentileTimeConsumptionOverview(cts.Kit, req)
+	if err != nil {
+		logs.Errorf("get percentile time consumption overview failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return &cvmapplyproto.ZiyanCvmApplyPercentileTimeOverviewResult{Details: result.Details}, nil
+}
+
+// GetPercentileTimeConsumptionCompare get percentile time consumption compare by biz.
+func (svc *service) GetPercentileTimeConsumptionCompare(cts *rest.Contexts) (interface{}, error) {
+	req := new(filter.Expression)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	exprOpt := filter.NewExprOption(
+		filter.RuleFields(cvmapplytable.ZiyanCvmApplySuborderColumns.ColumnTypes()),
+	)
+	if err := req.Validate(exprOpt); err != nil {
+		logs.Errorf("invalid percentile time consumption compare request, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	result, err := svc.dao.ZiyanCvmApplySuborder().GetPercentileTimeConsumptionCompare(cts.Kit, req)
+	if err != nil {
+		logs.Errorf("get percentile time consumption compare failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return &cvmapplyproto.ZiyanCvmApplyPercentileTimeCompareResult{
+		Current: result.Current,
+		Compare: result.Compare,
+	}, nil
 }

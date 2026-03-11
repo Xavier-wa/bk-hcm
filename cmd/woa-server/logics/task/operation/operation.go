@@ -30,6 +30,7 @@ import (
 	model "hcm/cmd/woa-server/model/task"
 	types "hcm/cmd/woa-server/types/task"
 	"hcm/pkg"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/api/core"
 	"hcm/pkg/client"
 	"hcm/pkg/condition"
@@ -69,11 +70,11 @@ type Interface interface {
 	GetProductionStageTimeCostCompare(kt *kit.Kit, param *types.ProductionStageTimeCostCompareReq) (
 		*types.ProductionStageTimeCostCompareRst, error)
 	// GetPercentileTimeConsumptionOverview get percentile time consumption overview
-	GetPercentileTimeConsumptionOverview(kt *kit.Kit, param *types.PercentileTimeConsumptionReq) (
-		[]types.PercentileTimeConsumptionItem, error)
+	GetPercentileTimeConsumptionOverview(kt *kit.Kit, startDate, endDate time.Time) (
+		*cvmapplyproto.ZiyanCvmApplyPercentileTimeOverviewResult, error)
 	// GetPercentileTimeConsumptionCompare get percentile time consumption compare
-	GetPercentileTimeConsumptionCompare(kt *kit.Kit, param *types.PercentileTimeConsumptionCompareReq) (
-		*types.PercentileTimeConsumptionCompareRst, error)
+	GetPercentileTimeConsumptionCompare(kt *kit.Kit, currentStart, compareStart string) (
+		*cvmapplyproto.ZiyanCvmApplyPercentileTimeCompareResult, error)
 	// GetDeliveryRateStatistics get delivery rate statistics
 	GetDeliveryRateStatistics(kt *kit.Kit, param *types.DeliveryRateStatisticsReq) (
 		[]types.DeliveryRateStatisticsItem, error)

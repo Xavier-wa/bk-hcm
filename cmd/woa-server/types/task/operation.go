@@ -495,9 +495,9 @@ type ProductionStageTimeCostCompareRst struct {
 // PercentileTimeConsumptionReq request for percentile time consumption overview
 type PercentileTimeConsumptionReq struct {
 	// Date format: YYYY-MM-DD, e.g., 2025-01-01
-	StartTime string `json:"start_time" bson:"start_time"`
+	StartTime string `json:"start_time"`
 	// Date format: YYYY-MM-DD, e.g., 2025-01-31
-	EndTime string `json:"end_time" bson:"end_time"`
+	EndTime string `json:"end_time"`
 }
 
 // Validate whether PercentileTimeConsumptionReq is valid
@@ -533,25 +533,12 @@ func (req *PercentileTimeConsumptionReq) GetEndTime() (time.Time, error) {
 	return time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, time.UTC), nil
 }
 
-// PercentileTimeConsumptionItem one month aggregated metrics for percentile time consumption
-type PercentileTimeConsumptionItem struct {
-	YearMonth string  `json:"year_month" bson:"year_month"`
-	P90Hours  float64 `json:"p90_hours" bson:"p90_hours"`
-	P95Hours  float64 `json:"p95_hours" bson:"p95_hours"`
-	P99Hours  float64 `json:"p99_hours" bson:"p99_hours"`
-}
-
-// PercentileTimeConsumptionOverviewResp wraps overview list under details
-type PercentileTimeConsumptionOverviewResp struct {
-	Details []PercentileTimeConsumptionItem `json:"details"`
-}
-
 // PercentileTimeConsumptionCompareReq request for percentile time consumption compare
 type PercentileTimeConsumptionCompareReq struct {
 	// YearMonth format: YYYY-MM, e.g., 2025-10 for October 2025
-	CurrentDate string `json:"current_date" bson:"current_date"`
+	CurrentDate string `json:"current_date"`
 	// YearMonth format: YYYY-MM, e.g., 2025-11 for November 2025
-	CompareDate string `json:"compare_date" bson:"compare_date"`
+	CompareDate string `json:"compare_date"`
 }
 
 // Validate whether PercentileTimeConsumptionCompareReq is valid
@@ -589,22 +576,6 @@ func (req *PercentileTimeConsumptionCompareReq) GetCompareRange() (start time.Ti
 	nextMonth := time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, time.UTC)
 	end = nextMonth.Add(-time.Nanosecond)
 	return start, end, nil
-}
-
-// PercentileTimeConsumptionCompareItem one month aggregated metrics by biz for percentile time consumption compare
-type PercentileTimeConsumptionCompareItem struct {
-	BkBizID    int64   `json:"bk_biz_id" bson:"bk_biz_id"`
-	YearMonth  string  `json:"year_month" bson:"year_month"`
-	DoneOrders int64   `json:"done_orders" bson:"done_orders"`
-	P90Hours   float64 `json:"p90_hours" bson:"p90_hours"`
-	P95Hours   float64 `json:"p95_hours" bson:"p95_hours"`
-	P99Hours   float64 `json:"p99_hours" bson:"p99_hours"`
-}
-
-// PercentileTimeConsumptionCompareRst wraps compare result with current and compare arrays
-type PercentileTimeConsumptionCompareRst struct {
-	Current []PercentileTimeConsumptionCompareItem `json:"current"`
-	Compare []PercentileTimeConsumptionCompareItem `json:"compare"`
 }
 
 // DeliveryRateStatisticsReq request for delivery rate statistics
