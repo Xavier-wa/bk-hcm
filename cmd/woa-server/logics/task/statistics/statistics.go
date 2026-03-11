@@ -25,16 +25,15 @@ import (
 	"strings"
 	"time"
 
-	taskModel "hcm/cmd/woa-server/model/task"
-	"hcm/pkg"
 	"hcm/pkg/api/core"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/dal/dao/tools"
 	tableapplystat "hcm/pkg/dal/table/cvm-apply-order-statistics-config"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
-	"hcm/pkg/tools/metadata"
+	"hcm/pkg/runtime/filter"
 	"hcm/pkg/tools/slice"
 )
 
@@ -96,60 +95,86 @@ func (s *statistics) fetchSubOrderIDsFromOrders(kt *kit.Kit, ranges []timeRangeC
 		return nil, nil
 	}
 
-	orConditions := make([]map[string]interface{}, 0, len(ranges))
+	if s.client == nil || s.client.DataService() == nil {
+		return nil, fmt.Errorf("data service client is not initialized")
+	}
+
+	// 构建 OR 条件的过滤表达式
+	orRules := make([]filter.RuleFactory, 0, len(ranges))
 	for _, tr := range ranges {
 		if tr.start.After(tr.end) {
 			continue
 		}
-		cond := map[string]interface{}{
-			"create_at": map[string]interface{}{
-				pkg.BKDBGTE: tr.start,
-				pkg.BKDBLTE: tr.end,
-			},
+		// 每个时间范围构建一个 AND 条件
+		andRules := []filter.RuleFactory{
+			tools.RuleGreaterThanEqual("created_at", tr.start.Format(constant.TimeStdFormat)),
+			tools.RuleLessThanEqual("created_at", tr.end.Format(constant.TimeStdFormat)),
 		}
-		orConditions = append(orConditions, cond)
+		orRules = append(orRules, &filter.Expression{
+			Op:    filter.And,
+			Rules: andRules,
+		})
 	}
 
-	if len(orConditions) == 0 {
+	if len(orRules) == 0 {
 		return nil, fmt.Errorf("all time ranges are invalid")
 	}
 
-	filters := map[string]interface{}{
-		pkg.BKDBOR: orConditions,
+	filterExpr := &filter.Expression{
+		Op:    filter.Or,
+		Rules: orRules,
 	}
 
 	// 先查询总数
-	count, err := taskModel.Operation().ApplyOrder().CountApplyOrder(kt.Ctx, filters)
-	if err != nil {
-		return nil, fmt.Errorf("count apply order failed: %w", err)
+	countReq := &cvmapplyproto.ZiyanCvmApplySuborderListReq{
+		Filter: filterExpr,
+		Page:   &core.BasePage{Count: true},
+		Fields: []string{"suborder_id"},
 	}
 
-	if count == 0 {
+	countResult, err := s.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.List(kt.Ctx, kt.Header(), countReq)
+	if err != nil {
+		return nil, fmt.Errorf("count ziyan cvm apply suborder failed: %w", err)
+	}
+
+	if countResult.Count == 0 {
 		return nil, nil
 	}
 
-	// 使用分页循环查询，参考 MySQL 标准分页模式
-	allIDs := make([]string, 0)
-	for offset := uint64(0); offset < count; offset = offset + uint64(core.DefaultMaxPageLimit) {
-		page := metadata.BasePage{
-			Start: int(offset),
-			Limit: int(core.DefaultMaxPageLimit),
+	// 使用分页循环查询
+	allIDs := make([]string, 0, countResult.Count)
+	start := uint32(0)
+	for {
+		listReq := &cvmapplyproto.ZiyanCvmApplySuborderListReq{
+			Filter: filterExpr,
+			Page: &core.BasePage{
+				Count: false,
+				Start: start,
+				Limit: core.DefaultMaxPageLimit,
+			},
+			Fields: []string{"suborder_id"},
 		}
 
-		orders, err := taskModel.Operation().ApplyOrder().FindManyApplyOrder(kt.Ctx, page, filters)
+		result, err := s.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.List(kt.Ctx, kt.Header(), listReq)
 		if err != nil {
-			return nil, fmt.Errorf("find apply order failed: %w", err)
+			return nil, fmt.Errorf("list ziyan cvm apply suborder failed, err: %w", err)
 		}
 
-		for _, order := range orders {
-			if order == nil {
+		for _, suborder := range result.Details {
+			if suborder == nil {
 				continue
 			}
-			if order.SubOrderId == "" {
+			if suborder.SuborderID == "" {
 				continue
 			}
-			allIDs = append(allIDs, order.SubOrderId)
+			allIDs = append(allIDs, suborder.SuborderID)
 		}
+
+		// 如果返回的数据少于一页，说明已经是最后一页了
+		if len(result.Details) < int(core.DefaultMaxPageLimit) {
+			break
+		}
+		start += uint32(core.DefaultMaxPageLimit)
 	}
 
 	return allIDs, nil

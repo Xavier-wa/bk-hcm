@@ -20,19 +20,33 @@
 package operation
 
 import (
+	"fmt"
+	"math"
+	"sort"
 	"time"
 
-	model "hcm/cmd/woa-server/model/task"
 	types "hcm/cmd/woa-server/types/task"
 	"hcm/pkg"
+	"hcm/pkg/api/core"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/criteria/errf"
+	"hcm/pkg/dal/dao/tools"
+	cvmapply "hcm/pkg/dal/table/cvm-apply"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/runtime/filter"
+	"hcm/pkg/tools/slice"
 )
 
 // GetAverageTimeConsumptionOverview aggregates average time consumption by month within a range
 func (op *operation) GetAverageTimeConsumptionOverview(kt *kit.Kit, param *types.AverageTimeConsumptionReq) (
 	[]types.AverageTimeConsumptionItem, error) {
+
+	if op.client == nil || op.client.DataService() == nil {
+		return nil, errf.Newf(errf.InvalidParameter, "data service client is not initialized")
+	}
 
 	start, err := param.GetStartTime()
 	if err != nil {
@@ -52,85 +66,287 @@ func (op *operation) GetAverageTimeConsumptionOverview(kt *kit.Kit, param *types
 		return nil, err
 	}
 
-	pipeline := op.buildAverageTimeConsumptionOverviewPipeline(start, end, excludeSuborderIDs)
-
 	rst := make([]types.AverageTimeConsumptionItem, 0)
-	if err := model.Operation().ApplyTicket().AggregateAll(kt.Ctx, pipeline, &rst); err != nil {
-		logs.Errorf("aggregate average time consumption overview failed, err: %v, rid: %s", err, kt.Rid)
+	rst, err = op.execAverageTimeConsumptionOverviewQuery(kt, start, end, excludeSuborderIDs)
+	if err != nil {
+		logs.Errorf("execute average time consumption overview query failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
 	return rst, nil
 }
 
-// buildAverageTimeConsumptionOverviewPipeline builds the aggregation pipeline for average time consumption overview
-func (op *operation) buildAverageTimeConsumptionOverviewPipeline(start, end time.Time, excludeSuborderIDs []string) []map[string]interface{} {
-	match := map[string]interface{}{
-		"create_at": map[string]interface{}{
-			pkg.BKDBGTE: start,
-			pkg.BKDBLTE: end,
+// buildTimeRangeFilter 构建时间范围过滤条件
+func (op *operation) buildTimeRangeFilter(start, end time.Time) *filter.Expression {
+	return &filter.Expression{
+		Op: filter.And,
+		Rules: []filter.RuleFactory{
+			tools.RuleGreaterThanEqual("created_at", start.Format(constant.TimeStdFormat)),
+			tools.RuleLessThanEqual("created_at", end.Format(constant.TimeStdFormat)),
 		},
-	}
-
-	return []map[string]interface{}{
-		{pkg.BKDBMatch: match},
-		{pkg.BKDBLookup: map[string]interface{}{
-			"from":         pkg.BKTableNameApplyOrder,
-			"localField":   "order_id",
-			"foreignField": "order_id",
-			"as":           "suborders",
-		}},
-		// filter out excluded suborders
-		buildFilterExcludedSubordersStage(excludeSuborderIDs),
-		// ensure still has suborders after filtering
-		{pkg.BKDBMatch: map[string]interface{}{
-			"suborders": map[string]interface{}{pkg.BKDBNE: []interface{}{}},
-		}},
-		{pkg.BKDBAddFields: map[string]interface{}{
-			"year_month": map[string]interface{}{
-				"$dateToString": map[string]interface{}{
-					"format": "%Y-%m",
-					"date":   "$create_at",
-				},
-			},
-			"completed_suborders": map[string]interface{}{
-				"$filter": map[string]interface{}{
-					"input": "$suborders",
-					"as":    "suborder",
-					"cond":  map[string]interface{}{pkg.BKDBEQ: []interface{}{"$$suborder.stage", types.TicketStageDone}},
-				},
-			},
-		}},
-		{pkg.BKDBAddFields: map[string]interface{}{
-			"last_suborder_end_time": map[string]interface{}{
-				"$max": "$completed_suborders.update_at",
-			},
-		}},
-		{pkg.BKDBMatch: map[string]interface{}{
-			"last_suborder_end_time": map[string]interface{}{pkg.BKDBNE: nil},
-		}},
-		{pkg.BKDBAddFields: map[string]interface{}{
-			"duration_hours": map[string]interface{}{
-				pkg.BKDBDivide: []interface{}{
-					map[string]interface{}{pkg.BKDBSubtract: []interface{}{"$last_suborder_end_time", "$create_at"}},
-					3600000,
-				},
-			},
-		}},
-		{pkg.BKDBGroup: map[string]interface{}{
-			"_id":                "$year_month",
-			"avg_duration_hours": map[string]interface{}{pkg.BKDBAvg: "$duration_hours"},
-		}},
-		{pkg.BKDBProject: map[string]interface{}{
-			"_id":                0,
-			"year_month":         "$_id",
-			"avg_duration_hours": map[string]interface{}{pkg.BKDBRound: []interface{}{"$avg_duration_hours", 2}},
-		}},
-		{pkg.BKDBSort: map[string]interface{}{"year_month": 1}},
 	}
 }
 
+// listApplyOrders 获取指定时间范围内的主订单列表
+func (op *operation) listApplyOrders(kt *kit.Kit, filterExpr *filter.Expression) (
+	*cvmapplyproto.ZiyanCvmApplyOrderListResult, error) {
+
+	allOrders := make([]*cvmapply.ZiyanCvmApplyOrder, 0)
+	start := uint32(0)
+
+	for {
+		req := &cvmapplyproto.ZiyanCvmApplyOrderListReq{
+			Filter: filterExpr,
+			Page: &core.BasePage{
+				Count: false,
+				Start: start,
+				Limit: core.DefaultMaxPageLimit,
+			},
+		}
+
+		orders, err := op.client.DataService().TCloudZiyan.ZiyanCvmApplyOrder.List(kt.Ctx, kt.Header(), req)
+		if err != nil {
+			logs.Errorf("list apply orders failed, filterExpr: %v, err: %v, rid: %s", req.Filter, err, kt.Rid)
+			return nil, fmt.Errorf("list apply orders failed: %w", err)
+		}
+
+		allOrders = append(allOrders, orders.Details...)
+
+		if len(orders.Details) < int(core.DefaultMaxPageLimit) {
+			break
+		}
+
+		start += uint32(core.DefaultMaxPageLimit)
+	}
+
+	return &cvmapplyproto.ZiyanCvmApplyOrderListResult{
+		Details: allOrders,
+	}, nil
+}
+
+// calculateAverageDuration 计算平均耗时
+func (op *operation) calculateAverageDuration(durations []float64) float64 {
+	if len(durations) == 0 {
+		return 0
+	}
+
+	sum := 0.0
+	for _, duration := range durations {
+		sum += duration
+	}
+	avg := sum / float64(len(durations))
+
+	return math.Round(avg*100) / 100
+}
+
+// parseTime 解析时间字符串为 time.Time 类型
+func (op *operation) parseTime(kt *kit.Kit, timeStr string, fieldName string) (time.Time, error) {
+	t, err := time.Parse(constant.TimeStdFormat, timeStr)
+	if err != nil {
+		logs.Errorf("parse %s failed, err: %v, rid: %s", fieldName, err, kt.Rid)
+		return time.Time{}, err
+	}
+	return t, nil
+}
+
+// buildSuborderFilterForMultipleOrders 构建多个订单的子订单过滤条件
+func (op *operation) buildSuborderFilterForMultipleOrders(orderIDs []uint64,
+	excludeSuborderIDs []string) *filter.Expression {
+
+	baseRules := []filter.RuleFactory{
+		tools.RuleEqual("stage", types.TicketStageDone),
+		tools.RuleNotEqual("source", enumor.ApplyTicketSrcPurchaseToResPool),
+	}
+
+	batches := slice.Split(orderIDs, int(core.DefaultMaxPageLimit))
+	var orderIdRules []filter.RuleFactory
+
+	for _, batch := range batches {
+		orderIdRules = append(orderIdRules, tools.RuleIn("order_id", batch))
+	}
+
+	var excludeRules []filter.RuleFactory
+	if len(excludeSuborderIDs) > 0 {
+		excludeBatches := slice.Split(excludeSuborderIDs, int(core.DefaultMaxPageLimit))
+		for _, batch := range excludeBatches {
+			excludeRules = append(excludeRules, tools.RuleNotIn("suborder_id", batch))
+		}
+	}
+
+	allRules := make([]filter.RuleFactory, 0)
+	allRules = append(allRules, baseRules...)
+
+	if len(orderIdRules) > 0 {
+		orderIdExpr := &filter.Expression{
+			Op:    filter.Or,
+			Rules: orderIdRules,
+		}
+		allRules = append(allRules, orderIdExpr)
+	}
+
+	if len(excludeRules) > 0 {
+		excludeExpr := &filter.Expression{
+			Op:    filter.And,
+			Rules: excludeRules,
+		}
+		allRules = append(allRules, excludeExpr)
+	}
+
+	return &filter.Expression{
+		Op:    filter.And,
+		Rules: allRules,
+	}
+}
+
+// execAverageTimeConsumptionOverviewQuery executes the average time consumption overview query
+func (op *operation) execAverageTimeConsumptionOverviewQuery(kt *kit.Kit, start, end time.Time,
+	excludeSuborderIDs []string) ([]types.AverageTimeConsumptionItem, error) {
+
+	filterExpr := op.buildTimeRangeFilter(start, end)
+
+	// 获取主订单列表
+	orders, err := op.listApplyOrders(kt, filterExpr)
+	if err != nil {
+		logs.Errorf("list apply orders failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	orderIDs := make([]uint64, 0, len(orders.Details))
+	for _, order := range orders.Details {
+		if order != nil {
+			orderIDs = append(orderIDs, order.OrderID)
+		}
+	}
+
+	// 如果没有主订单，直接返回空结果
+	if len(orderIDs) == 0 {
+		return []types.AverageTimeConsumptionItem{}, nil
+	}
+
+	// 获取最后完成子订单时间
+	lastTimeMap, _, err := op.getLastSuborderEndTime(kt, orderIDs, excludeSuborderIDs)
+	if err != nil {
+		logs.Errorf("get last suborder end time failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	// 按年月分组统计耗时
+	monthMap := make(map[string][]float64)
+	for _, order := range orders.Details {
+		if order == nil {
+			continue
+		}
+
+		lastTime, ok := lastTimeMap[order.OrderID]
+		if !ok || lastTime.IsZero() {
+			continue
+		}
+
+		createdAt, err := op.parseTime(kt, string(order.CreatedAt), "created_at")
+		if err != nil {
+			logs.Errorf("parse created_at failed, err: %v, rid: %s", err, kt.Rid)
+			continue
+		}
+
+		duration := lastTime.Sub(createdAt).Hours()
+		if duration <= 0 {
+			continue
+		}
+
+		yearMonth := createdAt.Format(constant.YearMonthLayout)
+		monthMap[yearMonth] = append(monthMap[yearMonth], duration)
+	}
+
+	items := make([]types.AverageTimeConsumptionItem, 0, len(monthMap))
+	for yearMonth, durations := range monthMap {
+		if len(durations) == 0 {
+			continue
+		}
+
+		avg := op.calculateAverageDuration(durations)
+		items = append(items, types.AverageTimeConsumptionItem{
+			YearMonth:        yearMonth,
+			AvgDurationHours: avg,
+		})
+	}
+
+	// 按年月排序
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].YearMonth < items[j].YearMonth
+	})
+
+	return items, nil
+}
+
+// getLastSuborderEndTime 获取主订单的最后完成子订单时间
+func (op *operation) getLastSuborderEndTime(kt *kit.Kit, orderIDs []uint64, excludeSuborderIDs []string) (
+	map[uint64]time.Time, map[uint64]int64, error) {
+
+	// 如果 orderIDs 为空，直接返回空 map
+	if len(orderIDs) == 0 {
+		return make(map[uint64]time.Time), make(map[uint64]int64), nil
+	}
+
+	lastEndTimeMap := make(map[uint64]time.Time)
+	completedCountMap := make(map[uint64]int64)
+	batches := slice.Split(orderIDs, int(core.DefaultMaxPageLimit))
+	for _, batchOrderIDs := range batches {
+		// 构建子订单过滤条件
+		filterExpr := op.buildSuborderFilterForMultipleOrders(batchOrderIDs, excludeSuborderIDs)
+
+		start := uint32(0)
+		for {
+			req := &cvmapplyproto.ZiyanCvmApplySuborderListReq{
+				Filter: filterExpr,
+				Page: &core.BasePage{
+					Count: false,
+					Start: start,
+					Limit: core.DefaultMaxPageLimit,
+				},
+			}
+
+			suborders, err := op.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.List(kt.Ctx, kt.Header(), req)
+			if err != nil {
+				logs.Errorf("list apply suborders failed, err: %v, rid: %s", err, kt.Rid)
+				return nil, nil, err
+			}
+
+			for _, suborder := range suborders.Details {
+				if suborder == nil {
+					continue
+				}
+
+				updatedAt, err := op.parseTime(kt, string(suborder.UpdatedAt), "updated_at")
+				if err != nil {
+					logs.Errorf("parse updated_at failed, err: %v, rid: %s", err, kt.Rid)
+					continue
+				}
+
+				if lastTime, ok := lastEndTimeMap[suborder.OrderID]; !ok || updatedAt.After(lastTime) {
+					lastEndTimeMap[suborder.OrderID] = updatedAt
+				}
+				// 累加已完成子订单计数
+				completedCountMap[suborder.OrderID]++
+			}
+
+			if len(suborders.Details) < int(core.DefaultMaxPageLimit) {
+				break
+			}
+
+			start += uint32(core.DefaultMaxPageLimit)
+		}
+	}
+
+	return lastEndTimeMap, completedCountMap, nil
+}
+
 // GetAverageTimeConsumptionCompare aggregates average time consumption compare by biz and month
-func (op *operation) GetAverageTimeConsumptionCompare(kt *kit.Kit, param *types.AverageTimeConsumptionCompareReq) (*types.AverageTimeConsumptionCompareRst, error) {
+func (op *operation) GetAverageTimeConsumptionCompare(kt *kit.Kit, param *types.AverageTimeConsumptionCompareReq) (
+	*types.AverageTimeConsumptionCompareRst, error) {
+
+	if op.client == nil || op.client.DataService() == nil {
+		return nil, errf.Newf(errf.InvalidParameter, "data service client is not initialized")
+	}
+
 	currentStart, currentEnd, err := param.GetCurrentRange()
 	if err != nil {
 		logs.Errorf("parse current range failed, err: %v, rid: %s", err, kt.Rid)
@@ -142,23 +358,24 @@ func (op *operation) GetAverageTimeConsumptionCompare(kt *kit.Kit, param *types.
 		return nil, err
 	}
 
-	// build and run pipelines for current and compare ranges
-	current, err := op.aggregateAverageTimeConsumptionByRange(kt, currentStart, currentEnd)
+	current, err := op.execAverageTimeConsumptionByRangeQuery(kt, currentStart, currentEnd)
 	if err != nil {
-		logs.Errorf("aggregate current range failed, err: %v, rid: %s", err, kt.Rid)
+		logs.Errorf("execute current range query failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
-	compare, err := op.aggregateAverageTimeConsumptionByRange(kt, compareStart, compareEnd)
+	compare, err := op.execAverageTimeConsumptionByRangeQuery(kt, compareStart, compareEnd)
 	if err != nil {
-		logs.Errorf("aggregate compare range failed, err: %v, rid: %s", err, kt.Rid)
+		logs.Errorf("execute compare range query failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
 
 	return &types.AverageTimeConsumptionCompareRst{Current: current, Compare: compare}, nil
 }
 
-// aggregateAverageTimeConsumptionByRange runs the aggregation for a given time range
-func (op *operation) aggregateAverageTimeConsumptionByRange(kt *kit.Kit, start time.Time, end time.Time) ([]types.AverageTimeConsumptionCompareItem, error) {
+// execAverageTimeConsumptionByRangeQuery executes the average time consumption by range query
+func (op *operation) execAverageTimeConsumptionByRangeQuery(kt *kit.Kit, start, end time.Time) (
+	[]types.AverageTimeConsumptionCompareItem, error) {
+
 	// Get exclude suborder IDs
 	excludeSuborderIDs, err := op.getExcludeSuborderIDs(kt, start, end)
 	if err != nil {
@@ -166,99 +383,106 @@ func (op *operation) aggregateAverageTimeConsumptionByRange(kt *kit.Kit, start t
 		return nil, err
 	}
 
-	pipeline := op.buildAverageTimeConsumptionComparePipeline(start, end, excludeSuborderIDs)
+	filterExpr := op.buildTimeRangeFilter(start, end)
 
-	rst := make([]types.AverageTimeConsumptionCompareItem, 0)
-	if err := model.Operation().ApplyTicket().AggregateAll(kt.Ctx, pipeline, &rst); err != nil {
-		logs.Errorf("aggregate average time consumption compare failed, err: %v, rid: %s", err, kt.Rid)
+	orders, err := op.listApplyOrders(kt, filterExpr)
+	if err != nil {
+		logs.Errorf("list apply orders failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
-	return rst, nil
+
+	orderIDs := make([]uint64, 0, len(orders.Details))
+	for _, order := range orders.Details {
+		if order != nil {
+			orderIDs = append(orderIDs, order.OrderID)
+		}
+	}
+
+	// 如果没有主订单，直接返回空结果
+	if len(orderIDs) == 0 {
+		return []types.AverageTimeConsumptionCompareItem{}, nil
+	}
+
+	lastTimeMap, completedCountMap, err := op.getLastSuborderEndTime(kt, orderIDs, excludeSuborderIDs)
+	if err != nil {
+		logs.Errorf("get last suborder end time failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	// 按业务和月份分组统计
+	bizMonthDurationsMap, bizMonthCompletedCountMap := op.groupByBizAndMonthWithCount(kt, orders, lastTimeMap,
+		completedCountMap)
+
+	var items []types.AverageTimeConsumptionCompareItem
+	for bkBizID, monthMap := range bizMonthDurationsMap {
+		for yearMonth, durations := range monthMap {
+			if len(durations) == 0 {
+				continue
+			}
+
+			avg := op.calculateAverageDuration(durations)
+			items = append(items, types.AverageTimeConsumptionCompareItem{
+				BkBizID:          bkBizID,
+				YearMonth:        yearMonth,
+				DoneOrders:       bizMonthCompletedCountMap[bkBizID][yearMonth],
+				AvgDurationHours: avg,
+			})
+		}
+	}
+
+	// 按业务 ID 和年月排序
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].BkBizID != items[j].BkBizID {
+			return items[i].BkBizID < items[j].BkBizID
+		}
+		return items[i].YearMonth < items[j].YearMonth
+	})
+
+	return items, nil
 }
 
-// buildAverageTimeConsumptionComparePipeline builds the aggregation pipeline for average time consumption comparison
-func (op *operation) buildAverageTimeConsumptionComparePipeline(start, end time.Time,
-	excludeSuborderIDs []string) []map[string]interface{} {
+// groupByBizAndMonth 按业务和月份分组统计耗时
+func (op *operation) groupByBizAndMonthWithCount(kt *kit.Kit, orders *cvmapplyproto.ZiyanCvmApplyOrderListResult,
+	lastTimeMap map[uint64]time.Time, completedCountMap map[uint64]int64) (
+	bizMonthDurationsMap map[int64]map[string][]float64, bizMonthCompletedCountMap map[int64]map[string]int64) {
 
-	match := map[string]interface{}{
-		"create_at": map[string]interface{}{
-			pkg.BKDBGTE: start,
-			pkg.BKDBLTE: end,
-		},
+	bizMonthDurationsMap = make(map[int64]map[string][]float64)
+	bizMonthCompletedCountMap = make(map[int64]map[string]int64)
+
+	for _, order := range orders.Details {
+		if order == nil {
+			continue
+		}
+
+		// 获取最后完成子订单时间
+		lastTime, ok := lastTimeMap[order.OrderID]
+		if !ok || lastTime.IsZero() {
+			continue
+		}
+
+		createdAt, err := op.parseTime(kt, string(order.CreatedAt), "created_at")
+		if err != nil {
+			logs.Errorf("parse created_at failed, err: %v, rid: %s", err, kt.Rid)
+			continue
+		}
+
+		duration := lastTime.Sub(createdAt).Hours()
+		if duration <= 0 {
+			continue
+		}
+
+		// 按业务和月份分组
+		yearMonth := createdAt.Format(constant.YearMonthLayout)
+		if _, ok := bizMonthDurationsMap[order.BkBizID]; !ok {
+			bizMonthDurationsMap[order.BkBizID] = make(map[string][]float64)
+			bizMonthCompletedCountMap[order.BkBizID] = make(map[string]int64)
+		}
+		bizMonthDurationsMap[order.BkBizID][yearMonth] = append(bizMonthDurationsMap[order.BkBizID][yearMonth],
+			duration)
+		// 累加已完成子订单数
+		bizMonthCompletedCountMap[order.BkBizID][yearMonth] += completedCountMap[order.OrderID]
 	}
-	return []map[string]interface{}{
-		{pkg.BKDBMatch: match},
-		{pkg.BKDBAddFields: map[string]interface{}{
-			"year_month": map[string]interface{}{
-				"$dateToString": map[string]interface{}{
-					"format": "%Y-%m",
-					"date":   "$create_at",
-				},
-			},
-		}},
-		{pkg.BKDBLookup: map[string]interface{}{
-			"from":         pkg.BKTableNameApplyOrder,
-			"localField":   "order_id",
-			"foreignField": "order_id",
-			"as":           "suborders",
-		}},
-		// filter out excluded suborders
-		buildFilterExcludedSubordersStage(excludeSuborderIDs),
-		// ensure still has suborders after filtering
-		{pkg.BKDBMatch: map[string]interface{}{
-			"suborders.0": map[string]interface{}{pkg.BKDBExists: true},
-		}},
-		{pkg.BKDBAddFields: map[string]interface{}{
-			"suborder_update_times": "$suborders.update_at",
-			"completed_suborders": map[string]interface{}{
-				"$filter": map[string]interface{}{
-					"input": "$suborders",
-					"as":    "suborder",
-					"cond":  map[string]interface{}{pkg.BKDBEQ: []interface{}{"$$suborder.stage", types.TicketStageDone}},
-				},
-			},
-		}},
-		{pkg.BKDBAddFields: map[string]interface{}{
-			"done_orders": map[string]interface{}{
-				"$size": "$completed_suborders",
-			},
-		}},
-		{pkg.BKDBAddFields: map[string]interface{}{
-			"last_suborder_end_time": map[string]interface{}{
-				"$max": "$completed_suborders.update_at",
-			},
-		}},
-		{pkg.BKDBMatch: map[string]interface{}{
-			"last_suborder_end_time": map[string]interface{}{pkg.BKDBNE: nil},
-		}},
-		{pkg.BKDBAddFields: map[string]interface{}{
-			"duration_hours": map[string]interface{}{
-				pkg.BKDBDivide: []interface{}{
-					map[string]interface{}{pkg.BKDBSubtract: []interface{}{"$last_suborder_end_time", "$create_at"}},
-					3600000,
-				},
-			},
-		}},
-		{pkg.BKDBGroup: map[string]interface{}{
-			"_id": map[string]interface{}{
-				"bk_biz_id":  "$bk_biz_id",
-				"year_month": "$year_month",
-			},
-			"done_orders":        map[string]interface{}{pkg.BKDBSum: "$done_orders"},
-			"avg_duration_hours": map[string]interface{}{pkg.BKDBAvg: "$duration_hours"},
-		}},
-		{pkg.BKDBProject: map[string]interface{}{
-			"_id":                0,
-			"bk_biz_id":          "$_id.bk_biz_id",
-			"year_month":         "$_id.year_month",
-			"done_orders":        1,
-			"avg_duration_hours": map[string]interface{}{pkg.BKDBRound: []interface{}{"$avg_duration_hours", 2}},
-		}},
-		{pkg.BKDBSort: map[string]interface{}{
-			"bk_biz_id":  1,
-			"year_month": 1,
-		}},
-	}
+	return
 }
 
 // buildFilterExcludedSubordersStage builds a $addFields stage to filter out excluded suborders

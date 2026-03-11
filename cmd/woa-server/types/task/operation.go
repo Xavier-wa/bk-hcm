@@ -159,9 +159,9 @@ type ApplyStat struct {
 // AverageTimeConsumptionReq request for average time consumption overview
 type AverageTimeConsumptionReq struct {
 	// Date format: YYYY-MM-DD, e.g., 2025-01-01
-	StartTime string `json:"start_time" bson:"start_time"`
+	StartTime string `json:"start_time"`
 	// Date format: YYYY-MM-DD, e.g., 2025-01-31
-	EndTime string `json:"end_time" bson:"end_time"`
+	EndTime string `json:"end_time"`
 }
 
 // Validate whether AverageTimeConsumptionReq is valid
@@ -204,8 +204,8 @@ func (req *AverageTimeConsumptionReq) GetEndTime() (time.Time, error) {
 
 // AverageTimeConsumptionItem one month aggregated metrics for average time consumption
 type AverageTimeConsumptionItem struct {
-	YearMonth        string  `json:"year_month" bson:"year_month"`
-	AvgDurationHours float64 `json:"avg_duration_hours" bson:"avg_duration_hours"`
+	YearMonth        string  `json:"year_month"`
+	AvgDurationHours float64 `json:"avg_duration_hours"`
 }
 
 // AverageTimeConsumptionOverviewResp wraps overview list under details
@@ -216,9 +216,9 @@ type AverageTimeConsumptionOverviewResp struct {
 // AverageTimeConsumptionCompareReq request for average time consumption compare
 type AverageTimeConsumptionCompareReq struct {
 	// YearMonth format: YYYY-MM, e.g., 2025-10 for October 2025
-	CurrentDate string `json:"current_date" bson:"current_date"`
+	CurrentDate string `json:"current_date"`
 	// YearMonth format: YYYY-MM, e.g., 2025-11 for November 2025
-	CompareDate string `json:"compare_date" bson:"compare_date"`
+	CompareDate string `json:"compare_date"`
 }
 
 // Validate whether AverageTimeConsumptionCompareReq is valid
@@ -259,10 +259,10 @@ func (req *AverageTimeConsumptionCompareReq) GetCompareRange() (start time.Time,
 
 // AverageTimeConsumptionCompareItem one month aggregated metrics by biz for average time consumption compare
 type AverageTimeConsumptionCompareItem struct {
-	BkBizID          int64   `json:"bk_biz_id" bson:"bk_biz_id"`
-	YearMonth        string  `json:"year_month" bson:"year_month"`
-	DoneOrders       int64   `json:"done_orders" bson:"done_orders"`
-	AvgDurationHours float64 `json:"avg_duration_hours" bson:"avg_duration_hours"`
+	BkBizID          int64   `json:"bk_biz_id"`
+	YearMonth        string  `json:"year_month"`
+	DoneOrders       int64   `json:"done_orders"`
+	AvgDurationHours float64 `json:"avg_duration_hours"`
 }
 
 // AverageTimeConsumptionCompareRst wraps compare result with current and compare arrays

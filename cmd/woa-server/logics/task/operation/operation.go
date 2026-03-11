@@ -92,12 +92,14 @@ type Interface interface {
 type operation struct {
 	lang       language.CCLanguageIf
 	statistics statistics.Interface
+	client     *client.ClientSet
 }
 
 // New create a operation instance
 func New(_ context.Context, clientSet *client.ClientSet) (*operation, error) {
 	op := &operation{
-		lang: language.NewFromCtx(language.EmptyLanguageSetting),
+		lang:   language.NewFromCtx(language.EmptyLanguageSetting),
+		client: clientSet,
 	}
 
 	if clientSet != nil {
