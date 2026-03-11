@@ -43,6 +43,10 @@ func InitService(cap *capability.Capability) {
 	h.Add("ListZiyanCvmApplySuborder", http.MethodPost, "/cvm_apply/suborders/list", svc.ListZiyanCvmApplySuborder)
 	h.Add("DeleteZiyanCvmApplySuborder", http.MethodDelete,
 		"/cvm_apply/suborders/batch", svc.DeleteZiyanCvmApplySuborder)
+	h.Add("GetOrderTimeCostOverview", http.MethodPost,
+		"/cvm_apply/analysis/order_time_cost/overview", svc.GetOrderTimeCostOverview)
+	h.Add("GetOrderTimeCostCompare", http.MethodPost,
+		"/cvm_apply/analysis/order_time_cost/compares", svc.GetOrderTimeCostCompare)
 
 	h.Load(cap.WebService)
 }

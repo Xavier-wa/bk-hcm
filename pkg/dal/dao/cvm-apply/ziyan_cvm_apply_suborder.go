@@ -46,6 +46,8 @@ type ZiyanCvmApplySuborderInterface interface {
 	Update(kt *kit.Kit, tx *sqlx.Tx, expr *filter.Expression, model *cvmapplytable.ZiyanCvmApplySuborder) error
 	List(kt *kit.Kit, opt *types.ListOption) (*cvmapplyproto.ZiyanCvmApplySuborderListResult, error)
 	DeleteWithTx(kt *kit.Kit, tx *sqlx.Tx, expr *filter.Expression) error
+	GetOrderTimeCostOverview(kt *kit.Kit, expr *filter.Expression) ([]*cvmapplyproto.OrderTimeCostItem, error)
+	GetOrderTimeCostCompare(kt *kit.Kit, expr *filter.Expression) ([]*cvmapplyproto.OrderTimeCostCompareItem, error)
 }
 
 var _ ZiyanCvmApplySuborderInterface = new(ZiyanCvmApplySuborderDao)
@@ -195,4 +197,72 @@ func (d ZiyanCvmApplySuborderDao) DeleteWithTx(kt *kit.Kit, tx *sqlx.Tx, expr *f
 	}
 
 	return nil
+}
+
+// GetOrderTimeCostOverview 按月份统计剔除审批阶段耗时
+func (d ZiyanCvmApplySuborderDao) GetOrderTimeCostOverview(kt *kit.Kit, expr *filter.Expression) (
+	[]*cvmapplyproto.OrderTimeCostItem, error) {
+
+	if expr == nil {
+		return nil, errf.New(errf.InvalidParameter, "filter expr is required")
+	}
+
+	whereExpr, whereValue, err := expr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		logs.Errorf("get order time cost overview failed, err: %v, whereValue: %+v, rid: %s", err, whereValue,
+			kt.Rid)
+		return nil, err
+	}
+
+	sql := fmt.Sprintf(`
+		SELECT
+			DATE_FORMAT(created_at, '%%Y-%%m') AS yearmonth,
+			ROUND(AVG(TIMESTAMPDIFF(HOUR, created_at, updated_at)), 2) AS avg_duration_hours
+		FROM %s %s
+		GROUP BY yearmonth
+		ORDER BY yearmonth ASC`, table.ZiyanCvmApplySuborderTable, whereExpr)
+
+	details := make([]*cvmapplyproto.OrderTimeCostItem, 0)
+	if err := d.Orm.Do().Select(kt.Ctx, &details, sql, whereValue); err != nil {
+		logs.Errorf("get order time cost overview failed, sql: %s, err: %v, whereValue: %+v, rid: %s",
+			sql, err, whereValue, kt.Rid)
+		return nil, err
+	}
+
+	return details, nil
+}
+
+// GetOrderTimeCostCompare 按业务+月份统计剔除审批阶段耗时详情
+func (d ZiyanCvmApplySuborderDao) GetOrderTimeCostCompare(kt *kit.Kit, expr *filter.Expression) (
+	[]*cvmapplyproto.OrderTimeCostCompareItem, error) {
+
+	if expr == nil {
+		return nil, errf.New(errf.InvalidParameter, "filter expr is required")
+	}
+
+	whereExpr, whereValue, err := expr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		logs.Errorf("get order time cost compare failed, err: %v, whereValue: %+v, rid: %s", err, whereValue,
+			kt.Rid)
+		return nil, err
+	}
+
+	sql := fmt.Sprintf(`
+		SELECT
+			bk_biz_id,
+			DATE_FORMAT(created_at, '%%Y-%%m') AS yearmonth,
+			COUNT(*) AS done_orders,
+			ROUND(AVG(TIMESTAMPDIFF(HOUR, created_at, updated_at)), 2) AS avg_duration_hours
+		FROM %s %s
+		GROUP BY bk_biz_id, yearmonth
+		ORDER BY bk_biz_id ASC, yearmonth ASC`, table.ZiyanCvmApplySuborderTable, whereExpr)
+
+	details := make([]*cvmapplyproto.OrderTimeCostCompareItem, 0)
+	if err := d.Orm.Do().Select(kt.Ctx, &details, sql, whereValue); err != nil {
+		logs.Errorf("get order time cost compare failed, sql: %s, err: %v, whereValue: %+v, rid: %s",
+			sql, err, whereValue, kt.Rid)
+		return nil, err
+	}
+
+	return details, nil
 }

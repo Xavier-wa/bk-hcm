@@ -53,7 +53,7 @@ func (s *service) GetOrderTimeCostOverview(cts *rest.Contexts) (any, error) {
 		logs.Errorf("failed to get order time cost overview, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, err
 	}
-	return types.OrderTimeCostOverviewResp{Details: rst}, nil
+	return rst, nil
 }
 
 // GetOrderTimeCostCompare get order time cost compare

@@ -274,9 +274,9 @@ type AverageTimeConsumptionCompareRst struct {
 // OrderTimeCostReq request for order time cost overview
 type OrderTimeCostReq struct {
 	// Date format: YYYY-MM-DD, e.g., 2025-01-01
-	StartTime string `json:"start_time" bson:"start_time"`
+	StartTime string `json:"start_time"`
 	// Date format: YYYY-MM-DD, e.g., 2025-01-31
-	EndTime string `json:"end_time" bson:"end_time"`
+	EndTime string `json:"end_time"`
 }
 
 // Validate whether OrderTimeCostReq is valid
@@ -313,21 +313,21 @@ func (req *OrderTimeCostReq) GetEndTime() (time.Time, error) {
 
 // OrderTimeCostItem one month aggregated metrics for order time cost
 type OrderTimeCostItem struct {
-	YearMonth        string  `json:"year_month" bson:"year_month"`
-	AvgDurationHours float64 `json:"avg_duration_hours" bson:"avg_duration_hours"`
+	YearMonth        string  `json:"year_month" db:"yearmonth"`
+	AvgDurationHours float64 `json:"avg_duration_hours" db:"avg_duration_hours"`
 }
 
 // OrderTimeCostOverviewResp wraps overview list under details
 type OrderTimeCostOverviewResp struct {
-	Details []OrderTimeCostItem `json:"details"`
+	Details []*OrderTimeCostItem `json:"details"`
 }
 
 // OrderTimeCostCompareReq request for order time cost compare
 type OrderTimeCostCompareReq struct {
 	// YearMonth format: YYYY-MM, e.g., 2025-10 for October 2025
-	CurrentDate string `json:"current_date" bson:"current_date"`
+	CurrentDate string `json:"current_date"`
 	// YearMonth format: YYYY-MM, e.g., 2025-11 for November 2025
-	CompareDate string `json:"compare_date" bson:"compare_date"`
+	CompareDate string `json:"compare_date"`
 }
 
 // Validate whether OrderTimeCostCompareReq is valid
@@ -369,16 +369,16 @@ func (req *OrderTimeCostCompareReq) GetCompareRange() (start time.Time, end time
 
 // OrderTimeCostCompareItem one month aggregated metrics by biz for order time cost compare
 type OrderTimeCostCompareItem struct {
-	BkBizID          int64   `json:"bk_biz_id" bson:"bk_biz_id"`
-	YearMonth        string  `json:"year_month" bson:"year_month"`
-	DoneOrders       int64   `json:"done_orders" bson:"done_orders"`
-	AvgDurationHours float64 `json:"avg_duration_hours" bson:"avg_duration_hours"`
+	BkBizID          int64   `json:"bk_biz_id" db:"bk_biz_id"`
+	YearMonth        string  `json:"year_month" db:"yearmonth"`
+	DoneOrders       int64   `json:"done_orders" db:"done_orders"`
+	AvgDurationHours float64 `json:"avg_duration_hours" db:"avg_duration_hours"`
 }
 
 // OrderTimeCostCompareRst wraps compare result with current and compare arrays
 type OrderTimeCostCompareRst struct {
-	Current []OrderTimeCostCompareItem `json:"current"`
-	Compare []OrderTimeCostCompareItem `json:"compare"`
+	Current []*OrderTimeCostCompareItem `json:"current"`
+	Compare []*OrderTimeCostCompareItem `json:"compare"`
 }
 
 // ProductionStageTimeCostReq request for production stage time cost overview

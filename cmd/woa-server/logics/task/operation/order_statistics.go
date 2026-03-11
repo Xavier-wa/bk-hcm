@@ -22,15 +22,12 @@ package operation
 import (
 	"time"
 
-	model "hcm/cmd/woa-server/model/task"
 	types "hcm/cmd/woa-server/types/task"
 	"hcm/pkg"
-	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/criteria/errf"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 )
-
-const millisecondsPerHour = int64(time.Hour / time.Millisecond)
 
 var (
 	bizOrderMap = map[string]interface{}{pkg.BKDBSort: map[string]interface{}{
@@ -40,7 +37,14 @@ var (
 )
 
 // GetOrderTimeCostOverview aggregates order time cost by month within a range
-func (op *operation) GetOrderTimeCostOverview(kt *kit.Kit, param *types.OrderTimeCostReq) ([]types.OrderTimeCostItem, error) {
+func (op *operation) GetOrderTimeCostOverview(kt *kit.Kit, param *types.OrderTimeCostReq) (
+	*types.OrderTimeCostOverviewResp, error) {
+
+	if op.client == nil || op.client.DataService() == nil {
+		logs.Errorf("data service client is not initialized, rid: %s", kt.Rid)
+		return nil, errf.New(errf.Aborted, "data service client is not initialized")
+	}
+
 	start, err := param.GetStartTime()
 	if err != nil {
 		logs.Errorf("parse start time failed, err: %v, rid: %s", err, kt.Rid)
@@ -59,63 +63,39 @@ func (op *operation) GetOrderTimeCostOverview(kt *kit.Kit, param *types.OrderTim
 		return nil, err
 	}
 
-	match := map[string]interface{}{
-		"create_at": map[string]interface{}{
-			pkg.BKDBGTE: start,
-			pkg.BKDBLTE: end,
-		},
-		"stage":  types.TicketStageDone,
-		"status": types.ApplyStatusDone,
-		"source": map[string]interface{}{
-			pkg.BKDBNE: enumor.ApplyTicketSrcPurchaseToResPool,
-		},
-	}
-
-	// Exclude suborder IDs if any
-	if len(excludeSuborderIDs) > 0 {
-		match["suborder_id"] = map[string]interface{}{
-			pkg.BKDBNIN: excludeSuborderIDs,
-		}
-	}
-
-	pipeline := []map[string]interface{}{
-		{pkg.BKDBMatch: match},
-		{pkg.BKDBAddFields: map[string]interface{}{
-			"year_month": map[string]interface{}{
-				"$dateToString": map[string]interface{}{
-					"format": "%Y-%m",
-					"date":   "$create_at",
-				},
-			},
-			"duration_hours": map[string]interface{}{
-				pkg.BKDBDivide: []interface{}{
-					map[string]interface{}{pkg.BKDBSubtract: []interface{}{"$update_at", "$create_at"}},
-					millisecondsPerHour,
-				},
-			},
-		}},
-		{pkg.BKDBGroup: map[string]interface{}{
-			"_id":                "$year_month",
-			"avg_duration_hours": map[string]interface{}{pkg.BKDBAvg: "$duration_hours"},
-		}},
-		{pkg.BKDBProject: map[string]interface{}{
-			"_id":                0,
-			"year_month":         "$_id",
-			"avg_duration_hours": map[string]interface{}{pkg.BKDBRound: []interface{}{"$avg_duration_hours", 2}},
-		}},
-		{pkg.BKDBSort: map[string]interface{}{"year_month": 1}},
-	}
-
-	rst := make([]types.OrderTimeCostItem, 0)
-	if err := model.Operation().ApplyOrder().AggregateAll(kt.Ctx, pipeline, &rst); err != nil {
-		logs.Errorf("aggregate order time cost overview failed, err: %v, rid: %s", err, kt.Rid)
+	filterExpr, err := op.buildSuborderFilterExpression(start, end, excludeSuborderIDs)
+	if err != nil {
+		logs.Errorf("build suborder filter expression failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
-	return rst, nil
+
+	result, err := op.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.GetOrderTimeCostOverview(kt.Ctx,
+		kt.Header(), filterExpr)
+	if err != nil {
+		logs.Errorf("get order time cost overview from data service failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	convertedDetails := make([]*types.OrderTimeCostItem, 0, len(result))
+	for _, item := range result {
+		convertedDetails = append(convertedDetails, &types.OrderTimeCostItem{
+			YearMonth:        item.YearMonth,
+			AvgDurationHours: item.AvgDurationHours,
+		})
+	}
+
+	return &types.OrderTimeCostOverviewResp{Details: convertedDetails}, nil
 }
 
 // GetOrderTimeCostCompare implements comparison aggregation per biz across two months
-func (op *operation) GetOrderTimeCostCompare(kt *kit.Kit, param *types.OrderTimeCostCompareReq) (*types.OrderTimeCostCompareRst, error) {
+func (op *operation) GetOrderTimeCostCompare(kt *kit.Kit, param *types.OrderTimeCostCompareReq) (
+	*types.OrderTimeCostCompareRst, error) {
+
+	if op.client == nil || op.client.DataService() == nil {
+		logs.Errorf("data service client is not initialized, rid: %s", kt.Rid)
+		return nil, errf.New(errf.Aborted, "data service client is not initialized")
+	}
+
 	currentStart, currentEnd, err := param.GetCurrentRange()
 	if err != nil {
 		logs.Errorf("parse current range failed, err: %v, rid: %s", err, kt.Rid)
@@ -127,88 +107,58 @@ func (op *operation) GetOrderTimeCostCompare(kt *kit.Kit, param *types.OrderTime
 		return nil, err
 	}
 
-	// build and run pipelines for current and compare ranges
-	current, err := op.aggregateOrderTimeCostByRange(kt, currentStart, currentEnd)
+	currentExcludeIDs, err := op.getExcludeSuborderIDs(kt, currentStart, currentEnd)
 	if err != nil {
-		logs.Errorf("aggregate current range failed, err: %v, rid: %s", err, kt.Rid)
-		return nil, err
-	}
-	compare, err := op.aggregateOrderTimeCostByRange(kt, compareStart, compareEnd)
-	if err != nil {
-		logs.Errorf("aggregate compare range failed, err: %v, rid: %s", err, kt.Rid)
+		logs.Errorf("get current exclude suborder IDs failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
 
-	return &types.OrderTimeCostCompareRst{Current: current, Compare: compare}, nil
+	compareExcludeIDs, err := op.getExcludeSuborderIDs(kt, compareStart, compareEnd)
+	if err != nil {
+		logs.Errorf("get compare exclude suborder IDs failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	currentItems, err := op.buildAndFetchOrderTimeCostCompare(kt, currentStart, currentEnd, currentExcludeIDs)
+	if err != nil {
+		logs.Errorf("build and fetch current items failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+	compareItems, err := op.buildAndFetchOrderTimeCostCompare(kt, compareStart, compareEnd, compareExcludeIDs)
+	if err != nil {
+		logs.Errorf("build and fetch compare items failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+	return &types.OrderTimeCostCompareRst{Current: currentItems, Compare: compareItems}, nil
 }
 
-// aggregateOrderTimeCostByRange runs the aggregation for a given time range
-func (op *operation) aggregateOrderTimeCostByRange(kt *kit.Kit, start time.Time, end time.Time) ([]types.OrderTimeCostCompareItem, error) {
-	// Get exclude suborder IDs
-	excludeSuborderIDs, err := op.getExcludeSuborderIDs(kt, start, end)
+// buildAndFetchOrderTimeCostCompare builds filter and fetches order time cost compare data
+func (op *operation) buildAndFetchOrderTimeCostCompare(kt *kit.Kit, start, end time.Time, excludeIDs []string) (
+	[]*types.OrderTimeCostCompareItem, error) {
+
+	filterExpr, err := op.buildSuborderFilterExpression(start, end, excludeIDs)
 	if err != nil {
-		logs.Errorf("get exclude suborder IDs failed, err: %v, rid: %s", err, kt.Rid)
+		logs.Errorf("build suborder filter expression failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
 
-	match := map[string]interface{}{
-		"create_at": map[string]interface{}{
-			pkg.BKDBGTE: start,
-			pkg.BKDBLTE: end,
-		},
-		// only completed orders
-		"stage":  types.TicketStageDone,
-		"status": types.ApplyStatusDone,
-		"source": map[string]interface{}{
-			pkg.BKDBNE: enumor.ApplyTicketSrcPurchaseToResPool,
-		},
-	}
+	result, err := op.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.GetOrderTimeCostCompare(kt.Ctx,
+		kt.Header(), filterExpr)
 
-	// Exclude suborder IDs if any
-	if len(excludeSuborderIDs) > 0 {
-		match["suborder_id"] = map[string]interface{}{
-			pkg.BKDBNIN: excludeSuborderIDs,
-		}
-	}
-
-	pipeline := []map[string]interface{}{
-		{pkg.BKDBMatch: match},
-		{pkg.BKDBAddFields: map[string]interface{}{
-			"year_month": map[string]interface{}{
-				"$dateToString": map[string]interface{}{
-					"format": "%Y-%m",
-					"date":   "$create_at",
-				},
-			},
-			"duration_hours": map[string]interface{}{
-				pkg.BKDBDivide: []interface{}{
-					map[string]interface{}{pkg.BKDBSubtract: []interface{}{"$update_at", "$create_at"}},
-					millisecondsPerHour,
-				},
-			},
-		}},
-		{pkg.BKDBGroup: map[string]interface{}{
-			"_id": map[string]interface{}{
-				"bk_biz_id":  "$bk_biz_id",
-				"year_month": "$year_month",
-			},
-			"done_orders":        map[string]interface{}{pkg.BKDBSum: 1},
-			"avg_duration_hours": map[string]interface{}{pkg.BKDBAvg: "$duration_hours"},
-		}},
-		{pkg.BKDBProject: map[string]interface{}{
-			"_id":                0,
-			"bk_biz_id":          "$_id.bk_biz_id",
-			"year_month":         "$_id.year_month",
-			"done_orders":        1,
-			"avg_duration_hours": map[string]interface{}{pkg.BKDBRound: []interface{}{"$avg_duration_hours", 2}},
-		}},
-		bizOrderMap,
-	}
-
-	rst := make([]types.OrderTimeCostCompareItem, 0)
-	if err := model.Operation().ApplyOrder().AggregateAll(kt.Ctx, pipeline, &rst); err != nil {
-		logs.Errorf("aggregate order time cost compare failed, err: %v, rid: %s", err, kt.Rid)
+	if err != nil {
+		logs.Errorf("get order time cost compare from data service failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
-	return rst, nil
+
+	convertedItems := make([]*types.OrderTimeCostCompareItem, 0, len(result))
+	for _, item := range result {
+		convertedItems = append(convertedItems, &types.OrderTimeCostCompareItem{
+			BkBizID:          item.BkBizID,
+			YearMonth:        item.YearMonth,
+			DoneOrders:       item.DoneOrders,
+			AvgDurationHours: item.AvgDurationHours,
+		})
+	}
+
+	return convertedItems, nil
 }

@@ -30,15 +30,19 @@ import (
 	model "hcm/cmd/woa-server/model/task"
 	types "hcm/cmd/woa-server/types/task"
 	"hcm/pkg"
+	"hcm/pkg/api/core"
 	"hcm/pkg/client"
 	"hcm/pkg/condition"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/mapstr"
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/runtime/filter"
 	"hcm/pkg/tools/language"
 	"hcm/pkg/tools/metadata"
+	"hcm/pkg/tools/slice"
 	"hcm/pkg/tools/util"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -55,7 +59,7 @@ type Interface interface {
 	GetAverageTimeConsumptionCompare(kt *kit.Kit, param *types.AverageTimeConsumptionCompareReq) (
 		*types.AverageTimeConsumptionCompareRst, error)
 	// GetOrderTimeCostOverview get order time cost overview
-	GetOrderTimeCostOverview(kt *kit.Kit, param *types.OrderTimeCostReq) ([]types.OrderTimeCostItem, error)
+	GetOrderTimeCostOverview(kt *kit.Kit, param *types.OrderTimeCostReq) (*types.OrderTimeCostOverviewResp, error)
 	// GetOrderTimeCostCompare get order time cost compare
 	GetOrderTimeCostCompare(kt *kit.Kit, param *types.OrderTimeCostCompareReq) (*types.OrderTimeCostCompareRst, error)
 	// GetProductionStageTimeCostOverview get production stage time cost overview
@@ -734,4 +738,40 @@ func (op *operation) GetApplyBizCpuCoresStatistics(kt *kit.Kit, startDate, endDa
 	}
 
 	return &types.ApplyBizCpuCoresStatisticsResult{Details: result}, nil
+}
+
+// buildSuborderFilterExpression 构建子单查询的过滤表达式
+func (op *operation) buildSuborderFilterExpression(startDate, endDate time.Time,
+	excludeSuborderIDs []string) (*filter.Expression, error) {
+	baseRules := []filter.RuleFactory{
+		tools.RuleGreaterThanEqual("created_at", startDate.Format(constant.TimeStdFormat)),
+		tools.RuleLessThanEqual("created_at", endDate.Format(constant.TimeStdFormat)),
+		tools.RuleEqual("stage", types.TicketStageDone),
+		tools.RuleEqual("status", types.ApplyStatusDone),
+		tools.RuleNotEqual("source", enumor.ApplyTicketSrcPurchaseToResPool),
+	}
+
+	var excludeRules []filter.RuleFactory
+	if len(excludeSuborderIDs) > 0 {
+		excludeBatches := slice.Split(excludeSuborderIDs, int(core.DefaultMaxPageLimit))
+		for _, batch := range excludeBatches {
+			excludeRules = append(excludeRules, tools.RuleNotIn("suborder_id", batch))
+		}
+	}
+
+	allRules := make([]filter.RuleFactory, 0)
+	allRules = append(allRules, baseRules...)
+
+	if len(excludeRules) > 0 {
+		excludeExpr := &filter.Expression{
+			Op:    filter.And,
+			Rules: excludeRules,
+		}
+		allRules = append(allRules, excludeExpr)
+	}
+
+	return &filter.Expression{
+		Op:    filter.And,
+		Rules: allRules,
+	}, nil
 }

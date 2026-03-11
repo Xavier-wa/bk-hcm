@@ -221,3 +221,29 @@ type ZiyanCvmApplySuborderUpdateReq struct {
 func (req *ZiyanCvmApplySuborderUpdateReq) Validate() error {
 	return validator.Validate.Struct(req)
 }
+
+// OrderTimeCostItemListResp order time cost item list response
+type OrderTimeCostItemListResp struct {
+	rest.BaseResp `json:",inline"`
+	Details       []*OrderTimeCostItem `json:"data"`
+}
+
+// OrderTimeCostCompareItemListResp order time cost compare item list response
+type OrderTimeCostCompareItemListResp struct {
+	rest.BaseResp `json:",inline"`
+	Details       []*OrderTimeCostCompareItem `json:"data"`
+}
+
+// OrderTimeCostItem order time cost item
+type OrderTimeCostItem struct {
+	YearMonth        string  `json:"year_month" db:"yearmonth"`
+	AvgDurationHours float64 `json:"avg_duration_hours" db:"avg_duration_hours"`
+}
+
+// OrderTimeCostCompareItem order time cost compare item
+type OrderTimeCostCompareItem struct {
+	BkBizID          int64   `json:"bk_biz_id" db:"bk_biz_id"`
+	YearMonth        string  `json:"year_month" db:"yearmonth"`
+	DoneOrders       int64   `json:"done_orders" db:"done_orders"`
+	AvgDurationHours float64 `json:"avg_duration_hours" db:"avg_duration_hours"`
+}

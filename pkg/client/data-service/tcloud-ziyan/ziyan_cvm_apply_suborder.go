@@ -28,6 +28,7 @@ import (
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/rest"
+	"hcm/pkg/runtime/filter"
 )
 
 // ZiyanCvmApplySuborderClient is data service ziyan cvm apply suborder api client.
@@ -137,4 +138,50 @@ func (c *ZiyanCvmApplySuborderClient) BatchDelete(ctx context.Context, h http.He
 	}
 
 	return nil
+}
+
+// GetOrderTimeCostOverview 按月份统计剔除审批阶段耗时
+func (c *ZiyanCvmApplySuborderClient) GetOrderTimeCostOverview(ctx context.Context, h http.Header,
+	req *filter.Expression) ([]*cvmapplyproto.OrderTimeCostItem, error) {
+
+	resp := new(cvmapplyproto.OrderTimeCostItemListResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(req).
+		SubResourcef("/cvm_apply/analysis/order_time_cost/overview").
+		WithHeaders(h).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != errf.OK {
+		return nil, errf.New(resp.Code, resp.Message)
+	}
+
+	return resp.Details, nil
+}
+
+// GetOrderTimeCostCompare 按业务+月份统计剔除审批阶段耗时详情
+func (c *ZiyanCvmApplySuborderClient) GetOrderTimeCostCompare(ctx context.Context, h http.Header,
+	req *filter.Expression) ([]*cvmapplyproto.OrderTimeCostCompareItem, error) {
+
+	resp := new(cvmapplyproto.OrderTimeCostCompareItemListResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(req).
+		SubResourcef("/cvm_apply/analysis/order_time_cost/compares").
+		WithHeaders(h).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != errf.OK {
+		return nil, errf.New(resp.Code, resp.Message)
+	}
+
+	return resp.Details, nil
 }
