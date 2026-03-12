@@ -288,3 +288,46 @@ type ZiyanCvmApplyPercentileTimeCompareResp struct {
 	rest.BaseResp `json:",inline"`
 	Data          *ZiyanCvmApplyPercentileTimeCompareResult `json:"data"`
 }
+
+// ProductionStageTimeCostItem one month aggregated metrics for production stage time cost
+type ProductionStageTimeCostItem struct {
+	YearMonth        string  `json:"year_month" db:"yearmonth"`
+	AvgDurationHours float64 `json:"avg_duration_hours" db:"avg_duration_hours"`
+}
+
+// ProductionStageTimeCostOverviewResult list production stage time cost overview result
+type ProductionStageTimeCostOverviewResult struct {
+	Details []*ProductionStageTimeCostItem `json:"details"`
+}
+
+// ProductionStageTimeCostOverviewResp define production stage time cost overview resp.
+type ProductionStageTimeCostOverviewResp struct {
+	rest.BaseResp `json:",inline"`
+	Data          *ProductionStageTimeCostOverviewResult `json:"data"`
+}
+
+// ProductionStageTimeCostBizItem one month aggregated metrics by biz for production stage time cost compare
+type ProductionStageTimeCostBizItem struct {
+	BkBizID          int64   `json:"bk_biz_id" db:"bk_biz_id"`
+	YearMonth        string  `json:"year_month" db:"yearmonth"`
+	DoneOrders       int64   `json:"done_orders" db:"done_orders"`
+	AvgDurationHours float64 `json:"avg_duration_hours" db:"avg_duration_hours"`
+}
+
+// ProductionStageTimeCostCompareResult list production stage time cost compare result
+type ProductionStageTimeCostCompareResult struct {
+	Current []ProductionStageTimeCostBizItem `json:"current"`
+	Compare []ProductionStageTimeCostBizItem `json:"compare"`
+}
+
+// ProductionStageTimeCostCompareResp define production stage time cost compare resp.
+type ProductionStageTimeCostCompareResp struct {
+	rest.BaseResp `json:",inline"`
+	Data          []ProductionStageTimeCostCompareResult `json:"data"`
+}
+
+// ProductionStageTimeCostSingleListResp 单个时间段的业务列表响应
+type ProductionStageTimeCostSingleListResp struct {
+	rest.BaseResp `json:",inline"`
+	Data          []ProductionStageTimeCostBizItem `json:"data"`
+}

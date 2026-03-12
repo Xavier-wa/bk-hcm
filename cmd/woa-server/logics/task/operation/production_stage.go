@@ -22,17 +22,27 @@ package operation
 import (
 	"time"
 
-	model "hcm/cmd/woa-server/model/task"
 	types "hcm/cmd/woa-server/types/task"
-	"hcm/pkg"
+	"hcm/pkg/api/core"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/criteria/errf"
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/runtime/filter"
+	"hcm/pkg/tools/slice"
 )
 
 // GetProductionStageTimeCostOverview aggregates production stage time cost by month within a range
 func (op *operation) GetProductionStageTimeCostOverview(kt *kit.Kit, param *types.ProductionStageTimeCostReq) (
-	[]types.ProductionStageTimeCostItem, error) {
+	*cvmapplyproto.ProductionStageTimeCostOverviewResult, error) {
+
+	if op.client == nil || op.client.DataService() == nil {
+		logs.Errorf("data service client is not initialized, rid: %s", kt.Rid)
+		return nil, errf.New(errf.InvalidParameter, "data service client is not initialized")
+	}
 
 	start, err := param.GetStartTime()
 	if err != nil {
@@ -45,76 +55,50 @@ func (op *operation) GetProductionStageTimeCostOverview(kt *kit.Kit, param *type
 		return nil, err
 	}
 
-	match := map[string]interface{}{
-		"create_at": map[string]interface{}{
-			pkg.BKDBGTE: start,
-			pkg.BKDBLTE: end,
-		},
-		"status":   types.GenerateStatusSuccess,
-		"start_at": map[string]interface{}{pkg.BKDBNE: nil, pkg.BKDBExists: true},
-		"end_at": map[string]interface{}{
-			pkg.BKDBNE:     nil,
-			pkg.BKDBExists: true,
-			pkg.BKDBGT:     time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
-		},
-	}
-
-	pipeline := []map[string]interface{}{
-		{pkg.BKDBMatch: match},
-		// 关联 ApplyOrder 表以过滤 source
-		{pkg.BKDBLookup: map[string]interface{}{
-			"from":         pkg.BKTableNameApplyOrder,
-			"localField":   "suborder_id",
-			"foreignField": "suborder_id",
-			"as":           "order_info",
-		}},
-		// 过滤关联结果非空 + 排除采购到资源池的订单
-		{pkg.BKDBMatch: map[string]interface{}{
-			"order_info":        map[string]interface{}{pkg.BKDBNE: []interface{}{}},
-			"order_info.source": map[string]interface{}{pkg.BKDBNE: enumor.ApplyTicketSrcPurchaseToResPool},
-		}},
-		{pkg.BKDBAddFields: map[string]interface{}{
-			"year_month": map[string]interface{}{
-				"$dateToString": map[string]interface{}{
-					"format": "%Y-%m",
-					"date":   "$create_at",
-				},
-			},
-			"duration_hours": map[string]interface{}{
-				pkg.BKDBDivide: []interface{}{
-					map[string]interface{}{pkg.BKDBSubtract: []interface{}{"$end_at", "$start_at"}},
-					3600000,
-				},
-			},
-		}},
-		{pkg.BKDBMatch: map[string]interface{}{
-			"duration_hours": map[string]interface{}{
-				pkg.BKDBGT: 0,
-				pkg.BKDBLT: 240, // less than 10 days
-			},
-		}},
-		{pkg.BKDBGroup: map[string]interface{}{
-			"_id":                "$year_month",
-			"avg_duration_hours": map[string]interface{}{pkg.BKDBAvg: "$duration_hours"},
-		}},
-		{pkg.BKDBProject: map[string]interface{}{
-			"_id":                0,
-			"year_month":         "$_id",
-			"avg_duration_hours": map[string]interface{}{pkg.BKDBRound: []interface{}{"$avg_duration_hours", 2}},
-		}},
-		{pkg.BKDBSort: map[string]interface{}{"year_month": 1}},
-	}
-
-	rst := make([]types.ProductionStageTimeCostItem, 0)
-	if err := model.Operation().GenerateRecord().AggregateAll(kt.Ctx, pipeline, &rst); err != nil {
-		logs.Errorf("aggregate production stage time cost overview failed, err: %v, rid: %s", err, kt.Rid)
+	// Get exclude suborder IDs
+	excludeSuborderIDs, err := op.getExcludeSuborderIDs(kt, start, end)
+	if err != nil {
+		logs.Errorf("get exclude suborder IDs failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
-	return rst, nil
+
+	rules := []filter.RuleFactory{
+		tools.RuleGreaterThanEqual("g.created_at", start.Format(constant.TimeStdFormat)),
+		tools.RuleLessThan("g.created_at", end.Format(constant.TimeStdFormat)),
+		tools.RuleEqual("g.status", types.GenerateStatusSuccess),
+		tools.RuleNotEqual("s.source", enumor.ApplyTicketSrcPurchaseToResPool),
+	}
+	var excludeRules []filter.RuleFactory
+	if len(excludeSuborderIDs) > 0 {
+		excludeBatches := slice.Split(excludeSuborderIDs, int(core.DefaultMaxPageLimit))
+		for _, batch := range excludeBatches {
+			excludeRules = append(excludeRules, tools.RuleNotIn("s.suborder_id", batch))
+		}
+	}
+	filterExpr := &filter.Expression{
+		Op:    filter.And,
+		Rules: append(rules, excludeRules...),
+	}
+
+	resp, err := op.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.GetProductionStageTimeCostOverview(kt.Ctx,
+		kt.Header(), filterExpr)
+	if err != nil {
+		logs.Errorf("query production stage time cost overview failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	return resp, nil
 }
 
 // GetProductionStageTimeCostCompare implements comparison aggregation per biz across two months
-func (op *operation) GetProductionStageTimeCostCompare(kt *kit.Kit, param *types.ProductionStageTimeCostCompareReq) (*types.ProductionStageTimeCostCompareRst, error) {
+func (op *operation) GetProductionStageTimeCostCompare(kt *kit.Kit, param *types.ProductionStageTimeCostCompareReq) (
+	*cvmapplyproto.ProductionStageTimeCostCompareResult, error) {
+
+	if op.client == nil || op.client.DataService() == nil {
+		logs.Errorf("data service client is not initialized, rid: %s", kt.Rid)
+		return nil, errf.New(errf.InvalidParameter, "data service client is not initialized")
+	}
+
 	currentStart, currentEnd, err := param.GetCurrentRange()
 	if err != nil {
 		logs.Errorf("parse current range failed, err: %v, rid: %s", err, kt.Rid)
@@ -126,100 +110,78 @@ func (op *operation) GetProductionStageTimeCostCompare(kt *kit.Kit, param *types
 		return nil, err
 	}
 
-	// build and run pipelines in parallel-like sequence (driver handles network)
-	current, err := op.aggregateProductionStageByRange(kt, currentStart, currentEnd)
+	currentExcludeIDs, err := op.getExcludeSuborderIDs(kt, currentStart, currentEnd)
 	if err != nil {
-		logs.Errorf("aggregate current range failed, err: %v, rid: %s", err, kt.Rid)
-		return nil, err
-	}
-	compare, err := op.aggregateProductionStageByRange(kt, compareStart, compareEnd)
-	if err != nil {
-		logs.Errorf("aggregate compare range failed, err: %v, rid: %s", err, kt.Rid)
+		logs.Errorf("get current exclude suborder IDs failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
 
-	return &types.ProductionStageTimeCostCompareRst{Current: current, Compare: compare}, nil
+	compareExcludeIDs, err := op.getExcludeSuborderIDs(kt, compareStart, compareEnd)
+	if err != nil {
+		logs.Errorf("get compare exclude suborder IDs failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+	buildAndFetch := func(start, end time.Time, excludeIDs []string) (
+		[]cvmapplyproto.ProductionStageTimeCostBizItem, error) {
+
+		rules := []filter.RuleFactory{
+			tools.RuleGreaterThanEqual("g.created_at", start.Format(constant.TimeStdFormat)),
+			tools.RuleLessThan("g.created_at", end.Format(constant.TimeStdFormat)),
+			tools.RuleEqual("g.status", types.GenerateStatusSuccess),
+			tools.RuleNotEqual("s.source", enumor.ApplyTicketSrcPurchaseToResPool),
+		}
+		var excludeRules []filter.RuleFactory
+		if len(excludeIDs) > 0 {
+			excludeBatches := slice.Split(excludeIDs, int(core.DefaultMaxPageLimit))
+			for _, batch := range excludeBatches {
+				excludeRules = append(excludeRules, tools.RuleNotIn("s.suborder_id", batch))
+			}
+		}
+		filterExpr := &filter.Expression{
+			Op:    filter.And,
+			Rules: append(rules, excludeRules...),
+		}
+
+		resp, err := op.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.GetProductionStageTimeCostCompare(kt.Ctx,
+			kt.Header(), filterExpr)
+		if err != nil {
+			logs.Errorf("query production stage time cost compare failed, err: %v, rid: %s", err, kt.Rid)
+			return nil, err
+		}
+		return resp, nil
+	}
+
+	currentItems, err := buildAndFetch(currentStart, currentEnd, currentExcludeIDs)
+	if err != nil {
+		logs.Errorf("build and fetch current items failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+	compareItems, err := buildAndFetch(compareStart, compareEnd, compareExcludeIDs)
+	if err != nil {
+		logs.Errorf("build and fetch compare items failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+	currentBizItems := convertToProductionStageTimeCostBizItems(currentItems)
+	compareBizItems := convertToProductionStageTimeCostBizItems(compareItems)
+
+	return &cvmapplyproto.ProductionStageTimeCostCompareResult{
+		Current: currentBizItems,
+		Compare: compareBizItems,
+	}, nil
 }
 
-// aggregateProductionStageByRange runs the aggregation defined in the spec for a given time range
-func (op *operation) aggregateProductionStageByRange(kt *kit.Kit, start time.Time, end time.Time) ([]types.ProductionStageTimeCostBizItem, error) {
-	// Get exclude suborder IDs
-	excludeSuborderIDs, err := op.getExcludeSuborderIDs(kt, start, end)
-	if err != nil {
-		logs.Errorf("get exclude suborder IDs failed, err: %v, rid: %s", err, kt.Rid)
-		return nil, err
-	}
+// convertToProductionStageTimeCostBizItems converts []cvmapplyproto.ProductionStageTimeCostBizItem to the same type
+func convertToProductionStageTimeCostBizItems(items []cvmapplyproto.ProductionStageTimeCostBizItem,
+) []cvmapplyproto.ProductionStageTimeCostBizItem {
 
-	match := map[string]interface{}{
-		"create_at": map[string]interface{}{
-			pkg.BKDBGTE: start,
-			pkg.BKDBLTE: end,
-		},
-		"status":   types.GenerateStatusSuccess,
-		"start_at": map[string]interface{}{pkg.BKDBNE: nil, pkg.BKDBExists: true},
-		"end_at": map[string]interface{}{
-			pkg.BKDBNE:     nil,
-			pkg.BKDBExists: true,
-			pkg.BKDBGT:     time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
-		},
-	}
-
-	// Exclude suborder IDs if any
-	if len(excludeSuborderIDs) > 0 {
-		match["suborder_id"] = map[string]interface{}{
-			pkg.BKDBNIN: excludeSuborderIDs,
+	result := make([]cvmapplyproto.ProductionStageTimeCostBizItem, len(items))
+	for i, item := range items {
+		result[i] = cvmapplyproto.ProductionStageTimeCostBizItem{
+			BkBizID:          item.BkBizID,
+			YearMonth:        item.YearMonth,
+			DoneOrders:       item.DoneOrders,
+			AvgDurationHours: item.AvgDurationHours,
 		}
 	}
-
-	pipeline := []map[string]interface{}{
-		{pkg.BKDBMatch: match},
-		{pkg.BKDBLookup: map[string]interface{}{
-			"from":         pkg.BKTableNameApplyOrder,
-			"localField":   "suborder_id",
-			"foreignField": "suborder_id",
-			"as":           "order_info",
-		}},
-		// 过滤关联结果非空 + 排除采购到资源池的订单
-		{pkg.BKDBMatch: map[string]interface{}{
-			"order_info":        map[string]interface{}{pkg.BKDBNE: []interface{}{}},
-			"order_info.source": map[string]interface{}{pkg.BKDBNE: enumor.ApplyTicketSrcPurchaseToResPool},
-		}},
-		{pkg.BKDBAddFields: map[string]interface{}{
-			"bk_biz_id": map[string]interface{}{"$arrayElemAt": []interface{}{"$order_info.bk_biz_id", 0}},
-			"year_month": map[string]interface{}{
-				"$dateToString": map[string]interface{}{"format": "%Y-%m", "date": "$create_at"}},
-			"duration_hours": map[string]interface{}{
-				pkg.BKDBDivide: []interface{}{
-					map[string]interface{}{pkg.BKDBSubtract: []interface{}{"$end_at", "$start_at"}},
-					3600000,
-				},
-			},
-		}},
-		{pkg.BKDBMatch: map[string]interface{}{
-			"duration_hours": map[string]interface{}{pkg.BKDBGT: 0, pkg.BKDBLT: 720}, // < 30 days
-		}},
-		{pkg.BKDBGroup: map[string]interface{}{
-			"_id": map[string]interface{}{
-				"bk_biz_id":  "$bk_biz_id",
-				"year_month": "$year_month",
-			},
-			"done_orders":        map[string]interface{}{pkg.BKDBSum: 1},
-			"avg_duration_hours": map[string]interface{}{pkg.BKDBAvg: "$duration_hours"},
-		}},
-		{pkg.BKDBProject: map[string]interface{}{
-			"_id":                0,
-			"bk_biz_id":          "$_id.bk_biz_id",
-			"year_month":         "$_id.year_month",
-			"done_orders":        1,
-			"avg_duration_hours": map[string]interface{}{pkg.BKDBRound: []interface{}{"$avg_duration_hours", 2}},
-		}},
-		bizOrderMap,
-	}
-
-	rst := make([]types.ProductionStageTimeCostBizItem, 0)
-	if err := model.Operation().GenerateRecord().AggregateAll(kt.Ctx, pipeline, &rst); err != nil {
-		logs.Errorf("aggregate production stage compare failed, err: %v, rid: %s", err, kt.Rid)
-		return nil, err
-	}
-	return rst, nil
+	return result
 }

@@ -384,9 +384,9 @@ type OrderTimeCostCompareRst struct {
 // ProductionStageTimeCostReq request for production stage time cost overview
 type ProductionStageTimeCostReq struct {
 	// Date format: YYYY-MM-DD, e.g., 2025-01-01
-	StartTime string `json:"start_time" bson:"start_time"`
+	StartTime string `json:"start_time"`
 	// Date format: YYYY-MM-DD, e.g., 2025-01-31
-	EndTime string `json:"end_time" bson:"end_time"`
+	EndTime string `json:"end_time"`
 }
 
 // Validate whether ProductionStageTimeCostReq is valid
@@ -422,23 +422,12 @@ func (req *ProductionStageTimeCostReq) GetEndTime() (time.Time, error) {
 	return time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, time.UTC), nil
 }
 
-// ProductionStageTimeCostItem one month aggregated metrics for production stage time cost
-type ProductionStageTimeCostItem struct {
-	YearMonth        string  `json:"year_month" bson:"year_month"`
-	AvgDurationHours float64 `json:"avg_duration_hours" bson:"avg_duration_hours"`
-}
-
-// ProductionStageTimeCostOverviewResp wraps overview list under details
-type ProductionStageTimeCostOverviewResp struct {
-	Details []ProductionStageTimeCostItem `json:"details"`
-}
-
 // ProductionStageTimeCostCompareReq request for production stage time cost compare
 type ProductionStageTimeCostCompareReq struct {
 	// YearMonth format: YYYY-MM, e.g., 2025-10 for October 2025
-	CurrentDate string `json:"current_date" bson:"current_date"`
+	CurrentDate string `json:"current_date"`
 	// YearMonth format: YYYY-MM, e.g., 2025-11 for November 2025
-	CompareDate string `json:"compare_date" bson:"compare_date"`
+	CompareDate string `json:"compare_date"`
 }
 
 // Validate whether ProductionStageTimeCostCompareReq is valid
@@ -476,20 +465,6 @@ func (req *ProductionStageTimeCostCompareReq) GetCompareRange() (start time.Time
 	nextMonth := time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, time.UTC)
 	end = nextMonth.Add(-time.Nanosecond)
 	return start, end, nil
-}
-
-// ProductionStageTimeCostBizItem one month aggregated metrics by biz for production stage time cost compare
-type ProductionStageTimeCostBizItem struct {
-	BkBizID          int64   `json:"bk_biz_id" bson:"bk_biz_id"`
-	YearMonth        string  `json:"year_month" bson:"year_month"`
-	DoneOrders       int64   `json:"done_orders" bson:"done_orders"`
-	AvgDurationHours float64 `json:"avg_duration_hours" bson:"avg_duration_hours"`
-}
-
-// ProductionStageTimeCostCompareRst wraps compare result with current and compare arrays
-type ProductionStageTimeCostCompareRst struct {
-	Current []ProductionStageTimeCostBizItem `json:"current"`
-	Compare []ProductionStageTimeCostBizItem `json:"compare"`
 }
 
 // PercentileTimeConsumptionReq request for percentile time consumption overview

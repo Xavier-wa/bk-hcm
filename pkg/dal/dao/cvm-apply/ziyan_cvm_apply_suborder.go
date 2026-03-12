@@ -25,6 +25,7 @@ import (
 
 	"hcm/pkg/api/core"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/audit"
 	"hcm/pkg/dal/dao/orm"
@@ -52,6 +53,10 @@ type ZiyanCvmApplySuborderInterface interface {
 		*cvmapplyproto.ZiyanCvmApplyPercentileTimeOverviewResult, error)
 	GetPercentileTimeConsumptionCompare(kt *kit.Kit, expr *filter.Expression) (
 		*cvmapplyproto.ZiyanCvmApplyPercentileTimeCompareResult, error)
+	GetProductionStageTimeCostOverview(kt *kit.Kit, expr *filter.Expression) (
+		[]*cvmapplyproto.ProductionStageTimeCostItem, error)
+	GetProductionStageTimeCostCompare(kt *kit.Kit, expr *filter.Expression) (
+		[]*cvmapplyproto.ProductionStageTimeCostBizItem, error)
 }
 
 var _ ZiyanCvmApplySuborderInterface = new(ZiyanCvmApplySuborderDao)
@@ -377,4 +382,125 @@ func (d ZiyanCvmApplySuborderDao) GetPercentileTimeConsumptionCompare(kt *kit.Ki
 	}
 
 	return &cvmapplyproto.ZiyanCvmApplyPercentileTimeCompareResult{Current: items, Compare: nil}, nil
+}
+
+// GetProductionStageTimeCostOverview get production stage time cost overview.
+func (d ZiyanCvmApplySuborderDao) GetProductionStageTimeCostOverview(kt *kit.Kit, expr *filter.Expression) (
+	[]*cvmapplyproto.ProductionStageTimeCostItem, error) {
+
+	if expr == nil {
+		return nil, errf.New(errf.InvalidParameter, "filter expr is required")
+	}
+
+	// Validate filter expression fields
+	exprOpt := filter.NewExprOption(
+		filter.RuleFields(cvmapplytable.ZiyanCvmApplySuborderColumns.ColumnTypes()),
+	)
+	if err := expr.Validate(exprOpt); err != nil {
+		logs.Errorf("invalid production stage time cost overview request, err: %v, rid: %s", err, kt.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	whereExpr, whereValue, err := expr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		logs.Errorf("get order time cost overview failed, err: %v, whereValue: %+v, rid: %s",
+			err, whereValue, kt.Rid)
+		return nil, err
+	}
+
+	if whereValue == nil {
+		whereValue = make(map[string]interface{})
+	}
+
+	sql := fmt.Sprintf(`
+		SELECT
+			DATE_FORMAT(g.created_at, '%%Y-%%m') AS yearmonth,
+			ROUND(AVG(TIMESTAMPDIFF(HOUR, g.start_at, g.end_at)), 2) AS avg_duration_hours
+		FROM %s g
+		INNER JOIN %s s ON g.suborder_id = s.suborder_id
+		%s
+		  AND g.start_at IS NOT NULL
+		  AND g.end_at IS NOT NULL
+		  AND g.end_at > :min_valid_time
+		  AND TIMESTAMPDIFF(HOUR, g.start_at, g.end_at) > :min_duration_hours
+		  AND TIMESTAMPDIFF(HOUR, g.start_at, g.end_at) < :max_duration_hours
+		GROUP BY DATE_FORMAT(g.created_at, '%%Y-%%m')
+		ORDER BY yearmonth ASC`,
+		table.ZiyanCvmGenerateRecordTable, table.ZiyanCvmApplySuborderTable, whereExpr)
+
+	queryValue := tools.MapMerge(whereValue, map[string]interface{}{
+		"min_valid_time":     constant.ProductionStageMinValidTime,
+		"min_duration_hours": constant.ProductionStageMinDurationHours,
+		"max_duration_hours": constant.ProductionStageOverviewMaxDurationHours,
+	})
+
+	details := make([]*cvmapplyproto.ProductionStageTimeCostItem, 0)
+	if err := d.Orm.Do().Select(kt.Ctx, &details, sql, queryValue); err != nil {
+		logs.Errorf("get order time cost overview failed, sql: %s, err: %v, whereValue: %+v, rid: %s",
+			sql, err, whereValue, kt.Rid)
+		return nil, err
+	}
+
+	return details, nil
+}
+
+// GetProductionStageTimeCostCompare get production stage time cost compare.
+func (d ZiyanCvmApplySuborderDao) GetProductionStageTimeCostCompare(kt *kit.Kit, expr *filter.Expression) (
+	[]*cvmapplyproto.ProductionStageTimeCostBizItem, error) {
+
+	if expr == nil {
+		return nil, errf.New(errf.InvalidParameter, "filter expr is required")
+	}
+
+	// Validate filter expression fields
+	exprOpt := filter.NewExprOption(
+		filter.RuleFields(cvmapplytable.ZiyanCvmApplySuborderColumns.ColumnTypes()),
+	)
+	if err := expr.Validate(exprOpt); err != nil {
+		logs.Errorf("invalid production stage time cost compare request, err: %v, rid: %s", err, kt.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	whereExpr, whereValue, err := expr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		logs.Errorf("get order time cost compare failed, err: %v, whereValue: %+v, rid: %s",
+			err, whereValue, kt.Rid)
+		return nil, err
+	}
+	if whereValue == nil {
+		whereValue = make(map[string]interface{})
+	}
+
+	sql := fmt.Sprintf(`
+		SELECT 
+			s.bk_biz_id,
+			DATE_FORMAT(g.created_at, '%%Y-%%m') AS yearmonth,
+			COUNT(*) AS done_orders,
+			ROUND(AVG(TIMESTAMPDIFF(HOUR, g.start_at, g.end_at)), 2) AS avg_duration_hours
+		FROM %s g
+		INNER JOIN %s s ON g.suborder_id = s.suborder_id
+		%s
+		  AND g.start_at IS NOT NULL
+		  AND g.end_at IS NOT NULL
+		  AND g.end_at > :min_valid_time
+		  AND TIMESTAMPDIFF(HOUR, g.start_at, g.end_at) > :min_duration_hours
+		  AND TIMESTAMPDIFF(HOUR, g.start_at, g.end_at) < :max_duration_hours
+		GROUP BY s.bk_biz_id, DATE_FORMAT(g.created_at, '%%Y-%%m')
+		ORDER BY s.bk_biz_id ASC, yearmonth ASC`,
+		table.ZiyanCvmGenerateRecordTable, table.ZiyanCvmApplySuborderTable, whereExpr)
+
+	queryValue := tools.MapMerge(whereValue, map[string]interface{}{
+		"min_valid_time":     constant.ProductionStageMinValidTime,
+		"min_duration_hours": constant.ProductionStageMinDurationHours,
+		"max_duration_hours": constant.ProductionStageCompareMaxDurationHours,
+	})
+
+	details := make([]*cvmapplyproto.ProductionStageTimeCostBizItem, 0)
+	if err := d.Orm.Do().Select(kt.Ctx, &details, sql, queryValue); err != nil {
+		logs.Errorf("get order time cost compare failed, sql: %s, err: %v, whereValue: %+v, rid: %s",
+			sql, err, whereValue, kt.Rid)
+		return nil, err
+	}
+
+	return details, nil
 }

@@ -233,3 +233,49 @@ func (c *ZiyanCvmApplySuborderClient) GetPercentileTimeConsumptionCompare(ctx co
 
 	return resp.Data, nil
 }
+
+// GetProductionStageTimeCostOverview get production stage time cost overview.
+func (c *ZiyanCvmApplySuborderClient) GetProductionStageTimeCostOverview(ctx context.Context, h http.Header,
+	filterExpr *filter.Expression) (*cvmapplyproto.ProductionStageTimeCostOverviewResult, error) {
+
+	resp := new(cvmapplyproto.ProductionStageTimeCostOverviewResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(filterExpr).
+		SubResourcef("/cvm_apply/suborders/statistics/production_stage_time_cost/overview").
+		WithHeaders(h).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != errf.OK {
+		return nil, errf.New(resp.Code, resp.Message)
+	}
+
+	return resp.Data, nil
+}
+
+// GetProductionStageTimeCostCompare get production stage time cost compare.
+func (c *ZiyanCvmApplySuborderClient) GetProductionStageTimeCostCompare(ctx context.Context, h http.Header,
+	filterExpr *filter.Expression) ([]cvmapplyproto.ProductionStageTimeCostBizItem, error) {
+
+	resp := new(cvmapplyproto.ProductionStageTimeCostSingleListResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(filterExpr).
+		SubResourcef("/cvm_apply/suborders/statistics/production_stage_time_cost/compare").
+		WithHeaders(h).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != errf.OK {
+		return nil, errf.New(resp.Code, resp.Message)
+	}
+
+	return resp.Data, nil
+}

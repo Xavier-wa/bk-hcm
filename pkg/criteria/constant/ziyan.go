@@ -117,3 +117,14 @@ const ResPlanItsmAuditSkip string = "skip"
 
 // CrpCvmApplySubnetMaxNum CRP主机申请接口-子网最大数量
 const CrpCvmApplySubnetMaxNum = 10
+
+const (
+	// ProductionStageMinValidTime 生产阶段耗时最小有效时间，用于过滤异常时间数据
+	ProductionStageMinValidTime = "2000-01-01 00:00:00"
+	// ProductionStageMinDurationHours 生产阶段耗时最小有效时长阈值（小时），排除时长为 0 或负数的异常数据
+	ProductionStageMinDurationHours = 0
+	// ProductionStageOverviewMaxDurationHours 生产阶段耗时 Overview 接口最大有效时长阈值（小时）= 10 天
+	ProductionStageOverviewMaxDurationHours = 240
+	// ProductionStageCompareMaxDurationHours 生产阶段耗时 Compare 接口最大有效时长阈值（小时）= 30 天
+	ProductionStageCompareMaxDurationHours = 720
+)

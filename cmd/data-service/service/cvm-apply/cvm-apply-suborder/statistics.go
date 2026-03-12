@@ -126,3 +126,44 @@ func (svc *service) GetPercentileTimeConsumptionCompare(cts *rest.Contexts) (int
 		Compare: result.Compare,
 	}, nil
 }
+
+// GetProductionStageTimeCostOverview 获取生产阶段平均耗时
+func (svc *service) GetProductionStageTimeCostOverview(cts *rest.Contexts) (interface{}, error) {
+	req := new(filter.Expression)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	items, err := svc.dao.ZiyanCvmApplySuborder().GetProductionStageTimeCostOverview(cts.Kit, req)
+	if err != nil {
+		logs.Errorf("get order time cost overview failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return &cvmapplyproto.ProductionStageTimeCostOverviewResult{
+		Details: items,
+	}, nil
+}
+
+// GetProductionStageTimeCostCompare 按业务获取生产阶段平均耗时
+func (svc *service) GetProductionStageTimeCostCompare(cts *rest.Contexts) (interface{}, error) {
+	req := new(filter.Expression)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	items, err := svc.dao.ZiyanCvmApplySuborder().GetProductionStageTimeCostCompare(cts.Kit, req)
+	if err != nil {
+		logs.Errorf("get order time cost compare failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	bizItems := make([]cvmapplyproto.ProductionStageTimeCostBizItem, 0, len(items))
+	for _, item := range items {
+		if item != nil {
+			bizItems = append(bizItems, *item)
+		}
+	}
+
+	return bizItems, nil
+}

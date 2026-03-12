@@ -65,10 +65,10 @@ type Interface interface {
 	GetOrderTimeCostCompare(kt *kit.Kit, param *types.OrderTimeCostCompareReq) (*types.OrderTimeCostCompareRst, error)
 	// GetProductionStageTimeCostOverview get production stage time cost overview
 	GetProductionStageTimeCostOverview(kt *kit.Kit, param *types.ProductionStageTimeCostReq) (
-		[]types.ProductionStageTimeCostItem, error)
+		*cvmapplyproto.ProductionStageTimeCostOverviewResult, error)
 	// GetProductionStageTimeCostCompare get production stage time cost compare
 	GetProductionStageTimeCostCompare(kt *kit.Kit, param *types.ProductionStageTimeCostCompareReq) (
-		*types.ProductionStageTimeCostCompareRst, error)
+		*cvmapplyproto.ProductionStageTimeCostCompareResult, error)
 	// GetPercentileTimeConsumptionOverview get percentile time consumption overview
 	GetPercentileTimeConsumptionOverview(kt *kit.Kit, startDate, endDate time.Time) (
 		*cvmapplyproto.ZiyanCvmApplyPercentileTimeOverviewResult, error)
