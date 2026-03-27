@@ -1477,17 +1477,17 @@ func convertSuborderToApplyOrder(kt *kit.Kit, sub *cvmapplytable.ZiyanCvmApplySu
 		return nil, err
 	}
 
-	if sub.DeviceType != "" {
-		spec := initResourceSpec(sub)
-
-		if err := parseResourceSpecFields(kt, sub, spec); err != nil {
-			logs.Errorf("parse resource spec fields failed, suborder_id: %s, err: %v, rid: %s",
-				sub.SuborderID, err, kt.Rid)
-			return nil, err
-		}
-
-		apply.Spec = spec
+	spec := initResourceSpec(sub)
+	if err := parseResourceSpecFields(kt, sub, spec); err != nil {
+		logs.Errorf("parse resource spec fields failed, suborder_id: %s, err: %v, rid: %s",
+			sub.SuborderID, err, kt.Rid)
+		return nil, err
 	}
+	// DeviceType 为空时 Spec 无意义，置为 nil，由调用方通过 Spec == nil 判断走 PlanExpendGroup 分支
+	if spec.DeviceType == "" {
+		spec = nil
+	}
+	apply.Spec = spec
 
 	return apply, nil
 }
