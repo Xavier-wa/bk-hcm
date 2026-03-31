@@ -103,6 +103,10 @@ func (s *service) initPlanService(h *rest.Handler) {
 	h.Add("ListPlanDemandChangelog", http.MethodPost, "/plans/demands/change_logs/list", s.ListPlanDemandChangeLog)
 	h.Add("BatchUpdateResPlanDemand", http.MethodPatch, "/plans/resources/demands/batch", s.BatchUpdateResPlanDemand)
 	h.Add("ConfirmResPlanDemands", http.MethodPost, "/plans/resources/demands/confirm", s.ConfirmResPlanDemands)
+
+	h.Add("SyncBudgetOperatorByTime", http.MethodPost,
+		"/plans/resources/demands/budget_operator/sync/by_time", s.SyncBudgetOperatorByTime)
+
 	// gpu demand
 	h.Add("ListResPlanDemandGpuSubOrder", http.MethodPost,
 		"/plans/resources/gpu/demands/suborders/list", s.ListResPlanDemandGpuSubOrder)

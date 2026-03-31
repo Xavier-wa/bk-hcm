@@ -221,3 +221,24 @@ func (svc *service) BatchUpsertResPlanDemand(cts *rest.Contexts) (interface{}, e
 
 	return &core.BatchCreateResult{IDs: ids}, nil
 }
+
+// BatchUpdateDemandCreator 批量更新 creator
+func (svc *service) BatchUpdateDemandCreator(cts *rest.Contexts) (interface{}, error) {
+	req := new(rpproto.ResPlanDemandBatchUpdateCreatorReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	updatedCount, err := svc.dao.ResPlanDemand().UpdateDemandCreator(cts.Kit,
+		req.IDs, req.Creator, req.Reviser)
+	if err != nil {
+		logs.Errorf("batch update res plan demand failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return &rpproto.ResPlanDemandBatchUpdateCreatorResp{UpdatedCount: updatedCount}, nil
+}

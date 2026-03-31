@@ -65,6 +65,14 @@ func (b *ResourcePlanClient) BatchUpdateResPlanDemand(kt *kit.Kit, req *rpproto.
 		b.client, rest.PATCH, kt, req, "/res_plans/res_plan_demands/batch")
 }
 
+// ResPlanDemandBatchUpdateCreator update creator via budget operator sync.
+func (b *ResourcePlanClient) ResPlanDemandBatchUpdateCreator(kt *kit.Kit,
+	req *rpproto.ResPlanDemandBatchUpdateCreatorReq) (*rpproto.ResPlanDemandBatchUpdateCreatorResp, error) {
+
+	return common.Request[rpproto.ResPlanDemandBatchUpdateCreatorReq, rpproto.ResPlanDemandBatchUpdateCreatorResp](
+		b.client, rest.PATCH, kt, req, "/res_plans/res_plan_demands/update_creator")
+}
+
 // DeleteResPlanDemand delete resource plan demand
 func (b *ResourcePlanClient) DeleteResPlanDemand(kt *kit.Kit, req *dataproto.BatchDeleteReq) error {
 	return common.RequestNoResp[dataproto.BatchDeleteReq](

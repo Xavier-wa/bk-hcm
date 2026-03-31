@@ -195,6 +195,8 @@ type Logics interface {
 	ApplyDestroyOrderToResPlanDemand(kt *kit.Kit, destroyOrderID string) error
 	// AutoTransferBizResPlanDemandByID 根据业务ID和需求ID自动转移预测
 	AutoTransferBizResPlanDemandByID(kt *kit.Kit, bkBizID int64, demandIDs []string) ([]string, error)
+	// SyncBudgetOperatorByTime syncs budget operator info
+	SyncBudgetOperatorByTime(kt *kit.Kit, start, end time.Time) (*ptypes.BudgetOperatorSyncResp, error)
 }
 
 // Controller motivates the resource plan ticket status flow.
