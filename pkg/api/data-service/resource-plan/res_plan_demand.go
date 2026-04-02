@@ -155,6 +155,23 @@ func (r *ResPlanDemandUpdateReq) Validate() error {
 	return validator.Validate.Struct(r)
 }
 
+// ResPlanDemandBatchUpdateCreatorReq batch update creator request.
+type ResPlanDemandBatchUpdateCreatorReq struct {
+	IDs     []string `json:"ids" validate:"required,min=1,max=1000"`
+	Creator string   `json:"creator" validate:"required"`
+	Reviser string   `json:"reviser" validate:"required"`
+}
+
+// Validate validate
+func (r *ResPlanDemandBatchUpdateCreatorReq) Validate() error {
+	return validator.Validate.Struct(r)
+}
+
+// ResPlanDemandBatchUpdateCreatorResp batch update response.
+type ResPlanDemandBatchUpdateCreatorResp struct {
+	UpdatedCount int64 `json:"updated_count"`
+}
+
 // ResPlanDemandLockOpReq lock operation request
 type ResPlanDemandLockOpReq struct {
 	LockedItems []ResPlanDemandLockOpItem `json:"locked_objs" validate:"required,min=1,max=100"`

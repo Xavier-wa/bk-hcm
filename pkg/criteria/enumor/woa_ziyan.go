@@ -732,6 +732,20 @@ func (r ResAssign) Validate() error {
 	return nil
 }
 
+// resAssignNameMap 资源分配方式名称映射
+var resAssignNameMap = map[ResAssign]string{
+	ResPriorityResAssign: "有资源区域优先",
+	CampusResAssign:      "分Campus生产",
+}
+
+// GetName 获取资源分配方式名称
+func (r ResAssign) GetName() string {
+	if name, ok := resAssignNameMap[r]; ok {
+		return name
+	}
+	return "--"
+}
+
 // ProductType 生产类型(business:业务生产 admin:管理员生产)
 type ProductType string
 

@@ -48,6 +48,8 @@ func InitService(cap *capability.Capability) {
 		svc.UnlockResPlanDemand)
 	h.Add("BatchUpsertResPlanDemand", http.MethodPost, "/res_plans/res_plan_demands/batch/upsert",
 		svc.BatchUpsertResPlanDemand)
+	h.Add("BatchUpdateDemandCreator", http.MethodPatch,
+		"/res_plans/res_plan_demands/update_creator", svc.BatchUpdateDemandCreator)
 
 	h.Load(cap.WebService)
 }

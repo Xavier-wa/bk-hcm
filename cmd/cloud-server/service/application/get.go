@@ -20,17 +20,58 @@
 package application
 
 import (
-	"errors"
 	"fmt"
 
 	"hcm/cmd/cloud-server/logics/ziyan"
 	proto "hcm/pkg/api/cloud-server/application"
+	dsProto "hcm/pkg/api/data-service"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/iam/meta"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
+	"hcm/pkg/tools/slice"
 )
+
+// buildApplicationResponse 构建单据详情响应体
+func (a *applicationSvc) buildApplicationResponse(cts *rest.Contexts,
+	application *dsProto.ApplicationResp) (*proto.ApplicationGetResp, error) {
+
+	resp := &proto.ApplicationGetResp{
+		ID:             application.ID,
+		Source:         application.Source,
+		SN:             application.SN,
+		Type:           application.Type,
+		Status:         application.Status,
+		Applicant:      application.Applicant,
+		Content:        RemoveSenseField(application.Content),
+		DeliveryDetail: application.DeliveryDetail,
+		Memo:           application.Memo,
+		Revision:       application.Revision,
+	}
+
+	switch application.Source {
+	case enumor.ApplicationSourceITSM:
+		// 查询审批链接
+		ticket, err := a.itsmCli.GetTicketResult(cts.Kit, application.SN)
+		if err != nil {
+			return nil, fmt.Errorf("call itsm get ticket url failed, err: %v", err)
+		}
+		resp.TicketUrl = ticket.TicketURL
+	case enumor.ApplicationSourceBPaas:
+		// 仅返回通用信息，其他信息由前端调用 QueryBPaasApplication 查询
+		err := ziyan.CheckAndUpdateBPaasStatus(cts.Kit, a.client.DataService(), a.client.HCService(), application)
+		if err != nil {
+			// 忽略错误，不影响前端获取单据信息
+			logs.Errorf("try check and update bpaas status failed, err: %v, application id: %s, rid:%s",
+				err, application.ID, cts.Kit.Rid)
+		}
+	default:
+		return nil, fmt.Errorf("unknown application source: %s", application.Source)
+	}
+
+	return resp, nil
+}
 
 // GetApplication ...
 func (a *applicationSvc) GetApplication(cts *rest.Contexts) (interface{}, error) {
@@ -56,39 +97,54 @@ func (a *applicationSvc) GetApplication(cts *rest.Contexts) (interface{}, error)
 				fmt.Errorf("you can not view other people's application"))
 		}
 	}
-	resp := &proto.ApplicationGetResp{
-		ID:             application.ID,
-		Source:         application.Source,
-		SN:             application.SN,
-		Type:           application.Type,
-		Status:         application.Status,
-		Applicant:      application.Applicant,
-		Content:        RemoveSenseField(application.Content),
-		DeliveryDetail: application.DeliveryDetail,
-		Memo:           application.Memo,
-		Revision:       application.Revision,
-	}
-	switch application.Source {
-	case enumor.ApplicationSourceITSM:
-		// 查询审批链接
-		ticket, err := a.itsmCli.GetTicketResult(cts.Kit, application.SN)
-		if err != nil {
-			return nil, fmt.Errorf("call itsm get ticket url failed, err: %v", err)
-		}
 
-		resp.TicketUrl = ticket.TicketURL
-	case enumor.ApplicationSourceBPaas:
-		// 仅返回通用信息，其他信息由前端调用 QueryBPaasApplication 查询
-		err := ziyan.CheckAndUpdateBPaasStatus(cts.Kit, a.client.DataService(), a.client.HCService(), application)
-		if err != nil {
-			// 忽略错误
-			logs.Errorf("try check and update bpaas status failed, err: %v, application id: %s, rid:%s",
-				err, applicationID, cts.Kit.Rid)
-			// 不影响前端获取单据信息
-		}
+	return a.buildApplicationResponse(cts, application)
+}
 
-	default:
-		return nil, errors.New("unknown application source: " + string(application.Source))
+// GetBizApplication 业务视角查看单据明细
+func (a *applicationSvc) GetBizApplication(cts *rest.Contexts) (interface{}, error) {
+	bkBizID, err := cts.PathParameter("bk_biz_id").Int64()
+	if err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
-	return resp, nil
+	if bkBizID <= 0 {
+		return nil, errf.New(errf.InvalidParameter, "bk_biz_id is invalid")
+	}
+
+	applicationID := cts.PathParameter("application_id").String()
+	if applicationID == "" {
+		return nil, errf.New(errf.InvalidParameter, "application_id is required")
+	}
+
+	_, authorized, err := a.authorizer.Authorize(cts.Kit, meta.ResourceAttribute{
+		Basic: &meta.Basic{Type: meta.Biz, Action: meta.Access},
+		BizID: bkBizID,
+	})
+	if err != nil {
+		logs.Errorf("authorize biz access failed, bk_biz_id: %d, user: %s, err: %v, rid: %s",
+			bkBizID, cts.Kit.User, err, cts.Kit.Rid)
+		return nil, err
+	}
+	if !authorized {
+		logs.Warnf("biz access denied, bk_biz_id: %d, user: %s, rid: %s", bkBizID, cts.Kit.User, cts.Kit.Rid)
+		return nil, errf.New(errf.RecordNotFound, "application not found")
+	}
+
+	application, err := a.client.DataService().Global.Application.GetApplication(
+		cts.Kit.Ctx, cts.Kit.Header(), applicationID)
+	if err != nil {
+		logs.Errorf("get application failed, application_id: %s, err: %v, rid: %s", applicationID, err, cts.Kit.Rid)
+		if errf.IsRecordNotFound(err) {
+			return nil, errf.New(errf.RecordNotFound, "application not found")
+		}
+		return nil, err
+	}
+
+	if !slice.IsItemInSlice(application.BkBizIDs, bkBizID) {
+		logs.Warnf("biz mismatch, bk_biz_id: %d not in %v, application_id: %s, user: %s, rid: %s",
+			bkBizID, application.BkBizIDs, applicationID, cts.Kit.User, cts.Kit.Rid)
+		return nil, errf.New(errf.RecordNotFound, "application not found")
+	}
+
+	return a.buildApplicationResponse(cts, application)
 }

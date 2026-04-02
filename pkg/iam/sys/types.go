@@ -125,6 +125,8 @@ const (
 	BizResPlanOperate client.ActionID = "biz_resource_plan_operate"
 	// ZiyanResPlanManage ziyan resource plan manage action id to register iam.
 	ZiyanResPlanManage client.ActionID = "ziyan_resource_plan_manage"
+	// ZiYanResPlanGPUDemands 平台管理-GPU需求 action id to register iam.
+	ZiYanResPlanGPUDemands client.ActionID = "ziyan_resource_plan_gpu_demands"
 
 	// BizTaskManagementOperate biz task management operate action id to register iam.
 	BizTaskManagementOperate client.ActionID = "biz_task_management_operate"
@@ -238,6 +240,13 @@ const (
 	// CosBucketDelete cos bucket delete action id to register iam.
 	CosBucketDelete client.ActionID = "cos_bucket_delete"
 
+	// BizCosBucketCreate cos bucket create action id to register iam.
+	BizCosBucketCreate client.ActionID = "biz_cos_bucket_create"
+	// BizCosBucketFind cos bucket find action id to register iam.
+	BizCosBucketFind client.ActionID = "biz_cos_bucket_find"
+	// BizCosBucketDelete cos bucket delete action id to register iam.
+	BizCosBucketDelete client.ActionID = "biz_cos_bucket_delete"
+
 	// AwsSavingsPlansCostQuery aws savings plans cost query action id to register iam.
 	AwsSavingsPlansCostQuery client.ActionID = "aws_savings_plans_cost_query"
 
@@ -271,8 +280,9 @@ var ActionIDNameMap = map[client.ActionID]string{
 	BizRecycleBinConfig:    "业务-回收站配置",
 	BizOperationRecordFind: "业务-操作记录查看",
 
-	BizResPlanOperate:  "业务-资源预测操作",
-	ZiyanResPlanManage: "平台-资源预测",
+	BizResPlanOperate:      "业务-资源预测操作",
+	ZiyanResPlanManage:     "平台-资源预测",
+	ZiYanResPlanGPUDemands: "平台-GPU需求",
 
 	ServiceResDissolve: "服务-机房裁撤",
 
@@ -331,6 +341,10 @@ var ActionIDNameMap = map[client.ActionID]string{
 	CosBucketCreate: "COS桶创建",
 	CosBucketFind:   "COS桶查询",
 	CosBucketDelete: "COS桶删除",
+
+	BizCosBucketCreate: "业务-COS桶创建",
+	BizCosBucketFind:   "业务-COS桶查询",
+	BizCosBucketDelete: "业务-COS桶删除",
 
 	AwsSavingsPlansCostQuery: "AWS-SavingsPlans成本查询",
 }

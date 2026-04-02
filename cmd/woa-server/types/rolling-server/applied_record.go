@@ -30,15 +30,16 @@ type AppliedRecordDate struct {
 
 // UnReturnedSubOrderMsg unreturned sub order msg
 type UnReturnedSubOrderMsg struct {
-	SubOrderID        string
-	AppliedCore       int64
-	ReturnedCore      int64
-	AppliedUser       string
-	AppliedYear       int
-	AppliedMonth      int
-	AppliedDay        int
-	NeedReturnedYear  int
-	NeedReturnedMonth int
-	NeedReturnedDay   int
-	FineState         enumor.RsUnReturnedSubOrderFineState
+	SubOrderID           string
+	AppliedCore          int64
+	ReturnedCore         int64
+	ExemptedReturnedCore int64
+	AppliedUser          string
+	AppliedYear          int
+	AppliedMonth         int
+	AppliedDay           int
+	NeedReturnedYear     int
+	NeedReturnedMonth    int
+	NeedReturnedDay      int
+	FineState            enumor.RsUnReturnedSubOrderFineState
 }

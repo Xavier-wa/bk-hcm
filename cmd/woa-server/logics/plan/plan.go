@@ -37,6 +37,7 @@ import (
 	ttypes "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/api/core"
 	dt "hcm/pkg/api/core/cloud/device-type"
+	protoaudit "hcm/pkg/api/data-service/audit"
 	rpproto "hcm/pkg/api/data-service/resource-plan"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
@@ -152,10 +153,24 @@ type Logics interface {
 	// ApproveResPlanSubTicketAdmin approve res plan ticket admin.
 	ApproveResPlanSubTicketAdmin(kt *kit.Kit, subTicketID string, bizID int64,
 		req *ptypes.AuditResPlanTicketAdminReq) error
+	// BatchApproveResPlanSubTicketsAdmin 批量审批资源预测子单
+	BatchApproveResPlanSubTicketsAdmin(kt *kit.Kit, bizID int64,
+		req *ptypes.BatchAuditResPlanTicketAdminReq) (*ptypes.BatchApproveResPlanSubTicketsAdminResp, error)
 	// RetryResPlanFailedSubTickets retry res plan failed sub tickets.
 	RetryResPlanFailedSubTickets(kt *kit.Kit, ticketID string) error
 	// TerminateResPlanFailedTicket terminate res plan failed ticket.
 	TerminateResPlanFailedTicket(kt *kit.Kit, ticketID string) error
+
+	// TerminateBizGpuSubOrders 终止业务侧 GPU 需求子单的核心逻辑。
+	TerminateBizGpuSubOrders(kt *kit.Kit, bizID int64, subOrderIDs []string) error
+	// BatchReviewGpuSubOrders 资源侧批量评审 GPU 需求子单。
+	BatchReviewGpuSubOrders(kt *kit.Kit, req *ptypes.BatchUpdateStatusResPlanDemandGpuSubOrderReq) error
+	// AuditGpuSubOrderUpdates 统一提交 GPU 需求子单变更审计。
+	AuditGpuSubOrderUpdates(kt *kit.Kit, updates []protoaudit.CloudResourceUpdateInfo) error
+	// RefreshGpuOrderStatusAfterBizEdit 业务侧修改驳回子单后刷新主单状态。
+	RefreshGpuOrderStatusAfterBizEdit(kt *kit.Kit, orderIDs []string) error
+	// RefreshGpuOrderStatusAfterReview 评审后刷新主单状态。
+	RefreshGpuOrderStatusAfterReview(kt *kit.Kit, orderIDs []string) error
 
 	// CreateDemandWeek create demand week.
 	CreateDemandWeek(kt *kit.Kit, createReqs []rpproto.ResPlanWeekCreateReq) (*core.BatchCreateResult, error)
@@ -180,6 +195,8 @@ type Logics interface {
 	ApplyDestroyOrderToResPlanDemand(kt *kit.Kit, destroyOrderID string) error
 	// AutoTransferBizResPlanDemandByID 根据业务ID和需求ID自动转移预测
 	AutoTransferBizResPlanDemandByID(kt *kit.Kit, bkBizID int64, demandIDs []string) ([]string, error)
+	// SyncBudgetOperatorByTime syncs budget operator info
+	SyncBudgetOperatorByTime(kt *kit.Kit, start, end time.Time) (*ptypes.BudgetOperatorSyncResp, error)
 }
 
 // Controller motivates the resource plan ticket status flow.
@@ -205,8 +222,8 @@ type Controller struct {
 
 // New creates a resource plan ticket controller instance.
 func New(sd serviced.State, client *client.ClientSet, dao dao.Set, cmsiCli cmsi.Client, itsmCli itsm.Client,
-	finOpsCli finops.Client, crpCli cvmapi.CVMClientInterface, bizLogic biz.Logics) (Logics, error) {
-
+	finOpsCli finops.Client, crpCli cvmapi.CVMClientInterface, bizLogic biz.Logics,
+) (Logics, error) {
 	var itsmFlowCfg cc.ItsmFlow
 	for _, itsmFlow := range cc.WoaServer().ItsmFlows {
 		if itsmFlow.ServiceName == enumor.TicketSvcNameResPlan {
@@ -416,7 +433,6 @@ CPU变更核数：%d
 
 // ApproveTicketITSMByBiz 审批 预测单itsm节点
 func (c *Controller) ApproveTicketITSMByBiz(kt *kit.Kit, ticketID string, param *itsm.ApproveNodeOpt) error {
-
 	if err := c.itsmCli.ApproveNode(kt, param); err != nil {
 		logs.Errorf("failed to approve itsm node of plan ticket %s, err: %v, rid: %s", ticketID, err, kt.Rid)
 		return err
