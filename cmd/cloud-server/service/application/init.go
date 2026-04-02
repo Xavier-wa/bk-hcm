@@ -73,6 +73,8 @@ func InitApplicationService(c *capability.Capability, bkHcmUrl string) {
 	h.Add("CreateForCreateDisk", "POST", "/vendors/{vendor}/applications/types/create_disk", svc.CreateForCreateDisk)
 	h.Add("CreateForCreateLB", "POST",
 		"/vendors/{vendor}/applications/types/create_load_balancer", svc.CreateForCreateLB)
+	h.Add("SysCreateForCreateLB", "POST",
+		"/vendors/{vendor}/system/applications/types/create_load_balancer", svc.SysCreateForCreateLB)
 
 	h.Add("CreateForCreateMainAccount", "POST",
 		"/applications/types/create_main_account", svc.CreateForCreateMainAccount)
@@ -92,6 +94,7 @@ func InitApplicationService(c *capability.Capability, bkHcmUrl string) {
 
 func bizService(h *rest.Handler, svc *applicationSvc) {
 	h.Add("ListBizApplications", "POST", "/applications/list", svc.ListBizApplications)
+	h.Add("GetBizApplication", "GET", "/applications/{application_id}", svc.GetBizApplication)
 }
 
 type applicationSvc struct {
@@ -113,13 +116,13 @@ func (a *applicationSvc) getCallbackUrl() string {
 
 func (a *applicationSvc) getHandlerOption(cts *rest.Contexts) *handlers.HandlerOption {
 	return &handlers.HandlerOption{
-		Cts:     cts,
-		Client:  a.client,
-		ItsmCli: a.itsmCli,
-		Cipher:  a.cipher,
-		Audit:   a.audit,
-		CmsiCli: a.cmsiCli,
-		CmdbCli: a.cmdbCli,
+		Cts:       cts,
+		Client:    a.client,
+		ItsmCli:   a.itsmCli,
+		Cipher:    a.cipher,
+		Audit:     a.audit,
+		CmsiCli:   a.cmsiCli,
+		CmdbCli:   a.cmdbCli,
 		FinOpsCli: a.finOpsCli,
 	}
 }

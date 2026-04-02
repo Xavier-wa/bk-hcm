@@ -118,6 +118,9 @@ const ResPlanItsmAuditSkip string = "skip"
 // CrpCvmApplySubnetMaxNum CRP主机申请接口-子网最大数量
 const CrpCvmApplySubnetMaxNum = 10
 
+// GpuInstanceClassValue  GPU机型族
+const GpuInstanceClassValue = "GPU型"
+
 const (
 	// ProductionStageMinValidTime 生产阶段耗时最小有效时间，用于过滤异常时间数据
 	ProductionStageMinValidTime = "2000-01-01 00:00:00"

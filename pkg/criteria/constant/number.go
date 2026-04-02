@@ -64,6 +64,12 @@ const (
 	SearchBizBelongingMaxLimit = 20
 	// RollingServerOperateMaxLimit 滚服记录操作的最大数量限制
 	RollingServerOperateMaxLimit = 100
+	
+	// BudgetOperatorSyncPageLimit 预算提报人同步拉取需求列表每页数量
+	BudgetOperatorSyncPageLimit = 500
+	// BudgetOperatorSyncBatchSize 预算提报人同步每批更新数量
+	BudgetOperatorSyncBatchSize = 100
+
 )
 
 // SyncConcurrencyZiyanMaxLimit 自研云同步并发最大限制

@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,6 +46,7 @@ import (
 	"hcm/pkg/logs"
 	"hcm/pkg/runtime/filter"
 	"hcm/pkg/thirdparty/api-gateway/bkbase"
+	"hcm/pkg/thirdparty/api-gateway/finops"
 	"hcm/pkg/thirdparty/cvmapi"
 	"hcm/pkg/tools/concurrence"
 	cvt "hcm/pkg/tools/converter"
@@ -2057,4 +2059,269 @@ func (c *Controller) GetAllDeviceTypeMap(kt *kit.Kit) (map[string]dt.DistinctDev
 		return nil, err
 	}
 	return deviceTypeMap, nil
+}
+
+// SyncBudgetOperatorByTime 同步 admin 单据的预算提报人。
+func (c *Controller) SyncBudgetOperatorByTime(kt *kit.Kit, start, end time.Time) (
+	*ptypes.BudgetOperatorSyncResp, error) {
+	resp := &ptypes.BudgetOperatorSyncResp{}
+
+	demands, err := c.collectBudgetOperatorDemands(kt, start, end)
+	if err != nil {
+		logs.Errorf("collect budget operator demands failed, err: %v, start: %v, end: %v, rid: %s", err, start, end, kt.Rid)
+		return resp, err
+	}
+
+	resp.TotalCount = len(demands)
+	if resp.TotalCount == 0 {
+		return resp, nil
+	}
+
+	groups := groupBudgetDemands(demands)
+
+	// Batch fetch all budget operator candidates from FinOps
+	candidateCache, err := c.batchFetchBudgetOperatorCandidates(kt, groups)
+	if err != nil {
+		logs.Errorf("batch fetch budget operator candidates failed, err: %v, rid: %s", err, kt.Rid)
+		resp.ProcessedCount = resp.SuccessCount + resp.FailedCount + resp.SkippedCount
+		return resp, err
+	}
+
+	for _, group := range groups {
+		key := fmt.Sprintf("%d-%d", group.OpProductID, group.Year)
+		candidate, exists := candidateCache[key]
+		if !exists || candidate == "" {
+			for _, demand := range group.Items {
+				resp.SkippedCount++
+				resp.SkippedDemandIDs = append(resp.SkippedDemandIDs, demand.ID)
+			}
+			continue
+		}
+
+		c.processBudgetDemands(kt, group.Items, candidate, resp)
+	}
+
+	resp.ProcessedCount = resp.SuccessCount + resp.FailedCount + resp.SkippedCount
+	return resp, nil
+}
+
+func groupBudgetDemands(demands []budgetDemand) map[string]*demandGroup {
+	groups := make(map[string]*demandGroup)
+	for i := range demands {
+		demand := &demands[i]
+		key := fmt.Sprintf("%d-%04d-%02d", demand.OpProductID,
+			demand.ExpectTime.Year(), demand.ExpectTime.Month())
+		group, exists := groups[key]
+		if !exists {
+			group = &demandGroup{
+				OpProductID: demand.OpProductID,
+				Year:        demand.ExpectTime.Year(),
+			}
+			groups[key] = group
+		}
+		group.Items = append(group.Items, demand)
+	}
+
+	return groups
+}
+
+// batchFetchBudgetOperatorCandidates 批量获取所有分组的预算提报人候选
+func (c *Controller) batchFetchBudgetOperatorCandidates(kt *kit.Kit,
+	groups map[string]*demandGroup) (map[string]string, error) {
+	// 收集所有唯一的 OpProductID 和 Year
+	opProductYearSet := make(map[int64]map[int]bool)
+	for _, group := range groups {
+		if _, exists := opProductYearSet[group.OpProductID]; !exists {
+			opProductYearSet[group.OpProductID] = make(map[int]bool)
+		}
+		opProductYearSet[group.OpProductID][group.Year] = true
+	}
+
+	// 构建批量查询参数
+	var years []int
+	var opProductIDs []int64
+	for opID, yearMap := range opProductYearSet {
+		for year := range yearMap {
+			years = append(years, year)
+			opProductIDs = append(opProductIDs, opID)
+		}
+	}
+
+	if len(years) == 0 {
+		return nil, nil
+	}
+
+	param := &finops.GetBudgetDeclarationOperatorParam{
+		Years:        years,
+		OpProductIDs: opProductIDs,
+	}
+
+	// 批量调用 FinOps API（带重试）
+	var resp *finops.GetBudgetDeclarationOperatorResult
+	var err error
+	for i := 0; i < 3; i++ {
+		resp, err = c.finOpsCli.GetBudgetDeclarationOperator(kt, param)
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if err != nil {
+		logs.Errorf("batch get budget declaration operator from finops failed, "+
+			"err: %v, years: %v, op_product_ids: %v, rid: %s", err, years, opProductIDs, kt.Rid)
+		return nil, err
+	}
+
+	// 构建缓存：key=opID-year, value=candidate
+	candidateCache := make(map[string]string)
+	for _, item := range resp.Items {
+		for _, comp := range item.Composition {
+			key := fmt.Sprintf("%d-%d", comp.OpProductID, item.Year)
+			logs.Infof("processing budget operator, op_product_id: %d, year: %d, creators: %v, committers: %v, rid: %s",
+				comp.OpProductID, item.Year, comp.Creators, comp.Committers, kt.Rid)
+
+			// 提取第一个有效的候选人
+			candidates := deduplicateBudgetOperatorCandidates(comp.Creators, comp.Committers)
+			for _, operator := range candidates {
+				candidateCache[key] = operator
+				logs.Infof("budget operator candidate cached, key: %s, candidate: %s, rid: %s", key, operator, kt.Rid)
+				break // 只取第一个
+			}
+		}
+	}
+
+	return candidateCache, nil
+}
+
+func (c *Controller) collectBudgetOperatorDemands(kt *kit.Kit, start, end time.Time) ([]budgetDemand, error) {
+	results := make([]budgetDemand, 0)
+
+	page := core.NewDefaultBasePage()
+	page.Limit = constant.BudgetOperatorSyncPageLimit
+	page.Sort = "expect_time"
+	page.Order = core.Ascending
+	listFilter := tools.ExpressionAnd(
+		tools.RuleEqual("creator", constant.BackendOperationUserKey),
+		tools.RuleGreaterThanEqual("expect_time", times.ConvTimeToCompactInt(start)),
+		tools.RuleLessThan("expect_time", times.ConvTimeToCompactInt(end.AddDate(0, 0, 1))),
+	)
+
+	for {
+		req := &rpproto.ResPlanDemandListReq{
+			ListReq: core.ListReq{
+				Filter: listFilter,
+				Fields: []string{"id", "creator", "reviser", "expect_time", "op_product_id"},
+				Page:   page,
+			},
+		}
+		resp, err := c.client.DataService().Global.ResourcePlan.ListResPlanDemand(kt, req)
+		if err != nil {
+			logs.Errorf("list res plan demand for budget operator sync failed, err: %v, rid: %s", err, kt.Rid)
+			return nil, err
+		}
+
+		for _, item := range resp.Details {
+			results = append(results, budgetDemand{
+				ID:          item.ID,
+				Creator:     item.Creator,
+				Reviser:     item.Reviser,
+				ExpectTime:  times.ConvCompactIntToTime(item.ExpectTime),
+				OpProductID: item.OpProductID,
+			})
+		}
+
+		if len(resp.Details) < int(page.Limit) {
+			break
+		}
+		page.Start += uint32(page.Limit)
+	}
+
+	return results, nil
+}
+
+func deduplicateBudgetOperatorCandidates(operatorLists ...[]string) []string {
+	seen := make(map[string]struct{})
+	operators := make([]string, 0)
+	for _, operatorList := range operatorLists {
+		for _, operator := range operatorList {
+			operator = strings.TrimSpace(operator)
+			if operator == "" || operator == constant.BackendOperationUserKey {
+				continue
+			}
+			if _, ok := seen[operator]; ok {
+				continue
+			}
+			seen[operator] = struct{}{}
+			operators = append(operators, operator)
+		}
+	}
+	return operators
+}
+
+func (c *Controller) processBudgetDemands(kt *kit.Kit, demands []*budgetDemand, candidate string,
+	resp *ptypes.BudgetOperatorSyncResp) {
+	reviser := kt.User
+	if reviser == "" {
+		reviser = constant.BackendOperationUserKey
+	}
+
+	// 收集需要更新的 demand IDs
+	toUpdateIDs := make([]string, 0, len(demands))
+	for _, demand := range demands {
+		current := strings.TrimSpace(demand.Creator)
+		if current != "" && current != constant.BackendOperationUserKey {
+			resp.SkippedCount++
+			resp.SkippedDemandIDs = append(resp.SkippedDemandIDs, demand.ID)
+			continue
+		}
+
+		if current == candidate {
+			resp.SkippedCount++
+			resp.SkippedDemandIDs = append(resp.SkippedDemandIDs, demand.ID)
+			continue
+		}
+
+		toUpdateIDs = append(toUpdateIDs, demand.ID)
+	}
+
+	if len(toUpdateIDs) == 0 {
+		return
+	}
+
+	// 批量更新，按 BudgetOperatorSyncBatchSize 分批
+	for i := 0; i < len(toUpdateIDs); i += constant.BudgetOperatorSyncBatchSize {
+		if i > 0 {
+			time.Sleep(200 * time.Millisecond)
+		}
+
+		end := i + constant.BudgetOperatorSyncBatchSize
+		if end > len(toUpdateIDs) {
+			end = len(toUpdateIDs)
+		}
+		batchIDs := toUpdateIDs[i:end]
+
+		updateReq := &rpproto.ResPlanDemandBatchUpdateCreatorReq{
+			IDs:     batchIDs,
+			Creator: candidate,
+			Reviser: reviser,
+		}
+		updateResp, err := c.client.DataService().Global.ResourcePlan.ResPlanDemandBatchUpdateCreator(kt, updateReq)
+		if err != nil {
+			resp.FailedCount += len(batchIDs)
+			resp.FailedDemandIDs = append(resp.FailedDemandIDs, batchIDs...)
+			logs.Errorf("batch update budget operator creator failed, err: %v, demand_ids: %v, rid: %s",
+				err, batchIDs, kt.Rid)
+			continue
+		}
+
+		// 更新成功数和跳过数
+		resp.SuccessCount += int(updateResp.UpdatedCount)
+		skippedInBatch := len(batchIDs) - int(updateResp.UpdatedCount)
+		if skippedInBatch > 0 {
+			resp.SkippedCount += skippedInBatch
+			// 注：这里无法精确知道哪些是 skipped，只能记录批次信息
+			logs.Infof("batch update partial skip, batch_size: %d, updated: %d, skipped: %d, rid: %s",
+				len(batchIDs), updateResp.UpdatedCount, skippedInBatch, kt.Rid)
+		}
+	}
 }

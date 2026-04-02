@@ -221,6 +221,22 @@ type ResPlanConsumePool map[ResPlanPoolKeyV2]int64
 // ResPlanPoolMatch resource plan demand match.
 type ResPlanPoolMatch map[ResPlanPoolKeyV2]map[string]int64
 
+// budgetDemand 预算提报人同步使用的需求项
+type budgetDemand struct {
+	ID          string
+	Creator     string
+	Reviser     string
+	ExpectTime  time.Time
+	OpProductID int64
+}
+
+// demandGroup 按运营产品+年份分组的需求集合
+type demandGroup struct {
+	OpProductID int64
+	Year        int
+	Items       []*budgetDemand
+}
+
 // StrUnionFind string union find struct.
 type StrUnionFind struct {
 	idx    []string

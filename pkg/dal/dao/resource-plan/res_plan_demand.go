@@ -27,6 +27,7 @@ import (
 
 	"hcm/pkg/api/core"
 	rpproto "hcm/pkg/api/data-service/resource-plan"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/audit"
@@ -51,6 +52,7 @@ type ResPlanDemandInterface interface {
 	CreateWithTx(kt *kit.Kit, tx *sqlx.Tx, models []rpd.ResPlanDemandTable) ([]string, error)
 	UpdateWithTx(kt *kit.Kit, tx *sqlx.Tx, expr *filter.Expression, model *rpd.ResPlanDemandTable) error
 	List(kt *kit.Kit, opt *types.ListOption) (*rpproto.ResPlanDemandListResult, error)
+	UpdateDemandCreator(kt *kit.Kit, demandIDs []string, creator, reviser string) (int64, error)
 	DeleteWithTx(kt *kit.Kit, tx *sqlx.Tx, expr *filter.Expression) error
 	ExamineAndLockAllRPDemand(kt *kit.Kit, lockedItems []rpproto.ResPlanDemandLockOpItem) error
 	UnlockAllResPlanDemand(kt *kit.Kit, demandIDs []string) error
@@ -132,6 +134,55 @@ func (d ResPlanDemandDao) UpdateWithTx(kt *kit.Kit, tx *sqlx.Tx, filterExpr *fil
 	}
 
 	return nil
+}
+
+// UpdateDemandCreator batch update creator for multiple demands.
+func (d ResPlanDemandDao) UpdateDemandCreator(kt *kit.Kit, demandIDs []string, creator, reviser string) (int64, error) {
+	if len(demandIDs) == 0 {
+		return 0, errf.New(errf.InvalidParameter, "demand ids cannot be empty")
+	}
+
+	if creator == "" {
+		return 0, errf.New(errf.InvalidParameter, "creator cannot be empty")
+	}
+
+	idExpr := tools.ContainersExpression("id", demandIDs)
+	backendExpr := tools.EqualExpression("creator", constant.BackendOperationUserKey)
+
+	// Combine conditions with AND
+	filterExpr := &filter.Expression{
+		Op: filter.And,
+		Rules: []filter.RuleFactory{
+			idExpr,
+			backendExpr,
+		},
+	}
+
+	whereExpr, whereValue, err := filterExpr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		logs.Errorf("build filter expression failed, err: %v, rid: %s", err, kt.Rid)
+		return 0, err
+	}
+
+	params := map[string]interface{}{
+		"creator": creator,
+		"reviser": reviser,
+	}
+
+	// Merge where conditions with params
+	allParams := tools.MapMerge(whereValue, params)
+
+	sql := fmt.Sprintf(`UPDATE %s SET creator = :creator, reviser = :reviser, updated_at = NOW() %s`,
+		table.ResPlanDemandTable, whereExpr)
+
+	affected, err := d.Orm.Do().Update(kt.Ctx, sql, allParams)
+	if err != nil {
+		logs.Errorf("batch update budget operator demand creator failed, err: %v, demand_ids: %v, rid: %s",
+			err, demandIDs, kt.Rid)
+		return 0, err
+	}
+
+	return affected, nil
 }
 
 // List get resource plan demand list.

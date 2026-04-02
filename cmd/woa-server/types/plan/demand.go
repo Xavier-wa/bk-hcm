@@ -261,6 +261,55 @@ type ListResPlanDemandItem struct {
 	Reviser          string               `json:"reviser"`
 }
 
+// BudgetOperatorSyncReq defines the payload for budget operator sync.
+type BudgetOperatorSyncReq struct {
+	StartTime string `json:"start_time" validate:"required"`
+	EndTime   string `json:"end_time" validate:"required"`
+}
+
+// Validate validates BudgetOperatorSyncReq.
+func (r *BudgetOperatorSyncReq) Validate() error {
+	if err := validator.Validate.Struct(r); err != nil {
+		return err
+	}
+
+	if _, _, err := r.TimeRange(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// TimeRange returns parsed start/end time.
+func (r *BudgetOperatorSyncReq) TimeRange() (time.Time, time.Time, error) {
+	start, err := time.Parse(constant.DateLayout, r.StartTime)
+	if err != nil {
+		return time.Time{}, time.Time{}, errors.New("invalid start_time")
+	}
+
+	end, err := time.Parse(constant.DateLayout, r.EndTime)
+	if err != nil {
+		return time.Time{}, time.Time{}, errors.New("invalid end_time")
+	}
+
+	if start.After(end) {
+		return time.Time{}, time.Time{}, errors.New("start_time must be before or equal to end_time")
+	}
+
+	return start, end, nil
+}
+
+// BudgetOperatorSyncResp summaries the sync result.
+type BudgetOperatorSyncResp struct {
+	TotalCount       int      `json:"total_count"`
+	ProcessedCount   int      `json:"processed_count"`
+	SuccessCount     int      `json:"success_count"`
+	FailedCount      int      `json:"failed_count"`
+	FailedDemandIDs  []string `json:"failed_demand_ids"`
+	SkippedCount     int      `json:"skipped_count"`
+	SkippedDemandIDs []string `json:"skipped_demand_ids"`
+}
+
 // SetStatus set demand status
 func (l *ListResPlanDemandItem) SetStatus(status enumor.DemandStatus) {
 	l.Status = status
