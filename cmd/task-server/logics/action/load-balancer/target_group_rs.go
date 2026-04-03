@@ -152,7 +152,7 @@ func (act AddTargetToGroupAction) Run(kt run.ExecuteKit, params interface{}) (in
 	taskDetailState := enumor.TaskDetailSuccess
 	defer func() {
 		// 更新任务状态
-		if err := actionflow.BatchUpdateTaskDetailResultState(kt.Kit(), opt.ManagementDetailIDs, taskDetailState,
+		if err = actionflow.BatchUpdateTaskDetailResultState(kt.Kit(), opt.ManagementDetailIDs, taskDetailState,
 			result, err); err != nil {
 			logs.Errorf("fail to update task detail state, err: %v, opt: %+v rid: %s", err, opt, kt.Kit().Rid)
 		}
@@ -167,7 +167,6 @@ func (act AddTargetToGroupAction) Run(kt run.ExecuteKit, params interface{}) (in
 			LbID:          opt.TCloudBatchOperateTargetReq.LbID,
 			RsList:        rsBatch,
 		}
-
 		var batchResult *hclb.BatchCreateResult
 		switch opt.Vendor {
 		case enumor.TCloud:
@@ -254,7 +253,7 @@ func (act RemoveTargetAction) Run(kt run.ExecuteKit, params interface{}) (interf
 	if len(reason) > 0 {
 		return reason, nil
 	}
-	if err := actionflow.BatchUpdateTaskDetailState(kt.Kit(), opt.ManagementDetailIDs,
+	if err = actionflow.BatchUpdateTaskDetailState(kt.Kit(), opt.ManagementDetailIDs,
 		enumor.TaskDetailRunning); err != nil {
 		logs.Errorf("fail to update task detail state, err: %v, opt: %+v rid: %s", err, opt, kt.Kit().Rid)
 		return nil, err
@@ -263,7 +262,7 @@ func (act RemoveTargetAction) Run(kt run.ExecuteKit, params interface{}) (interf
 	taskDetailState := enumor.TaskDetailSuccess
 	defer func() {
 		// 更新任务状态
-		if err := actionflow.BatchUpdateTaskDetailResultState(kt.Kit(), opt.ManagementDetailIDs, taskDetailState,
+		if err = actionflow.BatchUpdateTaskDetailResultState(kt.Kit(), opt.ManagementDetailIDs, taskDetailState,
 			result, err); err != nil {
 			logs.Errorf("fail to update task detail state, err: %v, opt: %+v rid: %s", err, opt, kt.Kit().Rid)
 		}
@@ -420,7 +419,7 @@ func (act ModifyTargetWeightAction) Run(kt run.ExecuteKit, params interface{}) (
 	if len(reason) > 0 {
 		return reason, nil
 	}
-	if err := actionflow.BatchUpdateTaskDetailState(kt.Kit(), opt.ManagementDetailIDs,
+	if err = actionflow.BatchUpdateTaskDetailState(kt.Kit(), opt.ManagementDetailIDs,
 		enumor.TaskDetailRunning); err != nil {
 		logs.Errorf("fail to update task detail state, err: %v, opt: %+v rid: %s", err, opt, kt.Kit().Rid)
 		return nil, err

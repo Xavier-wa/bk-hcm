@@ -37,8 +37,6 @@ export default defineComponent({
     // 目标组list
     const { searchData, selections, CommonTable, getListData } = useRenderTRList();
 
-    const isDropdownShow = ref(false);
-
     // 检测路由query中的action参数，自动打开新建目标组弹窗
     onMounted(() => {
       if (route.query.action === 'create') {
@@ -163,22 +161,15 @@ export default defineComponent({
                       ),
                     }}
                   </hcm-auth>
-                  <Dropdown
-                    isShow={isDropdownShow.value}
-                    trigger='manual'
-                    placement='bottom-start'
-                    popoverOptions={{ forceClickoutside: true }}
-                    onHide={() => (isDropdownShow.value = false)}>
+                  <Dropdown placement='bottom-start' disabled={!selections.value.length}>
                     {{
                       default: () => (
-                        <Button disabled={!selections.value.length} onClick={() => (isDropdownShow.value = true)}>
+                        <Button disabled={!selections.value.length}>
                           {t('批量操作')} <AngleDown class='f22' />
                         </Button>
                       ),
                       content: () => (
-                        <DropdownMenu
-                          class='target-group-batch-operation-menu'
-                          onClick={() => (isDropdownShow.value = false)}>
+                        <DropdownMenu class='target-group-batch-operation-menu'>
                           <hcm-auth sign={clbDeleteAuthSign.value}>
                             {{
                               default: ({ noPerm }: { noPerm: boolean }) => (

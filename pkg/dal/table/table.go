@@ -296,6 +296,9 @@ const (
 	ResUsageBizRelTable = "res_usage_biz_rel"
 	// DeviceCapacityTable 机型库存表
 	DeviceCapacityTable = "device_capacity"
+
+	// PermissionPolicyLibraryTable is permission_policy_library table's name.
+	PermissionPolicyLibraryTable Name = "permission_policy_library"
 )
 
 // Validate whether the table name is valid or not.
@@ -454,6 +457,8 @@ var TableMap = map[Name]TableConfig{
 	OrgTopoTable:                       {},
 
 	ResUsageBizRelTable: {},
+
+	PermissionPolicyLibraryTable: {EnableTenant: true},
 	DeviceCapacityTable: {},
 }
 
