@@ -357,7 +357,6 @@ paths:
           userVerifiedRequired: true
         disabledStages: []
         descriptionEn: List AWS member account CloudWatch available metrics via AssumeRole
-
   /api/v1/task/get_biz_recycle_order:
     post:
       operationId: scr_list_biz_recycle_order

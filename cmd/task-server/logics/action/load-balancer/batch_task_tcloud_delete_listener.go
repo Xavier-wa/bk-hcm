@@ -23,7 +23,7 @@ import (
 	"fmt"
 
 	actcli "hcm/cmd/task-server/logics/action/cli"
-	"hcm/cmd/task-server/logics/flow"
+	actionflow "hcm/cmd/task-server/logics/flow"
 	"hcm/pkg/api/core"
 	corelb "hcm/pkg/api/core/cloud/load-balancer"
 	"hcm/pkg/async/action"

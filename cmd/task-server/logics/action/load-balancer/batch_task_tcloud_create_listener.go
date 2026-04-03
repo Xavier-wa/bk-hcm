@@ -24,7 +24,7 @@ import (
 	"strings"
 
 	actcli "hcm/cmd/task-server/logics/action/cli"
-	"hcm/cmd/task-server/logics/flow"
+	actionflow "hcm/cmd/task-server/logics/flow"
 	"hcm/pkg/api/core"
 	corelb "hcm/pkg/api/core/cloud/load-balancer"
 	dataproto "hcm/pkg/api/data-service/cloud"
@@ -147,7 +147,7 @@ func (act BatchTaskTCloudCreateListenerAction) createSingleListener(kt *kit.Kit,
 	}
 
 	// 更新任务状态为 running
-	if err := actionflow.BatchUpdateTaskDetailState(kt, []string{detailId}, enumor.TaskDetailRunning); err != nil {
+	if err = actionflow.BatchUpdateTaskDetailState(kt, []string{detailId}, enumor.TaskDetailRunning); err != nil {
 		return nil, fmt.Errorf("fail to update detail to running, err: %v", err)
 	}
 

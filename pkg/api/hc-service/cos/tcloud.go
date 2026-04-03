@@ -75,7 +75,7 @@ type TCloudCreateBucketResp struct {
 type TCloudDeleteBucketReq struct {
 	AccountID string `json:"account_id" validate:"required"`
 	Region    string `json:"region" validate:"required"`
-	Name      string `json:"name" validate:"required"`
+	CloudName string `json:"cloud_name" validate:"required"`
 }
 
 // Validate TCloudDeleteBucketReq.
