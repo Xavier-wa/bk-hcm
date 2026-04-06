@@ -275,9 +275,32 @@ func (a *AccountClient) DeleteSubAccount(kt *kit.Kit, req *hssubaccount.TCloudDe
 	return nil
 }
 
-// DescribeSafeAuthFlag get sub-account safe auth flag settings via TCloud CAM DescribeSafeAuthFlagColl.
-func (a *AccountClient) DescribeSafeAuthFlag(kt *kit.Kit,
-	req *hssubaccount.TCloudDescribeSafeAuthFlagReq,
+// DescribeSafeAuthFlagColl get sub-account safe auth flag settings via TCloud CAM DescribeSafeAuthFlagColl.
+func (a *AccountClient) DescribeSafeAuthFlagColl(kt *kit.Kit, req *hssubaccount.TCloudDescribeSafeAuthFlagCollReq,
+) (*hssubaccount.TCloudDescribeSafeAuthFlagCollResult, error) {
+
+	resp := new(hssubaccount.TCloudDescribeSafeAuthFlagCollResp)
+
+	err := a.client.Post().
+		WithContext(kt.Ctx).
+		Body(req).
+		SubResourcef("/sub_accounts/safe_auth_flag").
+		WithHeaders(kt.Header()).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != errf.OK {
+		return nil, errf.New(resp.Code, resp.Message)
+	}
+
+	return resp.Data, nil
+}
+
+// DescribeSafeAuthFlag get user's safe auth flag settings via TCloud CAM DescribeSafeAuthFlag.
+func (a *AccountClient) DescribeSafeAuthFlag(kt *kit.Kit, req *hssubaccount.TCloudDescribeSafeAuthFlagReq,
 ) (*hssubaccount.TCloudDescribeSafeAuthFlagResult, error) {
 
 	resp := new(hssubaccount.TCloudDescribeSafeAuthFlagResp)
@@ -285,7 +308,7 @@ func (a *AccountClient) DescribeSafeAuthFlag(kt *kit.Kit,
 	err := a.client.Post().
 		WithContext(kt.Ctx).
 		Body(req).
-		SubResourcef("/sub_accounts/safe_auth_flag").
+		SubResourcef("/accounts/safe_auth_flag").
 		WithHeaders(kt.Header()).
 		Do().
 		Into(resp)
