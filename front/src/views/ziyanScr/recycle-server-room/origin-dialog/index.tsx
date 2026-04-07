@@ -25,8 +25,15 @@ export default defineComponent({
   emits: ['update:is-show'],
   setup(props, { emit }) {
     const { t } = useI18n();
-    const { columns, settings } = useColumns('decommissionDetails');
+    const { columns: rawColumns, generateColumnsSettings } = useColumns('decommissionDetails');
     const ziyanScrStore = useZiyanScrStore();
+
+    // origin-dialog 中 project_name 和 svr_type_name 默认不展示
+    const columns = rawColumns.map((col: any) => ({
+      ...col,
+      isDefaultShow: ['project_name', 'svr_type_name'].includes(col.field) ? false : col.isDefaultShow,
+    }));
+    const settings = generateColumnsSettings(columns);
 
     const isLoading = ref(false);
     const tableData = ref();

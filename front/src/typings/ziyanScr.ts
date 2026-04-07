@@ -125,6 +125,7 @@ export interface CurrentListParam {
   group_name: string;
   center: string;
   svr_type_name: string;
+  project_name: string;
 }
 
 export type IDissolveHostCurrentListResult = IListResData<CurrentListParam[]>;

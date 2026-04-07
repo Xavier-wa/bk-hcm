@@ -2800,6 +2800,11 @@ export default (type: string, isSimpleShow = false) => {
       isDefaultShow: true,
     },
     {
+      label: '裁撤项目类型',
+      field: 'project_name',
+      isDefaultShow: true,
+    },
+    {
       label: 'SCM设备类型',
       field: 'device_type',
       isDefaultShow: true,
