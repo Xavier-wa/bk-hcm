@@ -140,7 +140,6 @@ export default defineComponent({
       zones: [], // 园区，cvm支持多可用区，使用此字段
       charge_type: cvmChargeTypes.PREPAID,
       charge_months: 36, // 计费时长
-      bk_asset_id: '', // 继承套餐的机器代表固资号
     });
     // 侧边栏腾讯云CVM
     const QCLOUDCVMForm = ref({
@@ -154,7 +153,8 @@ export default defineComponent({
         system_disk: { disk_type: '', disk_size: 0, disk_num: 1 },
         data_disk: [],
         network_type: 'TENTHOUSAND',
-        inherit_instance_id: '', // 继承套餐的机器代表实例ID
+        bk_asset_id: '', // 继承套餐的机器固资号
+        inherit_instance_id: '', // 继承套餐的机器实例ID
         cpu: undefined,
         res_assign: undefined,
         cpu_thread_switch: undefined, // CPU超线程开关
@@ -198,8 +198,8 @@ export default defineComponent({
       if (from === 'confirm') {
         const { deviceTypeList, inheritInstanceId, inheritAssetId } = data;
         QCLOUDCVMForm.value.spec.cpu = deviceTypeList?.[0]?.cpu_core;
+        QCLOUDCVMForm.value.spec.bk_asset_id = inheritAssetId;
         QCLOUDCVMForm.value.spec.inherit_instance_id = inheritInstanceId;
-        resourceForm.value.bk_asset_id = inheritAssetId;
 
         // zones有变更
         if (changed?.zones) {
@@ -487,10 +487,10 @@ export default defineComponent({
       resourceForm.value.resourceType = resourceType;
       modifyresourceType.value = resourceType;
 
-      const { anti_affinity_level, bk_asset_id, remark, replicas, spec } = cloneRow;
+      const { anti_affinity_level, remark, replicas, spec } = cloneRow;
       const { region, zone, zones, charge_type, charge_months } = spec;
 
-      Object.assign(resourceForm.value, { bk_asset_id, region, zone, zones, remark });
+      Object.assign(resourceForm.value, { region, zone, zones, remark });
 
       if (resourceType === 'QCLOUDCVM') {
         QCLOUDCVMForm.value.spec = { ...spec, anti_affinity_level, replicas: +replicas };
@@ -643,6 +643,7 @@ export default defineComponent({
         system_disk: { disk_type: '', disk_size: 0, disk_num: 1 },
         data_disk: [],
         network_type: 'TENTHOUSAND',
+        bk_asset_id: '',
         inherit_instance_id: '',
         cpu: data.cpu,
         res_assign: data.res_assign,
@@ -704,7 +705,6 @@ export default defineComponent({
         enable_disk_check: false,
         charge_type: cvmChargeTypes.PREPAID,
         charge_months: 36,
-        bk_asset_id: resourceForm.value.bk_asset_id, // 继承套餐的机器固资号不用清除
       };
       QCLOUDCVMForm.value = {
         spec: {
@@ -717,6 +717,7 @@ export default defineComponent({
           system_disk: { disk_type: '', disk_size: 0, disk_num: 1 },
           data_disk: [],
           network_type: 'TENTHOUSAND',
+          bk_asset_id: QCLOUDCVMForm.value.spec.bk_asset_id, // 继承套餐的机器固资号不用清除
           inherit_instance_id: QCLOUDCVMForm.value.spec.inherit_instance_id, // 继承套餐的机器实例id不用清除
           cpu: undefined,
           res_assign: undefined,
@@ -743,11 +744,9 @@ export default defineComponent({
         zones,
         charge_type,
         charge_months,
-        bk_asset_id,
       } = resourceForm.value;
 
       return {
-        bk_asset_id,
         resource_type,
         remark,
         enable_disk_check,
@@ -975,7 +974,7 @@ export default defineComponent({
       isSpecialRequirement,
       (val) => {
         if (!val) {
-          resourceForm.value.bk_asset_id = '';
+          QCLOUDCVMForm.value.spec.bk_asset_id = '';
           QCLOUDCVMForm.value.spec.inherit_instance_id = '';
           cloudTableColumns.value = [...CloudHostcolumns, ...CVMVerifyColumns, CloudHostoperation.value];
           cloudHostSetting = generateColumnsSettings(cloudTableColumns.value);
@@ -1534,7 +1533,7 @@ export default defineComponent({
                                   vendor={VendorEnum.ZIYAN}
                                   requireType={order.value.model.requireType}
                                   region={resourceForm.value.region}
-                                  assetId={resourceForm.value.bk_asset_id}
+                                  assetId={QCLOUDCVMForm.value.spec.bk_asset_id}
                                   instanceId={QCLOUDCVMForm.value.spec.inherit_instance_id}
                                   disabled={resourceForm.value.region === ''}
                                   isEditing={isOneClickApplication.value || title.value === '修改资源需求'}

@@ -36,7 +36,16 @@ const suborderId = computed(() => route.query.suborder_id as string);
 const formRef = useTemplateRef<typeof Form>('adjust-form');
 const networkInfoPanelRef = useTemplateRef<typeof NetworkInfoCollapsePanel>('network-info-panel');
 
-const formModel = reactive({ zones: [], res_assign: undefined, device_type: '', replicas: 0, vpc: '', subnet: '' });
+const formModel = reactive({
+  zones: [],
+  res_assign: undefined,
+  device_type: '',
+  replicas: 0,
+  vpc: '',
+  subnet: '',
+  bk_asset_id: '',
+  inherit_instance_id: '',
+});
 
 const details = ref<IApplyOrderItem>();
 const unProductNum = computed(() => (!details.value ? 0 : details.value.origin_num - details.value.product_num));
@@ -57,7 +66,7 @@ onBeforeMount(async () => {
   await getDetails();
   // 初始化表单
   const { origin_num, product_num } = details.value || {};
-  const { zones, res_assign, device_type, vpc, subnet } = details.value?.spec || {};
+  const { zones, res_assign, device_type, vpc, subnet, bk_asset_id, inherit_instance_id } = details.value?.spec || {};
   Object.assign(formModel, {
     zones,
     res_assign,
@@ -65,6 +74,8 @@ onBeforeMount(async () => {
     replicas: origin_num - product_num,
     vpc,
     subnet,
+    bk_asset_id,
+    inherit_instance_id,
   });
   setNetworkInfoDisabled(formModel.zones);
 });
@@ -175,6 +186,11 @@ const handleDeviceTypeChange = (
   from: 'confirm' | 'auto',
   changed?: { zones: boolean },
 ) => {
+  if (from === 'confirm') {
+    formModel.bk_asset_id = data.inheritAssetId;
+    formModel.inherit_instance_id = data.inheritInstanceId;
+  }
+
   if (changed?.zones) {
     formModel.subnet = '';
     setNetworkInfoDisabled(data.zones);
@@ -223,8 +239,16 @@ const formValidate = async () => {
 
 const handleVerify = async () => {
   await formValidate();
-  const { zones, device_type, vpc, subnet, replicas, res_assign } = formModel;
-  const spec = Object.assign({}, details.value.spec, { zones, device_type, vpc, subnet, res_assign });
+  const { zones, device_type, vpc, subnet, replicas, res_assign, bk_asset_id, inherit_instance_id } = formModel;
+  const spec = Object.assign({}, details.value.spec, {
+    zones,
+    device_type,
+    vpc,
+    subnet,
+    res_assign,
+    bk_asset_id,
+    inherit_instance_id,
+  });
   isVerifyLoading.value = true;
   try {
     const res = await planStore.verify_resource_demand({
@@ -257,8 +281,16 @@ const isReplicasInvalid = computed(() => formModel.replicas <= 0);
 const handleSubmit = async () => {
   await formValidate();
   const { suborder_id, bk_username } = details.value;
-  const { zones, device_type, vpc, subnet, replicas, res_assign } = formModel;
-  const spec = Object.assign({}, details.value.spec, { zones, device_type, vpc, subnet, res_assign });
+  const { zones, device_type, vpc, subnet, replicas, res_assign, bk_asset_id, inherit_instance_id } = formModel;
+  const spec = Object.assign({}, details.value.spec, {
+    zones,
+    device_type,
+    vpc,
+    subnet,
+    res_assign,
+    bk_asset_id,
+    inherit_instance_id,
+  });
   const res = await ziyanScrStore.modifyApplyOrder({ suborder_id, bk_username, replicas, spec });
   if (res.code === 0) {
     Message({ theme: 'success', message: '提交成功' });
@@ -302,6 +334,7 @@ const handleBack = () => {
               :vendor="VendorEnum.ZIYAN"
               :require-type="details?.require_type"
               :region="details?.spec.region"
+              :asset-id="details?.spec.bk_asset_id"
               :instance-id="details?.spec.inherit_instance_id"
               :edit-mode="true"
               @change="handleDeviceTypeChange"

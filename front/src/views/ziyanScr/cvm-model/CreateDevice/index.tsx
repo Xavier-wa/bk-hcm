@@ -18,6 +18,7 @@ export interface ICvmDeviceCreateModel {
   technical_class: string;
   disable?: boolean;
   region: string;
+  generation_type: '存量' | '采购';
 }
 
 export default defineComponent({
@@ -35,6 +36,10 @@ export default defineComponent({
     const deviceTypeClassOptions = {
       CommonType: '通用机型',
       SpecialType: '专用机型',
+    };
+    const generationTypeOptions = {
+      存量: '存量',
+      采购: '采购',
     };
 
     const isShow = computed({
@@ -58,6 +63,7 @@ export default defineComponent({
       device_class: '',
       device_type_class: 'CommonType',
       technical_class: '',
+      generation_type: '存量',
     });
     const selectedZones = ref<Array<{ value: string; label: string; region: string }>>([]);
 
@@ -106,10 +112,10 @@ export default defineComponent({
               technical_class: formModel.technical_class,
               region: r,
               zone: z,
+              generation_type: formModel.generation_type,
             });
           }
         }
-
         const res = await apiService.createCvmDevice({ device_types: deviceTypes }, { globalError: false });
 
         if (res.code === 0) {
@@ -179,6 +185,13 @@ export default defineComponent({
               </bk-form-item>
               <bk-form-item label='核心类型' property='core_type' required>
                 <hcm-form-enum v-model={formModel.core_type} option={deviceSizeNames} class='i-form-control' />
+              </bk-form-item>
+              <bk-form-item label='机型代次' property='generation_type' required>
+                <hcm-form-enum
+                  v-model={formModel.generation_type}
+                  option={generationTypeOptions}
+                  class='i-form-control'
+                />
               </bk-form-item>
               <bk-form-item label='CPU(核)' property='cpu_core' required>
                 <bk-input type='number' v-model={formModel.cpu_core} min={0} class='i-form-control' />
