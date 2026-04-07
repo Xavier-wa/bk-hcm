@@ -782,6 +782,7 @@ type QueryCvmInstanceTypeItem struct {
 	InstanceClass         string            `json:"instanceClass"`         // 实例类型
 	CoreType              int               `json:"coreType"`              // 1.2.3 分别标识，小核心，中核心，大核心
 	CvmInstanceTypeClass  string            `json:"cvmInstanceTypeClass"`  // 技术分类
+	GenerationType        string            `json:"generationType"`        // 机型代次
 }
 
 // GetApproveLogResp get approve log response

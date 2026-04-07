@@ -91,7 +91,8 @@ POST /api/v1/woa/task/findmany/apply
           "image": "Tencent Linux Release 1.2 (tkernel2)",
           "network": "TENTHOUSAND",
           "region": "ap-shanghai",
-          "zone": "ap-shanghai-2"
+          "zone": "ap-shanghai-2",
+          "bk_asset_id": "TCxxxxxx"
         },
         "anti_affinity_level": "ANTI_NONE",
         "stage": "RUNNING",
@@ -172,3 +173,4 @@ POST /api/v1/woa/task/findmany/apply
 | cpu_provider | string	  | CPU类型                                             |
 | kernel	   | string	  | 内核                                                |
 | source    | string   | 枚举类型，"business"（业务单据）、"purchase_to_resource_pool"(资源池采购)     |
+| bk_asset_id  | string	 | 主机继承的固资号                                        |

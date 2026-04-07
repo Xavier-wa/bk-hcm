@@ -860,6 +860,8 @@ type ResourceSpec struct {
 	ChargeMonths uint `json:"charge_months" bson:"charge_months"`
 	// 被继承云主机实例ID
 	InheritInstanceId string `json:"inherit_instance_id" bson:"inherit_instance_id"`
+	// 继承的固资号
+	BkAssetID string `json:"bk_asset_id" bson:"bk_asset_id"`
 	// 分区生产时报错的可用区ID列表
 	FailedZoneIDs []string          `json:"failed_zone_ids" bson:"failed_zone_ids"`
 	SystemDisk    enumor.DiskSpec   `json:"system_disk" bson:"system_disk"`
@@ -1710,22 +1712,24 @@ type GetApplyModifyRst struct {
 	Info  []*table.ModifyRecord `json:"info"`
 }
 
-// CheckRollingServerHostReq check rolling server host request
-type CheckRollingServerHostReq struct {
-	AssetID string `json:"bk_asset_id" validate:"required"`
-	BizID   int64  `json:"bk_biz_id"`
-	Region  string `json:"region" validate:"required"`
+// CheckInheritedHostReq check inherited host request
+type CheckInheritedHostReq struct {
+	AssetID     string             `json:"bk_asset_id" validate:"required"`
+	BizID       int64              `json:"bk_biz_id"`
+	Region      string             `json:"region" validate:"required"`
+	RequireType enumor.RequireType `json:"require_type" validate:"required"`
 }
 
-// Validate CheckRollingServerHostReq
-func (c *CheckRollingServerHostReq) Validate() error {
+// Validate CheckInheritedHostReq
+func (c *CheckInheritedHostReq) Validate() error {
 	return validator.Validate.Struct(c)
 }
 
-// CheckRollingServerHostResp check rolling server host response
-type CheckRollingServerHostResp struct {
+// CheckInheritedHostResp check inherited host response
+type CheckInheritedHostResp struct {
 	DeviceType           string    `json:"device_type"`
 	DeviceGroup          string    `json:"device_group"`
+	GenerationType       string    `json:"generation_type"`
 	InstanceChargeType   string    `json:"instance_charge_type"`
 	ChargeMonths         int       `json:"charge_months"`
 	BillingStartTime     time.Time `json:"billing_start_time"`

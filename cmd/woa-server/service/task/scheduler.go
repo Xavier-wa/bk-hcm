@@ -1861,22 +1861,61 @@ func (s *service) listApplyTicket(kit *kit.Kit, filterOptFns ...filterOptFunc) (
 	return ticket, nil
 }
 
-// CheckRollingServerHost check rolling server host
-func (s *service) CheckRollingServerHost(cts *rest.Contexts) (any, error) {
-	input := new(types.CheckRollingServerHostReq)
+// CheckBizInheritedHost check biz inherited host
+func (s *service) CheckBizInheritedHost(cts *rest.Contexts) (any, error) {
+	bkBizID, err := cts.PathParameter("bk_biz_id").Int64()
+	if err != nil {
+		return nil, err
+	}
+	if bkBizID <= 0 {
+		return nil, errf.New(errf.InvalidParameter, "biz id is invalid")
+	}
+
+	err = s.authorizer.AuthorizeWithPerm(cts.Kit, meta.ResourceAttribute{
+		Basic: &meta.Basic{Type: meta.Biz, Action: meta.Access}, BizID: bkBizID,
+	})
+	if err != nil {
+		logs.Errorf("failed to check biz inherited host, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	input := new(types.CheckInheritedHostReq)
+	if err = cts.DecodeInto(input); err != nil {
+		logs.Errorf("failed to check biz inherited host, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	if err = input.Validate(); err != nil {
+		logs.Errorf("check biz inherited host failed, err: %v, input: %+v, rid: %s", err, input, cts.Kit.Rid)
+		return nil, errf.NewFromErr(pkg.CCErrCommParamsIsInvalid, err)
+	}
+
+	input.BizID = bkBizID
+	rst, err := s.logics.Scheduler().CheckInheritedHost(cts.Kit, input)
+	if err != nil {
+		logs.Errorf("check biz inherited host failed, err: %v, input: %+v, rid: %s", err, input, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return rst, nil
+}
+
+// CheckInheritedHost check inherited host
+func (s *service) CheckInheritedHost(cts *rest.Contexts) (any, error) {
+	input := new(types.CheckInheritedHostReq)
 	if err := cts.DecodeInto(input); err != nil {
-		logs.Errorf("failed to get apply order modify record, err: %v, rid: %s", err, cts.Kit.Rid)
+		logs.Errorf("failed to inherited host failed, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, err
 	}
 
 	if err := input.Validate(); err != nil {
-		logs.Errorf("check rolling server host failed, err: %v, input: %+v, rid: %s", err, input, cts.Kit.Rid)
+		logs.Errorf("check inherited host failed, err: %v, input: %+v, rid: %s", err, input, cts.Kit.Rid)
 		return nil, errf.NewFromErr(pkg.CCErrCommParamsIsInvalid, err)
 	}
 
-	rst, err := s.logics.Scheduler().CheckRollingServerHost(cts.Kit, input)
+	rst, err := s.logics.Scheduler().CheckInheritedHost(cts.Kit, input)
 	if err != nil {
-		logs.Errorf("check rolling server host failed, err: %v, input: %+v, rid: %s", err, input, cts.Kit.Rid)
+		logs.Errorf("check inherited host failed, err: %v, input: %+v, rid: %s", err, input, cts.Kit.Rid)
 		return nil, err
 	}
 

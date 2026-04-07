@@ -90,7 +90,8 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/findmany/apply
           "image": "Tencent Linux Release 1.2 (tkernel2)",
           "network": "TENTHOUSAND",
           "region": "ap-shanghai",
-          "zone": "ap-shanghai-2"
+          "zone": "ap-shanghai-2",
+          "bk_asset_id": "TCxxxxxx"
         },
         "anti_affinity_level": "ANTI_NONE",
         "stage": "RUNNING",
@@ -169,3 +170,4 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/findmany/apply
 | mount_path   | string	 | 数据盘挂载点                                              |
 | cpu_provider | string	 | CPU类型                                               |
 | kernel	      | string	 | 内核                                                  |
+| bk_asset_id	  | string	 | 主机继承的固资号                                        |

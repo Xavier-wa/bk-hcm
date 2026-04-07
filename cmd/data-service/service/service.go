@@ -88,6 +88,7 @@ import (
 	rollingfinedetail "hcm/cmd/data-service/service/rolling-server/rolling-fine-detail"
 	"hcm/cmd/data-service/service/rolling-server/rolling-returned"
 	"hcm/cmd/data-service/service/task"
+	dissolverecyclehost "hcm/cmd/data-service/service/dissolve/recycle-host"
 	tcloudziyanpmdevicetype "hcm/cmd/data-service/service/tcloud-ziyan-pm-device-type"
 	"hcm/cmd/data-service/service/tenant"
 	"hcm/cmd/data-service/service/user"
@@ -307,6 +308,7 @@ func (s *Service) apiSet() *restful.Container {
 	rollingreturned.InitService(capability)
 	rollingfinedetail.InitService(capability)
 	rollingbill.InitService(capability)
+	dissolverecyclehost.InitService(capability)
 	globalconfig.InitService(capability)
 	orgtopo.InitService(capability)
 	woadevicetype.InitService(capability)

@@ -253,6 +253,7 @@ func (d *device) ListCvmInstanceInfoByDeviceTypes(kt *kit.Kit, deviceTypes []str
 				CoreType:        detail.CoreType,
 				TechnicalClass:  detail.TechnicalClass,
 				DeviceTypeClass: detail.DeviceTypeClass,
+				GenerationType:  detail.GenerationType,
 			}
 		}
 		if len(resp.Details) < int(req.Page.Limit) {

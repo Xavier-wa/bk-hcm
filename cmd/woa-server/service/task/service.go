@@ -182,7 +182,7 @@ func (s *service) initSchedulerService(h *rest.Handler) {
 	h.Add("ModifyApplyOrder", http.MethodPost, "/modify/apply", s.ModifyApplyOrder)
 	h.Add("GetApplyModify", http.MethodPost, "/find/apply/record/modify", s.GetApplyModify)
 
-	h.Add("CheckRollingServerHost", http.MethodPost, "/check/rolling_server/host", s.CheckRollingServerHost)
+	h.Add("CheckInheritedHost", http.MethodPost, "/check/apply/order/host", s.CheckInheritedHost)
 	h.Add("GetApplyAuditCrp", http.MethodPost, "/apply/crp_ticket/audit/get", s.GetApplyAuditCrp)
 
 	h.Add("ListApplyAuditInfo", http.MethodPost, "/apply/ticket/audit/info/list", s.ListApplyAuditInfo)
@@ -230,6 +230,7 @@ func bizService(h *rest.Handler, s *service) {
 	h.Add("CancelBizApplyTicketItsm", http.MethodPost, "/apply/ticket/itsm_audit/cancel", s.CancelBizApplyTicketItsm)
 	h.Add("CancelBizApplyTicketCrp", http.MethodPost, "/apply/ticket/crp_audit/cancel", s.CancelBizApplyTicketCrp)
 	h.Add("AuditBizApplyTicket", http.MethodPost, "/audit/apply/ticket", s.AuditBizApplyTicket)
+	h.Add("CheckBizInheritedHost", http.MethodPost, "/check/apply/order/host", s.CheckBizInheritedHost)
 
 	h.Add("CheckHostUworkTicketStatus", http.MethodPost, "/hosts/uwork_tickets/status/check",
 		s.CheckHostUworkTicketStatus)

@@ -32,6 +32,7 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/modify/apply
 | subnet        | string        | 否   | 私有子网，默认为空 |
 | zones         | string array  | 否   | 多可用区(选“全部”时传all)                             |
 | res_assign    | int           | 否   | 资源分配方式(1表示“有资源区域优先”、2表示“分Campus生产”)  |
+| bk_asset_id   | string        | 否   | 固资号，"滚服项目"、"机房裁撤"继承的固资号               |
 
 ### 调用示例
 

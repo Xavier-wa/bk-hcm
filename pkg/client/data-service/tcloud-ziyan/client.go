@@ -35,6 +35,7 @@ type Client struct {
 	LoadBalancer  *LoadBalancerClient
 	Cvm           *CvmClient
 	DeviceType    *DeviceTypeClient
+	Dissolve      *DissolveClient
 }
 
 type restClient struct {
@@ -54,5 +55,6 @@ func NewClient(client rest.ClientInterface) *Client {
 		LoadBalancer:  NewLoadBalancerClient(client),
 		Cvm:           NewCloudCvmClient(client),
 		DeviceType:    NewDeviceTypeClient(client),
+		Dissolve:      NewDissolveClient(client),
 	}
 }

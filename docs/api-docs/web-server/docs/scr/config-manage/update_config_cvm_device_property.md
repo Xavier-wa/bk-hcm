@@ -31,6 +31,7 @@ PUT /api/v1/woa/config/updatemany/config/cvm/device/property
 | zone              | string                | 否   | 可用区，最大长度64 |
 | disable           | bool                  | 否   | 是否不使用 |
 | source            | string                | 否   | 机型来源 |
+| generation_type   | string                | 否   | 机型代次(枚举值：存量、采购)  |
 
 ### 调用示例
 

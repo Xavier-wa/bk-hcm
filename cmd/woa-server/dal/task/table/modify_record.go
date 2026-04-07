@@ -58,4 +58,8 @@ type ModifyData struct {
 	Zones       []string          `json:"zones" bson:"zones"` //  多可用区
 	// ResAssign 资源分配方式（1表示“有资源区域优先”、2表示“分Campus生产”）
 	ResAssign enumor.ResAssign `json:"res_assign" bson:"res_assign"`
+	// BkAssetID 继承主机的固资号
+	BkAssetID string `json:"bk_asset_id" bson:"bk_asset_id"`
+	// InheritInstanceID 继承主机的云实例ID
+	InheritInstanceID string `json:"inherit_instance_id" bson:"inherit_instance_id"`
 }
