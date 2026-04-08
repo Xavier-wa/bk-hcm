@@ -279,3 +279,141 @@ func (c *ZiyanCvmApplySuborderClient) GetProductionStageTimeCostCompare(ctx cont
 
 	return resp.Data, nil
 }
+
+// GetApplyBizHostsStatistics 按业务统计申请主机数
+func (c *ZiyanCvmApplySuborderClient) GetApplyBizHostsStatistics(ctx context.Context, h http.Header,
+	req *cvmapplyproto.CvmStatisticsListReq) (*cvmapplyproto.ZiyanCvmApplyBizHostsStatisticsResult, error) {
+
+	resp := new(cvmapplyproto.ZiyanCvmApplyBizHostsStatisticsResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(req).
+		SubResourcef("/cvm_apply/suborders/statistics/biz_hosts").
+		WithHeaders(h).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != errf.OK {
+		return nil, errf.New(resp.Code, resp.Message)
+	}
+
+	return resp.Data, nil
+}
+
+// GetApplyBizCpuCoresStatistics 按业务统计申请CPU核心数
+func (c *ZiyanCvmApplySuborderClient) GetApplyBizCpuCoresStatistics(ctx context.Context, h http.Header,
+	req *cvmapplyproto.CvmStatisticsListReq) (*cvmapplyproto.ZiyanCvmApplyBizCpuCoresStatisticsResult, error) {
+
+	resp := new(cvmapplyproto.ZiyanCvmApplyBizCpuCoresStatisticsResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(req).
+		SubResourcef("/cvm_apply/suborders/statistics/biz_cpu_cores").
+		WithHeaders(h).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != errf.OK {
+		return nil, errf.New(resp.Code, resp.Message)
+	}
+
+	return resp.Data, nil
+}
+
+// GetCompletionRateStatistics 按月份统计结单率
+func (c *ZiyanCvmApplySuborderClient) GetCompletionRateStatistics(ctx context.Context, h http.Header,
+	req *cvmapplyproto.CvmStatisticsListReq) (*cvmapplyproto.ZiyanCvmApplyCompletionRateStatisticsResult, error) {
+
+	resp := new(cvmapplyproto.ZiyanCvmApplyCompletionRateStatisticsResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(req).
+		SubResourcef("/cvm_apply/suborders/statistics/completion_rate").
+		WithHeaders(h).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != errf.OK {
+		return nil, errf.New(resp.Code, resp.Message)
+	}
+
+	return resp.Data, nil
+}
+
+// GetCompletionRateDetailStatistics 按业务+月份统计结单率详情
+func (c *ZiyanCvmApplySuborderClient) GetCompletionRateDetailStatistics(ctx context.Context, h http.Header,
+	req *cvmapplyproto.CvmStatisticsListReq) (*cvmapplyproto.ZiyanCvmApplyCompletionRateDetailResult, error) {
+
+	resp := new(cvmapplyproto.ZiyanCvmApplyCompletionRateDetailResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(req).
+		SubResourcef("/cvm_apply/suborders/statistics/completion_rate_detail").
+		WithHeaders(h).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != errf.OK {
+		return nil, errf.New(resp.Code, resp.Message)
+	}
+
+	return resp.Data, nil
+}
+
+// GetDeliveryRateStatistics 按月份统计主机交付率
+func (c *ZiyanCvmApplySuborderClient) GetDeliveryRateStatistics(ctx context.Context, h http.Header,
+	req *cvmapplyproto.CvmStatisticsListReq) (*cvmapplyproto.ZiyanCvmApplyDeliveryRateStatisticsResult, error) {
+
+	resp := new(cvmapplyproto.ZiyanCvmApplyDeliveryRateStatisticsResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(req).
+		SubResourcef("/cvm_apply/suborders/statistics/delivery_rate").
+		WithHeaders(h).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != errf.OK {
+		return nil, errf.New(resp.Code, resp.Message)
+	}
+
+	return resp.Data, nil
+}
+
+// GetDeliveryRateDetailStatistics 按业务+月份统计主机交付率详情
+func (c *ZiyanCvmApplySuborderClient) GetDeliveryRateDetailStatistics(ctx context.Context, h http.Header,
+	req *cvmapplyproto.CvmStatisticsListReq) (*cvmapplyproto.ZiyanCvmApplyDeliveryRateDetailResult, error) {
+
+	resp := new(cvmapplyproto.ZiyanCvmApplyDeliveryRateDetailResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(req).
+		SubResourcef("/cvm_apply/suborders/statistics/delivery_rate_detail").
+		WithHeaders(h).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != errf.OK {
+		return nil, errf.New(resp.Code, resp.Message)
+	}
+
+	return resp.Data, nil
+}

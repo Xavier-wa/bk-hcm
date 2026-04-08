@@ -30,6 +30,7 @@ import (
 	"hcm/pkg/dal/dao/orm"
 	cvmapplytable "hcm/pkg/dal/table/cvm-apply"
 	"hcm/pkg/rest"
+	cvt "hcm/pkg/tools/converter"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -51,7 +52,7 @@ func (svc *service) BatchCreateZiyanCvmApplyInitTask(cts *rest.Contexts) (interf
 				IP:         createReq.IP,
 				TaskID:     createReq.TaskID,
 				TaskLink:   createReq.TaskLink,
-				Status:     createReq.Status,
+				Status:     cvt.ValToPtr(createReq.Status),
 				Message:    createReq.Message,
 				StartAt:    createReq.StartAt,
 				EndAt:      createReq.EndAt,

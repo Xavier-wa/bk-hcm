@@ -26,6 +26,7 @@ import (
 	"hcm/pkg/api/core"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/audit"
 	"hcm/pkg/dal/dao/orm"
@@ -57,6 +58,18 @@ type ZiyanCvmApplySuborderInterface interface {
 		[]*cvmapplyproto.ProductionStageTimeCostItem, error)
 	GetProductionStageTimeCostCompare(kt *kit.Kit, expr *filter.Expression) (
 		[]*cvmapplyproto.ProductionStageTimeCostBizItem, error)
+	GetApplyBizHostsStatistics(kt *kit.Kit, expr *filter.Expression) (
+		[]*cvmapplyproto.ApplyBizHostsStatisticsItem, error)
+	GetApplyBizCpuCoresStatistics(kt *kit.Kit, expr *filter.Expression) (
+		[]*cvmapplyproto.ApplyBizCpuCoresStatisticsItem, error)
+	GetCompletionRateStatistics(kt *kit.Kit, expr *filter.Expression) (
+		[]*cvmapplyproto.ApplyCompletionRateStatisticsItem, error)
+	GetCompletionRateDetailStatistics(kt *kit.Kit, expr *filter.Expression) (
+		[]*cvmapplyproto.ApplyCompletionRateDetailItem, error)
+	GetDeliveryRateStatistics(kt *kit.Kit, expr *filter.Expression) (
+		[]*cvmapplyproto.ApplyDeliveryRateStatisticsItem, error)
+	GetDeliveryRateDetailStatistics(kt *kit.Kit, expr *filter.Expression) (
+		[]*cvmapplyproto.ApplyDeliveryRateDetailItem, error)
 }
 
 var _ ZiyanCvmApplySuborderInterface = new(ZiyanCvmApplySuborderDao)
@@ -498,6 +511,247 @@ func (d ZiyanCvmApplySuborderDao) GetProductionStageTimeCostCompare(kt *kit.Kit,
 	details := make([]*cvmapplyproto.ProductionStageTimeCostBizItem, 0)
 	if err := d.Orm.Do().Select(kt.Ctx, &details, sql, queryValue); err != nil {
 		logs.Errorf("get order time cost compare failed, sql: %s, err: %v, whereValue: %+v, rid: %s",
+			sql, err, whereValue, kt.Rid)
+		return nil, err
+	}
+
+	return details, nil
+}
+
+// GetApplyBizHostsStatistics 按业务统计申请主机数
+func (d ZiyanCvmApplySuborderDao) GetApplyBizHostsStatistics(kt *kit.Kit, expr *filter.Expression) (
+	[]*cvmapplyproto.ApplyBizHostsStatisticsItem, error) {
+
+	if expr == nil {
+		return nil, errf.New(errf.InvalidParameter, "filter expr is required")
+	}
+
+	whereExpr, whereValue, err := expr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		return nil, err
+	}
+
+	// 按 bk_biz_id 分组，统计订单数和主机数，按主机数降序排序
+	sql := fmt.Sprintf(`
+		SELECT 
+			bk_biz_id,
+			COUNT(*) AS order_count,
+			IFNULL(SUM(success_num), 0) AS host_count
+		FROM %s %s
+		GROUP BY bk_biz_id
+		ORDER BY host_count DESC`, table.ZiyanCvmApplySuborderTable, whereExpr)
+
+	details := make([]*cvmapplyproto.ApplyBizHostsStatisticsItem, 0)
+	if err = d.Orm.Do().Select(kt.Ctx, &details, sql, whereValue); err != nil {
+		logs.Errorf("get apply biz hosts statistics failed, sql: %s, err: %v, whereValue: %+v, rid: %s",
+			sql, err, whereValue, kt.Rid)
+		return nil, err
+	}
+
+	return details, nil
+}
+
+// GetApplyBizCpuCoresStatistics 按业务统计申请CPU核心数
+func (d ZiyanCvmApplySuborderDao) GetApplyBizCpuCoresStatistics(kt *kit.Kit, expr *filter.Expression) (
+	[]*cvmapplyproto.ApplyBizCpuCoresStatisticsItem, error) {
+
+	if expr == nil {
+		return nil, errf.New(errf.InvalidParameter, "filter expr is required")
+	}
+
+	whereExpr, whereValue, err := expr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		return nil, err
+	}
+
+	// 按 bk_biz_id 分组，统计订单数和交付核心数，按核心数降序排序
+	sql := fmt.Sprintf(`
+		SELECT 
+			bk_biz_id,
+			COUNT(*) AS order_count,
+			IFNULL(SUM(delivered_core), 0) AS delivered_core_count
+		FROM %s %s
+		GROUP BY bk_biz_id
+		ORDER BY delivered_core_count DESC`, table.ZiyanCvmApplySuborderTable, whereExpr)
+
+	details := make([]*cvmapplyproto.ApplyBizCpuCoresStatisticsItem, 0)
+	if err = d.Orm.Do().Select(kt.Ctx, &details, sql, whereValue); err != nil {
+		logs.Errorf("get apply biz cpu cores statistics failed, sql: %s, err: %v, whereValue: %+v, rid: %s",
+			sql, err, whereValue, kt.Rid)
+		return nil, err
+	}
+
+	return details, nil
+}
+
+func ensureWhereValue(whereValue map[string]interface{}) map[string]interface{} {
+	if whereValue == nil {
+		return make(map[string]interface{})
+	}
+
+	return whereValue
+}
+
+func injectCompletionRateParams(whereValue map[string]interface{}) map[string]interface{} {
+	whereValue = ensureWhereValue(whereValue)
+	whereValue["_inner_stage_done"] = enumor.TicketStageDone
+	whereValue["_inner_stage_terminate"] = enumor.TicketStageTerminate
+	whereValue["_inner_status_done"] = enumor.ApplyStatusDone
+	whereValue["_inner_status_terminate"] = enumor.ApplyStatusTerminate
+
+	return whereValue
+}
+
+func injectStageDoneParam(whereValue map[string]interface{}) map[string]interface{} {
+	whereValue = ensureWhereValue(whereValue)
+	whereValue["_inner_stage_done"] = enumor.TicketStageDone
+
+	return whereValue
+}
+
+// GetCompletionRateStatistics 按月份统计结单率
+func (d ZiyanCvmApplySuborderDao) GetCompletionRateStatistics(kt *kit.Kit, expr *filter.Expression) (
+	[]*cvmapplyproto.ApplyCompletionRateStatisticsItem, error) {
+
+	if expr == nil {
+		return nil, errf.New(errf.InvalidParameter, "filter expr is required")
+	}
+
+	whereExpr, whereValue, err := expr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		return nil, err
+	}
+
+	whereValue = injectCompletionRateParams(whereValue)
+	sql := fmt.Sprintf(`
+		SELECT
+			DATE_FORMAT(created_at, '%%Y-%%m') AS yearmonth,
+			COALESCE(ROUND((
+				SUM(CASE WHEN stage IN (:_inner_stage_done, :_inner_stage_terminate)
+					AND status IN (:_inner_status_done, :_inner_status_terminate) THEN 1 ELSE 0 END)
+				/ NULLIF(COUNT(*), 0)
+			) * 100, 2), 0) AS completion_rate
+		FROM %s %s
+		GROUP BY yearmonth
+		ORDER BY yearmonth ASC`, table.ZiyanCvmApplySuborderTable, whereExpr)
+
+	details := make([]*cvmapplyproto.ApplyCompletionRateStatisticsItem, 0)
+	if err = d.Orm.Do().Select(kt.Ctx, &details, sql, whereValue); err != nil {
+		logs.Errorf("get completion rate statistics failed, sql: %s, err: %v, whereValue: %+v, rid: %s",
+			sql, err, whereValue, kt.Rid)
+		return nil, err
+	}
+
+	return details, nil
+}
+
+// GetCompletionRateDetailStatistics 按业务+月份统计结单率详情
+func (d ZiyanCvmApplySuborderDao) GetCompletionRateDetailStatistics(kt *kit.Kit, expr *filter.Expression) (
+	[]*cvmapplyproto.ApplyCompletionRateDetailItem, error) {
+
+	if expr == nil {
+		return nil, errf.New(errf.InvalidParameter, "filter expr is required")
+	}
+
+	whereExpr, whereValue, err := expr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		return nil, err
+	}
+
+	whereValue = injectCompletionRateParams(whereValue)
+	sql := fmt.Sprintf(`
+		SELECT
+			bk_biz_id,
+			DATE_FORMAT(created_at, '%%Y-%%m') AS yearmonth,
+			COUNT(*) AS total_orders,
+			SUM(CASE WHEN stage IN (:_inner_stage_done, :_inner_stage_terminate)
+				AND status IN (:_inner_status_done, :_inner_status_terminate) THEN 1 ELSE 0 END) AS done_orders,
+			COALESCE(ROUND((
+				SUM(CASE WHEN stage IN (:_inner_stage_done, :_inner_stage_terminate)
+					AND status IN (:_inner_status_done, :_inner_status_terminate) THEN 1 ELSE 0 END)
+				/ NULLIF(COUNT(*), 0)
+			) * 100, 2), 0) AS completion_rate
+		FROM %s %s
+		GROUP BY bk_biz_id, yearmonth
+		ORDER BY completion_rate DESC, bk_biz_id ASC, yearmonth ASC`,
+		table.ZiyanCvmApplySuborderTable, whereExpr)
+
+	details := make([]*cvmapplyproto.ApplyCompletionRateDetailItem, 0)
+	if err = d.Orm.Do().Select(kt.Ctx, &details, sql, whereValue); err != nil {
+		logs.Errorf("get completion rate detail statistics failed, sql: %s, err: %v, whereValue: %+v, rid: %s",
+			sql, err, whereValue, kt.Rid)
+		return nil, err
+	}
+
+	return details, nil
+}
+
+// GetDeliveryRateStatistics 按月份统计主机交付率
+func (d ZiyanCvmApplySuborderDao) GetDeliveryRateStatistics(kt *kit.Kit, expr *filter.Expression) (
+	[]*cvmapplyproto.ApplyDeliveryRateStatisticsItem, error) {
+
+	if expr == nil {
+		return nil, errf.New(errf.InvalidParameter, "filter expr is required")
+	}
+
+	whereExpr, whereValue, err := expr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		return nil, err
+	}
+
+	sql := fmt.Sprintf(`
+		SELECT
+			DATE_FORMAT(created_at, '%%Y-%%m') AS yearmonth,
+			COALESCE(ROUND((
+				IFNULL(SUM(success_num), 0) / NULLIF(IFNULL(SUM(total_num), 0), 0)
+			) * 100, 2), 0) AS delivery_rate
+		FROM %s %s
+		GROUP BY yearmonth
+		ORDER BY yearmonth ASC`, table.ZiyanCvmApplySuborderTable, whereExpr)
+
+	details := make([]*cvmapplyproto.ApplyDeliveryRateStatisticsItem, 0)
+	if err = d.Orm.Do().Select(kt.Ctx, &details, sql, whereValue); err != nil {
+		logs.Errorf("get delivery rate statistics failed, sql: %s, err: %v, whereValue: %+v, rid: %s",
+			sql, err, whereValue, kt.Rid)
+		return nil, err
+	}
+
+	return details, nil
+}
+
+// GetDeliveryRateDetailStatistics 按业务+月份统计主机交付率详情
+func (d ZiyanCvmApplySuborderDao) GetDeliveryRateDetailStatistics(kt *kit.Kit, expr *filter.Expression) (
+	[]*cvmapplyproto.ApplyDeliveryRateDetailItem, error) {
+
+	if expr == nil {
+		return nil, errf.New(errf.InvalidParameter, "filter expr is required")
+	}
+
+	whereExpr, whereValue, err := expr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		return nil, err
+	}
+
+	whereValue = injectStageDoneParam(whereValue)
+	sql := fmt.Sprintf(`
+		SELECT
+			bk_biz_id,
+			DATE_FORMAT(created_at, '%%Y-%%m') AS yearmonth,
+			COUNT(*) AS total_orders,
+			SUM(CASE WHEN stage = :_inner_stage_done THEN 1 ELSE 0 END) AS done_orders,
+			IFNULL(SUM(total_num), 0) AS total_num_sum,
+			IFNULL(SUM(success_num), 0) AS success_num_sum,
+			COALESCE(ROUND((
+				IFNULL(SUM(success_num), 0) / NULLIF(IFNULL(SUM(total_num), 0), 0)
+			) * 100, 2), 0) AS host_delivery_rate
+		FROM %s %s
+		GROUP BY bk_biz_id, yearmonth
+		ORDER BY host_delivery_rate DESC, bk_biz_id ASC, yearmonth ASC`,
+		table.ZiyanCvmApplySuborderTable, whereExpr)
+
+	details := make([]*cvmapplyproto.ApplyDeliveryRateDetailItem, 0)
+	if err = d.Orm.Do().Select(kt.Ctx, &details, sql, whereValue); err != nil {
+		logs.Errorf("get delivery rate detail statistics failed, sql: %s, err: %v, whereValue: %+v, rid: %s",
 			sql, err, whereValue, kt.Rid)
 		return nil, err
 	}

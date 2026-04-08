@@ -22,7 +22,6 @@ package cvmapply
 import (
 	"errors"
 
-	tasktypes "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	"hcm/pkg/dal/table"
@@ -64,7 +63,7 @@ type ZiyanCvmDeliverRecord struct {
 	// AssetID 固资号
 	AssetID string `db:"asset_id" json:"asset_id" validate:"max=64"`
 	// Status 状态（-1:默认 0:成功 1:失败 2:处理中）
-	Status *tasktypes.DeliverStepStatus `db:"status" json:"status"`
+	Status *enumor.DeliverStepStatus `db:"status" json:"status"`
 	// Message 状态消息
 	Message string `db:"message" json:"message" validate:"max=512"`
 	// Deliverer 交付方式

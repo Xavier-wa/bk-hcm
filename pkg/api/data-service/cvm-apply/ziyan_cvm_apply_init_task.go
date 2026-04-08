@@ -113,15 +113,15 @@ func (c *BatchUpdateZiyanCvmApplyInitTaskReq) Validate() error {
 
 // ZiyanCvmApplyInitTaskUpdateReq update request
 type ZiyanCvmApplyInitTaskUpdateReq struct {
-	ID         string                   `json:"id" validate:"required"`
-	SuborderID string                   `json:"suborder_id" validate:"omitempty,max=64"`
-	IP         string                   `json:"ip" validate:"omitempty,max=64"`
-	TaskID     string                   `json:"task_id" validate:"omitempty,max=128"`
-	TaskLink   string                   `json:"task_link" validate:"omitempty,max=512"`
-	Status     tasktypes.InitStepStatus `json:"status" validate:"omitempty"`
-	Message    string                   `json:"message" validate:"omitempty"`
-	StartAt    string                   `json:"start_at" validate:"omitempty"`
-	EndAt      string                   `json:"end_at" validate:"omitempty"`
+	ID         string                    `json:"id" validate:"required"`
+	SuborderID string                    `json:"suborder_id" validate:"omitempty,max=64"`
+	IP         string                    `json:"ip" validate:"omitempty,max=64"`
+	TaskID     string                    `json:"task_id" validate:"omitempty,max=128"`
+	TaskLink   string                    `json:"task_link" validate:"omitempty,max=512"`
+	Status     *tasktypes.InitStepStatus `json:"status" validate:"omitempty"`
+	Message    string                    `json:"message" validate:"omitempty"`
+	StartAt    string                    `json:"start_at" validate:"omitempty"`
+	EndAt      string                    `json:"end_at" validate:"omitempty"`
 }
 
 // Validate ...

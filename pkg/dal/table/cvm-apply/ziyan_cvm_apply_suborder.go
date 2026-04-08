@@ -22,7 +22,6 @@ package cvmapply
 import (
 	"errors"
 
-	tasktypes "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	"hcm/pkg/dal/table"
@@ -118,7 +117,7 @@ type ZiyanCvmApplySuborder struct {
 	// ExpectTime 期望交付时间
 	ExpectTime string `db:"expect_time" json:"expect_time"`
 	// ResourceType 资源类型(QCLOUDCVM/IDCDVM/PM等)
-	ResourceType tasktypes.ResourceType `db:"resource_type" json:"resource_type" validate:"max=32"`
+	ResourceType enumor.ResourceType `db:"resource_type" json:"resource_type" validate:"max=32"`
 	// AntiAffinityLevel 反亲和级别
 	AntiAffinityLevel string `db:"anti_affinity_level" json:"anti_affinity_level" validate:"max=64"`
 	// EnableDiskCheck 是否检查磁盘
@@ -180,9 +179,9 @@ type ZiyanCvmApplySuborder struct {
 	// UpgradeCvmList cvm升降配列表
 	UpgradeCvmList types.JsonField `db:"upgrade_cvm_list" json:"upgrade_cvm_list"`
 	// Stage 阶段
-	Stage tasktypes.TicketStage `db:"stage" json:"stage" validate:"max=32"`
+	Stage enumor.TicketStage `db:"stage" json:"stage" validate:"max=32"`
 	// Status 状态
-	Status tasktypes.ApplyStatus `db:"status" json:"status" validate:"max=32"`
+	Status enumor.ApplyStatus `db:"status" json:"status" validate:"max=32"`
 	// RetryTime 重试次数
 	RetryTime *uint `db:"retry_time" json:"retry_time"`
 	// ModifyTime 修改次数

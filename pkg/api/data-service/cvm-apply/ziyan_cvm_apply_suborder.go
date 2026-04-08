@@ -331,3 +331,124 @@ type ProductionStageTimeCostSingleListResp struct {
 	rest.BaseResp `json:",inline"`
 	Data          []ProductionStageTimeCostBizItem `json:"data"`
 }
+
+// ZiyanCvmApplyBizHostsStatisticsResult list ziyan cvm apply biz hosts statistics result
+type ZiyanCvmApplyBizHostsStatisticsResult = core.ListResultT[*ApplyBizHostsStatisticsItem]
+
+// ZiyanCvmApplyBizHostsStatisticsResp define ziyan cvm apply biz hosts statistics resp.
+type ZiyanCvmApplyBizHostsStatisticsResp struct {
+	rest.BaseResp `json:",inline"`
+	Data          *ZiyanCvmApplyBizHostsStatisticsResult `json:"data"`
+}
+
+// ApplyBizHostsStatisticsItem 申请主机数-业务统计单项
+type ApplyBizHostsStatisticsItem struct {
+	BkBizID    int64 `json:"bk_biz_id" db:"bk_biz_id"`
+	HostCount  uint  `json:"host_count" db:"host_count"`
+	OrderCount int   `json:"order_count" db:"order_count"`
+}
+
+// ZiyanCvmApplyBizCpuCoresStatisticsResult list ziyan cvm apply biz cpu cores statistics result
+type ZiyanCvmApplyBizCpuCoresStatisticsResult = core.ListResultT[*ApplyBizCpuCoresStatisticsItem]
+
+// ZiyanCvmApplyBizCpuCoresStatisticsResp define ziyan cvm apply biz cpu cores statistics resp.
+type ZiyanCvmApplyBizCpuCoresStatisticsResp struct {
+	rest.BaseResp `json:",inline"`
+	Data          *ZiyanCvmApplyBizCpuCoresStatisticsResult `json:"data"`
+}
+
+// ApplyBizCpuCoresStatisticsItem 申请CPU核心数-业务统计单项
+type ApplyBizCpuCoresStatisticsItem struct {
+	BkBizID            int64 `json:"bk_biz_id" db:"bk_biz_id"`
+	DeliveredCoreCount uint  `json:"delivered_core_count" db:"delivered_core_count"`
+	OrderCount         int   `json:"order_count" db:"order_count"`
+}
+
+// ZiyanCvmApplyCompletionRateStatisticsResult list completion rate statistics result
+type ZiyanCvmApplyCompletionRateStatisticsResult = core.ListResultT[*ApplyCompletionRateStatisticsItem]
+
+// ZiyanCvmApplyCompletionRateStatisticsResp define completion rate statistics resp.
+type ZiyanCvmApplyCompletionRateStatisticsResp struct {
+	rest.BaseResp `json:",inline"`
+	Data          *ZiyanCvmApplyCompletionRateStatisticsResult `json:"data"`
+}
+
+// ApplyCompletionRateStatisticsItem completion rate statistics item
+type ApplyCompletionRateStatisticsItem struct {
+	YearMonth      string  `json:"yearmonth" db:"yearmonth"`
+	CompletionRate float64 `json:"completion_rate" db:"completion_rate"`
+}
+
+// ZiyanCvmApplyCompletionRateDetailResult list completion rate detail result
+type ZiyanCvmApplyCompletionRateDetailResult = core.ListResultT[*ApplyCompletionRateDetailItem]
+
+// ZiyanCvmApplyCompletionRateDetailResp define completion rate detail resp.
+type ZiyanCvmApplyCompletionRateDetailResp struct {
+	rest.BaseResp `json:",inline"`
+	Data          *ZiyanCvmApplyCompletionRateDetailResult `json:"data"`
+}
+
+// ApplyCompletionRateDetailItem completion rate detail item
+type ApplyCompletionRateDetailItem struct {
+	BkBizID        int64   `json:"bk_biz_id" db:"bk_biz_id"`
+	YearMonth      string  `json:"yearmonth" db:"yearmonth"`
+	TotalOrders    int     `json:"total_orders" db:"total_orders"`
+	DoneOrders     int     `json:"done_orders" db:"done_orders"`
+	CompletionRate float64 `json:"completion_rate" db:"completion_rate"`
+}
+
+// ZiyanCvmApplyDeliveryRateStatisticsResult list delivery rate statistics result
+type ZiyanCvmApplyDeliveryRateStatisticsResult = core.ListResultT[*ApplyDeliveryRateStatisticsItem]
+
+// ZiyanCvmApplyDeliveryRateStatisticsResp define delivery rate statistics resp.
+type ZiyanCvmApplyDeliveryRateStatisticsResp struct {
+	rest.BaseResp `json:",inline"`
+	Data          *ZiyanCvmApplyDeliveryRateStatisticsResult `json:"data"`
+}
+
+// ApplyDeliveryRateStatisticsItem delivery rate statistics item
+type ApplyDeliveryRateStatisticsItem struct {
+	YearMonth    string  `json:"yearmonth" db:"yearmonth"`
+	DeliveryRate float64 `json:"delivery_rate" db:"delivery_rate"`
+}
+
+// ZiyanCvmApplyDeliveryRateDetailResult list delivery rate detail result
+type ZiyanCvmApplyDeliveryRateDetailResult = core.ListResultT[*ApplyDeliveryRateDetailItem]
+
+// ZiyanCvmApplyDeliveryRateDetailResp define delivery rate detail resp.
+type ZiyanCvmApplyDeliveryRateDetailResp struct {
+	rest.BaseResp `json:",inline"`
+	Data          *ZiyanCvmApplyDeliveryRateDetailResult `json:"data"`
+}
+
+// ApplyDeliveryRateDetailItem delivery rate detail item
+type ApplyDeliveryRateDetailItem struct {
+	BkBizID          int64   `json:"bk_biz_id" db:"bk_biz_id"`
+	YearMonth        string  `json:"yearmonth" db:"yearmonth"`
+	TotalOrders      int64   `json:"total_orders" db:"total_orders"`
+	DoneOrders       int64   `json:"done_orders" db:"done_orders"`
+	TotalNumSum      int64   `json:"total_num_sum" db:"total_num_sum"`
+	SuccessNumSum    int64   `json:"success_num_sum" db:"success_num_sum"`
+	HostDeliveryRate float64 `json:"host_delivery_rate" db:"host_delivery_rate"`
+}
+
+// CvmStatisticsListReq cvm statistics list request
+type CvmStatisticsListReq struct {
+	Filter *filter.Expression `json:"filter"`
+}
+
+// Validate CvmStatisticsListReq validate
+func (l *CvmStatisticsListReq) Validate() error {
+	if l.Filter == nil {
+		return errf.New(errf.InvalidParameter, "filter is required")
+	}
+
+	exprOpt := filter.NewExprOption(
+		filter.RuleFields(cvmapplytable.ZiyanCvmApplySuborderColumns.ColumnTypes()),
+	)
+	if err := l.Filter.Validate(exprOpt); err != nil {
+		return err
+	}
+
+	return nil
+}

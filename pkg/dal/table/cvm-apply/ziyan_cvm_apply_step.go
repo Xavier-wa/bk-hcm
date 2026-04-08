@@ -22,7 +22,6 @@ package cvmapply
 import (
 	"errors"
 
-	tasktypes "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	"hcm/pkg/dal/table"
@@ -64,7 +63,7 @@ type ZiyanCvmApplyStep struct {
 	// StepName 步骤名称(生成/匹配/初始化/交付等)
 	StepName string `db:"step_name" json:"step_name" validate:"max=64"`
 	// Status 状态(0:成功 1:失败 2:运行中 3:部分成功等)
-	Status *tasktypes.StepStatusType `db:"status" json:"status"`
+	Status *enumor.StepStatusType `db:"status" json:"status"`
 	// Message 状态消息/错误信息
 	Message string `db:"message" json:"message"`
 	// TotalNum 总数量

@@ -16,6 +16,7 @@ package apply
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"hcm/cmd/woa-server/model/task"
@@ -37,6 +38,8 @@ import (
 type Interface interface {
 	// Pop gets head of apply info queue
 	Pop() (string, error)
+	// Stop stops apply informer watch loop.
+	Stop()
 }
 
 // applyInformer apply informer which list and watch database and cache apply order info
@@ -45,6 +48,9 @@ type applyInformer struct {
 	watchDB dal.DB
 	event   stream.LoopInterface
 	queue   workqueue.RateLimitingInterface
+
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 // New creates an apply informer
@@ -54,6 +60,7 @@ func New(loopWatch stream.LoopInterface, watchDB dal.DB) (*applyInformer, error)
 		watchDB: watchDB,
 		event:   loopWatch,
 		queue:   workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "apply"),
+		stopCh:  make(chan struct{}),
 	}
 
 	if err := applyInformer.Run(); err != nil {
@@ -90,6 +97,14 @@ func (a *applyInformer) Pop() (string, error) {
 	return id, nil
 }
 
+// Stop stops apply informer watch loop.
+func (a *applyInformer) Stop() {
+	a.stopOnce.Do(func() {
+		close(a.stopCh)
+		a.queue.ShutDown()
+	})
+}
+
 // listAndWatchApplyOrder list and watch database and cache apply order into queue
 func (a *applyInformer) listAndWatchApplyOrder() error {
 	// list apply order
@@ -123,6 +138,7 @@ func (a *applyInformer) listAndWatchApplyOrder() error {
 				MaxRetryCount: 4,
 				RetryDuration: 500 * time.Millisecond,
 			},
+			StopNotifier: a.stopCh,
 		},
 		EventHandler: &types.OneHandler{
 			DoAdd:    a.onUpsert,

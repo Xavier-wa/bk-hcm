@@ -10,79 +10,182 @@
  * limitations under the License.
  */
 
-// Package informer define informer interface
+// Package informer define informer interface with leader election support
 package informer
 
 import (
+	"context"
+	"sync"
+	"time"
+
 	"hcm/cmd/woa-server/logics/task/informer/apply"
 	"hcm/cmd/woa-server/logics/task/informer/generate"
-	"hcm/cmd/woa-server/logics/task/informer/notice"
-	"hcm/cmd/woa-server/logics/task/informer/recycle"
 	"hcm/cmd/woa-server/storage/dal"
 	"hcm/cmd/woa-server/storage/stream"
+	"hcm/pkg/logs"
+	"hcm/pkg/serviced"
 )
 
 // Interface informer interface
 type Interface interface {
 	// Apply apply informer interface
 	Apply() apply.Interface
-	// Recycle recycle informer interface
-	Recycle() recycle.Interface
-	// Event event informer interface
-	Event() notice.Interface
 	// Generate generate informer interface
 	Generate() generate.Interface
+	// Close stops leader monitor and all running informers
+	Close()
 }
 
-type informer struct {
-	apply    apply.Interface
-	recycle  recycle.Interface
-	event    notice.Interface
-	generate generate.Interface
+// leaderAwareInformer wraps informer with leader election support
+type leaderAwareInformer struct {
+	sd      serviced.State
+	loopW   stream.LoopInterface
+	watchDB dal.DB
+
+	// actual informers
+	applyInformer    apply.Interface
+	generateInformer generate.Interface
+
+	// control flags
+	started   bool
+	startedMu sync.RWMutex
+
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
-// New create a informer
-func New(loopWatch stream.LoopInterface, watchDB dal.DB) (*informer, error) {
-	applyIf, err := apply.New(loopWatch, watchDB)
+// New create a leader-aware informer that only runs on master node
+func New(loopWatch stream.LoopInterface, watchDB dal.DB, sd serviced.State) (Interface, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	lai := &leaderAwareInformer{
+		sd:      sd,
+		loopW:   loopWatch,
+		watchDB: watchDB,
+		ctx:     ctx,
+		cancel:  cancel,
+	}
+
+	if sd.IsMaster() {
+		if err := lai.startInformers(); err != nil {
+			logs.Errorf("failed to start informers on init, err: %v", err)
+		}
+	}
+
+	// Start monitoring leader state changes
+	go lai.monitorLeaderState()
+
+	return lai, nil
+}
+
+// monitorLeaderState monitors leader election state and starts/stops informers accordingly
+func (lai *leaderAwareInformer) monitorLeaderState() {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	var lastIsMaster bool
+
+	for {
+		select {
+		case <-lai.ctx.Done():
+			logs.Infof("leader monitor stopped")
+			return
+		case <-ticker.C:
+			isMaster := lai.sd.IsMaster()
+
+			if isMaster == lastIsMaster {
+				continue
+			}
+
+			// State changed
+			lastIsMaster = isMaster
+			if isMaster {
+				logs.Infof("current node become master, starting MongoDB informers...")
+				if err := lai.startInformers(); err != nil {
+					logs.Errorf("failed to start informers, err: %v", err)
+					lastIsMaster = false
+				}
+				continue
+			}
+			logs.Infof("current node become follower, stopping MongoDB informers...")
+			lai.stopInformers()
+		}
+	}
+}
+
+// startInformers starts all MongoDB change stream informers
+func (lai *leaderAwareInformer) startInformers() error {
+	lai.startedMu.Lock()
+	defer lai.startedMu.Unlock()
+
+	if lai.started {
+		logs.Warnf("informers already started, skip")
+		return nil
+	}
+
+	var err error
+
+	// Start apply informer
+	lai.applyInformer, err = apply.New(lai.loopW, lai.watchDB)
 	if err != nil {
-		return nil, err
+		logs.Errorf("failed to start apply informer, err: %v", err)
+		return err
 	}
 
-	eventIf, err := notice.New(loopWatch, watchDB)
+	// Start generate informer
+	lai.generateInformer, err = generate.New(lai.loopW, lai.watchDB)
 	if err != nil {
-		return nil, err
+		lai.applyInformer.Stop()
+		lai.applyInformer = nil
+		logs.Errorf("failed to start generate informer, err: %v", err)
+		return err
 	}
 
-	generateIf, err := generate.New(loopWatch, watchDB)
-	if err != nil {
-		return nil, err
+	lai.started = true
+	logs.Infof("all MongoDB informers started successfully")
+	return nil
+}
+
+// stopInformers stops all MongoDB change stream informers
+func (lai *leaderAwareInformer) stopInformers() {
+	lai.startedMu.Lock()
+	defer lai.startedMu.Unlock()
+
+	if !lai.started {
+		logs.Warnf("informers not started, skip stop")
+		return
 	}
 
-	informer := &informer{
-		apply:    applyIf,
-		event:    eventIf,
-		generate: generateIf,
+	if lai.applyInformer != nil {
+		lai.applyInformer.Stop()
+	}
+	if lai.generateInformer != nil {
+		lai.generateInformer.Stop()
 	}
 
-	return informer, nil
+	lai.applyInformer = nil
+	lai.generateInformer = nil
+
+	lai.started = false
+	logs.Infof("all MongoDB informers stopped")
 }
 
-// Apply apply informer interface
-func (i *informer) Apply() apply.Interface {
-	return i.apply
+// Close stops leader monitor and all MongoDB informers
+func (lai *leaderAwareInformer) Close() {
+	lai.cancel()
+	lai.stopInformers()
 }
 
-// Recycle recycle informer interface
-func (i *informer) Recycle() recycle.Interface {
-	return i.recycle
+// Apply returns apply informer (returns nil if informers are not running)
+func (lai *leaderAwareInformer) Apply() apply.Interface {
+	lai.startedMu.RLock()
+	defer lai.startedMu.RUnlock()
+	return lai.applyInformer
 }
 
-// Event event informer interface
-func (i *informer) Event() notice.Interface {
-	return i.event
-}
-
-// Generate generate informer interface
-func (i *informer) Generate() generate.Interface {
-	return i.generate
+// Generate returns generate informer (returns nil if informers are not running)
+func (lai *leaderAwareInformer) Generate() generate.Interface {
+	lai.startedMu.RLock()
+	defer lai.startedMu.RUnlock()
+	return lai.generateInformer
 }

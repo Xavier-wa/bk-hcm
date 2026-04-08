@@ -113,9 +113,28 @@ func (m *Matcher) Run(workers int) {
 
 // runWorker deals with apply order match task
 func (m *Matcher) runWorker() error {
-	generateId, err := m.informer.Generate().Pop()
+	// Check if informer is available (only available on master node)
+	if m.informer == nil {
+		logs.Warnf("task scheduler informer matcher is not available")
+		time.Sleep(time.Second)
+		return nil
+	}
+
+	generateInformer := m.informer.Generate()
+	if generateInformer == nil {
+		logs.Warnf("task scheduler generate informer is not available")
+		time.Sleep(time.Second)
+		return nil
+	}
+
+	generateId, err := generateInformer.Pop()
 	if err != nil {
 		return err
+	}
+	if generateId == 0 {
+		logs.Warnf("shutdown to deal generate informer, for get generate id from informer")
+		time.Sleep(time.Second)
+		return nil
 	}
 
 	// get generate record
@@ -141,7 +160,7 @@ func (m *Matcher) runWorker() error {
 	kt := core.NewBackendKit()
 
 	// deal match device
-	if err := m.matchHandler(kt, generateRecord); err != nil {
+	if err = m.matchHandler(kt, generateRecord); err != nil {
 		logs.Errorf("failed to match device, order id: %s, err: %v, rid: %s", generateRecord.SubOrderId, err, kt.Rid)
 		return err
 	}

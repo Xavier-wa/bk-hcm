@@ -22,7 +22,6 @@ package cvmapply
 import (
 	"errors"
 
-	tasktypes "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	"hcm/pkg/dal/table"
@@ -63,7 +62,7 @@ type ZiyanCvmApplyOrder struct {
 	// ItsmTicketID ITSM工单ID
 	ItsmTicketID string `db:"itsm_ticket_id" json:"itsm_ticket_id" validate:"max=64"`
 	// Stage 阶段(AUDIT:审核中 RUNNING:运行中 DONE:已完成 SUSPEND:已暂停)
-	Stage tasktypes.TicketStage `db:"stage" json:"stage" validate:"max=32"`
+	Stage enumor.TicketStage `db:"stage" json:"stage" validate:"max=32"`
 	// BkBizID 业务ID
 	BkBizID int64 `db:"bk_biz_id" json:"bk_biz_id"`
 	// BkUsername 申请人

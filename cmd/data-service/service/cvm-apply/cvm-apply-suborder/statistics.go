@@ -167,3 +167,131 @@ func (svc *service) GetProductionStageTimeCostCompare(cts *rest.Contexts) (inter
 
 	return bizItems, nil
 }
+
+// GetApplyBizHostsStatistics 按业务统计申请主机数
+func (svc *service) GetApplyBizHostsStatistics(cts *rest.Contexts) (interface{}, error) {
+	req := new(cvmapplyproto.CvmStatisticsListReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		logs.Errorf("get apply biz hosts statistics req is invalid, err: %v, req: %+v, rid: %s", err, req, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	result, err := svc.dao.ZiyanCvmApplySuborder().GetApplyBizHostsStatistics(cts.Kit, req.Filter)
+	if err != nil {
+		logs.Errorf("get apply biz hosts statistics failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return &cvmapplyproto.ZiyanCvmApplyBizHostsStatisticsResult{Details: result}, nil
+}
+
+// GetApplyBizCpuCoresStatistics 按业务统计申请CPU核心数
+func (svc *service) GetApplyBizCpuCoresStatistics(cts *rest.Contexts) (interface{}, error) {
+	req := new(cvmapplyproto.CvmStatisticsListReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		logs.Errorf("get apply biz core statistics req is invalid, err: %v, req: %+v, rid: %s", err, req, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	result, err := svc.dao.ZiyanCvmApplySuborder().GetApplyBizCpuCoresStatistics(cts.Kit, req.Filter)
+	if err != nil {
+		logs.Errorf("get apply biz cpu cores statistics failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return &cvmapplyproto.ZiyanCvmApplyBizCpuCoresStatisticsResult{Details: result}, nil
+}
+
+// GetCompletionRateStatistics 按月份统计结单率
+func (svc *service) GetCompletionRateStatistics(cts *rest.Contexts) (interface{}, error) {
+	req := new(cvmapplyproto.CvmStatisticsListReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		logs.Errorf("get completion rate statistics req is invalid, err: %v, req: %+v, rid: %s", err, req, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	result, err := svc.dao.ZiyanCvmApplySuborder().GetCompletionRateStatistics(cts.Kit, req.Filter)
+	if err != nil {
+		logs.Errorf("get completion rate statistics failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return &cvmapplyproto.ZiyanCvmApplyCompletionRateStatisticsResult{Details: result}, nil
+}
+
+// GetCompletionRateDetailStatistics 按业务+月份统计结单率详情
+func (svc *service) GetCompletionRateDetailStatistics(cts *rest.Contexts) (interface{}, error) {
+	req := new(cvmapplyproto.CvmStatisticsListReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		logs.Errorf("get completion rate detail statistics req is invalid, err: %v, req: %+v, rid: %s",
+			err, req, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	result, err := svc.dao.ZiyanCvmApplySuborder().GetCompletionRateDetailStatistics(cts.Kit, req.Filter)
+	if err != nil {
+		logs.Errorf("get completion rate detail statistics failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return &cvmapplyproto.ZiyanCvmApplyCompletionRateDetailResult{Details: result}, nil
+}
+
+// GetDeliveryRateStatistics 按月份统计主机交付率
+func (svc *service) GetDeliveryRateStatistics(cts *rest.Contexts) (interface{}, error) {
+	req := new(cvmapplyproto.CvmStatisticsListReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		logs.Errorf("get delivery rate statistics req is invalid, err: %v, req: %+v, rid: %s", err, req, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	result, err := svc.dao.ZiyanCvmApplySuborder().GetDeliveryRateStatistics(cts.Kit, req.Filter)
+	if err != nil {
+		logs.Errorf("get delivery rate statistics failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return &cvmapplyproto.ZiyanCvmApplyDeliveryRateStatisticsResult{Details: result}, nil
+}
+
+// GetDeliveryRateDetailStatistics 按业务+月份统计主机交付率详情
+func (svc *service) GetDeliveryRateDetailStatistics(cts *rest.Contexts) (interface{}, error) {
+	req := new(cvmapplyproto.CvmStatisticsListReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		logs.Errorf("get delivery rate detail statistics req is invalid, err: %v, req: %+v, rid: %s",
+			err, req, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	result, err := svc.dao.ZiyanCvmApplySuborder().GetDeliveryRateDetailStatistics(cts.Kit, req.Filter)
+	if err != nil {
+		logs.Errorf("get delivery rate detail statistics failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return &cvmapplyproto.ZiyanCvmApplyDeliveryRateDetailResult{Details: result}, nil
+}

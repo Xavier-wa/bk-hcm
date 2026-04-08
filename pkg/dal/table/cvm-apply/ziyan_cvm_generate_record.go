@@ -22,7 +22,6 @@ package cvmapply
 import (
 	"errors"
 
-	tasktypes "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	"hcm/pkg/dal/table"
@@ -71,7 +70,7 @@ type ZiyanCvmGenerateRecord struct {
 	// RequestInfo 请求信息
 	RequestInfo string `db:"request_info" json:"request_info"`
 	// Status 状态(-1:默认 0:成功 1:失败 2:运行中等)
-	Status *tasktypes.GenerateStepStatus `db:"status" json:"status"`
+	Status *enumor.GenerateStepStatus `db:"status" json:"status"`
 	// IsMatched 是否已匹配(0:否 1:是)
 	IsMatched *bool `db:"is_matched" json:"is_matched"`
 	// Message 状态消息/错误信息

@@ -15,6 +15,7 @@ package generate
 
 import (
 	"errors"
+	"sync"
 	"time"
 
 	"hcm/cmd/woa-server/storage/dal"
@@ -31,6 +32,8 @@ import (
 type Interface interface {
 	// Pop gets head of generate record info queue
 	Pop() (uint64, error)
+	// Stop stops generate informer watch loop.
+	Stop()
 }
 
 // generateInformer generate informer which list and watch database and cache generate record info
@@ -40,6 +43,9 @@ type generateInformer struct {
 	event   stream.LoopInterface
 
 	queue workqueue.RateLimitingInterface
+
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 // New create a generate informer
@@ -49,6 +55,7 @@ func New(loopWatch stream.LoopInterface, watchDB dal.DB) (*generateInformer, err
 		watchDB: watchDB,
 		event:   loopWatch,
 		queue:   workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "generate"),
+		stopCh:  make(chan struct{}),
 	}
 
 	if err := generateInformer.Run(); err != nil {
@@ -85,6 +92,14 @@ func (i *generateInformer) Pop() (uint64, error) {
 	return id, nil
 }
 
+// Stop stops generate informer watch loop.
+func (i *generateInformer) Stop() {
+	i.stopOnce.Do(func() {
+		close(i.stopCh)
+		i.queue.ShutDown()
+	})
+}
+
 // listAndWatchGenerateRecord list and watch database and cache generate record into queue
 func (i *generateInformer) listAndWatchGenerateRecord() error {
 	// watch generate record
@@ -109,6 +124,7 @@ func (i *generateInformer) listAndWatchGenerateRecord() error {
 				MaxRetryCount: 4,
 				RetryDuration: 500 * time.Millisecond,
 			},
+			StopNotifier: i.stopCh,
 		},
 		EventHandler: &types.OneHandler{
 			DoAdd:    i.onUpsert,

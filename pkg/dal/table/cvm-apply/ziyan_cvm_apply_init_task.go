@@ -22,7 +22,6 @@ package cvmapply
 import (
 	"errors"
 
-	tasktypes "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	"hcm/pkg/dal/table"
@@ -63,7 +62,7 @@ type ZiyanCvmApplyInitTask struct {
 	// TaskLink 初始化任务链接
 	TaskLink string `db:"task_link" json:"task_link" validate:"max=512"`
 	// Status 状态(-1:默认 0:成功 1:失败 2:运行中等)
-	Status tasktypes.InitStepStatus `db:"status" json:"status"`
+	Status *enumor.InitStepStatus `db:"status" json:"status"`
 	// Message 状态消息/错误信息
 	Message string `db:"message" json:"message"`
 	// StartAt 开始时间

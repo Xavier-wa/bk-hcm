@@ -55,6 +55,18 @@ func InitService(cap *capability.Capability) {
 		"/cvm_apply/suborders/statistics/production_stage_time_cost/overview", svc.GetProductionStageTimeCostOverview)
 	h.Add("GetProductionStageTimeCostCompare", http.MethodPost,
 		"/cvm_apply/suborders/statistics/production_stage_time_cost/compare", svc.GetProductionStageTimeCostCompare)
+	h.Add("GetApplyBizHostsStatistics", http.MethodPost,
+		"/cvm_apply/suborders/statistics/biz_hosts", svc.GetApplyBizHostsStatistics)
+	h.Add("GetApplyBizCpuCoresStatistics", http.MethodPost,
+		"/cvm_apply/suborders/statistics/biz_cpu_cores", svc.GetApplyBizCpuCoresStatistics)
+	h.Add("GetCompletionRateStatistics", http.MethodPost,
+		"/cvm_apply/suborders/statistics/completion_rate", svc.GetCompletionRateStatistics)
+	h.Add("GetCompletionRateDetailStatistics", http.MethodPost,
+		"/cvm_apply/suborders/statistics/completion_rate_detail", svc.GetCompletionRateDetailStatistics)
+	h.Add("GetDeliveryRateStatistics", http.MethodPost,
+		"/cvm_apply/suborders/statistics/delivery_rate", svc.GetDeliveryRateStatistics)
+	h.Add("GetDeliveryRateDetailStatistics", http.MethodPost,
+		"/cvm_apply/suborders/statistics/delivery_rate_detail", svc.GetDeliveryRateDetailStatistics)
 
 	h.Load(cap.WebService)
 }

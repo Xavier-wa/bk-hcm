@@ -29,6 +29,7 @@ import (
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/tools"
 	tableapplystat "hcm/pkg/dal/table/cvm-apply-order-statistics-config"
 	"hcm/pkg/kit"
@@ -41,6 +42,24 @@ import (
 type Interface interface {
 	// ListExcludedSubOrderIDs 根据查询时间范围，将配置表内容统一转换为需要排除的主机申请子订单号列表
 	ListExcludedSubOrderIDs(kt *kit.Kit, queryStart, queryEnd time.Time) ([]string, error)
+	// GetApplyBizHostsStatistics 按业务统计申请主机数
+	GetApplyBizHostsStatistics(kt *kit.Kit, filterExpr *filter.Expression) (
+		*cvmapplyproto.ZiyanCvmApplyBizHostsStatisticsResult, error)
+	// GetApplyBizCpuCoresStatistics 按业务统计申请CPU核心数
+	GetApplyBizCpuCoresStatistics(kt *kit.Kit, filterExpr *filter.Expression) (
+		*cvmapplyproto.ZiyanCvmApplyBizCpuCoresStatisticsResult, error)
+	// GetCompletionRateStatistics 按月份统计结单率
+	GetCompletionRateStatistics(kt *kit.Kit, filterExpr *filter.Expression) (
+		*cvmapplyproto.ZiyanCvmApplyCompletionRateStatisticsResult, error)
+	// GetCompletionRateDetailStatistics 按业务+月份统计结单率详情
+	GetCompletionRateDetailStatistics(kt *kit.Kit, filterExpr *filter.Expression) (
+		*cvmapplyproto.ZiyanCvmApplyCompletionRateDetailResult, error)
+	// GetDeliveryRateStatistics 按月份统计主机交付率
+	GetDeliveryRateStatistics(kt *kit.Kit, filterExpr *filter.Expression) (
+		*cvmapplyproto.ZiyanCvmApplyDeliveryRateStatisticsResult, error)
+	// GetDeliveryRateDetailStatistics 按业务+月份统计主机交付率详情
+	GetDeliveryRateDetailStatistics(kt *kit.Kit, filterExpr *filter.Expression) (
+		*cvmapplyproto.ZiyanCvmApplyDeliveryRateDetailResult, error)
 }
 
 // New 创建统计能力实例
@@ -52,6 +71,14 @@ func New(clientSet *client.ClientSet) Interface {
 
 type statistics struct {
 	client *client.ClientSet
+}
+
+func (s *statistics) ensureDataServiceClient(method string) error {
+	if s.client == nil || s.client.DataService() == nil {
+		return errf.Newf(errf.InvalidParameter, "%s: data service client is not initialized", method)
+	}
+
+	return nil
 }
 
 // ListExcludedSubOrderIDs 根据查询时间范围，将配置表内容统一转换为需要排除的主机申请子订单号列表
@@ -96,7 +123,7 @@ func (s *statistics) fetchSubOrderIDsFromOrders(kt *kit.Kit, ranges []timeRangeC
 	}
 
 	if s.client == nil || s.client.DataService() == nil {
-		return nil, fmt.Errorf("data service client is not initialized")
+		return nil, errf.Newf(errf.InvalidParameter, "data service client is not initialized")
 	}
 
 	// 构建 OR 条件的过滤表达式
@@ -125,39 +152,20 @@ func (s *statistics) fetchSubOrderIDsFromOrders(kt *kit.Kit, ranges []timeRangeC
 		Rules: orRules,
 	}
 
-	// 先查询总数
-	countReq := &cvmapplyproto.ZiyanCvmApplySuborderListReq{
+	// 使用分页循环查询
+	allIDs := make([]string, 0)
+	listReq := &cvmapplyproto.ZiyanCvmApplySuborderListReq{
 		Filter: filterExpr,
-		Page:   &core.BasePage{Count: true},
+		Page:   &core.BasePage{Start: 0, Limit: core.DefaultMaxPageLimit},
 		Fields: []string{"suborder_id"},
 	}
-
-	countResult, err := s.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.List(kt.Ctx, kt.Header(), countReq)
-	if err != nil {
-		return nil, fmt.Errorf("count ziyan cvm apply suborder failed: %w", err)
-	}
-
-	if countResult.Count == 0 {
-		return nil, nil
-	}
-
-	// 使用分页循环查询
-	allIDs := make([]string, 0, countResult.Count)
-	start := uint32(0)
 	for {
-		listReq := &cvmapplyproto.ZiyanCvmApplySuborderListReq{
-			Filter: filterExpr,
-			Page: &core.BasePage{
-				Count: false,
-				Start: start,
-				Limit: core.DefaultMaxPageLimit,
-			},
-			Fields: []string{"suborder_id"},
-		}
-
 		result, err := s.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.List(kt.Ctx, kt.Header(), listReq)
 		if err != nil {
 			return nil, fmt.Errorf("list ziyan cvm apply suborder failed, err: %w", err)
+		}
+		if result == nil || len(result.Details) == 0 {
+			break
 		}
 
 		for _, suborder := range result.Details {
@@ -170,11 +178,10 @@ func (s *statistics) fetchSubOrderIDsFromOrders(kt *kit.Kit, ranges []timeRangeC
 			allIDs = append(allIDs, suborder.SuborderID)
 		}
 
-		// 如果返回的数据少于一页，说明已经是最后一页了
 		if len(result.Details) < int(core.DefaultMaxPageLimit) {
 			break
 		}
-		start += uint32(core.DefaultMaxPageLimit)
+		listReq.Page.Start += uint32(core.DefaultMaxPageLimit)
 	}
 
 	return allIDs, nil
@@ -384,4 +391,112 @@ func (s *statistics) buildTimeRange(kt *kit.Kit, cfg *tableapplystat.CvmApplyOrd
 		start: maxTime(start, queryStart),
 		end:   minTime(end, queryEnd),
 	}, true
+}
+
+// GetApplyBizHostsStatistics 按业务统计申请主机数
+func (s *statistics) GetApplyBizHostsStatistics(kt *kit.Kit, filterExpr *filter.Expression) (
+	*cvmapplyproto.ZiyanCvmApplyBizHostsStatisticsResult, error) {
+
+	if err := s.ensureDataServiceClient("GetApplyBizHostsStatistics"); err != nil {
+		return nil, err
+	}
+
+	req := &cvmapplyproto.CvmStatisticsListReq{Filter: filterExpr}
+	result, err := s.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.GetApplyBizHostsStatistics(
+		kt.Ctx, kt.Header(), req)
+	if err != nil {
+		return nil, fmt.Errorf("get apply biz hosts statistics from data service failed, err: %w", err)
+	}
+
+	return result, nil
+}
+
+// GetApplyBizCpuCoresStatistics 按业务统计申请CPU核心数
+func (s *statistics) GetApplyBizCpuCoresStatistics(kt *kit.Kit, filterExpr *filter.Expression) (
+	*cvmapplyproto.ZiyanCvmApplyBizCpuCoresStatisticsResult, error) {
+
+	if err := s.ensureDataServiceClient("GetApplyBizCpuCoresStatistics"); err != nil {
+		return nil, err
+	}
+
+	req := &cvmapplyproto.CvmStatisticsListReq{Filter: filterExpr}
+	result, err := s.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.GetApplyBizCpuCoresStatistics(
+		kt.Ctx, kt.Header(), req)
+	if err != nil {
+		return nil, fmt.Errorf("get apply biz cpu cores statistics from data service failed, err: %w", err)
+	}
+
+	return result, nil
+}
+
+// GetCompletionRateStatistics 按月份统计结单率
+func (s *statistics) GetCompletionRateStatistics(kt *kit.Kit, filterExpr *filter.Expression) (
+	*cvmapplyproto.ZiyanCvmApplyCompletionRateStatisticsResult, error) {
+
+	if err := s.ensureDataServiceClient("GetCompletionRateStatistics"); err != nil {
+		return nil, err
+	}
+
+	req := &cvmapplyproto.CvmStatisticsListReq{Filter: filterExpr}
+	result, err := s.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.GetCompletionRateStatistics(
+		kt.Ctx, kt.Header(), req)
+	if err != nil {
+		return nil, fmt.Errorf("get completion rate statistics from data service failed, err: %w", err)
+	}
+
+	return result, nil
+}
+
+// GetCompletionRateDetailStatistics 按业务+月份统计结单率详情
+func (s *statistics) GetCompletionRateDetailStatistics(kt *kit.Kit, filterExpr *filter.Expression) (
+	*cvmapplyproto.ZiyanCvmApplyCompletionRateDetailResult, error) {
+
+	if err := s.ensureDataServiceClient("GetCompletionRateDetailStatistics"); err != nil {
+		return nil, err
+	}
+
+	req := &cvmapplyproto.CvmStatisticsListReq{Filter: filterExpr}
+	result, err := s.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.GetCompletionRateDetailStatistics(
+		kt.Ctx, kt.Header(), req)
+	if err != nil {
+		return nil, fmt.Errorf("get completion rate detail statistics from data service failed, err: %w", err)
+	}
+
+	return result, nil
+}
+
+// GetDeliveryRateStatistics 按月份统计主机交付率
+func (s *statistics) GetDeliveryRateStatistics(kt *kit.Kit, filterExpr *filter.Expression) (
+	*cvmapplyproto.ZiyanCvmApplyDeliveryRateStatisticsResult, error) {
+
+	if err := s.ensureDataServiceClient("GetDeliveryRateStatistics"); err != nil {
+		return nil, err
+	}
+
+	req := &cvmapplyproto.CvmStatisticsListReq{Filter: filterExpr}
+	result, err := s.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.GetDeliveryRateStatistics(
+		kt.Ctx, kt.Header(), req)
+	if err != nil {
+		return nil, fmt.Errorf("get delivery rate statistics from data service failed, err: %w", err)
+	}
+
+	return result, nil
+}
+
+// GetDeliveryRateDetailStatistics 按业务+月份统计主机交付率详情
+func (s *statistics) GetDeliveryRateDetailStatistics(kt *kit.Kit, filterExpr *filter.Expression) (
+	*cvmapplyproto.ZiyanCvmApplyDeliveryRateDetailResult, error) {
+
+	if err := s.ensureDataServiceClient("GetDeliveryRateDetailStatistics"); err != nil {
+		return nil, err
+	}
+
+	req := &cvmapplyproto.CvmStatisticsListReq{Filter: filterExpr}
+	result, err := s.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.GetDeliveryRateDetailStatistics(
+		kt.Ctx, kt.Header(), req)
+	if err != nil {
+		return nil, fmt.Errorf("get delivery rate detail statistics from data service failed, err: %w", err)
+	}
+
+	return result, nil
 }

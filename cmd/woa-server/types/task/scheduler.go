@@ -84,20 +84,19 @@ type UpgradeCVMSpec struct {
 	TargetInstanceType   string   `json:"target_instance_type" bson:"target_instance_type"`
 }
 
-// ResourceType resource type
-type ResourceType string
+// ResourceType resource type（类型定义已下沉至 pkg/criteria/enumor/cvm_apply.go）
+type ResourceType = enumor.ResourceType
 
 // ResourceType resource type
 const (
-	ResourceTypePm          ResourceType = "IDCPM"
-	ResourceTypeCvm         ResourceType = "QCLOUDCVM"
-	ResourceTypeIdcDvm      ResourceType = "IDCDVM"
-	ResourceTypeQcloudDvm   ResourceType = "QCLOUDDVM"
-	ResourceTypePool        ResourceType = "POOL"
-	ResourceTypeOthers      ResourceType = "OTHERS"
-	ResourceTypeUnsupported ResourceType = "UNSUPPORTED"
-	// ResourceTypeUpgradeCvm cvm升降配
-	ResourceTypeUpgradeCvm ResourceType = "UPGRADECVM"
+	ResourceTypePm          = enumor.ResourceTypePm
+	ResourceTypeCvm         = enumor.ResourceTypeCvm
+	ResourceTypeIdcDvm      = enumor.ResourceTypeIdcDvm
+	ResourceTypeQcloudDvm   = enumor.ResourceTypeQcloudDvm
+	ResourceTypePool        = enumor.ResourceTypePool
+	ResourceTypeOthers      = enumor.ResourceTypeOthers
+	ResourceTypeUnsupported = enumor.ResourceTypeUnsupported
+	ResourceTypeUpgradeCvm  = enumor.ResourceTypeUpgradeCvm
 
 	ApplyLimit = 1000
 )
@@ -111,8 +110,8 @@ var AllResourceType = []ResourceType{
 	ResourceTypeUpgradeCvm,
 }
 
-// ApplyStatus apply status
-type ApplyStatus string
+// ApplyStatus apply status（类型定义已下沉至 pkg/criteria/enumor/cvm_apply.go）
+type ApplyStatus = enumor.ApplyStatus
 
 /*
 	apply status:
@@ -124,15 +123,14 @@ Paused			已暂停
 Done			终止
 */
 const (
-	ApplyStatusWaitForMatch ApplyStatus = "WAIT"
-	ApplyStatusMatching     ApplyStatus = "MATCHING"
-	ApplyStatusMatchedSome  ApplyStatus = "MATCHED_SOME"
-	ApplyStatusPaused       ApplyStatus = "PAUSED"
-	ApplyStatusDone         ApplyStatus = "DONE"
-	ApplyStatusTerminate    ApplyStatus = "TERMINATE"
-	// ApplyStatusGracefulTerminate 比起 ApplyStatusTerminate，将不再发起重试，但是后续的流程仍会继续流转
-	ApplyStatusGracefulTerminate ApplyStatus = "GRACEFUL_TERMINATE"
-	ApplyStatusConfirming        ApplyStatus = "CONFIRMING" // 修改需求后-待用户确认
+	ApplyStatusWaitForMatch      = enumor.ApplyStatusWaitForMatch
+	ApplyStatusMatching          = enumor.ApplyStatusMatching
+	ApplyStatusMatchedSome       = enumor.ApplyStatusMatchedSome
+	ApplyStatusPaused            = enumor.ApplyStatusPaused
+	ApplyStatusDone              = enumor.ApplyStatusDone
+	ApplyStatusTerminate         = enumor.ApplyStatusTerminate
+	ApplyStatusGracefulTerminate = enumor.ApplyStatusGracefulTerminate
+	ApplyStatusConfirming        = enumor.ApplyStatusConfirming
 )
 
 // GenerateRecord apply order vm generate record
@@ -157,17 +155,16 @@ type GenerateRecord struct {
 	IsManualMatched bool               `json:"is_manual_matched" bson:"is_manual_matched"` // 是否手工匹配
 }
 
-// GenerateStepStatus generate step status
-type GenerateStepStatus int
+// GenerateStepStatus generate step status（类型定义已下沉至 pkg/criteria/enumor/cvm_apply.go）
+type GenerateStepStatus = enumor.GenerateStepStatus
 
 // GenerateStepStatus generate step status
 const (
-	GenerateStatusInit     GenerateStepStatus = -1
-	GenerateStatusSuccess  GenerateStepStatus = 0
-	GenerateStatusHandling GenerateStepStatus = 1
-	GenerateStatusFailed   GenerateStepStatus = 2
-	// GenerateStatusSuspend 分区生产订单，未拿到机器生产单据id时状态，更新后此生产订单不会进入再生产
-	GenerateStatusSuspend GenerateStepStatus = 3
+	GenerateStatusInit     = enumor.GenerateStatusInit
+	GenerateStatusSuccess  = enumor.GenerateStatusSuccess
+	GenerateStatusHandling = enumor.GenerateStatusHandling
+	GenerateStatusFailed   = enumor.GenerateStatusFailed
+	GenerateStatusSuspend  = enumor.GenerateStatusSuspend
 )
 
 // GetApplyDeviceReq get resource apply delivered devices request
@@ -489,18 +486,18 @@ type ApplyTicket struct {
 	UpdateAt     time.Time          `json:"update_at" bson:"update_at"`
 }
 
-// TicketStage resource apply ticket stage
-type TicketStage string
+// TicketStage resource apply ticket stage（类型定义已下沉至 pkg/criteria/enumor/cvm_apply.go）
+type TicketStage = enumor.TicketStage
 
 // TicketStage resource apply ticket stage
 const (
-	TicketStageUncommit   TicketStage = "UNCOMMIT"
-	TicketStageAudit      TicketStage = "AUDIT"
-	TicketStageTerminate  TicketStage = "TERMINATE"
-	TicketStageRunning    TicketStage = "RUNNING"
-	TicketStageSuspend    TicketStage = "SUSPEND"
-	TicketStageDone       TicketStage = "DONE"
-	TicketStageConfirming TicketStage = "CONFIRMING" // 修改需求后-待用户确认
+	TicketStageUncommit   = enumor.TicketStageUncommit
+	TicketStageAudit      = enumor.TicketStageAudit
+	TicketStageTerminate  = enumor.TicketStageTerminate
+	TicketStageRunning    = enumor.TicketStageRunning
+	TicketStageSuspend    = enumor.TicketStageSuspend
+	TicketStageDone       = enumor.TicketStageDone
+	TicketStageConfirming = enumor.TicketStageConfirming
 )
 
 // TicketStageEnums ticket stage enum
@@ -1439,8 +1436,8 @@ type ApplyStep struct {
 // StepIdType step id
 type StepIdType int
 
-// StepStatusType step status
-type StepStatusType int
+// StepStatusType step status（类型定义已下沉至 pkg/criteria/enumor/cvm_apply.go）
+type StepStatusType = enumor.StepStatusType
 
 // StepIdType step id type
 const (
@@ -1455,10 +1452,10 @@ const (
 	StepNameDiskCheck string     = "本地盘性能压测"
 	StepNameDeliver   string     = "交付"
 
-	StepStatusInit     StepStatusType = -1
-	StepStatusSuccess  StepStatusType = 0
-	StepStatusHandling StepStatusType = 1
-	StepStatusFailed   StepStatusType = 2
+	StepStatusInit     = enumor.StepStatusInit
+	StepStatusSuccess  = enumor.StepStatusSuccess
+	StepStatusHandling = enumor.StepStatusHandling
+	StepStatusFailed   = enumor.StepStatusFailed
 
 	StepMsgInit     string = "init"
 	StepMsgSuccess  string = "success"
@@ -1479,15 +1476,15 @@ type InitRecord struct {
 	EndAt      time.Time      `json:"end_at" bson:"end_at"`
 }
 
-// InitStepStatus init step status
-type InitStepStatus int
+// InitStepStatus init step status（类型定义已下沉至 pkg/criteria/enumor/cvm_apply.go）
+type InitStepStatus = enumor.InitStepStatus
 
 // InitStepStatus init step status
 const (
-	InitStatusInit     InitStepStatus = -1
-	InitStatusSuccess  InitStepStatus = 0
-	InitStatusHandling InitStepStatus = 1
-	InitStatusFailed   InitStepStatus = 2
+	InitStatusInit     = enumor.InitStatusInit
+	InitStatusSuccess  = enumor.InitStatusSuccess
+	InitStatusHandling = enumor.InitStatusHandling
+	InitStatusFailed   = enumor.InitStatusFailed
 )
 
 // DiskCheckRecord apply order disk check record
@@ -1534,15 +1531,15 @@ type DeliverRecord struct {
 	EndAt            time.Time         `json:"end_at" bson:"end_at"`
 }
 
-// DeliverStepStatus deliver step status
-type DeliverStepStatus int
+// DeliverStepStatus deliver step status（类型定义已下沉至 pkg/criteria/enumor/cvm_apply.go）
+type DeliverStepStatus = enumor.DeliverStepStatus
 
 // DeliverStepStatus deliver step status
 const (
-	DeliverStatusInit     DeliverStepStatus = -1
-	DeliverStatusSuccess  DeliverStepStatus = 0
-	DeliverStatusHandling DeliverStepStatus = 1
-	DeliverStatusFailed   DeliverStepStatus = 2
+	DeliverStatusInit     = enumor.DeliverStatusInit
+	DeliverStatusSuccess  = enumor.DeliverStatusSuccess
+	DeliverStatusHandling = enumor.DeliverStatusHandling
+	DeliverStatusFailed   = enumor.DeliverStatusFailed
 )
 
 // StartApplyOrderReq start apply order request

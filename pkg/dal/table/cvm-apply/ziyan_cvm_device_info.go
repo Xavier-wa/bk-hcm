@@ -22,7 +22,6 @@ package cvmapply
 import (
 	"errors"
 
-	tasktypes "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	"hcm/pkg/dal/table"
@@ -98,7 +97,7 @@ type ZiyanCvmDeviceInfo struct {
 	// RequireType 需求类型
 	RequireType enumor.RequireType `db:"require_type" json:"require_type"`
 	// ResourceType 资源类型(QCLOUDCVM/PM等)
-	ResourceType tasktypes.ResourceType `db:"resource_type" json:"resource_type" validate:"max=32"`
+	ResourceType enumor.ResourceType `db:"resource_type" json:"resource_type" validate:"max=32"`
 	// DeviceType 设备类型/机型
 	DeviceType  string `db:"device_type" json:"device_type" validate:"max=64"`
 	Description string `db:"description" json:"description"`

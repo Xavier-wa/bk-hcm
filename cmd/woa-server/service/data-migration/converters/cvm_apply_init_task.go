@@ -29,6 +29,7 @@ import (
 	"hcm/pkg/dal/table"
 	cvmapplytable "hcm/pkg/dal/table/cvm-apply"
 	"hcm/pkg/dal/table/types"
+	cvt "hcm/pkg/tools/converter"
 )
 
 func init() {
@@ -89,7 +90,7 @@ func (c *CvmApplyInitTaskConverter) ConvertToUpdate(source interface{}, target i
 		IP:         initRecord.Ip,
 		TaskID:     initRecord.TaskId,
 		TaskLink:   initRecord.TaskLink,
-		Status:     initRecord.Status,
+		Status:     cvt.ValToPtr(initRecord.Status),
 		Message:    initRecord.Message,
 		StartAt:    initRecord.StartAt.Format(constant.TimeStdFormat),
 		EndAt:      initRecord.EndAt.Format(constant.TimeStdFormat),
@@ -152,7 +153,7 @@ func (c *CvmApplyInitTaskConverter) compareField(initRecord *tasktypes.InitRecor
 	case "ip":
 		return initRecord.Ip != task.IP
 	case "status":
-		return initRecord.Status != task.Status
+		return initRecord.Status != cvt.PtrToVal(task.Status)
 	case "message":
 		return initRecord.Message != task.Message
 	case "task_id":

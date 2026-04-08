@@ -124,6 +124,7 @@ type Service struct {
 	taskStatistics taskStatistics.Interface
 	cvmLogic       cvmlogic.Logics
 	tasks          map[enumor.CronTask]croncore.Task
+	sd             serviced.State
 }
 
 // NewService create a service instance.
@@ -148,12 +149,13 @@ func NewService(dis serviced.ServiceDiscover, sd serviced.State) (*Service, erro
 		return nil, err
 	}
 
-	mongoComponents, err := initMongoComponents(dis, clients, apiClientSet, logics)
+	mongoComponents, err := initMongoComponents(dis, sd, clients, apiClientSet, logics)
 	if err != nil {
 		return nil, err
 	}
 
 	service := assembleService(apiClientSet, clients, logics, mongoComponents)
+	service.sd = sd
 	service, err = newOtherClient(core.NewBackendKit(), service, clients.itsmCli, sd)
 	if err != nil {
 		return nil, err
@@ -367,7 +369,7 @@ type mongoComponentSet struct {
 }
 
 // initMongoComponents 初始化涉及MongoDB的逻辑
-func initMongoComponents(dis serviced.ServiceDiscover, clients *clientSet, apiClientSet *client.ClientSet,
+func initMongoComponents(dis serviced.ServiceDiscover, sd serviced.State, clients *clientSet, apiClientSet *client.ClientSet,
 	logics *logicSet) (*mongoComponentSet, error) {
 
 	if !cc.WoaServer().UseMongo {
@@ -380,7 +382,8 @@ func initMongoComponents(dis serviced.ServiceDiscover, clients *clientSet, apiCl
 		return nil, err
 	}
 
-	informerIf, err := informer.New(loopW, watchDB)
+	// Create leader-aware informer that only runs on master node
+	informerIf, err := informer.New(loopW, watchDB, sd)
 	if err != nil {
 		logs.Errorf("new informer failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
@@ -569,6 +572,10 @@ func (s *Service) ListenAndServeRest() error {
 
 			logs.Infof("start shutdown restful server gracefully...")
 
+			if s.informerIf != nil {
+				s.informerIf.Close()
+			}
+
 			ctx, cancel := context.WithTimeout(context.TODO(), 20*time.Second)
 			defer cancel()
 			if err := server.Shutdown(ctx); err != nil {
@@ -680,7 +687,7 @@ func (s *Service) initCronTask() error {
 	}
 	s.tasks = make(map[enumor.CronTask]croncore.Task)
 
-	deviceCapacityTask, err := crontask.NewDeviceCapacityTask(s.client, s.configLogics)
+	deviceCapacityTask, err := crontask.NewDeviceCapacityTask(s.client, s.configLogics, s.sd)
 	if err != nil {
 		logs.Errorf("init device capacity task failed, err: %v", err)
 		return err

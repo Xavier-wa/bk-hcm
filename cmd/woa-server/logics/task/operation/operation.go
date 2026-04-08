@@ -30,10 +30,9 @@ import (
 	model "hcm/cmd/woa-server/model/task"
 	types "hcm/cmd/woa-server/types/task"
 	"hcm/pkg"
-	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/api/core"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/client"
-	"hcm/pkg/condition"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/mapstr"
@@ -45,8 +44,6 @@ import (
 	"hcm/pkg/tools/metadata"
 	"hcm/pkg/tools/slice"
 	"hcm/pkg/tools/util"
-
-	"go.mongodb.org/mongo-driver/bson"
 )
 
 // Interface operation interface
@@ -87,10 +84,11 @@ type Interface interface {
 	GetCompletionRateDetail(kt *kit.Kit,
 		param *types.GetCompletionRateDetailReq) (*types.GetCompletionRateDetailRst, error)
 	// GetApplyBizHostsStatistics get apply biz hosts statistics
-	GetApplyBizHostsStatistics(kt *kit.Kit, startDate, endDate time.Time) (*types.ApplyBizHostsStatisticsResult, error)
+	GetApplyBizHostsStatistics(kt *kit.Kit, startDate, endDate time.Time) (
+		*cvmapplyproto.ZiyanCvmApplyBizHostsStatisticsResult, error)
 	// GetApplyBizCpuCoresStatistics get apply biz cpu cores statistics
 	GetApplyBizCpuCoresStatistics(kt *kit.Kit, startDate, endDate time.Time) (
-		*types.ApplyBizCpuCoresStatisticsResult, error)
+		*cvmapplyproto.ZiyanCvmApplyBizCpuCoresStatisticsResult, error)
 }
 
 // operation provides operation statistics service
@@ -362,85 +360,21 @@ func (op *operation) getExcludeSuborderIDs(kt *kit.Kit, startTime, endTime time.
 	return excludeSuborderIDs, nil
 }
 
-// addExcludeSuborderFilter 添加排除子单号过滤条件
-func addExcludeSuborderFilter(filter map[string]interface{}, excludeSuborderIDs []string) {
-	if len(excludeSuborderIDs) == 0 {
-		return
-	}
+// convertCompletionRateStatisticsResult 转换 MySQL 统计结果
+func convertCompletionRateStatisticsResult(result *cvmapplyproto.ZiyanCvmApplyCompletionRateStatisticsResult,
+) *types.GetCompletionRateStatRst {
 
-	suborderFilter, ok := filter["suborder_id"].(map[string]interface{})
-	if !ok || suborderFilter == nil {
-		suborderFilter = make(map[string]interface{})
-	}
-	suborderFilter[pkg.BKDBNIN] = excludeSuborderIDs
-	filter["suborder_id"] = suborderFilter
-}
-
-// buildCompletionRateStatisticsPipeline 构建结单率统计聚合管道
-func buildCompletionRateStatisticsPipeline(filter map[string]interface{}) []map[string]interface{} {
-	return []map[string]interface{}{
-		{pkg.BKDBMatch: filter},
-		{"$addFields": map[string]interface{}{
-			"year_month": map[string]interface{}{
-				"$dateToString": map[string]interface{}{
-					"format": "%Y-%m",
-					"date":   "$create_at"}},
-			"is_done": map[string]interface{}{
-				"$cond": []interface{}{
-					map[string]interface{}{
-						condition.BKDBIN: []interface{}{
-							"$stage", []interface{}{types.TicketStageDone, types.TicketStageTerminate},
-						},
-					},
-					1,
-					0,
-				},
-			},
-		}},
-		{pkg.BKDBGroup: map[string]interface{}{
-			"_id":         "$year_month",
-			"total_count": map[string]interface{}{pkg.BKDBSum: 1},
-			"done_count":  map[string]interface{}{pkg.BKDBSum: "$is_done"},
-		}},
-		{pkg.BKDBProject: map[string]interface{}{
-			"year_month": "$_id",
-			"completion_rate": map[string]interface{}{
-				"$round": []interface{}{
-					map[string]interface{}{
-						"$multiply": []interface{}{
-							map[string]interface{}{
-								"$divide": []interface{}{
-									"$done_count",
-									map[string]interface{}{
-										"$cond": []interface{}{
-											map[string]interface{}{condition.BKDBEQ: []interface{}{"$total_count", 0}},
-											1,
-											"$total_count",
-										},
-									},
-								},
-							},
-							100,
-						},
-					},
-					2,
-				},
-			},
-		}},
-		{pkg.BKDBSort: map[string]interface{}{"year_month": 1}},
-	}
-}
-
-// convertCompletionRateStatisticsResult 转换结单率统计结果
-func convertCompletionRateStatisticsResult(aggRst []struct {
-	YearMonth      string  `bson:"year_month"`
-	CompletionRate float64 `bson:"completion_rate"`
-}) *types.GetCompletionRateStatRst {
 	rst := &types.GetCompletionRateStatRst{
-		Details: make([]*types.CompletionRateStat, 0, len(aggRst)),
+		Details: make([]*types.CompletionRateStat, 0),
+	}
+	if result == nil || len(result.Details) == 0 {
+		return rst
 	}
 
-	for _, stat := range aggRst {
+	for _, stat := range result.Details {
+		if stat == nil {
+			continue
+		}
 		rst.Details = append(rst.Details, &types.CompletionRateStat{
 			YearMonth:      stat.YearMonth,
 			CompletionRate: stat.CompletionRate,
@@ -453,12 +387,6 @@ func convertCompletionRateStatisticsResult(aggRst []struct {
 // GetCompletionRateStatistics get completion rate statistics
 func (op *operation) GetCompletionRateStatistics(kt *kit.Kit,
 	param *types.GetCompletionRateStatReq) (*types.GetCompletionRateStatRst, error) {
-	filter, err := param.GetFilter()
-	if err != nil {
-		logs.Errorf("failed to get completion rate statistics, for get filter err: %v, rid: %s", err, kt.Rid)
-		return nil, err
-	}
-
 	startTime, endTime, err := parseTimeRange(param.StartTime, param.EndTime)
 	if err != nil {
 		logs.Errorf("failed to parse time range, err: %v, rid: %s", err, kt.Rid)
@@ -472,129 +400,57 @@ func (op *operation) GetCompletionRateStatistics(kt *kit.Kit,
 		return nil, err
 	}
 
-	addExcludeSuborderFilter(filter, excludeSuborderIDs)
+	// 结束时间需要加1天
+	endTime = endTime.AddDate(0, 0, 1)
 
-	pipeline := buildCompletionRateStatisticsPipeline(filter)
-
-	aggRst := make([]struct {
-		YearMonth      string  `bson:"year_month"`
-		CompletionRate float64 `bson:"completion_rate"`
-	}, 0)
-
-	if err := model.Operation().ApplyOrder().AggregateAll(kt.Ctx, pipeline, &aggRst); err != nil {
-		logs.Errorf("failed to get completion rate statistics, err: %v, rid: %s", err, kt.Rid)
+	filterExpr, err := buildCompletionRateFilterExpression(startTime, endTime, excludeSuborderIDs)
+	if err != nil {
+		logs.Errorf("failed to build completion rate filter expression, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
 
-	return convertCompletionRateStatisticsResult(aggRst), nil
+	result, err := op.statistics.GetCompletionRateStatistics(kt, filterExpr)
+	if err != nil {
+		logs.Errorf("failed to get completion rate statistics, startTime: %s, endTime: %s, err: %v, rid: %s",
+			startTime, endTime, err, kt.Rid)
+		return nil, err
+	}
+
+	return convertCompletionRateStatisticsResult(result), nil
 }
 
-// buildCompletionRateDetailBaseFilter 构建结单率详情基础过滤条件
-func buildCompletionRateDetailBaseFilter(startTime, endTime time.Time, excludeSuborderIDs []string) map[string]interface{} {
-	baseFilter := map[string]interface{}{
-		"create_at": map[string]interface{}{
-			pkg.BKDBGTE: startTime,
-			pkg.BKDBLT:  endTime,
-		},
-		"source": map[string]interface{}{
-			pkg.BKDBNE: enumor.ApplyTicketSrcPurchaseToResPool,
-		},
+// buildCompletionRateFilterExpression 构建结单率统计过滤条件（MySQL）
+func buildCompletionRateFilterExpression(startTime, endTime time.Time, excludeSuborderIDs []string,
+) (*filter.Expression, error) {
+
+	rules := []filter.RuleFactory{
+		tools.RuleGreaterThanEqual("created_at", startTime.Format(constant.TimeStdFormat)),
+		tools.RuleLessThan("created_at", endTime.Format(constant.TimeStdFormat)),
+		tools.RuleNotEqual("source", enumor.ApplyTicketSrcPurchaseToResPool),
 	}
 
 	if len(excludeSuborderIDs) > 0 {
-		baseFilter["suborder_id"] = map[string]interface{}{
-			pkg.BKDBNIN: excludeSuborderIDs,
-		}
+		appendChunkedNotInRules(&rules, "suborder_id", excludeSuborderIDs)
 	}
 
-	return baseFilter
+	return &filter.Expression{
+		Op:    filter.And,
+		Rules: rules,
+	}, nil
 }
 
-// buildCompletionRateDetailPipeline 构建结单率详情聚合管道
-func buildCompletionRateDetailPipeline(baseFilter map[string]interface{}) []map[string]interface{} {
-	return []map[string]interface{}{
-		{pkg.BKDBMatch: baseFilter},
-		{
-			"$addFields": map[string]interface{}{
-				"year_month": map[string]interface{}{
-					"$dateToString": map[string]interface{}{
-						"format": "%Y-%m",
-						"date":   "$create_at",
-					},
-				},
-			},
-		},
-		{
-			"$addFields": map[string]interface{}{
-				"is_done": map[string]interface{}{
-					"$cond": []interface{}{
-						map[string]interface{}{
-							"$and": []interface{}{
-								map[string]interface{}{
-									condition.BKDBIN: []interface{}{
-										"$stage", []interface{}{types.TicketStageDone, types.TicketStageTerminate},
-									},
-								},
-								map[string]interface{}{
-									condition.BKDBIN: []interface{}{
-										"$status", []interface{}{types.ApplyStatusDone, types.ApplyStatusTerminate},
-									},
-								},
-							},
-						},
-						1,
-						0,
-					},
-				},
-			},
-		},
-		{
-			pkg.BKDBGroup: map[string]interface{}{
-				"_id": map[string]interface{}{
-					"bk_biz_id":  "$bk_biz_id",
-					"year_month": "$year_month",
-				},
-				"total_orders": map[string]interface{}{pkg.BKDBSum: 1},
-				"done_orders":  map[string]interface{}{pkg.BKDBSum: "$is_done"},
-			},
-		},
-		{
-			"$addFields": map[string]interface{}{
-				"completion_rate": map[string]interface{}{
-					"$cond": []interface{}{
-						map[string]interface{}{condition.BKDBEQ: []interface{}{"$total_orders", 0}},
-						0.0,
-						map[string]interface{}{
-							"$multiply": []interface{}{
-								map[string]interface{}{
-									"$divide": []interface{}{"$done_orders", "$total_orders"},
-								},
-								100,
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			pkg.BKDBProject: map[string]interface{}{
-				"_id":          0,
-				"bk_biz_id":    "$_id.bk_biz_id",
-				"year_month":   "$_id.year_month",
-				"total_orders": "$total_orders",
-				"done_orders":  "$done_orders",
-				"completion_rate": map[string]interface{}{
-					"$round": []interface{}{"$completion_rate", 2},
-				},
-			},
-		},
-		{
-			pkg.BKDBSort: map[string]interface{}{
-				"completion_rate": -1,
-				"bk_biz_id":       1,
-				"year_month":      1,
-			},
-		},
+func appendChunkedNotInRules(rules *[]filter.RuleFactory, field string, values []string) {
+	if len(values) == 0 {
+		return
+	}
+
+	chunkSize := int(filter.DefaultMaxInLimit)
+	for i := 0; i < len(values); i += chunkSize {
+		end := i + chunkSize
+		if end > len(values) {
+			end = len(values)
+		}
+		*rules = append(*rules, tools.RuleNotIn(field, values[i:end]))
 	}
 }
 
@@ -617,33 +473,55 @@ func (op *operation) GetCompletionRateDetail(kt *kit.Kit,
 		return nil, err
 	}
 
-	baseFilter := buildCompletionRateDetailBaseFilter(startTime, endTime, excludeSuborderIDs)
-	pipeline := buildCompletionRateDetailPipeline(baseFilter)
-
-	aggRst := make([]*types.CompletionRateDetailItem, 0)
-	if err := model.Operation().ApplyOrder().AggregateAll(kt.Ctx, pipeline, &aggRst); err != nil {
-		logs.Errorf("failed to get completion rate detail statistics, err: %v, rid: %s", err, kt.Rid)
+	filterExpr, err := buildCompletionRateFilterExpression(startTime, endTime, excludeSuborderIDs)
+	if err != nil {
+		logs.Errorf("failed to build completion rate detail filter expression, err: %v, rid: %s",
+			err, kt.Rid)
 		return nil, err
 	}
 
-	return &types.GetCompletionRateDetailRst{
-		Details: aggRst,
-	}, nil
+	result, err := op.statistics.GetCompletionRateDetailStatistics(kt, filterExpr)
+	if err != nil {
+		logs.Errorf("failed to get completion rate detail statistics, startTime: %s, endTime: %s, "+
+			"err: %v, rid: %s", startTime, endTime, err, kt.Rid)
+		return nil, err
+	}
+
+	return convertCompletionRateDetailResult(result), nil
+}
+
+// convertCompletionRateDetailResult 转换 MySQL 结单率详情结果
+func convertCompletionRateDetailResult(
+	result *cvmapplyproto.ZiyanCvmApplyCompletionRateDetailResult,
+) *types.GetCompletionRateDetailRst {
+	rst := &types.GetCompletionRateDetailRst{
+		Details: make([]*types.CompletionRateDetailItem, 0),
+	}
+	if result == nil || len(result.Details) == 0 {
+		return rst
+	}
+
+	for _, stat := range result.Details {
+		if stat == nil {
+			continue
+		}
+		rst.Details = append(rst.Details, &types.CompletionRateDetailItem{
+			BkBizID:        stat.BkBizID,
+			YearMonth:      stat.YearMonth,
+			TotalOrders:    stat.TotalOrders,
+			DoneOrders:     stat.DoneOrders,
+			CompletionRate: stat.CompletionRate,
+		})
+	}
+
+	return rst
 }
 
 // GetApplyBizHostsStatistics 按日期范围统计业务维度的申请主机数据
 // startDate: 开始日期字符串，格式：2025-11-01
 // endDate: 结束日期字符串，格式：2025-11-30
 func (op *operation) GetApplyBizHostsStatistics(kt *kit.Kit, startDate, endDate time.Time) (
-	*types.ApplyBizHostsStatisticsResult, error) {
-
-	// 构建基础过滤条件
-	baseFilter := bson.M{
-		"create_at": bson.M{condition.BKDBGTE: startDate, condition.BKDBLTE: endDate},
-		"stage":     types.TicketStageDone,
-		"status":    types.ApplyStatusDone,
-		"source":    bson.M{condition.BKDBNE: enumor.ApplyTicketSrcPurchaseToResPool},
-	}
+	*cvmapplyproto.ZiyanCvmApplyBizHostsStatisticsResult, error) {
 
 	// 获取需要排除的suborder_id列表（例如：手动处理的订单）
 	excludeSuborderIDs, err := op.getExcludeSuborderIDs(kt, startDate, endDate)
@@ -652,53 +530,33 @@ func (op *operation) GetApplyBizHostsStatistics(kt *kit.Kit, startDate, endDate 
 		return nil, err
 	}
 
-	// 如果有需要排除的订单，添加到过滤条件中
 	if len(excludeSuborderIDs) > 0 {
 		logs.Infof("query biz host statistics exclude [%d] suborder_ids, rid: %s", len(excludeSuborderIDs), kt.Rid)
-		baseFilter["suborder_id"] = bson.M{condition.BKDBNIN: excludeSuborderIDs}
 	}
 
-	// 构建聚合管道
-	pipeline := bson.A{
-		// 第一步：过滤时间范围 + 排除特定订单
-		bson.M{pkg.BKDBMatch: baseFilter},
-		// 第二步：按业务ID分组，统计每个业务的申请成功的主机总数
-		bson.M{pkg.BKDBGroup: bson.M{
-			"_id":         "$bk_biz_id",
-			"order_count": bson.M{"$sum": 1},              // 申请单数量
-			"host_count":  bson.M{"$sum": "$success_num"}, // 成功交付的主机数
-		},
-		},
-		// 第三步：按成功交付主机总数降序排序
-		bson.M{pkg.BKDBSort: bson.M{"host_count": -1}},
-		// 第四步：格式化输出字段
-		bson.M{pkg.BKDBProject: bson.M{"_id": 0, "bk_biz_id": "$_id", "order_count": 1, "host_count": 1}},
-	}
-
-	var result []types.ApplyBizHostsStatisticsItem
-	err = model.Operation().ApplyOrder().AggregateAll(kt.Ctx, pipeline, &result)
+	// 构建过滤条件
+	filterExpr, err := op.buildSuborderFilterExpression(startDate, endDate, excludeSuborderIDs)
 	if err != nil {
-		logs.Errorf("failed to aggregate apply biz hosts statistics by date range, startDate: %s, endDate: %s, "+
+		logs.Errorf("failed to build filter expression, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	// 调用 DAO 方法进行统计查询
+	result, err := op.statistics.GetApplyBizHostsStatistics(kt, filterExpr)
+	if err != nil {
+		logs.Errorf("failed to get apply biz hosts statistics, startDate: %s, endDate: %s, "+
 			"err: %v, rid: %s", startDate, endDate, err, kt.Rid)
 		return nil, err
 	}
 
-	return &types.ApplyBizHostsStatisticsResult{Details: result}, nil
+	return result, nil
 }
 
 // GetApplyBizCpuCoresStatistics 按日期范围统计业务维度的申请核心数数据
 // startDate: 开始日期字符串，格式：2025-11-01
 // endDate: 结束日期字符串，格式：2025-11-30
 func (op *operation) GetApplyBizCpuCoresStatistics(kt *kit.Kit, startDate, endDate time.Time) (
-	*types.ApplyBizCpuCoresStatisticsResult, error) {
-
-	// 构建基础过滤条件
-	baseFilter := bson.M{
-		"create_at": bson.M{condition.BKDBGTE: startDate, condition.BKDBLTE: endDate},
-		"stage":     types.TicketStageDone,
-		"status":    types.ApplyStatusDone,
-		"source":    bson.M{condition.BKDBNE: enumor.ApplyTicketSrcPurchaseToResPool},
-	}
+	*cvmapplyproto.ZiyanCvmApplyBizCpuCoresStatisticsResult, error) {
 
 	// 获取需要排除的suborder_id列表（例如：手动处理的订单）
 	excludeSuborderIDs, err := op.getExcludeSuborderIDs(kt, startDate, endDate)
@@ -707,38 +565,26 @@ func (op *operation) GetApplyBizCpuCoresStatistics(kt *kit.Kit, startDate, endDa
 		return nil, err
 	}
 
-	// 如果有需要排除的订单，添加到过滤条件中
 	if len(excludeSuborderIDs) > 0 {
 		logs.Infof("query biz cpu cores statistics exclude [%d] suborder_ids, rid: %s", len(excludeSuborderIDs), kt.Rid)
-		baseFilter["suborder_id"] = bson.M{condition.BKDBNIN: excludeSuborderIDs}
 	}
 
-	// 构建聚合管道
-	pipeline := bson.A{
-		// 第一步：过滤时间范围 + 排除特定订单
-		bson.M{pkg.BKDBMatch: baseFilter},
-		// 第二步：按业务ID分组，统计每个业务的申请成功的主机总数
-		bson.M{pkg.BKDBGroup: bson.M{
-			"_id":                  "$bk_biz_id",
-			"order_count":          bson.M{"$sum": 1},                 // 申请单数量
-			"delivered_core_count": bson.M{"$sum": "$delivered_core"}, // 成功交付的主机数
-		},
-		},
-		// 第三步：按成功交付主机总数降序排序
-		bson.M{pkg.BKDBSort: bson.M{"delivered_core_count": -1}},
-		// 第四步：格式化输出字段
-		bson.M{pkg.BKDBProject: bson.M{"_id": 0, "bk_biz_id": "$_id", "order_count": 1, "delivered_core_count": 1}},
-	}
-
-	var result []types.ApplyBizCpuCoresStatisticsItem
-	err = model.Operation().ApplyOrder().AggregateAll(kt.Ctx, pipeline, &result)
+	// 构建过滤条件
+	filterExpr, err := op.buildSuborderFilterExpression(startDate, endDate, excludeSuborderIDs)
 	if err != nil {
-		logs.Errorf("failed to aggregate apply biz cpu core statistics by date range, startDate: %s, endDate: %s, "+
+		logs.Errorf("failed to build filter expression, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	// 调用 DAO 方法进行统计查询
+	result, err := op.statistics.GetApplyBizCpuCoresStatistics(kt, filterExpr)
+	if err != nil {
+		logs.Errorf("failed to get apply biz cpu cores statistics, startDate: %s, endDate: %s, "+
 			"err: %v, rid: %s", startDate, endDate, err, kt.Rid)
 		return nil, err
 	}
 
-	return &types.ApplyBizCpuCoresStatisticsResult{Details: result}, nil
+	return result, nil
 }
 
 // buildSuborderFilterExpression 构建子单查询的过滤表达式

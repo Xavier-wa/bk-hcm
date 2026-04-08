@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"hcm/pkg"
-	"hcm/pkg/api/core"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
@@ -797,23 +796,3 @@ func (req *GetApplyBizTopStatReq) ParseAndValidate() (time.Time, time.Time, erro
 
 	return start, end, nil
 }
-
-// ApplyBizHostsStatisticsItem 申请主机数-业务统计单项
-type ApplyBizHostsStatisticsItem struct {
-	BkBizID    int64 `json:"bk_biz_id" bson:"bk_biz_id"`
-	HostCount  uint  `json:"host_count" bson:"host_count"`
-	OrderCount int   `json:"order_count" bson:"order_count"`
-}
-
-// ApplyBizHostsStatisticsResult 申请主机数TOP10的业务统计结果
-type ApplyBizHostsStatisticsResult = core.ListResultT[ApplyBizHostsStatisticsItem]
-
-// ApplyBizCpuCoresStatisticsItem 申请核心数-业务统计单项
-type ApplyBizCpuCoresStatisticsItem struct {
-	BkBizID            int64 `json:"bk_biz_id" bson:"bk_biz_id"`
-	DeliveredCoreCount uint  `json:"delivered_core_count" bson:"delivered_core_count"`
-	OrderCount         int   `json:"order_count" bson:"order_count"`
-}
-
-// ApplyBizCpuCoresStatisticsResult 申请核心数TOP10的业务统计结果
-type ApplyBizCpuCoresStatisticsResult = core.ListResultT[ApplyBizCpuCoresStatisticsItem]

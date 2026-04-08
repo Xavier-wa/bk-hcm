@@ -71,12 +71,31 @@ func (d *Dispatcher) Run(workers int) {
 
 // runWorker deals with apply order
 func (d *Dispatcher) runWorker() error {
-	order, err := d.informer.Apply().Pop()
+	// Check if informer is available (only available on master node)
+	if d.informer == nil {
+		logs.Warnf("task scheduler informer dispatcher is not available")
+		time.Sleep(time.Second)
+		return nil
+	}
+
+	applyInformer := d.informer.Apply()
+	if applyInformer == nil {
+		logs.Warnf("task scheduler apply informer is not available")
+		time.Sleep(time.Second)
+		return nil
+	}
+
+	order, err := applyInformer.Pop()
 	if err != nil {
 		logs.Errorf("failed to deal apply order, for get apply order from informer err: %v", err)
 		return err
 	}
-	if err := d.dispatchHandler(core.NewBackendKit(), order); err != nil {
+	if order == "" {
+		logs.Warnf("shutdown to deal apply order, for get apply order from informer")
+		time.Sleep(time.Second)
+		return nil
+	}
+	if err = d.dispatchHandler(core.NewBackendKit(), order); err != nil {
 		logs.Errorf("failed to dispatch apply order %s, err: %v", order, err)
 		return err
 	}
