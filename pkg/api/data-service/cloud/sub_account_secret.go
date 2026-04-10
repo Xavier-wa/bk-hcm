@@ -20,9 +20,6 @@
 package cloud
 
 import (
-	"encoding/json"
-	"fmt"
-
 	"hcm/pkg/api/core"
 	coresass "hcm/pkg/api/core/cloud/sub-account-secret"
 	"hcm/pkg/criteria/enumor"
@@ -141,21 +138,6 @@ type SubAccountSecretExtListResp[T coresass.Extension] struct {
 // TCloudSubAccountSecretListExt is the data-service API name for coresass.TCloudSubAccountSecretListExt.
 type TCloudSubAccountSecretListExt = coresass.TCloudSubAccountSecretListExt
 
-// ParseTCloudBizListExtension decodes and validates Tencent Cloud biz list extension JSON.
-func ParseTCloudBizListExtension(f tabletypes.JsonField) (*TCloudSubAccountSecretListExt, error) {
-	if f.IsEmpty() {
-		return nil, nil
-	}
-	var ext TCloudSubAccountSecretListExt
-	if err := json.Unmarshal([]byte(f), &ext); err != nil {
-		return nil, fmt.Errorf("invalid extension json: %w", err)
-	}
-	if err := validator.Validate.Struct(&ext); err != nil {
-		return nil, err
-	}
-	return &ext, nil
-}
-
 // SubAccountSecretFilters defines biz-scoped list filters
 // Extension holds vendor-specific JSON (shape depends on vendor).
 type SubAccountSecretFilters struct {
@@ -167,7 +149,7 @@ type SubAccountSecretFilters struct {
 	Extension          tabletypes.JsonField           `json:"extension,omitempty"`
 }
 
-// SubAccountSecretJoinExtListReq defines sub account secret join-list request for data-service
+// SubAccountSecretJoinExtListReq defines subaccount secret join-list request for data-service
 // (secret joined with sub_account and account). Vendor must match the path; Extension JsonField is vendor-specific.
 type SubAccountSecretJoinExtListReq struct {
 	BkBizID                 int64 `json:"bk_biz_id" validate:"required"`

@@ -75,8 +75,7 @@ func (a *ApplicationOfCreateSubAccount) deliverForTCloud() (enumor.ApplicationSt
 		logs.Errorf("cloud sub account created (uin=%s) but local persistence failed, err: %v, rid: %s", cloudID,
 			err, a.Cts.Kit.Rid)
 		return enumor.DeliverError,
-			map[string]interface{}{
-				"error":    fmt.Sprintf("save sub account/account to db failed, err: %v", err),
+			map[string]interface{}{"error": fmt.Sprintf("save sub account/account to db failed, err: %v", err),
 				"cloud_id": converter.PtrToVal(cloudResult.Uin),
 			}, err
 	}
@@ -177,8 +176,8 @@ func (a *ApplicationOfCreateSubAccount) createTCloudSubAccountInCloud(ext *proto
 }
 
 func (a *ApplicationOfCreateSubAccount) registerAccountForTCloud(cloudID string, createResult *tcloudCreateCloudResult,
-	parentAccount *dataprotocloud.AccountGetResult[protocore.TCloudAccountExtension],
-) (string, error) {
+	parentAccount *dataprotocloud.AccountGetResult[protocore.TCloudAccountExtension]) (string, error) {
+
 	result, err := a.Client.DataService().TCloud.Account.Create(
 		a.Cts.Kit.Ctx,
 		a.Cts.Kit.Header(),
@@ -211,6 +210,7 @@ func (a *ApplicationOfCreateSubAccount) saveLocalSubAccount(cloudResult *tcloudC
 	ext *proto.TCloudSubAccountAddExtension,
 	parentAccount *dataprotocloud.AccountGetResult[protocore.TCloudAccountExtension],
 ) ([]string, string, error) {
+
 	cloudID := strconv.FormatUint(converter.PtrToVal(cloudResult.Uin), 10)
 
 	if ext == nil {
@@ -246,14 +246,15 @@ func (a *ApplicationOfCreateSubAccount) saveLocalSubAccount(cloudResult *tcloudC
 		&dssubaccount.CreateReq{
 			Items: []dssubaccount.CreateField{
 				{
-					CloudID:   cloudID,
-					Name:      a.req.Name,
-					Vendor:    a.Vendor(),
-					Site:      parentAccount.Site,
-					AccountID: a.req.AccountID,
-					Managers:  a.req.Managers,
-					BkBizIDs:  types.Int64Array{a.BkBizID()},
-					// 创建的三级账号为CurrentAccount类型
+					CloudID:               cloudID,
+					Name:                  a.req.Name,
+					Vendor:                a.Vendor(),
+					Site:                  parentAccount.Site,
+					AccountID:             a.req.AccountID,
+					Managers:              a.req.Managers,
+					BkBizIDs:              types.Int64Array{a.BkBizID()},
+					PermissionTemplateIDs: a.req.PermissionTemplateIDs,
+					// 创建的三级账号为CurrentAccount类型,
 					AccountType: string(enumor.CurrentAccount),
 					Email:       converter.ValToPtr(a.req.Email),
 					PhoneNum:    converter.ValToPtr(a.req.PhoneNum),
@@ -306,4 +307,8 @@ func (a *ApplicationOfCreateSubAccount) sendSubAccountMail(result *tcloudCreateC
 	}
 
 	return nil
+}
+
+func (a *ApplicationOfCreateSubAccount) attachPermissionToCloud() error {
+
 }
