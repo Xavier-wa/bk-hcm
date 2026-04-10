@@ -104,7 +104,8 @@ func (c *Controller) needToTransferDemand(kt *kit.Kit, t time.Time) (bool, error
 		logs.Errorf("failed to parse month range end, err: %v, month_range: %v, rid: %s", err, monthRange, kt.Rid)
 		return false, err
 	}
-	return monthEnd.Day() == t.Day(), nil
+
+	return t.Year() == monthEnd.Year() && t.Month() == monthEnd.Month() && t.Day() == monthEnd.Day(), nil
 }
 
 // listNearExpiredDemands 获取即将过期的预测且需求类型为 CVM
