@@ -35,7 +35,7 @@ func InitVpcService(cap *capability.Capability) {
 		ad:      cap.CloudAdaptor,
 		cs:      cap.ClientSet,
 		subnet:  subnet.NewSubnet(cap.ClientSet, cap.CloudAdaptor),
-		syncCli: ressync.NewClient(cap.CloudAdaptor, cap.ClientSet.DataService()),
+		syncCli: ressync.NewClient(cap.CloudAdaptor, cap.ClientSet.DataService(), cap.CrpCli),
 	}
 
 	h := rest.NewHandler()

@@ -807,3 +807,12 @@ type CpuTopology struct {
 	CoreCount     int64                  `json:"coreCount"`     // CPU核数
 	ThreadPerCore enumor.CPUThreadSwitch `json:"threadPerCore"` // 每核线程数(1:关闭 2:开启)
 }
+
+// QueryZoneCityListReq 查询可用区与城市映射请求
+type QueryZoneCityListReq struct {
+	ReqMeta `json:",inline"`
+	Params  *QueryZoneCityListParams `json:"params"`
+}
+
+// QueryZoneCityListParams 查询可用区与城市映射参数（接口返回全量数据，无需传参）
+type QueryZoneCityListParams struct{}

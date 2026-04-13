@@ -996,3 +996,24 @@ type LocalDiskTypeInfo struct {
 	Type string `json:"type"` // 类型，ROOT表示系统盘，DATA表示数据盘
 	Size int    `json:"size"` // 大小
 }
+
+// QueryZoneCityListResp 查询可用区与城市映射响应
+type QueryZoneCityListResp struct {
+	RespMeta `json:",inline"`
+	Result   []ZoneCityInfo `json:"result"`
+}
+
+// ZoneCityInfo CRP可用区与城市映射信息
+type ZoneCityInfo struct {
+	CiyID            int    `json:"ciyId"`
+	CityName         string `json:"cityName"`
+	Region           string `json:"region"`
+	AreaName         string `json:"areaName"`
+	Zone             string `json:"zone"`
+	ZoneID           int    `json:"zoneId"`
+	ZoneName         string `json:"zoneName"`
+	DefaultCampus    string `json:"defaultCampus"`
+	Country          string `json:"country"`
+	CustomhouseTitle string `json:"customhouseTitle"`
+	RegionName       string `json:"regionName"`
+}
