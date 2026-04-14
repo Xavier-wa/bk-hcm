@@ -997,6 +997,20 @@ type LocalDiskTypeInfo struct {
 	Size int    `json:"size"` // 大小
 }
 
+// ConfirmOrderForIEGResp CRP 预测单据审批响应
+type ConfirmOrderForIEGResp struct {
+	RespMeta `json:",inline"`
+	Result   *ConfirmOrderForIEGRst `json:"result"`
+}
+
+// ConfirmOrderForIEGRst CRP 预测单据审批结果
+type ConfirmOrderForIEGRst struct {
+	// Status 操作状态：0-成功，非0-失败
+	Status int `json:"status"`
+	// Message 操作消息
+	Message string `json:"message,omitempty"`
+}
+
 // QueryZoneCityListResp 查询可用区与城市映射响应
 type QueryZoneCityListResp struct {
 	RespMeta `json:",inline"`

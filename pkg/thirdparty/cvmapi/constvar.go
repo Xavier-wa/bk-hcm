@@ -182,6 +182,8 @@ const (
 	CvmQueryOrderList = "queryOrderList"
 	// CvmCbsPlanTransOrderMethod 需求转移接口
 	CvmCbsPlanTransOrderMethod = "transOrder"
+	// CvmCbsPlanConfirmOrderMethod 需求单据审批接口（自动过单）
+	CvmCbsPlanConfirmOrderMethod = "confirmOrderForIEG"
 	// CvmQueryZoneCityListMethod 查询可用区与城市映射接口
 	CvmQueryZoneCityListMethod = "queryZoneCityList"
 )

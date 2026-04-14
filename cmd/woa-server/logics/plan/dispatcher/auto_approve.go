@@ -1,0 +1,130 @@
+/*
+ * TencentBlueKing is pleased to support the open source community by making
+ * 蓝鲸智云 - 混合云管理平台 (BlueKing - Hybrid Cloud Management System) available.
+ * Copyright (C) 2022 THL A29 Limited,
+ * a Tencent company. All rights reserved.
+ * Licensed under the MIT License (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://opensource.org/licenses/MIT
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ *
+ * We undertake not to change the open source license (MIT license) applicable
+ *
+ * to the current version of the project delivered to anyone in the future.
+ */
+
+package dispatcher
+
+import (
+	"fmt"
+	"strings"
+
+	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
+	rpt "hcm/pkg/dal/table/resource-plan/res-plan-ticket"
+	"hcm/pkg/kit"
+	"hcm/pkg/logs"
+)
+
+// autoApproveCheckResult 自动过单条件检查结果
+type autoApproveCheckResult struct {
+	// CanAutoApprove 是否可自动过单
+	CanAutoApprove bool
+	// Reason 原因说明，不满足条件时包含详细原因
+	Reason string
+	// TotalCPUCores 整单CPU核心数
+	TotalCPUCores int64
+	// TotalCBSSizeGB 整单CBS容量（单位：GB）
+	TotalCBSSizeGB int64
+}
+
+// checkPredictionAutoApprove 检查预测单是否满足自动过单条件
+// 前置条件：只有"追加"类型的需求单才允许自动过单
+// 三个条件必须全部满足：
+// 1. 机型全部为标准型（DeviceFamily == "标准型"）
+// 2. 整单CPU ≤ 1500 核
+// 3. 整单CBS ≤ 45TB（46080GB）
+func checkPredictionAutoApprove(kt *kit.Kit, demands rpt.ResPlanDemands) *autoApproveCheckResult {
+	result := &autoApproveCheckResult{
+		CanAutoApprove: true,
+	}
+
+	var reasons []string
+	// 用于去重非标准机型，避免重复记录
+	nonStandardFamilies := make(map[string]struct{})
+
+	for _, demand := range demands {
+		// 判断需求类型：
+		// - 追加：Original == nil && Updated != nil
+		// - 删除：Original != nil && Updated == nil
+		// - 变更：Original != nil && Updated != nil
+		// 只有"追加"类型才允许自动过单
+		if demand.Original != nil {
+			// 删除或变更类型，不走自动过单，直接退出循环
+			result.CanAutoApprove = false
+			if demand.Updated == nil {
+				reasons = append(reasons, "包含删除类型需求")
+			} else {
+				reasons = append(reasons, "包含变更类型需求")
+			}
+			break
+		}
+
+		// 追加类型：Original == nil，检查 Updated
+		if demand.Updated == nil {
+			continue
+		}
+
+		// 统计 CPU 核心数
+		result.TotalCPUCores += demand.Updated.Cvm.CpuCore
+		// 统计 CBS 容量
+		result.TotalCBSSizeGB += demand.Updated.Cbs.DiskSize
+
+		// 条件1：检查机型是否为标准型（在遍历过程中直接检查）
+		// 只有机型为"标准型"才允许自动过单，空机型或其他机型都不允许
+		family := demand.Updated.Cvm.DeviceFamily
+		if family != string(enumor.DeviceFamilyStandard) {
+			// 使用 map 去重，避免重复记录相同的非标准机型
+			if _, exists := nonStandardFamilies[family]; !exists {
+				nonStandardFamilies[family] = struct{}{}
+				result.CanAutoApprove = false
+				if family == "" {
+					reasons = append(reasons, "包含未指定机型的需求")
+				} else {
+					reasons = append(reasons, fmt.Sprintf("包含非标准型机型: %s", family))
+				}
+			}
+		}
+	}
+
+	// 条件2：检查CPU核心数是否超出阈值
+	if result.TotalCPUCores > constant.AutoApproveCPUCoreThreshold {
+		result.CanAutoApprove = false
+		reasons = append(reasons, fmt.Sprintf("CPU核心数超出阈值: %d > %d",
+			result.TotalCPUCores, constant.AutoApproveCPUCoreThreshold))
+	}
+
+	// 条件3：检查CBS容量是否超出阈值
+	if result.TotalCBSSizeGB > constant.AutoApproveCBSSizeThreshold {
+		result.CanAutoApprove = false
+		reasons = append(reasons, fmt.Sprintf("CBS容量超出阈值: %dGB > %dGB",
+			result.TotalCBSSizeGB, constant.AutoApproveCBSSizeThreshold))
+	}
+
+	// 组装原因说明
+	if len(reasons) > 0 {
+		result.Reason = strings.Join(reasons, "; ")
+	} else if result.CanAutoApprove {
+		result.Reason = "满足自动过单条件"
+	}
+
+	logs.Infof("auto approve check result: can_auto_approve=%v, reason=%s, cpu=%d, cbs=%dGB, rid: %s",
+		result.CanAutoApprove, result.Reason, result.TotalCPUCores, result.TotalCBSSizeGB,
+		kt.Rid)
+
+	return result
+}
