@@ -3097,6 +3097,10 @@ func (s *scheduler) CheckInheritedHost(kt *kit.Kit, param *types.CheckInheritedH
 		AssetID: param.AssetID,
 		BizID:   param.BizID,
 	}
+	// 机房裁撤仅校验主机存在性，不校验归属业务
+	if param.RequireType == enumor.RequireTypeDissolve {
+		ccReq.BizID = 0
+	}
 	host, err := s.getInheritedHostFromCC(kt, ccReq)
 	if err != nil {
 		logs.Errorf("get rolling server host from bkcc failed, err: %v, rid: %s", err, kt.Rid)
