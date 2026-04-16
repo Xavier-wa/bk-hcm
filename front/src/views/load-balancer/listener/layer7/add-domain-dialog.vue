@@ -192,7 +192,7 @@ const handleClosed = () => {
           <bk-input v-model="formModel.url" />
         </bk-form-item>
         <bk-form-item label="均衡方式" required property="scheduler">
-          <bk-select v-model="formModel.scheduler">
+          <bk-select v-model="formModel.scheduler" filterable>
             <template v-for="scheduler in SCHEDULER_LIST" :key="scheduler">
               <bk-option :id="scheduler" :name="SCHEDULER_NAME[scheduler]" />
             </template>

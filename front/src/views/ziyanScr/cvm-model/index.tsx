@@ -237,6 +237,7 @@ export default defineComponent({
             <FormItem label='实例族'>
               <bk-select
                 v-model={filter.value.device_family}
+                filterable
                 multiple
                 clearable
                 collapse-tags
@@ -294,7 +295,7 @@ export default defineComponent({
               </bk-select>
             </FormItem>
             <FormItem label='机型代次'>
-              <bk-select v-model={filter.value.generation_type} multiple clearable>
+              <bk-select v-model={filter.value.generation_type} multiple clearable filterable>
                 {options.value.generation_types.map((item) => (
                   <bk-option key={item} value={item} label={item}></bk-option>
                 ))}

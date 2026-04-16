@@ -233,6 +233,7 @@ export default defineComponent({
               content: (
                 <bk-select
                   v-model={filter.value.device_group}
+                  filterable
                   multiple
                   clearable
                   collapse-tags

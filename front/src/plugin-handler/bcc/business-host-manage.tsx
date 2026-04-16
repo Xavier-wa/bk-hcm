@@ -106,17 +106,17 @@ const useColumns = ({ type = 'businessHostColumns', isSimpleShow = false, extra 
                 ),
                 <Dropdown
                   isShow={currentOperateRowIndex.value === index}
-                  trigger='manual'
+                  trigger='click'
                   popoverOptions={{
                     renderType: 'shown',
+                    clickContentAutoHide: true,
+                    onAfterShow: () => showDropdown(index),
                     onAfterHidden: hideDropdown,
-                    forceClickoutside: true,
                   }}>
                   {{
                     default: () => (
                       <div
-                        class={[`more-action${currentOperateRowIndex.value === index ? ' current-operate-row' : ''}`]}
-                        onClick={() => showDropdown(index)}>
+                        class={[`more-action${currentOperateRowIndex.value === index ? ' current-operate-row' : ''}`]}>
                         <i class={'hcm-icon bkhcm-icon-more-fill'}></i>
                       </div>
                     ),

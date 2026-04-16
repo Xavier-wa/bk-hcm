@@ -121,6 +121,7 @@ export default defineComponent({
           </bk-alert>
           <bk-form-item label={t('预测用途')} property='demand_class' required class={cssModule['forecast-type']}>
             <bk-select
+              filterable
               clearable
               loading={isLoadingDemandClasses.value}
               modelValue={props.modelValue.demand_class}

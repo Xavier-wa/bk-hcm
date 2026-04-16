@@ -376,7 +376,7 @@ const { beforeClose } = useSideslider(formModel);
       <!-- 新增 -->
       <template v-if="!isEdit">
         <bk-form-item label="均衡方式" required property="scheduler">
-          <bk-select v-model="formModel.scheduler">
+          <bk-select v-model="formModel.scheduler" filterable>
             <template v-for="scheduler in SCHEDULER_LIST" :key="scheduler">
               <!-- 七层支持IP Hash，四层不支持 -->
               <bk-option

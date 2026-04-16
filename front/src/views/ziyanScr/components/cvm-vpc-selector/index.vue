@@ -107,7 +107,7 @@ defineExpose({ findCvmVpcByVpcId });
 </script>
 
 <template>
-  <Select class="w600" v-model="selectedId" :disabled="props.disabled">
+  <Select class="w600" v-model="selectedId" :disabled="props.disabled" filterable>
     <Option
       v-for="{ id, vpc_id: vpcId, vpc_name: vpcName } in displayOptionList"
       :key="id"
