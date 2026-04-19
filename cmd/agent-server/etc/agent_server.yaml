@@ -1,0 +1,159 @@
+# 服务监听与注册配置（对齐 cc.Network）
+# bindIP 必须填写本机实际 IP（不能是 0.0.0.0），供 web-server 服务发现使用
+network:
+  bindIP:
+  port: 8080
+  tls:
+    insecureSkipVerify:
+    certFile:
+    keyFile:
+    caFile:
+    password:
+
+# 服务注册配置（etcd，对齐 cc.Service）
+service:
+  etcd:
+    # endpoints is a list of etcd URLs.
+    endpoints:
+      - 127.0.0.1:2379
+    # dialTimeoutMS is the timeout milliseconds for failing to establish a connection.
+    dialTimeoutMS:
+    # username is a user's name for authentication.
+    username:
+    # password is a password for authentication.
+    password:
+    tls:
+      insecureSkipVerify:
+      certFile:
+      keyFile:
+      caFile:
+      password:
+
+# 日志配置（对齐 cc.LogOption）
+log:
+  logDir: "${TRPC_CLAW_STATE_DIR}/logs"
+  maxPerFileSizeMB: 10  # MB
+  maxFileNum: 10        # 最多保留文件数
+  toStdErr: false
+  alsoToStdErr: true    # 同时输出到 stdout 方便开发调试
+  verbosity: 0
+
+# AGUI 持久化存储配置。
+# 配置 MySQL DSN 后，AGUI 的聊天历史（session）和长期记忆（memory）将持久化到 MySQL。
+# 若不配置（留空），session 使用内存存储（进程重启后丢失），memory 功能禁用。
+storage:
+  session:
+    # dsn: "user:password@tcp(host:3306)/dbname?charset=utf8mb4&parseTime=true"
+    # tablePrefix: "hcm_"   # 可选，所有 session 表名的前缀
+    # skipDBInit: false      # false=启动时自动建表；true=表由外部管理，跳过建表
+    summary:
+      # enabled: false         # true=开启 LLM 自动摘要（需配置 aidev 中的 LLM 模型）
+      # policy: "any"          # 触发策略：any=满足任一阈值即触发；all=所有阈值均满足才触发
+      # eventThreshold: 20     # 未摘要的事件数超过该值时触发（0=不使用此条件）
+      # tokenThreshold: 4000   # 未摘要内容的估算 token 数超过该值时触发（0=不使用此条件）
+      # idleThreshold: "30m"   # 会话空闲超过该时长后触发，如 "30m"、"1h"（空=不使用此条件）
+      # maxWords: 200          # 生成摘要的最大字数上限（0=不限制）
+  memory:
+    # dsn: "user:password@tcp(host:3306)/dbname?charset=utf8mb4&parseTime=true"
+    # tableName: "hcm_memories"  # 可选，默认为 "memories"
+    # skipDBInit: false           # false=启动时自动建表；true=表由外部管理，跳过建表
+    # limit: 100                  # 每个用户最多保留的记忆条数，0 表示使用默认值 100
+
+# aidev 配置兼容 OpenAI API 协议的蓝鲸 AI 网关。
+aidev:
+  # Endpoints is a seed list of host:port addresses of aidev nodes.
+  endpoints:
+    - https://path/to/apigw/test
+  # AppCode is the BlueKing app code of irisbot to request aidev.
+  appCode: aidev-iris
+  # AppSecret is the BlueKing app secret of irisbot to request aidev.
+  appSecret: xxxxx
+  # User is the BlueKing user of irisbot to request aidev.
+  user:
+  # BkTicket is the BlueKing access ticket of irisbot to request aidev.
+  bkTicket:
+  # defines tls related options.
+  tls:
+    # server should be accessed without verifying the TLS certificate.
+    insecureSkipVerify:
+    # server requires TLS client certificate authentication.
+    certFile:
+    # server requires TLS client certificate authentication.
+    keyFile:
+    # trusted root certificates for server.
+    caFile:
+    # the password to decrypt the certificate.
+    password:
+
+# AG-UI 协议配置。
+# appName：会话数据在存储后端的命名空间，建议设置。
+# allowedModels：允许使用的 AI 模型列表，留空则使用平台默认列表
+#   （见 pkg/criteria/enumor/ai_model.go DefaultAllowedAIModels）。
+#
+# AG-UI 端点说明（--enable-agui 开启后生效）：
+#   POST /api/v1/agent/agui        主聊天接口（SSE 流式返回 AG-UI 协议事件）
+#   POST /api/v1/agent/cancel      取消正在进行的 Run（请求体与主接口相同，threadId 必填）
+#                                   200=成功取消；404=该 threadId 无正在运行的 Run
+#   POST /api/v1/agent/history     历史消息回放（配置 storage.session.dsn 后自动开启）
+# 注：客户端断开 SSE 连接时，服务端会自动取消对应的 LLM 调用。
+agui:
+  enable: true
+  path: "/api/v1/agent/agui"
+  defaultModel: "gpt-4o"
+  appName: hcm-agent
+  # stream: false        # true=流式输出，每个 token 单独推送一个 TEXT_MESSAGE_CONTENT SSE 事件（逐字打字机效果）
+  #                      # false=非流式输出，LLM 返回完整响应后一次性推送（默认）
+  # allowedModels:
+  #   - deepseek-v3
+  #   - dsv32-thinking
+  #   - dsv32
+  #   - deepseek-r1
+  #   - hunyuan2-thinking
+  #   - hunyuan-turbo
+  #   - gptoss-120b
+  #   - qwen3
+  #   - qwen3-nothinking
+
+# AGUI Agent 工具配置。
+# 在此配置的 MCP toolset 和 skill 将直接注入到 AGUI agent 的工具链中。
+tools:
+  # bkAIDev 提供 BK 应用凭证，供 type 为 "bkaidev" 的 MCP toolset 使用。
+  # 当 MCP 条目设置 type: "bkaidev" 时，服务器会在每次 MCP 请求中自动注入
+  # X-Bkapi-Authorization 头，其中 bk_ticket 来自请求 Cookie 中的 bk_ticket 字段。
+  # bkAIDev:
+  #   appCode: ""      # BK 应用编码（bk_app_code）
+  #   appSecret: ""    # BK 应用密钥（bk_app_secret）
+
+  # MCP toolset 列表，支持 stdio / sse / streamable_http 三种传输方式。
+  # 每个条目对应一个独立的 MCP server。
+  # mcp:
+  #   - name: "my-mcp"             # toolset 唯一标识（用于冲突解决）
+  #     type: ""                   # 可选类型：留空=普通；bkaidev=自动注入 BK 鉴权头
+  #     transport: "streamable_http"  # 传输方式：stdio | sse | streamable_http
+  #     serverUrl: "http://localhost:3000/mcp"   # MCP server URL（sse/streamable_http 必填）
+  #     timeout: "30s"             # 每次请求超时，留空表示不限制
+  #     # headers 用于 HTTP 鉴权（鉴权字段稍后补充）
+  #     # headers:
+  #     #   Authorization: "Bearer your-token"
+  #     # filter 限制暴露给 agent 的工具范围
+  #     # filter:
+  #     #   mode: "include"        # include=白名单；exclude=黑名单
+  #     #   names:
+  #     #     - "tool_a"
+  #     #     - "tool_b"
+  #     # reconnect 配置 session 自动重连
+  #     # reconnect:
+  #     #   enabled: true
+  #     #   maxAttempts: 3
+  #   - name: "local-mcp"
+  #     transport: "stdio"
+  #     command: "/usr/local/bin/my-mcp-server"
+  #     args:
+  #       - "--flag"
+  #       - "value"
+
+  # skill 仓库配置。指向包含 SKILL.md 文件的目录，每个子目录为一个 skill。
+  # skills:
+  #   root: "./skills"             # 主 skill 目录
+  #   extraDirs:                   # 可选额外目录（优先级低于 root）
+  #     - "/opt/hcm/skills"

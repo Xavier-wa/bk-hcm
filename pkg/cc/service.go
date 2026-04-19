@@ -66,6 +66,8 @@ const (
 	TaskServerName Name = "task-server"
 	// AccountServerName is account server's name
 	AccountServerName Name = "account-server"
+	// AgentServerName is agent server's name
+	AgentServerName Name = "agent-server"
 )
 
 // Setting defines all service Setting interface.
@@ -827,5 +829,219 @@ func (s *PurchaseToResourcePool) validate() error {
 		return fmt.Errorf("bizID should not be empty")
 	}
 
+	return nil
+}
+
+// AgentStorage defines persistent storage settings for the AGUI runner.
+// When session DSN is empty, chat history uses in-memory storage (lost on restart).
+// When memory DSN is empty, long-term memory is disabled.
+type AgentStorage struct {
+	Session AgentSessionStorage `yaml:"session"`
+	Memory  AgentMemoryStorage  `yaml:"memory"`
+}
+
+// AgentSessionStorage defines MySQL settings for AGUI chat history (session) persistence.
+type AgentSessionStorage struct {
+	// DSN is the MySQL connection string. Leave empty to use in-memory storage.
+	// Example: "user:password@tcp(host:3306)/dbname?charset=utf8mb4&parseTime=true"
+	DSN string `yaml:"dsn"`
+	// TablePrefix is an optional prefix for all session table names (e.g. "hcm_").
+	TablePrefix string `yaml:"tablePrefix"`
+	// SkipDBInit skips automatic table creation. Set true if tables are managed externally.
+	SkipDBInit bool `yaml:"skipDBInit"`
+	// Summary configures automatic LLM-based session summarization.
+	// Requires the AGUI LLM model to be configured (aidev section).
+	Summary AgentSessionSummary `yaml:"summary"`
+}
+
+// AgentSessionSummary configures LLM-based session summarization for the AGUI runner.
+// When enabled, the configured LLM (aidev section) compresses old conversation history
+// into a summary once the configured thresholds are met, preventing context-window overflow.
+type AgentSessionSummary struct {
+	// Enabled turns on automatic session summarization. Default: false.
+	Enabled bool `yaml:"enabled"`
+	// Policy controls how multiple thresholds combine: "any" (OR) or "all" (AND). Default: "any".
+	Policy string `yaml:"policy"`
+	// EventThreshold triggers summarization when un-summarised event count exceeds this value.
+	// 0 means this condition is not used.
+	EventThreshold int `yaml:"eventThreshold"`
+	// TokenThreshold triggers summarization when estimated token count exceeds this value.
+	// 0 means this condition is not used.
+	TokenThreshold int `yaml:"tokenThreshold"`
+	// IdleThreshold triggers summarization when the session has been idle for this long.
+	// Use Go duration format, e.g. "30m", "1h". Empty means this condition is not used.
+	IdleThreshold string `yaml:"idleThreshold"`
+	// MaxWords caps the word count of the generated summary. 0 means no cap.
+	MaxWords int `yaml:"maxWords"`
+}
+
+// AgentMemoryStorage defines MySQL settings for AGUI long-term memory persistence.
+type AgentMemoryStorage struct {
+	// DSN is the MySQL connection string. Leave empty to disable memory persistence.
+	DSN string `yaml:"dsn"`
+	// TableName is the table name for storing memories. Default: "memories".
+	TableName string `yaml:"tableName"`
+	// SkipDBInit skips automatic table creation. Set true if tables are managed externally.
+	SkipDBInit bool `yaml:"skipDBInit"`
+	// Limit is the maximum number of memory entries per user. Default: 100.
+	Limit int `yaml:"limit"`
+}
+
+// AgentMCPFilter configures MCP tool name filtering for the AGUI agent.
+type AgentMCPFilter struct {
+	// Mode is the filter mode: "include" (default) keeps only listed tools,
+	// "exclude" removes listed tools.
+	Mode string `yaml:"mode"`
+	// Names lists the tool names to include or exclude.
+	Names []string `yaml:"names"`
+}
+
+// AgentMCPReconnect configures automatic MCP session reconnection.
+type AgentMCPReconnect struct {
+	// Enabled turns on auto-reconnect when the session expires or drops.
+	Enabled bool `yaml:"enabled"`
+	// MaxAttempts is the maximum reconnect attempts per operation (1-10, default: 3).
+	MaxAttempts int `yaml:"maxAttempts"`
+}
+
+// AgentMCPToolSet defines one MCP server toolset for the AGUI agent.
+type AgentMCPToolSet struct {
+	// Name is a unique label for this toolset (used for conflict resolution).
+	Name string `yaml:"name"`
+	// Type identifies the toolset category. When set to "bkaidev", the server
+	// automatically injects an X-Bkapi-Authorization header on every MCP request
+	// using tools.bkAIDev credentials (appCode, appSecret) and the bk_ticket
+	// extracted from the incoming HTTP request Cookie.
+	Type string `yaml:"type"`
+	// Transport is the connection method: "stdio", "sse", or "streamable_http".
+	Transport string `yaml:"transport"`
+	// ServerURL is the MCP server base URL (required for sse / streamable_http).
+	ServerURL string `yaml:"serverUrl"`
+	// Headers are extra HTTP headers sent on every request (e.g. auth tokens).
+	Headers map[string]string `yaml:"headers"`
+	// Command is the executable to launch (required for stdio).
+	Command string `yaml:"command"`
+	// Args are the arguments passed to the stdio command.
+	Args []string `yaml:"args"`
+	// Timeout is the per-request deadline, e.g. "10s", "30s". Empty means no timeout.
+	Timeout string `yaml:"timeout"`
+	// Filter optionally restricts which tools from this MCP server are exposed.
+	Filter *AgentMCPFilter `yaml:"filter"`
+	// Reconnect configures automatic session reconnection on failure.
+	Reconnect *AgentMCPReconnect `yaml:"reconnect"`
+}
+
+// AgentSkillsConfig configures the AGUI agent's skill repository.
+type AgentSkillsConfig struct {
+	// Root is the primary skills directory (each sub-directory with a SKILL.md is a skill).
+	Root string `yaml:"root"`
+	// ExtraDirs lists additional skill directories scanned at lower precedence.
+	ExtraDirs []string `yaml:"extraDirs"`
+}
+
+// AgentBKAIDevConfig holds BK application credentials used by MCP toolsets
+// of type "bkaidev" to construct the X-Bkapi-Authorization header.
+type AgentBKAIDevConfig struct {
+	// AppCode is the BK application code (bk_app_code).
+	AppCode string `yaml:"appCode"`
+	// AppSecret is the BK application secret (bk_app_secret).
+	AppSecret string `yaml:"appSecret"`
+}
+
+// AgentToolsConfig holds all tool configurations injected into the AGUI agent.
+type AgentToolsConfig struct {
+	// MCPToolSets lists MCP server toolsets to expose to the AGUI agent.
+	MCPToolSets []AgentMCPToolSet `yaml:"mcp"`
+	// Skills configures the filesystem-backed skill repository.
+	Skills *AgentSkillsConfig `yaml:"skills"`
+	// BKAIDev provides BK application credentials for MCP toolsets with type "bkaidev".
+	// When an MCP toolset has type: "bkaidev", the server injects X-Bkapi-Authorization
+	// on every request using these credentials combined with the per-request bk_ticket
+	// extracted from the incoming HTTP request Cookie.
+	BKAIDev *AgentBKAIDevConfig `yaml:"bkAIDev"`
+}
+
+// AgentAGUI configures the AG-UI protocol endpoint and its optional history feature.
+type AgentAGUI struct {
+	// Enable enables the AG-UI protocol endpoint.
+	// When true, the AG-UI HTTP handler is mounted on the specified Path.
+	Enable bool `yaml:"enable"`
+	// AppName namespaces all session data in the backend storage.
+	// Recommended to set in all deployments.
+	// Example: "hcm-agent"
+	AppName string `yaml:"appName"`
+	// AllowedModels is the list of AI model identifiers that the platform permits.
+	// When empty, the platform default list (pkg/criteria/enumor.DefaultAllowedAIModels) is used.
+	// Example: ["gpt-4o", "deepseek-v3", "hunyuan-turbo"]
+	AllowedModels []string `yaml:"allowedModels"`
+	// DefaultModel is the default LLM model identifier used by the agent.
+	// When empty, the first model in AllowedModels is used as default.
+	DefaultModel string `yaml:"defaultModel"`
+	// Stream enables token-level streaming when calling the upstream LLM.
+	// When true, each token is forwarded to the client as a separate TEXT_MESSAGE_CONTENT
+	// SSE event, producing a real-time typewriter effect.
+	// When false (default), the LLM response is returned as a single event after completion.
+	Stream bool `yaml:"stream"`
+}
+
+func (a *AgentAGUI) trySetDefault() {
+	// TODO
+}
+
+// AgentServerSetting defines agent server used setting options.
+type AgentServerSetting struct {
+	Network Network          `yaml:"network"`
+	Service Service          `yaml:"service"`
+	Log     LogOption        `yaml:"log"`
+	AIDev   AIDevConfig      `yaml:"aidev"`
+	Storage AgentStorage     `yaml:"storage"`
+	Tools   AgentToolsConfig `yaml:"tools"`
+	AGUI    AgentAGUI        `yaml:"agui"`
+}
+
+// trySetFlagBindIP try set flag bind ip.
+func (s *AgentServerSetting) trySetFlagBindIP(ip net.IP) error {
+	return s.Network.trySetFlagBindIP(ip)
+}
+
+// trySetDefault set the AgentServerSetting default value if user not configured.
+func (s *AgentServerSetting) trySetDefault() {
+	s.Network.trySetDefault()
+	s.Service.trySetDefault()
+	s.Log.trySetDefault()
+	s.AGUI.trySetDefault()
+}
+
+// Validate AgentServerSetting option.
+func (s AgentServerSetting) Validate() error {
+	if err := s.Network.validate(); err != nil {
+		return err
+	}
+
+	if err := s.Service.validate(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// TenantEnable returns false as agent-server does not support multi-tenancy.
+func (s *AgentServerSetting) TenantEnable() bool {
+	return false
+}
+
+// AIDevConfig holds the configuration for the AIDev API gateway.
+type AIDevConfig struct {
+	ApiGateway `yaml:",inline"`
+	// APIKey is the optional API key (Bearer token) for the gateway.
+	// Leave empty if the gateway does not require one.
+	APIKey string `yaml:"apiKey"`
+}
+
+// Validate AIDevConfig option.
+func (s *AIDevConfig) Validate() error {
+	if err := s.ApiGateway.validate(); err != nil {
+		return err
+	}
 	return nil
 }

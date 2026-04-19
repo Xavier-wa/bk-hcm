@@ -81,6 +81,8 @@ func loadFromFile(filename string) (Setting, error) {
 		s = new(WoaServerSetting)
 	case AccountServerName:
 		s = new(AccountServerSetting)
+	case AgentServerName:
+		s = new(AgentServerSetting)
 	default:
 		return nil, fmt.Errorf("unknown %s service name", ServiceName())
 	}

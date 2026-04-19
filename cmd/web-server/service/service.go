@@ -206,6 +206,7 @@ func (s *Service) ListenAndServeRest() error {
 	container.Add(s.proxyApiSet("/api/v1/cloud"))
 	container.Add(s.proxyApiSet("/api/v1/woa"))
 	container.Add(s.proxyApiSet("/api/v1/account"))
+	container.Add(s.proxyApiSet("/api/v1/agent"))
 	container.Add(s.indexSet())
 
 	root.Handle("/", container)
