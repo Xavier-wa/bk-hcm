@@ -885,6 +885,22 @@ type AgentMemoryStorage struct {
 	SkipDBInit bool `yaml:"skipDBInit"`
 	// Limit is the maximum number of memory entries per user. Default: 100.
 	Limit int `yaml:"limit"`
+	// AutoExtract enables automatic LLM-based memory extraction after each Run.
+	// When true, the agent calls an LLM after every conversation turn to identify
+	// memorable facts and persist them to the memories table.
+	// Requires DSN to be configured.
+	AutoExtract bool `yaml:"autoExtract"`
+	// AutoExtractMessages triggers extraction only when the number of new messages
+	// exceeds this value. 0 means no message-count gate (always consider extracting).
+	AutoExtractMessages int `yaml:"autoExtractMessages"`
+	// AutoExtractInterval triggers extraction only when the given duration has
+	// elapsed since the last extraction. 0 / empty means no interval gate.
+	// Accepts Go duration strings, e.g. "30m", "1h".
+	AutoExtractInterval string `yaml:"autoExtractInterval"`
+	// AutoExtractPolicy combines the above checkers: "any" (OR, default) or "all" (AND).
+	// "any"  – extract when at least one enabled checker passes.
+	// "all"  – extract only when every enabled checker passes.
+	AutoExtractPolicy string `yaml:"autoExtractPolicy"`
 }
 
 // AgentMCPFilter configures MCP tool name filtering for the AGUI agent.
@@ -961,6 +977,21 @@ type AgentToolsConfig struct {
 	BKAIDev *AgentBKAIDevConfig `yaml:"bkAIDev"`
 }
 
+// AgentPromptConfig configures the prompt files loaded into the AGUI agent.
+// Both fields accept absolute paths or paths relative to the process working directory.
+type AgentPromptConfig struct {
+	// SystemPromptFile is the path to a Markdown/text file whose content becomes the
+	// GlobalInstruction (system_prompt). It is prepended to every LLM request and
+	// is ideal for fixed identity definitions and hard constraints.
+	// Empty means no system prompt is injected.
+	SystemPromptFile string `yaml:"systemPromptFile"`
+	// InstructionFile is the path to a Markdown/text file whose content becomes the
+	// Instruction. It is appended to every LLM request and supports {user:xxx}
+	// state-injection placeholders for dynamic per-user context.
+	// Empty means no instruction is injected.
+	InstructionFile string `yaml:"instructionFile"`
+}
+
 // AgentAGUI configures the AG-UI protocol endpoint and its optional history feature.
 type AgentAGUI struct {
 	// Enable enables the AG-UI protocol endpoint.
@@ -982,6 +1013,8 @@ type AgentAGUI struct {
 	// SSE event, producing a real-time typewriter effect.
 	// When false (default), the LLM response is returned as a single event after completion.
 	Stream bool `yaml:"stream"`
+	// Prompt configures the prompt files (system_prompt and instruction) for the AGUI agent.
+	Prompt AgentPromptConfig `yaml:"prompt"`
 }
 
 func (a *AgentAGUI) trySetDefault() {

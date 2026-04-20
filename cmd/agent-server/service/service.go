@@ -34,6 +34,8 @@ import (
 
 	"hcm/cmd/agent-server/logics"
 	"hcm/cmd/agent-server/service/capability"
+	"hcm/cmd/agent-server/service/memory"
+	"hcm/cmd/agent-server/service/session"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
@@ -45,6 +47,7 @@ import (
 	"hcm/pkg/runtime/shutdown"
 	"hcm/pkg/serviced"
 	"hcm/pkg/tools/ssl"
+	"hcm/pkg/tools/uuid"
 
 	"github.com/emicklei/go-restful/v3"
 	"trpc.group/trpc-go/trpc-agent-go/agent"
@@ -195,6 +198,13 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 		return nil
 	}
 
+	//   - "/api/v1/agent/cancel" → AG-UI cancel handler (only when opt.EnableAGUI is true)
+	//   - "/api/v1/agent/history" → AG-UI history handler (only when session backend is configured)
+	//   - "/api/v1/agent/sessions/{thread_id}/context-stats" → session context stats (only when session is configured)
+	//   - "POST /api/v1/agent/memory" → add a memory entry (only when memory backend is configured)
+	//   - "GET /api/v1/agent/memory" → list / search memory entries (only when memory backend is configured)
+	//   - "DELETE /api/v1/agent/memory/{memory_id}" → delete a memory entry (only when memory backend is configured)
+	//   - "DELETE /api/v1/agent/memory" → clear all memory entries (only when memory backend is configured)
 	aguiOpts := []agui.Option{
 		agui.WithPath(aguiPath),
 		// Cancel endpoint: clients POST {threadId} to abort an in-progress run.
@@ -249,6 +259,10 @@ func (s *Service) apiSet() *restful.Container {
 		ClientSet:  s.clientSet,
 	}
 
+	appName := cc.AgentServer().AGUI.AppName
+	memory.InitService(c, s.runTime.MemorySvc(), appName)
+	session.InitService(c, s.runTime.SessionSvc(), appName)
+
 	return restful.NewContainer().Add(c.WebService)
 }
 
@@ -295,6 +309,10 @@ func (s *Service) Alivez(w http.ResponseWriter, r *http.Request) {
 //   - X-Bk-Ticket                          → logics.WithBKTicket
 func bkapiContextMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get(constant.RidKey) == "" {
+			r.Header.Set(constant.RidKey, uuid.UUID())
+		}
+
 		ctx := r.Context()
 		if username := r.Header.Get(constant.UserKey); username != "" {
 			ctx = logics.WithBKUsername(ctx, username)

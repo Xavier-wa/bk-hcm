@@ -22,9 +22,12 @@
 package logics
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +42,7 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/agent/llmagent"
 	localexec "trpc.group/trpc-go/trpc-agent-go/codeexecutor/local"
 	"trpc.group/trpc-go/trpc-agent-go/memory"
+	"trpc.group/trpc-go/trpc-agent-go/memory/extractor"
 	memmysql "trpc.group/trpc-go/trpc-agent-go/memory/mysql"
 	"trpc.group/trpc-go/trpc-agent-go/model"
 	"trpc.group/trpc-go/trpc-agent-go/model/openai"
@@ -66,6 +70,12 @@ type Runtime struct {
 // Returns nil when the MySQL session backend is not configured (in-memory mode).
 func (rt *Runtime) SessionSvc() session.Service {
 	return rt.aguiSessionSvc
+}
+
+// MemorySvc returns the memory service used by the AGUI runner.
+// Returns nil when the MySQL memory backend is not configured.
+func (rt *Runtime) MemorySvc() memory.Service {
+	return rt.aguiMemorySvc
 }
 
 // New initialises the Agent Runtime from the given options.
@@ -112,12 +122,16 @@ func New() (*Runtime, error) {
 		return nil, fmt.Errorf("build skill tools: %w", err)
 	}
 
+	systemPrompt := loadPromptFile(aguiCfg.Prompt.SystemPromptFile)
+	instruction := loadPromptFile(aguiCfg.Prompt.InstructionFile)
+
 	// When any MCP toolset requires per-request authentication (e.g. type "bkaidev"),
 	// disable eager tool loading at construction time. Tools are fetched lazily on
 	// the first agent run, at which point the real request context (with bk_ticket)
 	// is available so MCP session initialization can authenticate successfully.
 	refreshOnRun := hasBKAIDevToolSet()
-	agt := newAgentWithModel(defaultMdl, modelsMap, aguiCfg.Stream, skillTools, mcpToolSets, refreshOnRun)
+	agt := newAgentWithModel(defaultMdl, modelsMap, aguiCfg.Stream, systemPrompt, instruction,
+		skillTools, mcpToolSets, refreshOnRun)
 	runnerOpts := buildRunnerOpts(sessionSvc, memorySvc)
 	agUIRunner := runner.NewRunner(agt.Info().Name, agt, runnerOpts...)
 
@@ -127,6 +141,20 @@ func New() (*Runtime, error) {
 		aguiMemorySvc:   memorySvc,
 		aguiMCPToolSets: mcpToolSets,
 	}, nil
+}
+
+// loadPromptFile reads a prompt text file and returns its trimmed content.
+// Returns an empty string when path is empty or the file cannot be read.
+func loadPromptFile(path string) string {
+	if path = strings.TrimSpace(path); path == "" {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		logs.Warnf("failed to load prompt file %q: %v", path, err)
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // buildStorageServices creates MySQL-backed session and memory services when DSNs are
@@ -171,6 +199,11 @@ func buildStorageServices(mdl model.Model) (session.Service, memory.Service, err
 		if cfg.Memory.Limit > 0 {
 			opts = append(opts, memmysql.WithMemoryLimit(cfg.Memory.Limit))
 		}
+		if cfg.Memory.AutoExtract && mdl != nil {
+			opts = append(opts, memmysql.WithExtractor(buildMemoryExtractor(cfg.Memory, mdl)))
+			logs.Infof("AGUI memory auto-extract: enabled (policy=%q, messages=%d, interval=%s)",
+				cfg.Memory.AutoExtractPolicy, cfg.Memory.AutoExtractMessages, cfg.Memory.AutoExtractInterval)
+		}
 		svc, err := memmysql.NewService(opts...)
 		if err != nil {
 			if sessionSvc != nil {
@@ -185,6 +218,34 @@ func buildStorageServices(mdl model.Model) (session.Service, memory.Service, err
 	}
 
 	return sessionSvc, memorySvc, nil
+}
+
+// buildMemoryExtractor constructs a MemoryExtractor from the given config.
+// Checkers are combined according to AutoExtractPolicy ("any" = OR, "all" = AND).
+// When no checker is configured the extractor runs after every Run.
+func buildMemoryExtractor(cfg cc.AgentMemoryStorage, mdl model.Model) extractor.MemoryExtractor {
+	var checkers []extractor.Checker
+	if cfg.AutoExtractMessages > 0 {
+		checkers = append(checkers, extractor.CheckMessageThreshold(cfg.AutoExtractMessages))
+	}
+	if cfg.AutoExtractInterval != "" {
+		var interval time.Duration
+		if raw := strings.TrimSpace(cfg.AutoExtractInterval); raw != "" {
+			if d, err := time.ParseDuration(raw); err == nil {
+				interval = d
+			}
+		}
+		checkers = append(checkers, extractor.CheckTimeInterval(interval))
+	}
+	var opts []extractor.Option
+	if len(checkers) > 0 {
+		if cfg.AutoExtractPolicy == "all" {
+			opts = append(opts, extractor.WithChecker(extractor.ChecksAll(checkers...)))
+		} else {
+			opts = append(opts, extractor.WithCheckersAny(checkers...))
+		}
+	}
+	return extractor.NewExtractor(mdl, opts...)
 }
 
 // buildSummarizer constructs a SessionSummarizer from the given config.
@@ -284,11 +345,13 @@ func resolveDefaultModel(flagModelName string, allowedNames []string, modelsMap 
 // newAgentWithModel assembles the AGUI llm agent.
 // defaultMdl is the fallback model used when no per-request model name is specified.
 // modelsMap registers all models that can be selected per-request via agent.WithModelName.
+// systemPrompt is the GlobalInstruction content (prepended to every LLM request).
+// instruction is the per-request task instruction content (appended to every LLM request).
 // tools contains individual tool.Tool instances (e.g. skill tools).
 // toolSets contains ToolSet instances (e.g. MCP server toolsets).
 // refreshOnRun controls whether toolset tool lists are resolved lazily per-run.
 func newAgentWithModel(defaultMdl model.Model, modelsMap map[string]model.Model, isStream bool,
-	tools []tool.Tool, toolSets []tool.ToolSet, refreshOnRun bool) agent.Agent {
+	systemPrompt, instruction string, tools []tool.Tool, toolSets []tool.ToolSet, refreshOnRun bool) agent.Agent {
 
 	generationConfig := model.GenerationConfig{
 		MaxTokens:   cvt.ValToPtr(4096),
@@ -298,7 +361,12 @@ func newAgentWithModel(defaultMdl model.Model, modelsMap map[string]model.Model,
 
 	opts := []llmagent.Option{
 		llmagent.WithGenerationConfig(generationConfig),
-		llmagent.WithInstruction("You are a helpful assistant."),
+	}
+	if systemPrompt != "" {
+		opts = append(opts, llmagent.WithGlobalInstruction(systemPrompt))
+	}
+	if instruction != "" {
+		opts = append(opts, llmagent.WithInstruction(instruction))
 	}
 	if defaultMdl != nil {
 		opts = append(opts, llmagent.WithModel(defaultMdl))
@@ -316,8 +384,8 @@ func newAgentWithModel(defaultMdl model.Model, modelsMap map[string]model.Model,
 		}
 	}
 
-	logs.Infof("AGUI agent: models=%d tools=%d toolSets=%d refreshToolSetsOnRun=%v",
-		len(modelsMap), len(tools), len(toolSets), refreshOnRun)
+	logs.Infof("AGUI agent: models=%d tools=%d toolSets=%d refreshToolSetsOnRun=%v systemPrompt=%v instruction=%v",
+		len(modelsMap), len(tools), len(toolSets), refreshOnRun, systemPrompt != "", instruction != "")
 	return llmagent.New(cc.AgentServer().AGUI.AppName, opts...)
 }
 
@@ -515,7 +583,32 @@ func buildOpenAIOptions(cfg *cc.AIDevConfig) []openai.Option {
 		))
 	}
 
+	opts = append(opts, openai.WithOpenAIOptions(
+		openaiopt.WithMiddleware(llmRequestLogger),
+	))
+
 	return opts
+}
+
+const llmRequestBodyLogLimit = 16 * 1024
+
+func llmRequestLogger(r *http.Request, next openaiopt.MiddlewareNext) (*http.Response, error) {
+	if r.Body != nil {
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err == nil {
+			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			body := string(bodyBytes)
+			if len(body) > llmRequestBodyLogLimit {
+				body = body[:llmRequestBodyLogLimit] + fmt.Sprintf("... (truncated, total %d bytes)", len(bodyBytes))
+			}
+			logs.Infof("LLM request: %s %s body=%s", r.Method, r.URL.String(), body)
+		} else {
+			logs.Warnf("LLM request: failed to read body: %v", err)
+		}
+	} else {
+		logs.Infof("LLM request: %s %s (no body)", r.Method, r.URL.String())
+	}
+	return next(r)
 }
 
 // Close releases all resources held by the Runtime. It is safe to call multiple
