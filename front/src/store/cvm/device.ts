@@ -3,7 +3,7 @@ import { defineStore } from 'pinia';
 import rollRequest from '@blueking/roll-request';
 import http, { type HttpRequestConfig } from '@/http';
 import { IListResData, IQueryResData, QueryBuilderType } from '@/typings';
-import { enableCount, onePageParams } from '@/utils/search';
+import { enableCount, onePageParams, resolveBizApiPath } from '@/utils/search';
 import { RequirementType } from '@/store/config/requirement';
 
 export interface ICvmDeviceItem {
@@ -51,14 +51,16 @@ export interface ICvmChargeTypDevicetypeItem {
   }>;
 }
 
-export interface IRollingServerCvm {
+export interface IInheritCvm {
   device_type: string;
+  device_group: string;
   instance_charge_type: string;
   charge_months: number;
   billing_start_time: string;
   old_billing_expire_time: string;
+  new_billing_expire_time: string;
   bk_cloud_inst_id: string;
-  device_group: string;
+  generation_type: string;
 }
 
 export interface IManyCvmCapacityItem {
@@ -80,7 +82,7 @@ export const CoreTypeMap = {
 export const useCvmDeviceStore = defineStore('cvm-device', () => {
   const deviceListLoading = ref(false);
 
-  const rollingServerCvmLoading = ref(false);
+  const inheritCvmLoading = ref(false);
   const cvmCapacityLoading = ref(false);
 
   const getDeviceList = async (params: QueryBuilderType) => {
@@ -159,18 +161,19 @@ export const useCvmDeviceStore = defineStore('cvm-device', () => {
     }
   };
 
-  const getRollingServerCvm = async (
+  const getInheritCvm = async (
     params: {
+      require_type: number;
       bk_biz_id: number;
       bk_asset_id: string;
       region: string;
     },
     config?: { globalError?: boolean },
   ) => {
-    rollingServerCvmLoading.value = true;
+    inheritCvmLoading.value = true;
     try {
-      const res: IQueryResData<IRollingServerCvm> = await http.post(
-        '/api/v1/woa/task/check/rolling_server/host',
+      const res: IQueryResData<IInheritCvm> = await http.post(
+        `/api/v1/woa/${resolveBizApiPath(params.bk_biz_id)}task/check/apply/order/host`,
         params,
         config,
       );
@@ -179,7 +182,7 @@ export const useCvmDeviceStore = defineStore('cvm-device', () => {
       console.error(error);
       return Promise.reject(error);
     } finally {
-      rollingServerCvmLoading.value = false;
+      inheritCvmLoading.value = false;
     }
   };
 
@@ -220,8 +223,8 @@ export const useCvmDeviceStore = defineStore('cvm-device', () => {
     getDeviceTypeFullList,
     chargeTypeDeviceTypeListLoading,
     getChargeTypeDeviceTypeList,
-    rollingServerCvmLoading,
-    getRollingServerCvm,
+    inheritCvmLoading,
+    getInheritCvm,
     cvmCapacityLoading,
     getManyCvmCapacity,
   };

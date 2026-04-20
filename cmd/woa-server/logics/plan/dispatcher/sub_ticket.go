@@ -22,6 +22,7 @@ package dispatcher
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"hcm/cmd/woa-server/logics/plan/splitter"
@@ -227,6 +228,22 @@ func (d *Dispatcher) checkCrpTicket(kt *kit.Kit, subTicket *ptypes.SubTicketInfo
 	case cvmapi.PlanOrderStatusApproved:
 		// 更新子单状态到成功，等待其他子单进入终态
 		update.Status = enumor.RPSubTicketStatusDone
+	case cvmapi.PlanOrderStatusDeptAdmin:
+		// CRP 单据处于部门管理员审批节点（status=1），尝试自动过单
+		autoApproved, err := d.tryAutoApproveCrpDeptAdmin(kt, subTicket)
+		if err != nil {
+			logs.Errorf("failed to try auto approve crp dept admin, err: %v, id: %s, crp_sn: %s, rid: %s",
+				err, subTicket.ID, subTicket.CrpSN, kt.Rid)
+			return err
+		}
+		if autoApproved {
+			// 自动过单成功，等待下一轮检查
+			logs.Infof("crp dept admin auto approved, waiting for next check, id: %s, crp_sn: %s, rid: %s",
+				subTicket.ID, subTicket.CrpSN, kt.Rid)
+			return nil
+		}
+		// 不满足自动过单条件，等待人工审批
+		return d.checkSubTicketTimeout(kt, subTicket)
 	default:
 		return d.checkSubTicketTimeout(kt, subTicket)
 	}
@@ -244,8 +261,16 @@ func (d *Dispatcher) checkAdminAuditStatus(kt *kit.Kit, subTicket *ptypes.SubTic
 	switch subTicket.AdminAuditStatus {
 	case enumor.RPAdminAuditStatusSkip, enumor.RPAdminAuditStatusDone:
 	case enumor.RPAdminAuditStatusAuditing:
-		logs.Infof("sub ticket is in admin auditing, id: %s, rid: %s", subTicket.ID, kt.Rid)
-		return nil
+		// 检查是否满足自动过单条件
+		autoApproved, err := d.tryAutoApproveAdminAudit(kt, subTicket)
+		if err != nil {
+			logs.Errorf("failed to try auto approve admin audit, err: %v, id: %s, rid: %s", err, subTicket.ID, kt.Rid)
+			return err
+		}
+		if !autoApproved {
+			// 不满足自动过单条件，等待人工审批
+			return nil
+		}
 	case enumor.RPAdminAuditStatusRejected:
 		// 理论上当admin审批状态为reject时，ticket已经处于终态，不应进入到 checkAdminAuditStatus 中
 		logs.Errorf("invalid sub ticket status, admin audit status is rejected but still in auditing, id: %s, "+
@@ -264,6 +289,93 @@ func (d *Dispatcher) checkAdminAuditStatus(kt *kit.Kit, subTicket *ptypes.SubTic
 		return err
 	}
 	return nil
+}
+
+// tryAutoApproveAdminAudit 尝试自动过单管理员审批
+func (d *Dispatcher) tryAutoApproveAdminAudit(kt *kit.Kit, subTicket *ptypes.SubTicketInfo) (bool, error) {
+	// 检查是否满足自动过单条件
+	checkResult := checkPredictionAutoApprove(kt, subTicket.Demands)
+	if !checkResult.CanAutoApprove {
+		return false, nil
+	}
+
+	// 更新 AdminAuditStatus 为 skip
+	update := &rpproto.ResPlanSubTicketUpdateReq{
+		ID:               subTicket.ID,
+		AdminAuditStatus: enumor.RPAdminAuditStatusSkip,
+		AdminAuditAt:     time.Now().Format(constant.DateTimeLayout),
+	}
+	operateInfo := fmt.Sprintf("自动过单: %s", checkResult.Reason)
+	update.OperateInfo = &operateInfo
+
+	if err := d.updateSubTicket(kt, subTicket, update); err != nil {
+		logs.Errorf("failed to update sub ticket for auto approve, err: %v, id: %s, rid: %s",
+			err, subTicket.ID, kt.Rid)
+		return false, err
+	}
+
+	return true, nil
+}
+
+// tryAutoApproveCrpDeptAdmin 尝试自动过单 CRP 部门管理员节点
+func (d *Dispatcher) tryAutoApproveCrpDeptAdmin(kt *kit.Kit, subTicket *ptypes.SubTicketInfo) (bool, error) {
+	// 检查是否满足自动过单条件
+	checkResult := checkPredictionAutoApprove(kt, subTicket.Demands)
+	if !checkResult.CanAutoApprove {
+		return false, nil
+	}
+
+	// 获取操作人，使用 AdminHandler 的第一个账号
+	operators := strings.Split(constant.AdminHandler, ";")
+	operator := operators[0]
+
+	// 构建 CRP 审批请求
+	confirmReq := &cvmapi.ConfirmOrderForIEGReq{
+		ReqMeta: cvmapi.ReqMeta{
+			Id:      cvmapi.CvmId,
+			JsonRpc: cvmapi.CvmJsonRpc,
+			Method:  cvmapi.CvmCbsPlanConfirmOrderMethod,
+		},
+		Params: &cvmapi.ConfirmOrderForIEGParam{
+			TodoOrderId:   subTicket.CrpSN,
+			ApproveResult: cvmapi.ConfirmOrderApproveResultApprove, // 0: 同意
+			Status:        cvmapi.PlanOrderStatusDeptAdmin,         // 1: 部门管理员节点
+			Operator:      operator,
+			ApproveMemo: fmt.Sprintf("自动过单: %s (CPU: %d核, CBS: %dGB)",
+				checkResult.Reason, checkResult.TotalCPUCores, checkResult.TotalCBSSizeGB),
+		},
+	}
+
+	// 调用 CRP 审批接口
+	resp, err := d.crpCli.ConfirmOrderForIEG(kt.Ctx, kt.Header(), confirmReq)
+	if err != nil {
+		logs.Errorf("failed to call crp confirm order api, err: %v, id: %s, crp_sn: %s, rid: %s",
+			err, subTicket.ID, subTicket.CrpSN, kt.Rid)
+		return false, err
+	}
+
+	// 检查响应结果
+	if resp.Error.Code != 0 {
+		logs.Errorf("crp confirm order api returned error, code: %d, msg: %s, id: %s, crp_sn: %s, crp_trace: %s, rid: %s",
+			resp.Error.Code, resp.Error.Message, subTicket.ID, subTicket.CrpSN, resp.TraceId, kt.Rid)
+		return false, fmt.Errorf("crp confirm order failed, code: %d, msg: %s", resp.Error.Code, resp.Error.Message)
+	}
+
+	// 检查 Result 是否为空
+	if resp.Result == nil {
+		logs.Errorf("crp confirm order result is nil, id: %s, crp_sn: %s, crp_trace: %s, rid: %s",
+			subTicket.ID, subTicket.CrpSN, resp.TraceId, kt.Rid)
+		return false, fmt.Errorf("crp confirm order result is nil")
+	}
+
+	if resp.Result.Status != 0 {
+		logs.Errorf("crp confirm order result status error, status: %d, msg: %s, id: %s, crp_sn: %s, crp_trace: %s, rid: %s",
+			resp.Result.Status, resp.Result.Message, subTicket.ID, subTicket.CrpSN, resp.TraceId, kt.Rid)
+		return false, fmt.Errorf("crp confirm order result failed, status: %d, msg: %s",
+			resp.Result.Status, resp.Result.Message)
+	}
+
+	return true, nil
 }
 
 // subTicketStatistics 子单统计结果

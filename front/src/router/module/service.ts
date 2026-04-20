@@ -9,6 +9,7 @@ import {
 } from '@/constants/menu-symbol';
 import { useVerify } from '@/hooks/useVerify';
 import ticketRoutes from '@/views/ticket/route-config';
+import { permissionPolicyRoutes } from '@/views/cloud-account-manage/permission-policy/route-config';
 import { gpuDemandSrv as gpuDemandSrvRouteConfig } from '@/views/resource-plan/route-config';
 
 const { t } = i18n.global;
@@ -18,6 +19,7 @@ const serviceMenus: RouteRecordRaw[] = [
     path: '/service',
     children: [
       ...ticketRoutes,
+      ...permissionPolicyRoutes,
       // 单据管理 tab 资源预测详情
       {
         path: '/service/my-apply/resource-plan/detail',

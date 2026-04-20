@@ -31,6 +31,7 @@ import (
 	dataservice "hcm/pkg/client/data-service"
 	"hcm/pkg/kit"
 	"hcm/pkg/thirdparty/api-gateway/cmdb"
+	"hcm/pkg/thirdparty/cvmapi"
 )
 
 // Interface sync support vendor.
@@ -47,10 +48,11 @@ type Interface interface {
 var _ Interface = new(client)
 
 // NewClient new client.
-func NewClient(ad *cloudclient.CloudAdaptorClient, dataCli *dataservice.Client) Interface {
+func NewClient(ad *cloudclient.CloudAdaptorClient, dataCli *dataservice.Client, crpCli cvmapi.CVMClientInterface) Interface {
 	return &client{
 		ad:      ad,
 		dataCli: dataCli,
+		crpCli:  crpCli,
 	}
 }
 
@@ -58,6 +60,7 @@ func NewClient(ad *cloudclient.CloudAdaptorClient, dataCli *dataservice.Client) 
 type client struct {
 	ad      *cloudclient.CloudAdaptorClient
 	dataCli *dataservice.Client
+	crpCli  cvmapi.CVMClientInterface
 }
 
 // TCloud ...
@@ -122,5 +125,5 @@ func (cli *client) TCloudZiyan(kt *kit.Kit, accountID string) (ziyan.Interface, 
 		return nil, err
 	}
 
-	return ziyan.NewClient(cli.dataCli, cloudCli, cmdb.CmdbClient()), nil
+	return ziyan.NewClient(cli.dataCli, cloudCli, cmdb.CmdbClient(), cli.crpCli), nil
 }

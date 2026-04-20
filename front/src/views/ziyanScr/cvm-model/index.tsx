@@ -26,10 +26,12 @@ export default defineComponent({
       cpu_core: '',
       memory: '',
       disable: undefined as string | boolean | undefined,
+      generation_type: [],
     });
     const options = ref({
       device_families: deviceGroups,
       device_types: [],
+      generation_types: ['存量', '采购'],
       regions: [],
       zones: [],
       cpu: [],
@@ -115,6 +117,7 @@ export default defineComponent({
         cpu_core: '',
         memory: '',
         disable: undefined,
+        generation_type: [],
       };
       deviceConfigDisabled.value = false;
       deviceTypeDisabled.value = false;
@@ -167,6 +170,11 @@ export default defineComponent({
         filter.value.zone.length && { field: 'zone', op: 'in', value: filter.value.zone },
         filter.value.device_family.length && { field: 'device_family', op: 'in', value: filter.value.device_family },
         filter.value.device_type.length && { field: 'device_type', op: 'in', value: filter.value.device_type },
+        filter.value.generation_type.length && {
+          field: 'generation_type',
+          op: 'in',
+          value: filter.value.generation_type,
+        },
         filter.value.cpu_core && { field: 'cpu_core', op: 'eq', value: filter.value.cpu_core },
         filter.value.memory && { field: 'memory', op: 'eq', value: filter.value.memory },
         filter.value.disable !== undefined &&
@@ -229,6 +237,7 @@ export default defineComponent({
             <FormItem label='实例族'>
               <bk-select
                 v-model={filter.value.device_family}
+                filterable
                 multiple
                 clearable
                 collapse-tags
@@ -282,6 +291,13 @@ export default defineComponent({
                 onChange={handleDeviceConfigChange}>
                 {options.value.enabled.map((item) => (
                   <bk-option key={item.value} value={item.value} label={item.label}></bk-option>
+                ))}
+              </bk-select>
+            </FormItem>
+            <FormItem label='机型代次'>
+              <bk-select v-model={filter.value.generation_type} multiple clearable filterable>
+                {options.value.generation_types.map((item) => (
+                  <bk-option key={item} value={item} label={item}></bk-option>
                 ))}
               </bk-select>
             </FormItem>

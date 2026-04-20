@@ -35,6 +35,7 @@ type Client struct {
 	LoadBalancer  *LoadBalancerClient
 	Cvm           *CvmClient
 	DeviceType    *DeviceTypeClient
+	Dissolve      *DissolveClient
 	ZiyanCvmApplyOrder      *ZiyanCvmApplyOrderClient
 	ZiyanCvmApplySuborder   *ZiyanCvmApplySuborderClient
 	ZiyanCvmApplyStep       *ZiyanCvmApplyStepClient
@@ -62,6 +63,7 @@ func NewClient(client rest.ClientInterface) *Client {
 		LoadBalancer:  NewLoadBalancerClient(client),
 		Cvm:           NewCloudCvmClient(client),
 		DeviceType:    NewDeviceTypeClient(client),
+		Dissolve:      NewDissolveClient(client),
 		ZiyanCvmApplyOrder:      NewZiyanCvmApplyOrderClient(client),
 		ZiyanCvmApplySuborder:   NewZiyanCvmApplySuborderClient(client),
 		ZiyanCvmApplyStep:       NewZiyanCvmApplyStepClient(client),

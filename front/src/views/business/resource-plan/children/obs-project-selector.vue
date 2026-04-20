@@ -61,6 +61,7 @@ const isTipsShow = computed(() => {
   <div class="obs-project-selector-container">
     <bk-select
       v-model="model"
+      filterable
       :disabled="disabled"
       :multiple="multiple"
       :clearable="clearable"

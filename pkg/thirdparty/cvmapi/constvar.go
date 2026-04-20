@@ -186,6 +186,10 @@ const (
 	CvmQueryOrderList = "queryOrderList"
 	// CvmCbsPlanTransOrderMethod 需求转移接口
 	CvmCbsPlanTransOrderMethod = "transOrder"
+	// CvmCbsPlanConfirmOrderMethod 需求单据审批接口（自动过单）
+	CvmCbsPlanConfirmOrderMethod = "confirmOrderForIEG"
+	// CvmQueryZoneCityListMethod 查询可用区与城市映射接口
+	CvmQueryZoneCityListMethod = "queryZoneCityList"
 )
 
 // CVMCli yunti client options
@@ -262,6 +266,18 @@ func NewQueryReturnPlanReq(params *QueryReturnPlanParam) *QueryReturnPlanReq {
 			Id:      CvmId,
 			JsonRpc: CvmJsonRpc,
 			Method:  CvmReturnPlanMethod,
+		},
+		Params: params,
+	}
+}
+
+// NewQueryZoneCityListReq 查询可用区与城市映射请求元数据
+func NewQueryZoneCityListReq(params *QueryZoneCityListParams) *QueryZoneCityListReq {
+	return &QueryZoneCityListReq{
+		ReqMeta: ReqMeta{
+			Id:      CvmId,
+			JsonRpc: CvmJsonRpc,
+			Method:  CvmQueryZoneCityListMethod,
 		},
 		Params: params,
 	}

@@ -48,14 +48,15 @@ const { availableDeviceTypeMap, loading: chargeTypeDeviceTypeListLoading } = use
 
 const deviceTypeList = ref<ICvmDeviceTypeFormData['deviceTypeList']>();
 
-// 滚服继承的机型固资号
+// 继承套餐的机型固资号
 const inheritAssetId = ref<ICvmDeviceTypeFormData['inheritAssetId']>(props.assetId);
-// 滚服继承的机型实例ID
+// 继承套餐的机型实例ID
 const inheritInstanceId = ref<ICvmDeviceTypeFormData['inheritInstanceId']>(props.instanceId);
 
 const formItem = useFormItem();
 
 const isRollingServer = computed(() => props.requireType === RequirementType.RollServer);
+const isDissolve = computed(() => props.requireType === RequirementType.Dissolve);
 const isGreenChannel = computed(() => props.requireType === RequirementType.GreenChannel);
 const isSpringPool = computed(() => props.requireType === RequirementType.SpringResPool);
 const isRollingServerOrGreenChannel = computed(() => isRollingServer.value || isGreenChannel.value);
@@ -106,8 +107,8 @@ const updateDefaultData = () => {
   defaultData.value.resAssignType = resAssignType.value;
   // 在初始化为编辑模式时，此值为undefined
   defaultData.value.deviceTypeList = deviceTypeList.value;
-  defaultData.value.inheritAssetId = inheritAssetId.value;
-  // 详情态编辑时使用props传入的实例ID
+  // 异步详情下 props 可能晚于 setup，与 inheritInstanceId 一致优先用 props
+  defaultData.value.inheritAssetId = props.assetId ?? inheritAssetId.value;
   defaultData.value.inheritInstanceId = props.instanceId ?? inheritInstanceId.value;
 
   // 编辑模式记录原始数据，由于编辑模式完整数据需要异步查询，数据是动态变化的，这里通过是否有初始化值判断，来初始化原始值
@@ -173,7 +174,8 @@ watch(
     chargeType.value,
     chargeMonths.value,
     resAssignType.value,
-    () => props.instanceId,
+    props.instanceId,
+    props.assetId,
   ],
   () => {
     if (isInfoMode.value) {
@@ -209,6 +211,7 @@ watch(
 );
 
 provide('isRollingServer', isRollingServer);
+provide('isDissolve', isDissolve);
 provide('isGreenChannel', isGreenChannel);
 provide('isSpringPool', isSpringPool);
 provide('isRollingServerOrGreenChannel', isRollingServerOrGreenChannel);
@@ -268,6 +271,7 @@ provide('isInfoMode', isInfoMode);
     &::after {
       display: inline-block;
       content: '*' !important;
+      font-size: 12px;
       width: 14px;
       text-align: center;
       color: #ea3636;

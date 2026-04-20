@@ -88,6 +88,8 @@ var genResourceFuncMap = map[meta.ResourceType]genResourceFunc{
 	meta.Image:                    genImageResource,
 	meta.TaskManagement:           genTaskManagementResource,
 	meta.CosBucket:                genCosBucket,
+	meta.GlobalConfig:             genGlobalConfigResource,
+	meta.PermissionPolicyLibrary:  genPermissionPolicyLibraryResource,
 	meta.ResPlan:                  genResPlanResource,
 	// 自研云资源的操作-业务粒度
 	meta.ZiYanResource:          genZiYanResource,
@@ -104,7 +106,6 @@ var genResourceFuncMap = map[meta.ResourceType]genResourceFunc{
 	meta.ZiyanResInventory:      genZiyanResInventoryResource,
 	meta.RollingServerManage:    genRollingServerManageResource,
 	meta.GreenChannel:           genGreenChannelResource,
-	meta.GlobalConfig:           genGlobalConfigResource,
 	meta.ZiyanResDeliverAnalyze: genZiyanResDeliverAnalyzeResource,
 }
 

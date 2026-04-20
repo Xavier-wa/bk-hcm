@@ -199,6 +199,7 @@ func (hd *deviceTypeHandler) listDeviceTypeFromCloud(kt *kit.Kit, region string,
 				Memory:          int64(item.RamAmount),
 				TechnicalClass:  item.CvmInstanceTypeClass,
 				Source:          enumor.DeviceTypeSourceSync,
+				GenerationType:  item.GenerationType,
 			})
 		}
 	}

@@ -53,14 +53,6 @@ func (opt SyncZoneOption) Validate() error {
 	return validator.Validate.Struct(opt)
 }
 
-// extractCityName 从 region_name 中提取 city_name
-// 例如：从 "华南地区(广州)" 提取 "广州"
-// 注意：此函数内部调用 extractAreaAndCityName，仅返回 city_name
-func extractCityName(regionName string) string {
-	_, cityName := extractAreaAndCityName(regionName)
-	return cityName
-}
-
 // batchGetLogicCampusNameFromCmdb 批量从cmdb查询可用区对应的logic_campus_name
 // 返回map[zoneName]logicCampusName，如果一个可用区对应多个logic_campus_name，只返回第一个
 func (cli *client) batchGetLogicCampusNameFromCmdb(kt *kit.Kit, zoneNames []string) (map[string]string, error) {
@@ -139,7 +131,7 @@ func (cli *client) batchGetLogicCampusNameFromCmdb(kt *kit.Kit, zoneNames []stri
 	return zoneToCampusMap, nil
 }
 
-// getCityNameFromRegion 根据 region_id 查询 region 信息并提取 city_name
+// getCityNameFromRegion 根据 region_id 查询 region 信息获取 city_name
 func (cli *client) getCityNameFromRegion(kt *kit.Kit, regionID string) string {
 	regionReq := &core.ListReq{
 		Filter: &filter.Expression{
@@ -161,8 +153,8 @@ func (cli *client) getCityNameFromRegion(kt *kit.Kit, regionID string) string {
 		return ""
 	}
 
-	// 从 region_name 中提取 city_name
-	return extractCityName(regions.Details[0].RegionName)
+	// 直接使用 region 表中存储的 city_name
+	return regions.Details[0].CityName
 }
 
 // Zone ...
@@ -211,9 +203,12 @@ func (cli *client) Zone(kt *kit.Kit, opt *SyncZoneOption) (*SyncResult, error) {
 		return new(SyncResult), nil
 	}
 
-	// 只对 sync 的数据进行 diff
+	// 只对 sync 的数据进行 diff，传递 region 的 city_name 用于对比
 	addSlice, updateMap, delCloudIDs := common.Diff[typeszone.TCloudZone,
-		corezone.Zone[corezone.TCloudZiyanZoneExtension]](zoneFromCloud, zoneFromDB, isZoneChange)
+		corezone.Zone[corezone.TCloudZiyanZoneExtension]](zoneFromCloud, zoneFromDB,
+		func(cloud typeszone.TCloudZone, db corezone.Zone[corezone.TCloudZiyanZoneExtension]) bool {
+			return isZoneChange(cloud, db, opt.CityName)
+		})
 
 	// 对于需要 add 的 zone，检查是否在 allZoneFromDB 中存在（可能是过去临时手动添加的）
 	// 如果存在，需要先删除
@@ -474,7 +469,8 @@ func (cli *client) listZoneFromDB(kt *kit.Kit, opt *SyncZoneOption) (
 	return results, nil
 }
 
-func isZoneChange(cloud typeszone.TCloudZone, db corezone.Zone[corezone.TCloudZiyanZoneExtension]) bool {
+func isZoneChange(cloud typeszone.TCloudZone, db corezone.Zone[corezone.TCloudZiyanZoneExtension],
+	regionCityName string) bool {
 
 	if cloud.ZoneID != db.Name {
 		return true
@@ -488,8 +484,8 @@ func isZoneChange(cloud typeszone.TCloudZone, db corezone.Zone[corezone.TCloudZi
 		return true
 	}
 
-	// cityName实际不是云上字段，因此仅在该字段为空时需关注该对比
-	if db.Extension.CityName == "" {
+	// 如果与 region 表中的 city_name 不一致（如 CRP 修复后），需要更新
+	if db.Extension.CityName != regionCityName {
 		return true
 	}
 

@@ -325,6 +325,7 @@ const handleReset = () => {
         <bk-select
           v-model="searchValues.device_families"
           multiple
+          filterable
           :clearable="false"
           collapse-tags
           @change="handleDeviceGroupChange"

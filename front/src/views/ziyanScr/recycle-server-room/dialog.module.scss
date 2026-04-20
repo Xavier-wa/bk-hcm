@@ -28,6 +28,8 @@
   display: flex;
   .module-list {
     width: 210px;
+    min-width: 210px;
+    flex-shrink: 0;
     max-height: 100%;
     overflow-y: auto;
     .module-item {
@@ -40,7 +42,7 @@
         font-style: normal;
         font-size: 12px;
         margin-left: auto;
-        color: #979BA5;
+        color: #979ba5;
       }
 
       &:hover {
@@ -54,6 +56,7 @@
   }
   .data-table {
     flex: 1;
+    min-width: 0;
     margin-left: 12px;
   }
 }

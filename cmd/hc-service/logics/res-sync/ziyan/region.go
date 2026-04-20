@@ -21,6 +21,7 @@ package ziyan
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"hcm/cmd/hc-service/logics/res-sync/common"
@@ -37,6 +38,7 @@ import (
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/runtime/filter"
+	"hcm/pkg/thirdparty/cvmapi"
 	"hcm/pkg/tools/converter"
 	"hcm/pkg/tools/slice"
 )
@@ -53,6 +55,7 @@ func (opt SyncRegionOption) Validate() error {
 
 // extractAreaAndCityName 从 region_name 中提取 area_name 和 city_name
 // 例如：从 "华南地区(广州)" 提取 area_name="华南地区", city_name="广州"
+// NOTE: 腾讯云返回的 city_name 删除了 region 末尾的 EC 字段，导致名称不全，不能直接使用
 func extractAreaAndCityName(regionName string) (areaName, cityName string) {
 	if len(regionName) == 0 {
 		return "", ""
@@ -86,6 +89,43 @@ func extractAreaAndCityName(regionName string) (areaName, cityName string) {
 	return strings.TrimSpace(regionName[:leftIdx]), cityName
 }
 
+// getRegionCityMapFromCRP 调用 CRP queryZoneCityList 接口，构建 region -> cityName 映射
+// 返回 map[regionID]cityName，同一个 region 可能有多条记录（不同 zone），取第一条的 cityName
+func (cli *client) getRegionCityMapFromCRP(kt *kit.Kit) (map[string]string, error) {
+	if cli.crpCli == nil {
+		return nil, errors.New("crp client is nil")
+	}
+
+	req := cvmapi.NewQueryZoneCityListReq(&cvmapi.QueryZoneCityListParams{})
+	resp, err := cli.crpCli.QueryZoneCityList(kt.Ctx, kt.Header(), req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp == nil {
+		logs.Errorf("[%s] get region city map from CRP failed, response is nil, rid: %s", enumor.TCloudZiyan, kt.Rid)
+		return nil, errors.New("get region city map from CRP failed, response is nil")
+	}
+	if len(resp.Result) == 0 {
+		logs.Errorf("[%s] get region city map from CRP failed, result is empty, "+
+			"crp_code: %d, crp_message: %s, crp_trace_id: %s, rid: %s",
+			enumor.TCloudZiyan, resp.Error.Code, resp.Error.Message, resp.TraceId, kt.Rid)
+		return nil, fmt.Errorf("get region city map from CRP failed, result is empty, "+
+			"crp_code: %d, crp_message: %s, crp_trace_id: %s",
+			resp.Error.Code, resp.Error.Message, resp.TraceId)
+	}
+
+	regionCityMap := make(map[string]string)
+	for _, item := range resp.Result {
+		// 同一个 region 可能有多条记录（不同 zone），取第一条的 cityName
+		if _, exists := regionCityMap[item.Region]; !exists && item.CityName != "" {
+			regionCityMap[item.Region] = item.CityName
+		}
+	}
+
+	return regionCityMap, nil
+}
+
 // Region ...
 func (cli *client) Region(kt *kit.Kit, opt *SyncRegionOption) (*SyncResult, error) {
 	if err := opt.Validate(); err != nil {
@@ -112,9 +152,18 @@ func (cli *client) Region(kt *kit.Kit, opt *SyncRegionOption) (*SyncResult, erro
 		return new(SyncResult), nil
 	}
 
+	// 一次性获取 CRP 全量 region-city 映射
+	regionCityMap, err := cli.getRegionCityMapFromCRP(kt)
+	if err != nil {
+		logs.Errorf("get region-city map from CRP failed, err: %v, fallback to extract, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
 	// 只对 sync 的数据进行 diff
 	addSlice, updateMap, delCloudIDs := common.Diff[typesregion.TCloudRegion, cloudcore.TCloudZiyanRegion](
-		regionFromCloud, regionFromDB, isRegionChange)
+		regionFromCloud, regionFromDB, func(cloud typesregion.TCloudRegion, db cloudcore.TCloudZiyanRegion) bool {
+			return isRegionChange(cloud, db, regionCityMap)
+		})
 
 	// 对于需要 add 的 region，检查是否在 allRegionFromDB 中存在（可能是过去临时手动添加的）
 	// 如果存在，需要先删除
@@ -131,13 +180,13 @@ func (cli *client) Region(kt *kit.Kit, opt *SyncRegionOption) (*SyncResult, erro
 	}
 
 	if len(addSlice) > 0 {
-		if err = cli.createRegion(kt, opt, addSlice); err != nil {
+		if err = cli.createRegion(kt, opt, addSlice, regionCityMap); err != nil {
 			return nil, err
 		}
 	}
 
 	if len(updateMap) > 0 {
-		if err = cli.updateRegion(kt, opt, updateMap); err != nil {
+		if err = cli.updateRegion(kt, opt, updateMap, regionCityMap); err != nil {
 			return nil, err
 		}
 	}
@@ -145,8 +194,8 @@ func (cli *client) Region(kt *kit.Kit, opt *SyncRegionOption) (*SyncResult, erro
 	return new(SyncResult), nil
 }
 
-func (cli *client) createRegion(kt *kit.Kit, opt *SyncRegionOption,
-	addSlice []typesregion.TCloudRegion) error {
+func (cli *client) createRegion(kt *kit.Kit, opt *SyncRegionOption, addSlice []typesregion.TCloudRegion,
+	regionCityMap map[string]string) error {
 
 	if len(addSlice) <= 0 {
 		return errors.New("region addSlice is <= 0, not create")
@@ -156,6 +205,10 @@ func (cli *client) createRegion(kt *kit.Kit, opt *SyncRegionOption,
 
 	for _, one := range addSlice {
 		areaName, cityName := extractAreaAndCityName(one.RegionName)
+		// 优先使用 CRP 返回的完整 city_name
+		if crpCityName, ok := regionCityMap[one.RegionID]; ok && crpCityName != "" {
+			cityName = crpCityName
+		}
 		tmpRes := dataregion.TCloudRegionBatchCreate{
 			Vendor:     enumor.TCloudZiyan,
 			RegionID:   one.RegionID,
@@ -183,8 +236,8 @@ func (cli *client) createRegion(kt *kit.Kit, opt *SyncRegionOption,
 	return nil
 }
 
-func (cli *client) updateRegion(kt *kit.Kit, opt *SyncRegionOption,
-	updateMap map[string]typesregion.TCloudRegion) error {
+func (cli *client) updateRegion(kt *kit.Kit, opt *SyncRegionOption, updateMap map[string]typesregion.TCloudRegion,
+	regionCityMap map[string]string) error {
 
 	if len(updateMap) <= 0 {
 		return errors.New("region updateMap is <= 0, not update")
@@ -194,6 +247,10 @@ func (cli *client) updateRegion(kt *kit.Kit, opt *SyncRegionOption,
 
 	for id, one := range updateMap {
 		areaName, cityName := extractAreaAndCityName(one.RegionName)
+		// 优先使用 CRP 返回的完整 city_name
+		if crpCityName, ok := regionCityMap[one.RegionID]; ok && crpCityName != "" {
+			cityName = crpCityName
+		}
 		tmpRes := dataregion.TCloudRegionBatchUpdate{
 			ID:         id,
 			RegionID:   one.RegionID,
@@ -341,7 +398,8 @@ func (cli *client) listRegionFromDB(kt *kit.Kit, opt *SyncRegionOption) (
 	return results, nil
 }
 
-func isRegionChange(cloud typesregion.TCloudRegion, db cloudcore.TCloudZiyanRegion) bool {
+func isRegionChange(cloud typesregion.TCloudRegion, db cloudcore.TCloudZiyanRegion,
+	regionCityMap map[string]string) bool {
 
 	if cloud.RegionID != db.RegionID {
 		return true
@@ -353,6 +411,10 @@ func isRegionChange(cloud typesregion.TCloudRegion, db cloudcore.TCloudZiyanRegi
 
 	// area_name 和 city_name 也需相同，仅在第一次同步补充这些字段时需关注该对比
 	areaName, cityName := extractAreaAndCityName(cloud.RegionName)
+	// 优先使用 CRP 返回的完整 city_name 进行对比
+	if crpCityName, ok := regionCityMap[cloud.RegionID]; ok && crpCityName != "" {
+		cityName = crpCityName
+	}
 	if areaName != db.AreaName {
 		return true
 	}

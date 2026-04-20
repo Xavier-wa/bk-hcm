@@ -149,6 +149,10 @@ func isDeviceTypeChanged(cloud devicetype.DeviceType, db devicetype.DeviceType) 
 		return true
 	}
 
+	if cloud.GenerationType != db.GenerationType {
+		return true
+	}
+
 	return false
 }
 
@@ -168,6 +172,7 @@ func (cli *client) createDeviceType(kt *kit.Kit, deviceTypes []devicetype.Device
 			Zone:            dt.Zone,
 			Disable:         false,
 			Source:          enumor.DeviceTypeSourceSync,
+			GenerationType:  dt.GenerationType,
 		})
 	}
 
@@ -198,6 +203,7 @@ func (cli *client) updateDeviceType(kt *kit.Kit, deviceTypes map[string]devicety
 			DeviceTypeClass: &curDt.DeviceTypeClass,
 			TechnicalClass:  &curDt.TechnicalClass,
 			Source:          &curDt.Source,
+			GenerationType:  &curDt.GenerationType,
 		})
 	}
 

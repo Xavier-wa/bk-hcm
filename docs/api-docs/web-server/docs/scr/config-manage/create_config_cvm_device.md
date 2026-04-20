@@ -29,6 +29,7 @@ POST /api/v1/woa/config/createmany/config/cvm/device
 | region            | string                | 是   | 地域，最大长度64 |
 | zone              | string                | 是   | 可用区，最大长度64 |
 | disable           | bool                  | 否   | 是否不使用 |
+| generation_type   | string                | 是   | 机型代次(枚举值：存量、采购)  |
 
 ### 调用示例
 
@@ -47,7 +48,8 @@ POST /api/v1/woa/config/createmany/config/cvm/device
       "device_type_class": "CommonType",
       "technical_class": "标准型",
       "region": "ap-shanghai",
-      "zone": "ap-shanghai-2"
+      "zone": "ap-shanghai-2",
+      "generation_type": "存量"
     }
   ]
 }

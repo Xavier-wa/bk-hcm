@@ -21,6 +21,7 @@ package dispatcher
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	ptypes "hcm/cmd/woa-server/types/plan"
@@ -210,7 +211,27 @@ func (d *Dispatcher) checkItsmTicket(kt *kit.Kit, ticket *ptypes.TicketInfo) (bo
 			return false, d.checkTicketTimeout(kt, ticket)
 		}
 
-		if resp.Data.CurrentSteps[0].StateId != d.crpAuditNode.ID {
+		currentStep := resp.Data.CurrentSteps[0]
+
+		// 检查是否在资源管理员审批节点，尝试自动过单
+		if currentStep.Name == string(enumor.ResPlanItsmStepNameAdminApproval) {
+			autoApproved, err := d.tryAutoApproveItsmAdminNode(kt, ticket, currentStep)
+			if err != nil {
+				logs.Errorf("failed to try auto approve itsm admin node, err: %v, id: %s, rid: %s",
+					err, ticket.ID, kt.Rid)
+				return false, err
+			}
+			if autoApproved {
+				// 自动过单成功，等待下一轮检查
+				logs.Infof("itsm admin node auto approved, waiting for next check, id: %s, rid: %s",
+					ticket.ID, kt.Rid)
+				return false, nil
+			}
+			// 不满足自动过单条件，等待人工审批
+			return false, d.checkTicketTimeout(kt, ticket)
+		}
+
+		if currentStep.StateId != d.crpAuditNode.ID {
 			return false, d.checkTicketTimeout(kt, ticket)
 		}
 
@@ -235,6 +256,38 @@ func (d *Dispatcher) checkItsmTicket(kt *kit.Kit, ticket *ptypes.TicketInfo) (bo
 	}
 	// 单据被拒需要释放资源
 	return checkSubTicket, d.unlockTicketOriginalDemands(kt, ticket.Demands)
+}
+
+// tryAutoApproveItsmAdminNode 尝试自动过单 ITSM 资源管理员节点
+// 返回值: (是否自动过单成功, 错误)
+func (d *Dispatcher) tryAutoApproveItsmAdminNode(kt *kit.Kit, ticket *ptypes.TicketInfo,
+	currentStep *itsm.TicketStep) (bool, error) {
+
+	// 检查是否满足自动过单条件
+	checkResult := checkPredictionAutoApprove(kt, ticket.Demands)
+	if !checkResult.CanAutoApprove {
+		logs.Infof("ticket does not meet auto approve conditions for itsm admin node: %s, id: %s, rid: %s",
+			checkResult.Reason, ticket.ID, kt.Rid)
+		return false, nil
+	}
+
+	// 调用 ITSM ApproveNode 接口
+	approveReq := &itsm.ApproveNodeOpt{
+		SN:       ticket.ItsmSN,
+		StateId:  currentStep.StateId,
+		Operator: enumor.ItsmOperatorHcm, // 使用 "admin" 账号
+		Approval: true,
+		Remark: fmt.Sprintf("自动过单: %s (CPU: %d核, CBS: %dGB)",
+			checkResult.Reason, checkResult.TotalCPUCores, checkResult.TotalCBSSizeGB),
+	}
+
+	if err := d.itsmCli.ApproveNode(kt, approveReq); err != nil {
+		logs.Errorf("failed to auto approve itsm admin node, err: %v, id: %s, sn: %s, rid: %s",
+			err, ticket.ID, ticket.ItsmSN, kt.Rid)
+		return false, err
+	}
+
+	return true, nil
 }
 
 // checkTicketTimeout check ticket timeout

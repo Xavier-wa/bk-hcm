@@ -31,6 +31,7 @@ const { cvmChargeTypes, cvmChargeTypeNames } = useCvmChargeType();
 
 const requireType = inject<RequirementType>('requireType');
 const isRollingServer = inject<Ref<boolean>>('isRollingServer');
+const isInheritPackage = inject<Ref<boolean>>('isInheritPackage');
 const isSpringPool = inject<Ref<boolean>>('isSpringPool');
 const isNonPlanType = inject<Ref<boolean>>('isNonPlanType');
 
@@ -39,10 +40,12 @@ const chargeMonthsDisabledState = computed(() => {
     // GPU机型属于专用机型的特殊情况，只能选择6年
     return { disabled: true, content: 'GPU机型只能选择6年套餐' };
   }
-  if (isRollingServer.value || props.isDefaultFourYears) {
+  if (isInheritPackage.value || props.isDefaultFourYears) {
     return {
       disabled: true,
-      content: isRollingServer.value ? '继承原有套餐包年包月时长，此处的购买时长为剩余时长' : '专用机型只能选择4年套餐',
+      content: isInheritPackage.value
+        ? '继承原有套餐包年包月时长，此处的购买时长为剩余时长'
+        : '专用机型只能选择4年套餐',
     };
   }
 
@@ -127,7 +130,7 @@ const handleTypeChange = (type: string) => {
           @cancel="() => confirmPromise.reject()"
           ref="popConfirmRef"
         >
-          <!-- 滚服、小额绿通、春保资源池与预测无关 -->
+          <!-- 滚服继承套餐、小额绿通、春保资源池与预测无关 -->
           <bk-radio-group
             v-if="isNonPlanType"
             type="card"
@@ -150,14 +153,18 @@ const handleTypeChange = (type: string) => {
             </bk-radio-button>
           </bk-radio-group>
 
-          <!-- 其它需求类型，需要看预测 -->
+          <!-- 其它需求类型，需要看预测（包含机房裁撤继承套餐） -->
           <bk-radio-group
             v-else
             type="card"
             class="radio-group"
             v-model="chargeType"
             :with-validate="false"
-            :disabled="isChargeTypeLoading"
+            :disabled="isChargeTypeLoading || isInheritPackage"
+            v-bk-tooltips="{
+              content: '继承原有套餐，计费模式不可选',
+              disabled: !isInheritPackage,
+            }"
             :before-change="handleTypeBeforeChange"
             @change="handleTypeChange"
           >
@@ -166,7 +173,10 @@ const handleTypeChange = (type: string) => {
               :disabled="availableDeviceTypeMap?.get(cvmChargeTypes.PREPAID)?.size === 0"
               v-bk-tooltips="{
                 content: '当前地域无有效的预测需求，请提预测单后再按量申请',
-                disabled: isChargeTypeLoading || availableDeviceTypeMap?.get(cvmChargeTypes.PREPAID)?.size > 0,
+                disabled:
+                  isChargeTypeLoading ||
+                  isInheritPackage ||
+                  availableDeviceTypeMap?.get(cvmChargeTypes.PREPAID)?.size > 0,
               }"
             >
               {{ cvmChargeTypeNames[cvmChargeTypes.PREPAID] }}
@@ -176,7 +186,10 @@ const handleTypeChange = (type: string) => {
               :disabled="availableDeviceTypeMap?.get(cvmChargeTypes.POSTPAID_BY_HOUR)?.size === 0"
               v-bk-tooltips="{
                 content: '当前地域无有效的预测需求，请提预测单后再按量申请',
-                disabled: isChargeTypeLoading || availableDeviceTypeMap?.get(cvmChargeTypes.POSTPAID_BY_HOUR)?.size > 0,
+                disabled:
+                  isChargeTypeLoading ||
+                  isInheritPackage ||
+                  availableDeviceTypeMap?.get(cvmChargeTypes.POSTPAID_BY_HOUR)?.size > 0,
               }"
             >
               {{ cvmChargeTypeNames[cvmChargeTypes.POSTPAID_BY_HOUR] }}

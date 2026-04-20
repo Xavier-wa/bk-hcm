@@ -132,7 +132,8 @@ POST /api/v1/woa/config/findmany/config/cvm/devicetype
         "memory": 16,
         "technical_class": "",
         "disable": false,
-        "source": "sync"
+        "source": "sync",
+        "generation_type": "存量"
       },
       {
         "id": "6002",
@@ -146,7 +147,8 @@ POST /api/v1/woa/config/findmany/config/cvm/devicetype
         "memory": 32,
         "technical_class": "",
         "disable": false,
-        "source": "sync"
+        "source": "sync",
+        "generation_type": "采购"
       }
     ]
   }
@@ -198,3 +200,4 @@ POST /api/v1/woa/config/findmany/config/cvm/devicetype
 | technical_class   | string | 技术分类                                  |
 | disable           | bool   | 是否禁用                                  |
 | source            | string | 机型来源：枚举值：sync(同步)、manually(手动添加)      |
+| generation_type   | string | 机型代次                                  |

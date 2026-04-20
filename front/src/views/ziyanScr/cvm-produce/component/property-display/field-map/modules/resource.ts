@@ -89,3 +89,13 @@ export const dataDisk = Object.freeze({
   transformer: (dataDiskList: ICvmDataDisk[], row: any) =>
     h(CvmDataDiskDisplay, { dataDiskList, diskType: row.disk_type, diskSize: row.disk_size }),
 });
+
+export const bkAssetId = Object.freeze({
+  name: 'bk_asset_id',
+  cn: '继承的固资号',
+});
+
+export const inheritInstanceId = Object.freeze({
+  name: 'inherit_instance_id',
+  cn: '继承的云实例ID',
+});

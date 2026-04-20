@@ -1008,6 +1008,16 @@ func genGlobalConfigResource(a *meta.ResourceAttribute) (client.ActionID, []clie
 	}
 }
 
+// genPermissionPolicyLibraryResource generate permission policy library related iam resource.
+func genPermissionPolicyLibraryResource(a *meta.ResourceAttribute) (client.ActionID, []client.Resource, error) {
+	switch a.Basic.Action {
+	case meta.Create, meta.Find, meta.Update, meta.Delete:
+		return sys.CloudVendorConfig, make([]client.Resource, 0), nil
+	default:
+		return "", nil, errf.Newf(errf.InvalidParameter, "unsupported hcm action: %s", a.Basic.Action)
+	}
+}
+
 func genZiyanResDeliverAnalyzeResource(a *meta.ResourceAttribute) (client.ActionID, []client.Resource, error) {
 	switch a.Basic.Action {
 	case meta.Find, meta.Create, meta.Update, meta.Delete, meta.Access:

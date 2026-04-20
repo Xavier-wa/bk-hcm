@@ -1708,6 +1708,11 @@ export default (type: string, isSimpleShow = false) => {
       isDefaultShow: true,
     },
     {
+      label: '机型代次',
+      field: 'generation_type',
+      isDefaultShow: true,
+    },
+    {
       label: '可申请',
       field: 'disable',
       render: ({ cell }: any) => (!cell ? <span style={'color:#67c23a'}>是</span> : <span>否</span>),
@@ -2792,6 +2797,11 @@ export default (type: string, isSimpleShow = false) => {
     {
       label: '业务模块',
       field: 'module',
+      isDefaultShow: true,
+    },
+    {
+      label: '裁撤项目类型',
+      field: 'project_name',
       isDefaultShow: true,
     },
     {

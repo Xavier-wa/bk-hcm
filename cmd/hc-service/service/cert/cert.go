@@ -26,6 +26,7 @@ import (
 	"hcm/pkg/client"
 	dataservice "hcm/pkg/client/data-service"
 	"hcm/pkg/thirdparty/api-gateway/cmdb"
+	"hcm/pkg/thirdparty/cvmapi"
 )
 
 // InitCertService initial cert service.
@@ -34,6 +35,7 @@ func InitCertService(cap *capability.Capability) {
 		ad:      cap.CloudAdaptor,
 		dataCli: cap.ClientSet.DataService(),
 		cmdbCli: cmdb.CmdbClient(),
+		crpCli:  cap.CrpCli,
 	}
 
 	svc.initTCloudCertService(cap)
@@ -45,4 +47,5 @@ type certSvc struct {
 	dataCli *dataservice.Client
 	client  *client.ClientSet
 	cmdbCli cmdb.Client
+	crpCli  cvmapi.CVMClientInterface
 }

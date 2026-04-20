@@ -782,6 +782,7 @@ type QueryCvmInstanceTypeItem struct {
 	InstanceClass         string            `json:"instanceClass"`         // 实例类型
 	CoreType              int               `json:"coreType"`              // 1.2.3 分别标识，小核心，中核心，大核心
 	CvmInstanceTypeClass  string            `json:"cvmInstanceTypeClass"`  // 技术分类
+	GenerationType        string            `json:"generationType"`        // 机型代次
 }
 
 // GetApproveLogResp get approve log response
@@ -994,4 +995,39 @@ type InstanceTypeInfoItem struct {
 type LocalDiskTypeInfo struct {
 	Type string `json:"type"` // 类型，ROOT表示系统盘，DATA表示数据盘
 	Size int    `json:"size"` // 大小
+}
+
+// ConfirmOrderForIEGResp CRP 预测单据审批响应
+type ConfirmOrderForIEGResp struct {
+	RespMeta `json:",inline"`
+	Result   *ConfirmOrderForIEGRst `json:"result"`
+}
+
+// ConfirmOrderForIEGRst CRP 预测单据审批结果
+type ConfirmOrderForIEGRst struct {
+	// Status 操作状态：0-成功，非0-失败
+	Status int `json:"status"`
+	// Message 操作消息
+	Message string `json:"message,omitempty"`
+}
+
+// QueryZoneCityListResp 查询可用区与城市映射响应
+type QueryZoneCityListResp struct {
+	RespMeta `json:",inline"`
+	Result   []ZoneCityInfo `json:"result"`
+}
+
+// ZoneCityInfo CRP可用区与城市映射信息
+type ZoneCityInfo struct {
+	CiyID            int    `json:"ciyId"`
+	CityName         string `json:"cityName"`
+	Region           string `json:"region"`
+	AreaName         string `json:"areaName"`
+	Zone             string `json:"zone"`
+	ZoneID           int    `json:"zoneId"`
+	ZoneName         string `json:"zoneName"`
+	DefaultCampus    string `json:"defaultCampus"`
+	Country          string `json:"country"`
+	CustomhouseTitle string `json:"customhouseTitle"`
+	RegionName       string `json:"regionName"`
 }

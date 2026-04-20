@@ -297,6 +297,9 @@ const (
 	// DeviceCapacityTable 机型库存表
 	DeviceCapacityTable = "device_capacity"
 
+	// PermissionPolicyLibraryTable is permission_policy_library table's name.
+	PermissionPolicyLibraryTable Name = "permission_policy_library"
+
 	// ZiyanCvmApplyOrderTable 自研云CVM申请单主单表
 	ZiyanCvmApplyOrderTable = "ziyan_cvm_apply_order"
 	// ZiyanCvmApplySuborderTable 自研云CVM申请子单表
@@ -471,6 +474,8 @@ var TableMap = map[Name]TableConfig{
 	OrgTopoTable:                       {},
 
 	ResUsageBizRelTable: {},
+
+	PermissionPolicyLibraryTable: {EnableTenant: true},
 	DeviceCapacityTable: {},
 
 	ZiyanCvmApplyOrderTable:     {},

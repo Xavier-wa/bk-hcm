@@ -256,6 +256,9 @@ const (
 	// GreenChannel 平台管理-小额绿通
 	GreenChannel client.ActionID = "green_channel"
 
+	// CloudVendorConfig cloud vendor config action id to register iam.
+	CloudVendorConfig client.ActionID = "cloud_vendor_config"
+
 	// Skip is an action that no need to auth
 	Skip client.ActionID = "skip"
 )
@@ -347,4 +350,6 @@ var ActionIDNameMap = map[client.ActionID]string{
 	BizCosBucketDelete: "业务-COS桶删除",
 
 	AwsSavingsPlansCostQuery: "AWS-SavingsPlans成本查询",
+
+	CloudVendorConfig: "云厂商配置",
 }

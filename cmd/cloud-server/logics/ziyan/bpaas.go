@@ -87,13 +87,24 @@ func CheckAndUpdateBPaasStatus(kt *kit.Kit, dsCli *dataservice.Client, hcCli *hc
 			app.ID, sn, kt.Rid)
 	case BPaasApprovalStatusPass:
 		// 1 审批通过;
+		deliverReq := &hc.DeliverBPaasApplicationReq{
+			Content: app.Content,
+		}
+		if err := hcCli.TCloudZiyan.Application.DeliverBPaasApplication(kt, deliverReq); err != nil {
+			logs.Errorf("fail to deliver bpaas application after approval, err: %v, application id: %s, rid: %s",
+				err, app.ID, kt.Rid)
+			return err
+		}
+		logs.Infof("deliver bpaas application success, application id: %s, bpaas sn: %d, rid: %s",
+			app.ID, sn, kt.Rid)
+
 		updateReq := &ds.ApplicationUpdateReq{
 			Status:         enumor.Pass,
 			DeliveryDetail: cvt.ValToPtr(detailStr),
 		}
 		_, err := dsCli.Global.Application.UpdateApplication(kt, app.ID, updateReq)
 		if err != nil {
-			logs.Errorf("fail to update bpaas application to failed, err: %v, application id: %s, rid: %s",
+			logs.Errorf("fail to update bpaas application to pass, err: %v, application id: %s, rid: %s",
 				err, app.ID, kt.Rid)
 			return err
 		}

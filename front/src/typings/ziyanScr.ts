@@ -125,6 +125,7 @@ export interface CurrentListParam {
   group_name: string;
   center: string;
   svr_type_name: string;
+  project_name: string;
 }
 
 export type IDissolveHostCurrentListResult = IListResData<CurrentListParam[]>;
@@ -238,6 +239,7 @@ export interface IApplyOrderItem {
     inherit_instance_id: string;
     failed_zone_ids: string[];
     res_assign: number;
+    bk_asset_id: string;
   };
   anti_affinity_level: string;
   enable_disk_check: boolean;

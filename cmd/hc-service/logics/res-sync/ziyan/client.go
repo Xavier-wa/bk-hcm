@@ -24,6 +24,7 @@ import (
 	dataservice "hcm/pkg/client/data-service"
 	"hcm/pkg/kit"
 	"hcm/pkg/thirdparty/api-gateway/cmdb"
+	"hcm/pkg/thirdparty/cvmapi"
 )
 
 // Interface support resource sync.
@@ -93,6 +94,8 @@ type client struct {
 	dbCli     *dataservice.Client
 	// 引入esb 是为了同步时是去cc查询业务信息，后期考虑将clb 业务同步改到CloudServer中异步执行
 	cmdbCli cmdb.Client
+	// crpCli CRP接口客户端，用于查询可用区与城市映射
+	crpCli cvmapi.CVMClientInterface
 }
 
 // CloudCli return tcloud client.
@@ -101,11 +104,12 @@ func (cli *client) CloudCli() ziyan.TCloudZiyan {
 }
 
 // NewClient new sync client.
-func NewClient(dbCli *dataservice.Client, cloudCli ziyan.TCloudZiyan, cmdbCli cmdb.Client) Interface {
+func NewClient(dbCli *dataservice.Client, cloudCli ziyan.TCloudZiyan, cmdbCli cmdb.Client, crpCli cvmapi.CVMClientInterface) Interface {
 	// 获取 cmdb
 	return &client{
 		cloudCli: cloudCli,
 		dbCli:    dbCli,
 		cmdbCli:  cmdbCli,
+		crpCli:   crpCli,
 	}
 }

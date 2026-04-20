@@ -1,22 +1,22 @@
 <script setup lang="ts">
-import { inject, Ref, ref, shallowReactive, watch, watchEffect } from 'vue';
-import http from '@/http';
+import { inject, Ref, ref, shallowReactive, watch } from 'vue';
 import { Close, Success } from 'bkui-vue/lib/icon';
 import { timeFormatter } from '@/common/util';
-import { useCvmDeviceStore, type IRollingServerCvm } from '@/store/cvm/device';
+import { useCvmDeviceStore, type IInheritCvm } from '@/store/cvm/device';
+import { RequirementType } from '@/store/config/requirement';
 import useCvmChargeType from '@/views/ziyanScr/hooks/use-cvm-charge-type';
-import { transformSimpleCondition, resolveBizApiPath, onePageParams } from '@/utils/search';
 
 const model = defineModel<string>();
 
 const props = defineProps<{
   bizId: number;
   region: string;
+  requireType: RequirementType;
   inheritInstanceId: string;
 }>();
 
 const emit = defineEmits<{
-  checkSuccess: [cvm: IRollingServerCvm];
+  checkSuccess: [cvm: IInheritCvm];
   checkFail: [];
 }>();
 
@@ -28,29 +28,15 @@ const isInfoMode = inject<Ref<boolean>>('isInfoMode');
 
 const isShowDetails = ref(false);
 
-const rollingServerCvm = ref<IRollingServerCvm>();
+const inheritCvm = ref<IInheritCvm>();
 
 const checkState = shallowReactive({
   error: undefined,
   message: '',
 });
 
-watchEffect(async () => {
-  // 没有固资号ID有继承的实例ID，在修改需求的场景
-  if (!model.value && props.inheritInstanceId) {
-    const res = await http.post(`/api/v1/cloud/${resolveBizApiPath(props.bizId)}cvms/list`, {
-      filter: transformSimpleCondition({ cloud_id: props.inheritInstanceId }, [
-        { id: 'cloud_id', name: 'cloud_id', type: 'string' },
-      ]),
-      page: onePageParams(),
-    });
-    const cvm = res?.data.details?.[0];
-    model.value = cvm?.bk_asset_id;
-  }
-});
-
 const onError = (error: any) => {
-  rollingServerCvm.value = null;
+  inheritCvm.value = null;
   checkState.error = true;
   checkState.message = error.message;
   emit('checkFail');
@@ -58,8 +44,9 @@ const onError = (error: any) => {
 
 const handleCheck = async () => {
   try {
-    const res = await cvmDeviceStore.getRollingServerCvm(
+    const res = await cvmDeviceStore.getInheritCvm(
       {
+        require_type: props.requireType,
         bk_biz_id: props.bizId,
         bk_asset_id: model.value,
         region: props.region,
@@ -68,10 +55,10 @@ const handleCheck = async () => {
     );
 
     if (res.code === 0) {
-      rollingServerCvm.value = res.data;
+      inheritCvm.value = res.data;
       checkState.error = false;
       checkState.message = '';
-      emit('checkSuccess', rollingServerCvm.value);
+      emit('checkSuccess', inheritCvm.value);
     } else {
       onError(res);
     }
@@ -99,7 +86,9 @@ watch(
         class="bottom-dashed"
         v-bk-tooltips="{
           content:
-            '填写本业务下「一台主机」的CC固资号作为继承对象。新购主机将\n继承：套餐类型、计费时长、大小核心、地域大区等信息。需注意：\n1.不可跨业务使用CC固资号\n2.新购机型应为常规机型。如需专用机型，请选择常规项目申领',
+            requireType === RequirementType.RollServer
+              ? '填写本业务下「一台主机」的CC固资号作为继承对象。新购主机将\n继承：套餐类型、计费时长、大小核心、地域大区等信息。需注意：\n1.不可跨业务使用CC固资号\n2.新购机型应为常规机型。如需专用机型，请选择常规项目申领'
+              : '填写本业务下「一台主机」的CC固资号作为继承对象。新购主机将\n继承：套餐类型、计费时长、大小核心、地域大区等信息。\n如本业务无合适的固资号，请联系ICR助手',
         }"
       >
         固资号
@@ -121,7 +110,7 @@ watch(
       size="small"
       outline
       :disabled="!model?.length"
-      :loading="cvmDeviceStore.rollingServerCvmLoading"
+      :loading="cvmDeviceStore.inheritCvmLoading"
       @click="handleCheck"
     >
       手动校验
@@ -138,35 +127,35 @@ watch(
       <i
         :class="['hcm-icon', 'bkhcm-icon-file', 'details-icon', { active: isShowDetails }]"
         v-bk-tooltips="'查看详情'"
-        v-show="rollingServerCvm"
+        v-show="inheritCvm"
       ></i>
       <template #content>
         <div class="cvm-info">
           <div class="info-item">
             <span class="label">机型：</span>
-            <span class="content">{{ rollingServerCvm.device_type || '--' }}</span>
+            <span class="content">{{ inheritCvm.device_type || '--' }}</span>
           </div>
           <div class="info-item">
             <span class="label">机型族：</span>
-            <span class="content">{{ rollingServerCvm.device_group || '--' }}</span>
+            <span class="content">{{ inheritCvm.device_group || '--' }}</span>
           </div>
           <div class="info-item">
             <span class="label">计费模式：</span>
-            <span class="content">{{ cvmChargeTypeNames[rollingServerCvm.instance_charge_type] || '--' }}</span>
+            <span class="content">{{ cvmChargeTypeNames[inheritCvm.instance_charge_type] || '--' }}</span>
           </div>
           <div class="info-item">
             <span class="label">剩余时间：</span>
             <span class="content">
-              {{ rollingServerCvm.charge_months ? getMonthName(rollingServerCvm.charge_months) : '--' }}
+              {{ inheritCvm.charge_months ? getMonthName(inheritCvm.charge_months) : '--' }}
             </span>
           </div>
           <div class="info-item">
             <span class="label">计费起始时间：</span>
-            <span class="content">{{ timeFormatter(rollingServerCvm.billing_start_time) }}</span>
+            <span class="content">{{ timeFormatter(inheritCvm.billing_start_time) }}</span>
           </div>
           <div class="info-item">
             <span class="label">计费过期时间：</span>
-            <span class="content">{{ timeFormatter(rollingServerCvm.old_billing_expire_time) }}</span>
+            <span class="content">{{ timeFormatter(inheritCvm.old_billing_expire_time) }}</span>
           </div>
         </div>
       </template>

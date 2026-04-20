@@ -49,6 +49,7 @@ var DeviceTypeColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "zone", NamedC: "zone", Type: enumor.String},
 	{Column: "disable", NamedC: "disable", Type: enumor.Boolean},
 	{Column: "source", NamedC: "source", Type: enumor.String},
+	{Column: "generation_type", NamedC: "generation_type", Type: enumor.String},
 	{Column: "creator", NamedC: "creator", Type: enumor.String},
 	{Column: "reviser", NamedC: "reviser", Type: enumor.String},
 	{Column: "created_at", NamedC: "created_at", Type: enumor.Time},
@@ -85,6 +86,8 @@ type DeviceTypeTable struct {
 	Disable *bool `db:"disable" json:"disable"`
 	// Source 机型来源
 	Source enumor.DeviceTypeSource `db:"source" json:"source" validate:"lte=64"`
+	// GenerationType 机型代次
+	GenerationType string `db:"generation_type" json:"generation_type" validate:"lte=64"`
 	// Creator 创建人
 	Creator string `db:"creator" json:"creator" validate:"max=64"`
 	// Reviser 修改人

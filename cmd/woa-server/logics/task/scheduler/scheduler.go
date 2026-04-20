@@ -48,6 +48,7 @@ import (
 	"hcm/pkg/adaptor/types/cvm"
 	"hcm/pkg/api/core"
 	protocloud "hcm/pkg/api/data-service/cloud"
+	dissolveproto "hcm/pkg/api/data-service/dissolve"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
@@ -160,10 +161,8 @@ type Interface interface {
 	// GetGenerator get generator
 	GetGenerator() *generator.Generator
 
-	// CheckRollingServerHost check rolling server host
-	CheckRollingServerHost(kt *kit.Kit, param *types.CheckRollingServerHostReq) (
-		*types.CheckRollingServerHostResp, error)
-
+	// CheckInheritedHost check inherited host
+	CheckInheritedHost(kt *kit.Kit, param *types.CheckInheritedHostReq) (*types.CheckInheritedHostResp, error)
 	// CancelApplyTicketItsm cancel apply ticket which in itsm
 	CancelApplyTicketItsm(kt *kit.Kit, req *types.CancelApplyTicketItsmReq) error
 	// CancelApplyTicketCrp cancel apply ticket which in crp
@@ -1226,6 +1225,12 @@ func (s *scheduler) processingTicketByRequireType(kt *kit.Kit, param *types.Appl
 			return err
 		}
 
+	case enumor.RequireTypeDissolve: // 机房裁撤
+		if err := s.processDissolveInheritance(kt, param); err != nil {
+			logs.Errorf("failed to process dissolve inheritance, err: %v, rid: %s", err, kt.Rid)
+			return err
+		}
+
 	case enumor.RequireTypeSpringResPool:
 		configChargeType, err := s.configLogics.SpringResPool().GetChargeType(kt, param.BkBizId)
 		if err != nil {
@@ -1247,6 +1252,31 @@ func (s *scheduler) processingTicketByRequireType(kt *kit.Kit, param *types.Appl
 		return nil
 	}
 
+	return nil
+}
+
+// processDissolveInheritance 机房裁撤场景：校验固资号并继承计费模式
+func (s *scheduler) processDissolveInheritance(kt *kit.Kit, param *types.ApplyReq) error {
+	for _, suborder := range param.Suborders {
+		if suborder.Spec == nil || len(suborder.Spec.BkAssetID) == 0 {
+			continue
+		}
+		checkReq := &types.CheckInheritedHostReq{
+			AssetID:     suborder.Spec.BkAssetID,
+			BizID:       param.BkBizId,
+			Region:      suborder.Spec.Region,
+			RequireType: enumor.RequireTypeDissolve,
+		}
+		checkResp, err := s.CheckInheritedHost(kt, checkReq)
+		if err != nil {
+			logs.Errorf("check dissolve inherited host failed, err: %v, assetID: %s, rid: %s",
+				err, suborder.Spec.BkAssetID, kt.Rid)
+			return err
+		}
+		// 用 BKCC 返回的计费模式覆盖接口传入的 charge_type，保留用户传入的 charge_months
+		suborder.Spec.ChargeType = cvmapi.ChargeType(checkResp.InstanceChargeType)
+		suborder.Spec.InheritInstanceId = checkResp.CloudInstID
+	}
 	return nil
 }
 
@@ -2512,6 +2542,12 @@ func (s *scheduler) validateModification(kt *kit.Kit, order *types.ApplyOrder, p
 		return err
 	}
 
+	if err = s.validateInheritedHostAndModifyParam(kt, order, param); err != nil {
+		logs.Errorf("failed to validate modify inherited host and modify param, subOrderID: %s, err: %v, rid: %s",
+			order.SubOrderId, err, kt.Rid)
+		return err
+	}
+
 	return nil
 }
 
@@ -2660,6 +2696,41 @@ func (s *scheduler) validateModifyZone(kt *kit.Kit, order *types.ApplyOrder, par
 		return errors.New("region cannot be modified")
 	}
 
+	return nil
+}
+
+func (s *scheduler) validateInheritedHostAndModifyParam(kt *kit.Kit, order *types.ApplyOrder,
+	param *types.ModifyApplyReq) error {
+
+	if param == nil || param.Spec == nil {
+		return nil
+	}
+
+	switch order.RequireType {
+	case enumor.RequireTypeRollServer, enumor.RequireTypeDissolve:
+	default:
+		return nil
+	}
+
+	if len(param.Spec.BkAssetID) == 0 {
+		param.Spec.InheritInstanceId = ""
+		return nil
+	}
+
+	checkReq := &types.CheckInheritedHostReq{
+		AssetID:     param.Spec.BkAssetID,
+		BizID:       order.BkBizId,
+		Region:      param.Spec.Region,
+		RequireType: order.RequireType,
+	}
+	checkResp, err := s.CheckInheritedHost(kt, checkReq)
+	if err != nil {
+		logs.Errorf("check inherited host failed, err: %v, subOrderID: %s, assetID: %s, requireType: %d, rid: %s",
+			err, order.SubOrderId, param.Spec.BkAssetID, order.RequireType, kt.Rid)
+		return err
+	}
+
+	param.Spec.InheritInstanceId = checkResp.CloudInstID
 	return nil
 }
 
@@ -2947,13 +3018,24 @@ func (s *scheduler) SetDeviceDelivered(kt *kit.Kit, info *types.DeviceInfo) erro
 	return s.matcher.SetDeviceDelivered(kt, info)
 }
 
-// CheckRollingServerHost check rolling server host
-func (s *scheduler) CheckRollingServerHost(kt *kit.Kit, param *types.CheckRollingServerHostReq) (
-	*types.CheckRollingServerHostResp, error) {
+// CheckInheritedHost check inherited host
+func (s *scheduler) CheckInheritedHost(kt *kit.Kit, param *types.CheckInheritedHostReq) (
+	*types.CheckInheritedHostResp, error) {
+
+	// 机房裁撤场景需校验固资号在裁撤表中
+	if param.RequireType == enumor.RequireTypeDissolve {
+		if err := s.validateDissolveRecycleHost(kt, param.AssetID); err != nil {
+			return nil, err
+		}
+	}
 
 	ccReq := &getHostFromCCReq{
 		AssetID: param.AssetID,
 		BizID:   param.BizID,
+	}
+	// 机房裁撤仅校验主机存在性，不校验归属业务
+	if param.RequireType == enumor.RequireTypeDissolve {
+		ccReq.BizID = 0
 	}
 	host, err := s.getInheritedHostFromCC(kt, ccReq)
 	if err != nil {
@@ -2985,9 +3067,10 @@ func (s *scheduler) CheckRollingServerHost(kt *kit.Kit, param *types.CheckRollin
 		return nil, err
 	}
 
-	return &types.CheckRollingServerHostResp{
+	return &types.CheckInheritedHostResp{
 		DeviceType:           host.SvrDeviceClassName,
 		DeviceGroup:          cvmInfoMap[host.SvrDeviceClassName].DeviceGroup,
+		GenerationType:       cvmInfoMap[host.SvrDeviceClassName].GenerationType,
 		InstanceChargeType:   host.InstanceChargeType,
 		BillingStartTime:     host.BillingStartTime,
 		OldBillingExpireTime: host.BillingExpireTime,
@@ -2995,6 +3078,23 @@ func (s *scheduler) CheckRollingServerHost(kt *kit.Kit, param *types.CheckRollin
 		ChargeMonths:         chargeMonths,
 		CloudInstID:          host.BkCloudInstID,
 	}, nil
+}
+
+// validateDissolveRecycleHost validates that the asset exists in the dissolve recycle host table.
+func (s *scheduler) validateDissolveRecycleHost(kt *kit.Kit, assetID string) error {
+	listReq := &dissolveproto.RecycleHostListReq{
+		Filter: tools.EqualExpression("asset_id", assetID),
+		Page:   core.NewCountPage(),
+	}
+	result, err := s.apiClientSet.DataService().TCloudZiyan.Dissolve.ListRecycleHost(kt, listReq)
+	if err != nil {
+		logs.Errorf("list dissolve recycle host failed, err: %v, assetID: %s, rid: %s", err, assetID, kt.Rid)
+		return err
+	}
+	if result.Count == 0 {
+		return errf.Newf(errf.InvalidParameter, "固资号 %s 不在机房裁撤表中", assetID)
+	}
+	return nil
 }
 
 // getHostFromCCReq get host from cc request
@@ -3075,23 +3175,19 @@ func (s *scheduler) getInheritedHostFromCC(kt *kit.Kit, param *getHostFromCCReq)
 	return cvt.ValToPtr(resp.Info[0]), nil
 }
 
-func (s *scheduler) checkInheritedHost(kt *kit.Kit, param *types.CheckRollingServerHostReq, host *cmdb.Host) error {
+func (s *scheduler) checkInheritedHost(kt *kit.Kit, param *types.CheckInheritedHostReq, host *cmdb.Host) error {
 	if host == nil {
 		return errf.New(errf.InvalidParameter, "host not found")
 	}
-
 	if host.DeptName != constant.IEGDeptName {
 		return errors.New("主机的所属的运维部门不是IEG")
 	}
-
 	if host.InstanceChargeType == "" {
 		return errors.New("该主机计费模式为空")
 	}
-
 	if host.BillingStartTime.IsZero() {
 		return errors.New("该主机无计费开始时间")
 	}
-
 	if host.InstanceChargeType == string(cvm.Prepaid) && host.BillingExpireTime.IsZero() {
 		return errors.New("该主机无计费结束时间")
 	}
@@ -3107,8 +3203,20 @@ func (s *scheduler) checkInheritedHost(kt *kit.Kit, param *types.CheckRollingSer
 	if !ok {
 		return errors.New("该主机未找到对应的机型信息")
 	}
-	if deviceTypeInfo.DeviceTypeClass != cvmapi.CommonType {
-		return errors.New("该主机机型不是通用机型")
+
+	switch param.RequireType {
+	case enumor.RequireTypeDissolve:
+		// 机房裁撤：不能是GPU机型
+		if deviceTypeInfo.DeviceGroup == constant.GpuInstanceClassValue {
+			return errors.New("机房裁撤不支持GPU机型的主机继承")
+		}
+	case enumor.RequireTypeRollServer:
+		// 滚服项目：必须是通用机型
+		if deviceTypeInfo.DeviceTypeClass != cvmapi.CommonType {
+			return errors.New("该主机机型不是通用机型")
+		}
+	default:
+		return errf.Newf(errf.InvalidParameter, "unsupported require_type: %d", param.RequireType)
 	}
 
 	req := &cvmapi.InstanceQueryReq{
@@ -3140,7 +3248,6 @@ func (s *scheduler) checkInheritedHost(kt *kit.Kit, param *types.CheckRollingSer
 			param.AssetID, kt.Rid)
 		return fmt.Errorf("failed to query cvm instance, for data num %d != 1", len(resp.Result.Data))
 	}
-
 	if resp.Result.Data[0].CloudRegion != param.Region {
 		return errors.New("继承主机的地域与当前所选不匹配")
 	}
@@ -3534,8 +3641,8 @@ func (s *scheduler) auditApplyModifyCallback(kt *kit.Kit, param *types.ConfirmAp
 			Subnet:            modifyRecord.Details.CurData.Subnet,
 			Zones:             modifyRecord.Details.CurData.Zones,
 			ResAssign:         modifyRecord.Details.CurData.ResAssign,
-			InheritInstanceId: modifyRecord.Details.CurData.InheritInstanceID,
 			BkAssetID:         modifyRecord.Details.CurData.BkAssetID,
+			InheritInstanceId: modifyRecord.Details.CurData.InheritInstanceID,
 		},
 	}
 	if err = s.modifyOrder(kt, order, maReq); err != nil {

@@ -105,3 +105,14 @@ export const MENU_BUSINESS_TICKET_RESOURCE_PLAN_DETAILS = 'menu_business_ticket_
  * 统计分析
  */
 export const MENU_STATS_DELIVERY = 'menu_stats_delivery';
+
+/**
+ * 云账号管理
+ */
+export const MENU_BUSINESS_CLOUD_ACCOUNT = 'menu_business_cloud_account';
+export const MENU_BUSINESS_CLOUD_ACCOUNT_DETAILS = 'menu_business_cloud_account_details';
+
+/**
+ * 权限策略库管理
+ */
+export const MENU_SERVICE_PERMISSION_POLICY = 'menu_service_permission_policy';

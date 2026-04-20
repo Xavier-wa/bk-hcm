@@ -188,7 +188,7 @@ func (s *Service) apiSet() *restful.Container {
 		WebService:   ws,
 		ClientSet:    s.clientSet,
 		CloudAdaptor: s.cloudAdaptor,
-		ResSyncCli:   ressync.NewClient(s.cloudAdaptor, s.clientSet.DataService()),
+		ResSyncCli:   ressync.NewClient(s.cloudAdaptor, s.clientSet.DataService(), s.crpCli),
 		CrpCli:       s.crpCli,
 	}
 

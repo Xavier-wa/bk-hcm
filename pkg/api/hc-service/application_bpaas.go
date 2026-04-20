@@ -12,3 +12,13 @@ type GetBPaasApplicationReq struct {
 func (r *GetBPaasApplicationReq) Validate() error {
 	return validator.Validate.Struct(r)
 }
+
+// DeliverBPaasApplicationReq BPaaS审批通过后触发资源补偿交付的请求，透传申请单 content 由 hc-service 按 action 分发处理
+type DeliverBPaasApplicationReq struct {
+	Content string `json:"content" validate:"required"`
+}
+
+// Validate ...
+func (r *DeliverBPaasApplicationReq) Validate() error {
+	return validator.Validate.Struct(r)
+}
