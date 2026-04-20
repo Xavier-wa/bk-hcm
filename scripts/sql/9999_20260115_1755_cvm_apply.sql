@@ -102,6 +102,7 @@ CREATE TABLE `ziyan_cvm_apply_suborder` (
   	`charge_type` VARCHAR(64) DEFAULT '' COMMENT '计费模式(计费模式：PREPAID包年包月，POSTPAID_BY_HOUR按量计费)',
   	`charge_months` INT DEFAULT 0 COMMENT '计费时长，单位：月',
   	`inherit_instance_id` VARCHAR(64) DEFAULT '' COMMENT '被继承云主机实例ID',
+    `bk_asset_id` VARCHAR(64) DEFAULT '' COMMENT '被继承固资编号',
   	`res_assign` TINYINT DEFAULT 0 COMMENT '资源分配方式（1表示“有资源区域优先”、2表示“分Campus生产”）',
     `cpu_thread_switch` INT DEFAULT 0 COMMENT 'CPU超线程(0:默认 1:关闭 2:开启)',
   	`system_disk` JSON NOT NULL COMMENT '系统盘, JSON对象',
@@ -277,7 +278,7 @@ CREATE TABLE `ziyan_cvm_device_info` (
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `idx_uk_suborder_id_ip` (`suborder_id`, `ip`),
+    UNIQUE KEY `idx_uk_suborder_id_generate_ip_asset` (`suborder_id`, `generate_id`, `ip`, `asset_id`),
     KEY `idx_bk_biz_id_suborder_id` (`bk_biz_id`,`suborder_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设备交付记录表';
 
@@ -326,6 +327,8 @@ CREATE TABLE `ziyan_cvm_modify_record` (
     `pre_data_disk` JSON DEFAULT NULL COMMENT '修改前-数据盘配置（JSON数组）',
     `pre_zones` JSON DEFAULT NULL COMMENT '修改前-可用区列表（JSON数组）',
     `pre_res_assign` TINYINT DEFAULT NULL COMMENT '修改前-资源分配方式',
+    `pre_bk_asset_id` VARCHAR(64) DEFAULT '' COMMENT '修改前-被继承固资编号',
+    `pre_inherit_instance_id` VARCHAR(64) DEFAULT '' COMMENT '修改前-被继承云主机实例ID',
     
     -- 修改后数据（cur_data）
     `cur_total_num` INT DEFAULT NULL COMMENT '修改后-总数量',
@@ -345,7 +348,9 @@ CREATE TABLE `ziyan_cvm_modify_record` (
     `cur_data_disk` JSON DEFAULT NULL COMMENT '修改后-数据盘配置（JSON数组）',
     `cur_zones` JSON DEFAULT NULL COMMENT '修改后-可用区列表（JSON数组）',
     `cur_res_assign` TINYINT DEFAULT NULL COMMENT '修改后-资源分配方式',
-    
+    `cur_bk_asset_id` VARCHAR(64) DEFAULT '' COMMENT '修改后-被继承固资编号',
+    `cur_inherit_instance_id` VARCHAR(64) DEFAULT '' COMMENT '修改后-被继承云主机实例ID',
+
     `status` TINYINT NOT NULL DEFAULT 0 COMMENT '状态：0-待审批, 1-已审批, 2-审批失败, 3-已拒绝, 4-审批超时/作废',
     `approver` VARCHAR(64) DEFAULT NULL COMMENT '审批人',
     `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间（毫秒精度）',

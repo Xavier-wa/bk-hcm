@@ -27,7 +27,7 @@ import (
 	"hcm/cmd/woa-server/storage/driver/mongodb"
 	recovertask "hcm/cmd/woa-server/types/task"
 	types "hcm/cmd/woa-server/types/task"
-	"hcm/pkg/criteria/mapstr"
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 )
@@ -52,7 +52,7 @@ func (r *applyRecoverer) recoverDeliverOrder(kt *kit.Kit, generateRecord *types.
 				continue
 			}
 
-			if err = r.schedulerIf.DeliverDevice(device, order); err != nil {
+			if err = r.schedulerIf.DeliverDevice(kt, device, order); err != nil {
 				logs.Errorf("failed to deliver device, subOrderId: %s, ip: %s, err: %v, rid: %s", order.SubOrderId,
 					device.Ip, err, kt.Rid)
 			}
@@ -69,7 +69,7 @@ func (r *applyRecoverer) recoverDeliverOrder(kt *kit.Kit, generateRecord *types.
 
 	}
 	// update deliver step
-	if err := record.UpdateDeliverStep(order.SubOrderId, order.TotalNum); err != nil {
+	if err = record.UpdateDeliverStep(kt, order.SubOrderId, order.TotalNum); err != nil {
 		logs.Errorf("failed to update deliverStep step, subOrderId: %s, err: %v, rid: %s", order.SubOrderId, err,
 			kt.Rid)
 		return err
@@ -91,7 +91,7 @@ func (r *applyRecoverer) recoverDeliverStep(kt *kit.Kit, order *types.ApplyOrder
 		if generateRecord.Status == types.GenerateStatusSuccess && !generateRecord.IsMatched {
 			err := r.recoverDeliverOrder(kt, generateRecord, order)
 			if err != nil {
-				logs.Errorf("failed to recover deliver order, subOrderId: %s, generateId: %d, err: %v, rid: %s",
+				logs.Errorf("failed to recover deliver order, subOrderId: %s, generateId: %s, err: %v, rid: %s",
 					order.SubOrderId, generateRecord.GenerateId, err, kt.Rid)
 				continue
 			}
@@ -112,7 +112,7 @@ func (r *applyRecoverer) recoverDelivering(kt *kit.Kit, order *types.ApplyOrder,
 	}
 	// 只转移在931业务下主机，避免操作仍在使用主机
 	if bkBizID == recovertask.ResourceOperationService && order.BkBizId != recovertask.ResourceOperationService {
-		if err = r.schedulerIf.DeliverDevice(device, order); err != nil {
+		if err = r.schedulerIf.DeliverDevice(kt, device, order); err != nil {
 			logs.Errorf("failed to deliver device, subOrderId: %s, ip: %s, err: %v, rid: %s", order.SubOrderId, ip, err,
 				kt.Rid)
 			return fmt.Errorf("failed to deliver device, subOrderId: %s, ip: %s, err: %v", order.SubOrderId, ip, err)
@@ -142,7 +142,7 @@ func (r *applyRecoverer) recoverDelivering(kt *kit.Kit, order *types.ApplyOrder,
 	}
 
 	// 2. update device status
-	if err = r.schedulerIf.SetDeviceDelivered(device); err != nil {
+	if err = r.schedulerIf.SetDeviceDelivered(kt, device); err != nil {
 		logs.Errorf("failed to set device delivered, subOrderId: %s, ip: %s, err: %v, rid: %s", order.SubOrderId,
 			device.Ip, err, kt.Rid)
 		return fmt.Errorf("failed to set device delivered, subOrderId: %s, ip: %s, err: %v", order.SubOrderId,
@@ -150,7 +150,7 @@ func (r *applyRecoverer) recoverDelivering(kt *kit.Kit, order *types.ApplyOrder,
 	}
 
 	// update deliver record
-	if err = record.UpdateDeliverRecord(device, "success", types.DeliverStatusSuccess); err != nil {
+	if err = record.UpdateDeliverRecord(kt, device, "success", types.DeliverStatusSuccess); err != nil {
 		logs.Errorf("failed to deliver device, subOrderId: %s, ip: %s, err: %v, rid: %s", order.SubOrderId, device.Ip,
 			err, kt.Rid)
 		return fmt.Errorf("failed to deliver device, subOrderId: %s, ip: %s, err: %v", order.SubOrderId, device.Ip, err)
@@ -162,11 +162,8 @@ func (r *applyRecoverer) recoverDelivering(kt *kit.Kit, order *types.ApplyOrder,
 func (r *applyRecoverer) getDeviceByStatus(kt *kit.Kit, subOrderId string, isInited bool) ([]*types.DeviceInfo,
 	error) {
 
-	filter := &mapstr.MapStr{
-		"suborder_id": subOrderId,
-		"is_inited":   isInited,
-	}
-	devices, err := model.Operation().DeviceInfo().GetDeviceInfo(kt.Ctx, filter)
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", subOrderId), tools.RuleEqual("is_inited", isInited))
+	devices, err := model.Operation().DeviceInfo().GetDeviceInfo(kt, filter)
 	if err != nil {
 		logs.Errorf("failed to get device by isInited, subOrderId: %s, isInited: %v, err: %v, rid: %s", subOrderId,
 			isInited, err, kt.Rid)

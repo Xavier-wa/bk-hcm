@@ -21,13 +21,13 @@ import (
 
 // ModifyRecord defines a resource apply order modify record's detail information
 type ModifyRecord struct {
-	ID         uint64 `json:"id" bson:"id"`
+	ID         string `json:"id" bson:"id"`
 	SuborderID string `json:"suborder_id" bson:"suborder_id"`
 	// 修改人
-	User     string        `json:"bk_username" bson:"bk_username"`
-	Details  *ModifyDetail `json:"details" bson:"details"`
-	CreateAt time.Time     `json:"create_at" bson:"create_at"`
-	UpdateAt time.Time     `json:"update_at" bson:"update_at"`
+	User      string        `json:"bk_username" bson:"bk_username"`
+	Details   *ModifyDetail `json:"details" bson:"details"`
+	CreatedAt time.Time     `json:"created_at" bson:"create_at"`
+	UpdatedAt time.Time     `json:"updated_at" bson:"update_at"`
 	// 变更状态(0:待审批 1:审批通过 2:审批失败 3:审批拒绝 4:审批超时)
 	Status enumor.CvmModifyRecordStatus `json:"status" bson:"status"`
 	// 审批人
@@ -58,4 +58,8 @@ type ModifyData struct {
 	Zones       []string          `json:"zones" bson:"zones"` //  多可用区
 	// ResAssign 资源分配方式（1表示“有资源区域优先”、2表示“分Campus生产”）
 	ResAssign enumor.ResAssign `json:"res_assign" bson:"res_assign"`
+	// BkAssetID 继承主机的固资号
+	BkAssetID string `json:"bk_asset_id" bson:"bk_asset_id"`
+	// InheritInstanceID 继承主机的云实例ID
+	InheritInstanceID string `json:"inherit_instance_id" bson:"inherit_instance_id"`
 }

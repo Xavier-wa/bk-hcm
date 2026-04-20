@@ -70,6 +70,7 @@ var ZiyanCvmApplySuborderColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "charge_type", NamedC: "charge_type", Type: enumor.String},
 	{Column: "charge_months", NamedC: "charge_months", Type: enumor.Numeric},
 	{Column: "inherit_instance_id", NamedC: "inherit_instance_id", Type: enumor.String},
+	{Column: "bk_asset_id", NamedC: "bk_asset_id", Type: enumor.String},
 	{Column: "res_assign", NamedC: "res_assign", Type: enumor.Numeric},
 	{Column: "cpu_thread_switch", NamedC: "cpu_thread_switch", Type: enumor.Numeric},
 	{Column: "system_disk", NamedC: "system_disk", Type: enumor.Json},
@@ -166,6 +167,8 @@ type ZiyanCvmApplySuborder struct {
 	ChargeMonths uint `db:"charge_months" json:"charge_months"`
 	// InheritInstanceID 被继承云主机实例ID
 	InheritInstanceID string `db:"inherit_instance_id" json:"inherit_instance_id" validate:"max=64"`
+	// BkAssetID 被继承固资编号
+	BkAssetID string `db:"bk_asset_id" json:"bk_asset_id" validate:"max=64"`
 	// ResAssign 资源分配方式
 	ResAssign enumor.ResAssign `db:"res_assign" json:"res_assign"`
 	// CPUThreadSwitch CPU线程开关

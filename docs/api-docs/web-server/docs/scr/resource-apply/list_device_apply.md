@@ -10,10 +10,11 @@ POST /api/v1/woa/task/findmany/apply/device
 
 ### 输入参数
 
-| 参数名称   | 参数类型   | 必选 | 描述     |
-|--------|--------|----|--------|
-| filter | object | 是  | 查询过滤条件 |
-| page   | object | 是  | 分页设置   |
+| 参数名称     | 参数类型      | 必选 | 描述       |
+|------------|--------------|------|-----------|
+| bk_biz_ids | string array | 是   | 业务ID数组  |
+| filter     | object       | 是   | 查询过滤条件 |
+| page       | object       | 是   | 分页设置    |
 
 #### filter
 
@@ -61,6 +62,7 @@ POST /api/v1/woa/task/findmany/apply/device
 
 ```json
 {
+  "bk_biz_ids": [1,2,3],
   "filter": {
     "op": "and",
     "rules": [

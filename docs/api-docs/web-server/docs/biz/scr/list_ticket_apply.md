@@ -17,11 +17,12 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/findmany/apply
 | bk_username  | string	array | 否  | 提单人，数量上限20个                                                                            |
 | require_type | int array    | 否  | 需求类型。1: 常规项目; 2: 春节保障; 3: 机房裁撤; 6: 滚服项目; 7: 小额绿通                                       |
 | stage        | string array | 否  | 单据执行阶段。"UNCOMMIT": 未提交, "AUDIT": 审核中, "RUNNING": 生产中, "DONE": 已完成, "CONFIRMING": 待用户确认 |
-| start        | string	      | 否  | 单据创建时间过滤条件起点日期，格式如"2022-05-01"                                                         |
-| end          | string	      | 否  | 单据创建时间过滤条件终点日期，格式如"2022-05-01"                                                         |
-| page         | object	      | 否  | 分页信息                                                                                   |
-| get_product  | bool         | 否  | 是否获取CVM生产数据                                                                            |
-| source       | string array | 否  | 枚举类型，"business"（业务单据）、"purchase_to_resource_pool"(资源池采购)，不传时默认值为"business"             |
+| start        | string	      | 否  | 单据创建时间过滤条件起点日期，格式如"2022-05-01"                                                       |
+| end          | string	      | 否  | 单据创建时间过滤条件终点日期，格式如"2022-05-01"                                                       |
+| page         | object	      | 否  | 分页信息                                                                                 |
+| get_product  | bool         | 否  | 是否获取CVM生产数据                                                                          |
+| source       | string array | 否  | 枚举类型，"business"（业务单据）、"purchase_to_resource_pool"(资源池采购)，不传时默认值为"business"                     |
+| product_type | string array | 否  | 生产类型，"business"（业务生产）、"admin"（管理员生产），不传时默认值为"business"               |
 
 #### page
 
@@ -30,7 +31,7 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/findmany/apply
 | start | int  | 否  | 记录开始位置，start 起始值为0 |
 | limit | int  | 是  | 每页限制条数，最大200       |
 
-说明：默认按create_at降序排序
+说明：默认按created_at降序排序
 
 ### 调用示例
 
@@ -56,7 +57,8 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/findmany/apply
     "limit": 20
   },
   "get_product": false,
-  "source": ["business"]
+  "source": ["business"],
+  "product_type": ["business"]
 }
 ```
 

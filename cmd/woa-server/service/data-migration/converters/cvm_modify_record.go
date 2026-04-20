@@ -21,12 +21,12 @@ package converters
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	tasktable "hcm/cmd/woa-server/dal/task/table"
 	"hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/dal/table"
 	cvmapplytable "hcm/pkg/dal/table/cvm-apply"
 	"hcm/pkg/dal/table/types"
@@ -41,6 +41,72 @@ func init() {
 // CvmModifyRecordConverter CVM变更记录转换器
 type CvmModifyRecordConverter struct{}
 
+// mongoModifyRecord Mongo源表结构（兼容id为int64/string）
+type mongoModifyRecord struct {
+	ID         interface{}                  `json:"id" bson:"id"`
+	SuborderID string                       `json:"suborder_id" bson:"suborder_id"`
+	User       string                       `json:"bk_username" bson:"bk_username"`
+	Details    *tasktable.ModifyDetail      `json:"details" bson:"details"`
+	CreatedAt  time.Time                    `json:"created_at" bson:"create_at"`
+	UpdatedAt  time.Time                    `json:"updated_at" bson:"update_at"`
+	Status     enumor.CvmModifyRecordStatus `json:"status" bson:"status"`
+	Approver   string                       `json:"approver" bson:"approver"`
+}
+
+// normalizeModifyRecordID 兼容Mongo中id为int64/string
+func normalizeModifyRecordID(id interface{}) (string, error) {
+	switch v := id.(type) {
+	case string:
+		if v == "" {
+			return "", fmt.Errorf("id is empty string")
+		}
+		return v, nil
+	case int:
+		return fmt.Sprintf("%d", v), nil
+	case int32:
+		return fmt.Sprintf("%d", v), nil
+	case int64:
+		return fmt.Sprintf("%d", v), nil
+	case uint:
+		return fmt.Sprintf("%d", v), nil
+	case uint32:
+		return fmt.Sprintf("%d", v), nil
+	case uint64:
+		return fmt.Sprintf("%d", v), nil
+	default:
+		return "", fmt.Errorf("unsupported id type: %T", id)
+	}
+}
+
+// normalizeSourceRecord 将源数据统一转换为 tasktable.ModifyRecord
+func (c *CvmModifyRecordConverter) normalizeSourceRecord(source interface{}) (*tasktable.ModifyRecord, error) {
+	if record, ok := source.(*tasktable.ModifyRecord); ok {
+		return record, nil
+	}
+
+	if record, ok := source.(*mongoModifyRecord); ok {
+		id, err := normalizeModifyRecordID(record.ID)
+		if err != nil {
+			return nil, fmt.Errorf("normalize id failed: %w", err)
+		}
+
+		return &tasktable.ModifyRecord{
+			ID:         id,
+			SuborderID: record.SuborderID,
+			User:       record.User,
+			Details:    record.Details,
+			CreatedAt:  record.CreatedAt,
+			UpdatedAt:  record.UpdatedAt,
+			Status:     record.Status,
+			Approver:   record.Approver,
+		}, nil
+
+	}
+
+	return nil, fmt.Errorf("source data type mismatch, expected *tasktable.ModifyRecord or *mongoModifyRecord, "+
+		"got: %T", source)
+}
+
 // GetName 获取转换器名称
 func (c *CvmModifyRecordConverter) GetName() string {
 	return table.ZiyanCvmModifyRecordTable + "_converter"
@@ -48,14 +114,14 @@ func (c *CvmModifyRecordConverter) GetName() string {
 
 // NewSourceDataSlice 创建源数据切片
 func (c *CvmModifyRecordConverter) NewSourceDataSlice() interface{} {
-	return &[]*tasktable.ModifyRecord{}
+	return &[]*mongoModifyRecord{}
 }
 
 // ConvertToCreate 转换为创建请求
 func (c *CvmModifyRecordConverter) ConvertToCreate(source interface{}) (interface{}, error) {
-	record, ok := source.(*tasktable.ModifyRecord)
-	if !ok {
-		return nil, fmt.Errorf("source data type mismatch, expected *tasktable.ModifyRecord, got: %T", source)
+	record, err := c.normalizeSourceRecord(source)
+	if err != nil {
+		return nil, err
 	}
 
 	// 序列化 data_disk 和 zones
@@ -80,7 +146,7 @@ func (c *CvmModifyRecordConverter) ConvertToCreate(source interface{}) (interfac
 	}
 
 	req := &cvmapply.ZiyanCvmModifyRecordCreateReq{
-		ID:         strconv.FormatUint(record.ID, 10),
+		ID:         record.ID,
 		SuborderID: record.SuborderID,
 		BkUsername: record.User,
 		// Pre data fields
@@ -121,8 +187,8 @@ func (c *CvmModifyRecordConverter) ConvertToCreate(source interface{}) (interfac
 		CurResAssign:      record.Details.CurData.ResAssign,
 		Status:            record.Status,
 		Approver:          record.Approver,
-		CreatedAt:         types.Time(record.CreateAt.In(time.Local).Format(constant.TimeStdFormat)),
-		UpdatedAt:         types.Time(record.UpdateAt.In(time.Local).Format(constant.TimeStdFormat)),
+		CreatedAt:         types.Time(record.CreatedAt.In(time.Local).Format(constant.TimeStdFormat)),
+		UpdatedAt:         types.Time(record.UpdatedAt.In(time.Local).Format(constant.TimeStdFormat)),
 	}
 
 	return req, nil
@@ -130,9 +196,9 @@ func (c *CvmModifyRecordConverter) ConvertToCreate(source interface{}) (interfac
 
 // ConvertToUpdate 转换为更新请求
 func (c *CvmModifyRecordConverter) ConvertToUpdate(source interface{}, target interface{}) (interface{}, error) {
-	record, ok := source.(*tasktable.ModifyRecord)
-	if !ok {
-		return nil, fmt.Errorf("source data type mismatch, expected *tasktable.ModifyRecord, got: %T", source)
+	record, err := c.normalizeSourceRecord(source)
+	if err != nil {
+		return nil, err
 	}
 
 	existingRecord, ok := target.(*cvmapplytable.ZiyanCvmModifyRecord)
@@ -211,22 +277,29 @@ func (c *CvmModifyRecordConverter) ConvertToUpdate(source interface{}, target in
 
 // ExtractPrimaryKey 提取主键
 func (c *CvmModifyRecordConverter) ExtractPrimaryKey(data interface{}) (interface{}, error) {
-	// 尝试作为源数据类型处理（MongoDB中ID是uint64）
-	if modifyRecord, ok := data.(*tasktable.ModifyRecord); ok {
-		// MongoDB中是uint64，需要转换为string
+	if modifyRecord, ok := data.(*mongoModifyRecord); ok {
+		id, err := normalizeModifyRecordID(modifyRecord.ID)
+		if err != nil {
+			return nil, fmt.Errorf("normalize id failed: %w", err)
+		}
 		return map[string]interface{}{
-			"id": fmt.Sprintf("%d", modifyRecord.ID),
+			"id": id,
 		}, nil
 	}
 
-	// 尝试作为目标数据类型处理（MySQL中是string）
+	if modifyRecord, ok := data.(*tasktable.ModifyRecord); ok {
+		return map[string]interface{}{
+			"id": modifyRecord.ID,
+		}, nil
+	}
+
 	if record, ok := data.(*cvmapplytable.ZiyanCvmModifyRecord); ok {
 		return map[string]interface{}{
 			"id": record.ID,
 		}, nil
 	}
 
-	return nil, fmt.Errorf("data type mismatch, expected *tasktable.ModifyRecord or "+
+	return nil, fmt.Errorf("data type mismatch, expected *mongoModifyRecord, *tasktable.ModifyRecord or "+
 		"*cvmapplytable.ZiyanCvmModifyRecord, got: %T", data)
 }
 
@@ -234,12 +307,13 @@ func (c *CvmModifyRecordConverter) ExtractPrimaryKey(data interface{}) (interfac
 func (c *CvmModifyRecordConverter) CompareData(source interface{}, target interface{}, fields []string) (
 	bool, []string) {
 
-	sourceRecord, ok := source.(*tasktable.ModifyRecord)
-	if !ok {
+	sourceRecord, err := c.normalizeSourceRecord(source)
+	if err != nil {
 		return false, []string{"source_type_mismatch"}
 	}
 
 	targetRecord, ok := target.(*cvmapplytable.ZiyanCvmModifyRecord)
+
 	if !ok {
 		return false, []string{"target_type_mismatch"}
 	}

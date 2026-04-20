@@ -22,6 +22,7 @@ import (
 	"hcm/cmd/woa-server/logics/task/informer/generate"
 	"hcm/cmd/woa-server/storage/dal"
 	"hcm/cmd/woa-server/storage/stream"
+	ziyan "hcm/pkg/client/data-service/tcloud-ziyan"
 	"hcm/pkg/logs"
 	"hcm/pkg/serviced"
 )
@@ -45,6 +46,7 @@ type leaderAwareInformer struct {
 	// actual informers
 	applyInformer    apply.Interface
 	generateInformer generate.Interface
+	ziyanClient      *ziyan.Client
 
 	// control flags
 	started   bool
@@ -55,15 +57,14 @@ type leaderAwareInformer struct {
 }
 
 // New create a leader-aware informer that only runs on master node
-func New(loopWatch stream.LoopInterface, watchDB dal.DB, sd serviced.State) (Interface, error) {
+func New(ziyanClient *ziyan.Client, sd serviced.State) (Interface, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	lai := &leaderAwareInformer{
-		sd:      sd,
-		loopW:   loopWatch,
-		watchDB: watchDB,
-		ctx:     ctx,
-		cancel:  cancel,
+		sd:          sd,
+		ctx:         ctx,
+		cancel:      cancel,
+		ziyanClient: ziyanClient,
 	}
 
 	if sd.IsMaster() {
@@ -126,14 +127,14 @@ func (lai *leaderAwareInformer) startInformers() error {
 	var err error
 
 	// Start apply informer
-	lai.applyInformer, err = apply.New(lai.loopW, lai.watchDB)
+	lai.applyInformer, err = apply.New(lai.ziyanClient)
 	if err != nil {
 		logs.Errorf("failed to start apply informer, err: %v", err)
 		return err
 	}
 
 	// Start generate informer
-	lai.generateInformer, err = generate.New(lai.loopW, lai.watchDB)
+	lai.generateInformer, err = generate.New(lai.ziyanClient)
 	if err != nil {
 		lai.applyInformer.Stop()
 		lai.applyInformer = nil

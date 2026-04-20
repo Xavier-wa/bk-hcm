@@ -14,23 +14,26 @@ package model
 
 import (
 	"context"
+	"sync"
 
 	daltypes "hcm/cmd/woa-server/storage/dal/types"
 	types "hcm/cmd/woa-server/types/task"
-	"hcm/pkg/criteria/mapstr"
-	"hcm/pkg/tools/metadata"
+	"hcm/pkg/api/core"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	"hcm/pkg/client"
+	"hcm/pkg/kit"
+	"hcm/pkg/runtime/filter"
 )
 
 // model all model operation interface
 type model struct {
-	applyTicket     ApplyTicket
-	applyOrder      ApplyOrder
-	applyStep       ApplyStep
-	generateRecord  GenerateRecord
-	initRecord      InitRecord
-	diskCheckRecord DiskCheckRecord
-	deliverRecord   DeliverRecord
-	deviceInfo      DeviceInfo
+	applyTicket    ApplyTicket
+	applyOrder     ApplyOrder
+	applyStep      ApplyStep
+	generateRecord GenerateRecord
+	initRecord     InitRecord
+	deliverRecord  DeliverRecord
+	deviceInfo     DeviceInfo
 }
 
 // ApplyTicket get apply ticket operation interface
@@ -58,11 +61,6 @@ func (m *model) InitRecord() InitRecord {
 	return m.initRecord
 }
 
-// DiskCheckRecord get apply disk check record operation interface
-func (m *model) DiskCheckRecord() DiskCheckRecord {
-	return m.diskCheckRecord
-}
-
 // DeliverRecord get apply deliver record operation interface
 func (m *model) DeliverRecord() DeliverRecord {
 	return m.deliverRecord
@@ -73,24 +71,50 @@ func (m *model) DeviceInfo() DeviceInfo {
 	return m.deviceInfo
 }
 
-var operation *model
+var (
+	operation     *model
+	operationOnce sync.Once
+)
 
-func init() {
-	operation = &model{
-		applyTicket:     &applyTicket{},
-		applyOrder:      &applyOrder{},
-		applyStep:       &applyStep{},
-		generateRecord:  &generateRecord{},
-		initRecord:      &initRecord{},
-		diskCheckRecord: &diskCheckRecord{},
-		deliverRecord:   &deliverRecord{},
-		deviceInfo:      &deviceInfo{},
+func newOperation(apiClientSet *client.ClientSet) *model {
+	return &model{
+		applyTicket:    &applyTicket{apiClientSet: apiClientSet},
+		applyOrder:     &applyOrder{apiClientSet: apiClientSet},
+		applyStep:      &applyStep{apiClientSet: apiClientSet},
+		generateRecord: &generateRecord{apiClientSet: apiClientSet},
+		initRecord:     &initRecord{apiClientSet: apiClientSet},
+		deliverRecord:  &deliverRecord{apiClientSet: apiClientSet},
+		deviceInfo:     &deviceInfo{apiClientSet: apiClientSet},
 	}
 }
 
-// Operation return all model operation interface
-func Operation() *model {
-	return operation
+// InitOperation initializes task model operation singleton.
+// It only initializes once; subsequent calls are no-ops.
+func InitOperation(apiClientSet *client.ClientSet) {
+	if apiClientSet == nil {
+		return
+	}
+
+	operationOnce.Do(func() {
+		operation = newOperation(apiClientSet)
+	})
+}
+
+// Operation returns task model operation singleton.
+// It supports both Operation() and Operation(apiClientSet).
+// If not initialized yet, it returns a temporary empty model instead of nil to avoid panic.
+func Operation(apiClientSet ...*client.ClientSet) *model {
+	if len(apiClientSet) > 0 {
+		InitOperation(apiClientSet[0])
+	}
+
+	if operation != nil {
+		return operation
+	}
+
+	// Not initialized yet, return a temporary empty model to avoid nil pointer panic.
+	// The caller should call InitOperation before using Operation for full functionality.
+	return newOperation(nil)
 }
 
 // Model provides storage interface for operations of models
@@ -100,166 +124,129 @@ type Model interface {
 	ApplyStep() ApplyStep
 	GenerateRecord() GenerateRecord
 	InitRecord() InitRecord
-	DiskCheckRecord() DiskCheckRecord
 	DeliverRecord() DeliverRecord
 	DeviceInfo() DeviceInfo
 }
 
 // ApplyTicket apply ticket operation interface
 type ApplyTicket interface {
-	// NextSequence returns next apply ticket sequence id from db
-	NextSequence(ctx context.Context) (uint64, error)
 	// CreateApplyTicket creates apply ticket in db
-	CreateApplyTicket(ctx context.Context, inst *types.ApplyTicket) error
+	CreateApplyTicket(kt *kit.Kit, inst *types.ApplyTicket) (uint64, error)
 	// GetApplyTicket gets apply ticket by filter from db
-	GetApplyTicket(ctx context.Context, filter *mapstr.MapStr) (*types.ApplyTicket, error)
+	GetApplyTicket(kt *kit.Kit, filterExpr *filter.Expression) (
+		*types.ApplyTicket, error)
 	// CountApplyTicket gets apply ticket count by filter from db
-	CountApplyTicket(ctx context.Context, filter map[string]interface{}) (uint64, error)
+	CountApplyTicket(kt *kit.Kit, filter *filter.Expression) (uint64, error)
 	// FindManyApplyTicket gets apply ticket list by filter from db
-	FindManyApplyTicket(ctx context.Context, page metadata.BasePage, filter map[string]interface{}) (
-		[]*types.ApplyTicket, error)
+	FindManyApplyTicket(kt *kit.Kit, filterExpr *filter.Expression,
+		page *core.BasePage) ([]*types.ApplyTicket, error)
 	// UpdateApplyTicket updates apply ticket by filter and doc in db
-	UpdateApplyTicket(ctx context.Context, filter *mapstr.MapStr, doc interface{}) error
-	// DeleteApplyTicket deletes apply ticket from db
-	DeleteApplyTicket()
+	UpdateApplyTicket(kt *kit.Kit, filterExpr *filter.Expression,
+		updateData *cvmapplyproto.ZiyanCvmApplyOrderUpdateReq) error
 	// AggregateAll apply ticket aggregate all operation
 	AggregateAll(ctx context.Context, pipeline interface{}, result interface{}, opts ...*daltypes.AggregateOpts) error
 }
 
 // ApplyOrder apply order operation interface
 type ApplyOrder interface {
-	// NextSequence returns next apply order sequence id from db
-	NextSequence(ctx context.Context) (uint64, error)
 	// CreateApplyOrder creates apply order in db
-	CreateApplyOrder(ctx context.Context, inst *types.ApplyOrder) error
+	CreateApplyOrder(kt *kit.Kit, inst *types.ApplyOrder) error
 	// GetApplyOrder gets apply order by filter from db
-	GetApplyOrder(ctx context.Context, filter *mapstr.MapStr) (*types.ApplyOrder, error)
+	GetApplyOrder(kt *kit.Kit, filterExpr *filter.Expression) (*types.ApplyOrder, error)
 	// CountApplyOrder gets apply order count by filter from db
-	CountApplyOrder(ctx context.Context, filter map[string]interface{}) (uint64, error)
+	CountApplyOrder(kt *kit.Kit, filterExpr *filter.Expression) (uint64, error)
 	// FindManyApplyOrder gets apply order list by filter from db
-	FindManyApplyOrder(ctx context.Context, page metadata.BasePage, filter map[string]interface{}) ([]*types.ApplyOrder,
-		error)
+	FindManyApplyOrder(kt *kit.Kit, filterExpr *filter.Expression,
+		page *core.BasePage) ([]*types.ApplyOrder, error)
 	// UpdateApplyOrder updates apply order by filter and doc in db
-	UpdateApplyOrder(ctx context.Context, filter *mapstr.MapStr, doc *mapstr.MapStr) error
-	// DeleteApplyOrder deletes apply order from db
-	DeleteApplyOrder()
+	UpdateApplyOrder(kt *kit.Kit, filterExpr *filter.Expression,
+		updateData *cvmapplyproto.ZiyanCvmApplySuborderUpdateReq) error
 	// AggregateAll apply order aggregate all operation
 	AggregateAll(ctx context.Context, pipeline interface{}, result interface{}, opts ...*daltypes.AggregateOpts) error
 }
 
 // ApplyStep apply step operation interface
 type ApplyStep interface {
-	// NextSequence returns next apply order sequence id from db
-	NextSequence(ctx context.Context) (uint64, error)
 	// CreateApplyStep creates apply step in db
-	CreateApplyStep(ctx context.Context, inst *types.ApplyStep) error
+	CreateApplyStep(kt *kit.Kit, inst *types.ApplyStep) error
 	// GetApplyStep gets apply order by filter from db
-	GetApplyStep(ctx context.Context, filter *mapstr.MapStr) (*types.ApplyStep, error)
+	GetApplyStep(kt *kit.Kit, filterExpr *filter.Expression) (*types.ApplyStep, error)
 	// CountApplyStep gets apply step count by filter from db
-	CountApplyStep(ctx context.Context, filter map[string]interface{}) (uint64, error)
+	CountApplyStep(kt *kit.Kit, filterExpr *filter.Expression) (uint64, error)
 	// FindManyApplyStep gets apply order list by filter from db
-	FindManyApplyStep(ctx context.Context, filter *mapstr.MapStr) ([]*types.ApplyStep, error)
+	FindManyApplyStep(kt *kit.Kit, filterExpr *filter.Expression) (
+		[]*types.ApplyStep, error)
 	// UpdateApplyStep updates apply order by filter and doc in db
-	UpdateApplyStep(ctx context.Context, filter *mapstr.MapStr, doc *mapstr.MapStr) error
-	// DeleteApplyStep deletes apply step from db
-	DeleteApplyStep()
+	UpdateApplyStep(kt *kit.Kit, filterExpr *filter.Expression,
+		updateData *cvmapplyproto.ZiyanCvmApplyStepUpdateReq) error
 }
 
 // GenerateRecord apply generate record operation interface
 type GenerateRecord interface {
-	// NextSequence returns next apply order generate record sequence id from db
-	NextSequence(ctx context.Context) (uint64, error)
 	// CreateGenerateRecord creates apply order generate record in db
-	CreateGenerateRecord(ctx context.Context, inst *types.GenerateRecord) error
+	CreateGenerateRecord(kt *kit.Kit, inst *types.GenerateRecord) (string, error)
 	// GetGenerateRecord gets apply order generate record by filter from db
-	GetGenerateRecord(ctx context.Context, filter *mapstr.MapStr) (*types.GenerateRecord, error)
+	GetGenerateRecord(kt *kit.Kit, filterExpr *filter.Expression) (
+		*types.GenerateRecord, error)
 	// CountGenerateRecord gets apply order generate record count by filter from db
-	CountGenerateRecord(ctx context.Context, filter map[string]interface{}) (uint64, error)
+	CountGenerateRecord(kt *kit.Kit, filterExpr *filter.Expression) (uint64, error)
 	// FindManyGenerateRecord gets generate record list by filter from db
-	FindManyGenerateRecord(ctx context.Context, page metadata.BasePage, filter map[string]interface{}) (
-		[]*types.GenerateRecord, error)
+	FindManyGenerateRecord(kt *kit.Kit, filterExpr *filter.Expression,
+		page *core.BasePage) ([]*types.GenerateRecord, error)
 	// UpdateGenerateRecord updates apply order generate record by filter and doc in db
-	UpdateGenerateRecord(ctx context.Context, filter *mapstr.MapStr, doc *mapstr.MapStr) error
-	// DeleteGenerateRecord deletes apply order generate record from db
-	DeleteGenerateRecord()
+	UpdateGenerateRecord(kt *kit.Kit, filterExpr *filter.Expression,
+		updateData *cvmapplyproto.ZiyanCvmGenerateRecordUpdateReq) error
 	// AggregateAll generate record aggregate all operation
 	AggregateAll(ctx context.Context, pipeline interface{}, result interface{}, opts ...*daltypes.AggregateOpts) error
 }
 
 // InitRecord apply init record operation interface
 type InitRecord interface {
-	// NextSequence returns next apply order init record sequence id from db
-	NextSequence(ctx context.Context) (uint64, error)
 	// CreateInitRecord creates apply order init record in db
-	CreateInitRecord(ctx context.Context, inst *types.InitRecord) error
+	CreateInitRecord(kt *kit.Kit, inst *types.InitRecord) error
 	// GetInitRecord gets apply order init record by filter from db
-	GetInitRecord(ctx context.Context, filter *mapstr.MapStr) (*types.InitRecord, error)
+	GetInitRecord(kt *kit.Kit, filterExpr *filter.Expression) (*types.InitRecord, error)
 	// CountInitRecord gets apply order init record count by filter from db
-	CountInitRecord(ctx context.Context, filter map[string]interface{}) (uint64, error)
+	CountInitRecord(kt *kit.Kit, filterExpr *filter.Expression) (uint64, error)
 	// FindManyInitRecord gets init record list by filter from db
-	FindManyInitRecord(ctx context.Context, page metadata.BasePage, filter map[string]interface{}) ([]*types.InitRecord,
-		error)
+	FindManyInitRecord(kt *kit.Kit, filterExpr *filter.Expression,
+		page *core.BasePage) ([]*types.InitRecord, error)
 	// UpdateInitRecord updates apply order init record by filter and doc in db
-	UpdateInitRecord(ctx context.Context, filter *mapstr.MapStr, doc *mapstr.MapStr) error
-	// DeleteInitRecord deletes apply order init record from db
-	DeleteInitRecord()
-}
-
-// DiskCheckRecord apply disk check record operation interface
-type DiskCheckRecord interface {
-	// NextSequence returns next apply order disk check record sequence id from db
-	NextSequence(ctx context.Context) (uint64, error)
-	// CreateDiskCheckRecord creates apply order disk check record in db
-	CreateDiskCheckRecord(ctx context.Context, inst *types.DiskCheckRecord) error
-	// GetDiskCheckRecord gets apply order disk check record by filter from db
-	GetDiskCheckRecord(ctx context.Context, filter *mapstr.MapStr) (*types.DiskCheckRecord, error)
-	// CountDiskCheckRecord gets apply order disk check record count by filter from db
-	CountDiskCheckRecord(ctx context.Context, filter map[string]interface{}) (uint64, error)
-	// FindManyDiskCheckRecord gets disk check record list by filter from db
-	FindManyDiskCheckRecord(ctx context.Context, page metadata.BasePage, filter map[string]interface{}) (
-		[]*types.DiskCheckRecord, error)
-	// UpdateDiskCheckRecord updates apply order disk check record by filter and doc in db
-	UpdateDiskCheckRecord(ctx context.Context, filter *mapstr.MapStr, doc *mapstr.MapStr) error
-	// DeleteDiskCheckRecord deletes apply order disk check record from db
-	DeleteDiskCheckRecord()
+	UpdateInitRecord(kt *kit.Kit, filterExpr *filter.Expression,
+		updateData *cvmapplyproto.ZiyanCvmApplyInitTaskUpdateReq) error
 }
 
 // DeliverRecord apply deliver record operation interface
 type DeliverRecord interface {
-	// NextSequence returns next apply order deliver record sequence id from db
-	NextSequence(ctx context.Context) (uint64, error)
 	// CreateDeliverRecord creates apply order deliver record in db
-	CreateDeliverRecord(ctx context.Context, inst *types.DeliverRecord) error
+	CreateDeliverRecord(kt *kit.Kit, inst *types.DeliverRecord) error
 	// GetDeliverRecord gets apply order deliver record by filter from db
-	GetDeliverRecord(ctx context.Context, filter *mapstr.MapStr) (*types.DeliverRecord, error)
+	GetDeliverRecord(kt *kit.Kit, filterExpr *filter.Expression) (
+		*types.DeliverRecord, error)
 	// CountDeliverRecord gets apply order deliver record count by filter from db
-	CountDeliverRecord(ctx context.Context, filter map[string]interface{}) (uint64, error)
+	CountDeliverRecord(kt *kit.Kit, filterExpr *filter.Expression) (uint64, error)
 	// FindManyDeliverRecord gets deliver record list by filter from db
-	FindManyDeliverRecord(ctx context.Context, page metadata.BasePage, filter map[string]interface{}) (
-		[]*types.DeliverRecord, error)
+	FindManyDeliverRecord(kt *kit.Kit, filterExpr *filter.Expression,
+		page *core.BasePage) ([]*types.DeliverRecord, error)
 	// UpdateDeliverRecord updates apply order deliver record by filter and doc in db
-	UpdateDeliverRecord(ctx context.Context, filter *mapstr.MapStr, doc *mapstr.MapStr) error
-	// DeleteDeliverRecord deletes apply order deliver record from db
-	DeleteDeliverRecord()
+	UpdateDeliverRecord(kt *kit.Kit, filterExpr *filter.Expression,
+		updateData *cvmapplyproto.ZiyanCvmDeliverRecordUpdateReq) error
 }
 
 // DeviceInfo device info operation interface
 type DeviceInfo interface {
-	// CreateDeviceInfo creates device info in db
-	CreateDeviceInfo(ctx context.Context, inst *types.DeviceInfo) error
 	// CreateDeviceInfos creates devices info in db
-	CreateDeviceInfos(ctx context.Context, inst []*types.DeviceInfo) error
+	CreateDeviceInfos(kt *kit.Kit, insts []*types.DeviceInfo) error
 	// GetDeviceInfo gets device info by filter from db
-	GetDeviceInfo(ctx context.Context, filter *mapstr.MapStr) ([]*types.DeviceInfo, error)
+	GetDeviceInfo(kt *kit.Kit, filter *filter.Expression) ([]*types.DeviceInfo, error)
 	// CountDeviceInfo gets device info count by filter from db
-	CountDeviceInfo(ctx context.Context, filter map[string]interface{}) (uint64, error)
+	CountDeviceInfo(kt *kit.Kit, filter *filter.Expression) (uint64, error)
 	// FindManyDeviceInfo gets device info list by filter from db
-	FindManyDeviceInfo(ctx context.Context, page metadata.BasePage, filter map[string]interface{}) ([]*types.DeviceInfo,
-		error)
+	FindManyDeviceInfo(kt *kit.Kit, filter *filter.Expression,
+		page *core.BasePage) ([]*types.DeviceInfo, error)
 	// UpdateDeviceInfo updates device info by filter and doc in db
-	UpdateDeviceInfo(ctx context.Context, filter *mapstr.MapStr, doc *mapstr.MapStr) error
-	// DeleteDeviceInfo deletes device info from db
-	DeleteDeviceInfo()
+	UpdateDeviceInfo(kt *kit.Kit, filterExpr *filter.Expression,
+		updateData *cvmapplyproto.ZiyanCvmDeviceInfoUpdateReq) error
 	// AggregateAll device info aggregate all operation
 	AggregateAll(ctx context.Context, pipeline interface{}, result interface{}, opts ...*daltypes.AggregateOpts) error
 	// Distinct gets device info distinct result from db

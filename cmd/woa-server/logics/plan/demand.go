@@ -1575,6 +1575,7 @@ func initResourceSpec(sub *cvmapplytable.ZiyanCvmApplySuborder) *tasktypes.Resou
 		ChargeType:        sub.ChargeType,
 		ChargeMonths:      sub.ChargeMonths,
 		InheritInstanceId: sub.InheritInstanceID,
+		BkAssetID:         sub.BkAssetID,
 		ResAssign:         sub.ResAssign,
 		CPUThreadSwitch:   sub.CPUThreadSwitch,
 	}

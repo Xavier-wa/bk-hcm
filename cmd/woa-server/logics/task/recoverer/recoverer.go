@@ -21,9 +21,7 @@
 package recoverer
 
 import (
-	"hcm/cmd/woa-server/logics/cvm"
 	"hcm/cmd/woa-server/logics/task/recoverer/apply"
-	cvmprod "hcm/cmd/woa-server/logics/task/recoverer/cvm-prod"
 	"hcm/cmd/woa-server/logics/task/recoverer/recycle"
 	"hcm/cmd/woa-server/logics/task/recycler"
 	"hcm/cmd/woa-server/logics/task/scheduler"
@@ -38,7 +36,8 @@ import (
 
 // New create a recoverer
 func New(kt *kit.Kit, cfg *cc.Recover, itsmCli itsm.Client, recycler recycler.Interface, scheduler scheduler.Interface,
-	cvmLogic cvm.Logics, cmdbCli cmdb.Client, sopsCli sopsapi.SopsClientInterface, sd serviced.State) error {
+	cmdbCli cmdb.Client, sopsCli sopsapi.SopsClientInterface, sd serviced.State) error {
+
 	// 查看配置是否开启
 	if cfg.EnableApplyRecover {
 		logs.Infof("start apply recover service, rid: %s", kt.Rid)
@@ -54,11 +53,6 @@ func New(kt *kit.Kit, cfg *cc.Recover, itsmCli itsm.Client, recycler recycler.In
 			logs.Errorf("failed to start recycle recoverer, err: %v, rid: %s", err, kt.Rid)
 			return err
 		}
-	}
-
-	if cfg.EnableCvmProdRecover {
-		logs.Infof("start cvm product recover service, rid: %s", kt.Rid)
-		cvmprod.StartRecover(kt, cvmLogic, sd)
 	}
 
 	return nil

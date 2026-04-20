@@ -18,44 +18,56 @@ import (
 	"sync"
 	"time"
 
-	"hcm/cmd/woa-server/storage/dal"
-	"hcm/cmd/woa-server/storage/stream"
-	"hcm/cmd/woa-server/storage/stream/types"
-	"hcm/pkg"
+	"hcm/pkg/api/core"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	ziyan "hcm/pkg/client/data-service/tcloud-ziyan"
+	"hcm/pkg/criteria/constant"
+	"hcm/pkg/dal/dao/tools"
+	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/runtime/filter"
+	cvt "hcm/pkg/tools/converter"
 
-	"github.com/tidwall/gjson"
 	"k8s.io/client-go/util/workqueue"
+)
+
+const (
+	// defaultPollInterval default polling interval
+	defaultPollInterval = 5 * time.Second
 )
 
 // Interface generate informer interface
 type Interface interface {
 	// Pop gets head of generate record info queue
-	Pop() (uint64, error)
+	Pop() (string, error)
 	// Stop stops generate informer watch loop.
 	Stop()
 }
 
 // generateInformer generate informer which list and watch database and cache generate record info
 type generateInformer struct {
-	key     Key
-	watchDB dal.DB
-	event   stream.LoopInterface
-
-	queue workqueue.RateLimitingInterface
-
-	stopCh   chan struct{}
-	stopOnce sync.Once
+	client       *ziyan.Client
+	queue        workqueue.RateLimitingInterface
+	pollInterval time.Duration
+	lastPollTime time.Time
+	wg           sync.WaitGroup
+	mu           sync.Mutex
+	stopCh       chan struct{}
+	stopOnce     sync.Once
 }
 
-// New create a generate informer
-func New(loopWatch stream.LoopInterface, watchDB dal.DB) (*generateInformer, error) {
+// New creates a generate informer
+func New(client *ziyan.Client) (*generateInformer, error) {
+	if client == nil {
+		return nil, errors.New("ziyan data-service client is nil")
+	}
+
 	generateInformer := &generateInformer{
-		key:     KeyGenerate,
-		watchDB: watchDB,
-		event:   loopWatch,
-		queue:   workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "generate"),
-		stopCh:  make(chan struct{}),
+		queue:        workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "generate"),
+		stopCh:       make(chan struct{}),
+		client:       client,
+		pollInterval: defaultPollInterval,
+		lastPollTime: time.Now(),
 	}
 
 	if err := generateInformer.Run(); err != nil {
@@ -67,93 +79,126 @@ func New(loopWatch stream.LoopInterface, watchDB dal.DB) (*generateInformer, err
 }
 
 // Run starts generate informer
-func (i *generateInformer) Run() error {
-	return i.listAndWatchGenerateRecord()
+func (g *generateInformer) Run() error {
+	// start polling goroutine
+	g.wg.Add(1)
+	go g.pollLoop()
+
+	logs.Infof("generate informer started")
+	return nil
+}
+
+// Stop stops the generate informer
+func (g *generateInformer) Stop() {
+	g.stopOnce.Do(func() {
+		close(g.stopCh)
+		g.queue.ShutDown()
+		g.wg.Wait()
+	})
 }
 
 // Pop gets head of generate record info queue
-func (i *generateInformer) Pop() (uint64, error) {
-	obj, shutdown := i.queue.Get()
+func (g *generateInformer) Pop() (string, error) {
+	obj, shutdown := g.queue.Get()
 	if shutdown {
-		return 0, nil
+		return "", nil
 	}
 
-	defer i.queue.Done(obj)
+	defer g.queue.Done(obj)
 
-	id, ok := obj.(uint64)
+	id, ok := obj.(string)
 	if !ok {
-		i.queue.Forget(obj)
-		logs.Warnf("Expected int in queue but got %#v", obj)
-		return 0, errors.New("got non-int from queue")
+		g.queue.Forget(obj)
+		logs.Warnf("expected string in queue but got %#v", obj)
+		return "", errors.New("got non-string from queue")
 	}
 
-	i.queue.Forget(obj)
+	g.queue.Forget(obj)
 
 	return id, nil
 }
 
-// Stop stops generate informer watch loop.
-func (i *generateInformer) Stop() {
-	i.stopOnce.Do(func() {
-		close(i.stopCh)
-		i.queue.ShutDown()
-	})
+// pollLoop continuously polls for generate record changes
+func (g *generateInformer) pollLoop() {
+	defer g.wg.Done()
+
+	ticker := time.NewTicker(g.pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-g.stopCh:
+			logs.Infof("generate informer polling stopped")
+			return
+		case <-ticker.C:
+			if err := g.pollGenerateRecords(); err != nil {
+				logs.Errorf("failed to poll generate records, err: %v", err)
+			}
+		}
+	}
 }
 
-// listAndWatchGenerateRecord list and watch database and cache generate record into queue
-func (i *generateInformer) listAndWatchGenerateRecord() error {
-	// watch generate record
-	handler := newGenerateTokenHandler(i.key, i.watchDB)
-	startTime := &types.TimeStamp{Sec: uint32(time.Now().Unix())}
+// pollGenerateRecords polls for generate record changes since last poll time
+func (g *generateInformer) pollGenerateRecords() error {
+	kt := core.NewBackendKit()
 
-	loopOpts := &types.LoopOneOptions{
-		LoopOptions: types.LoopOptions{
-			Name: "generate_info",
-			WatchOpt: &types.WatchOptions{
-				Options: types.Options{
-					EventStruct:     new(map[string]interface{}),
-					Collection:      pkg.BKTableNameGenerateRecord,
-					StartAfterToken: nil,
-					StartAtTime:     startTime,
-					// TODO: add failure callback
-					WatchFatalErrorCallback: nil,
-				},
-			},
-			TokenHandler: handler,
-			RetryOptions: &types.RetryOptions{
-				MaxRetryCount: 4,
-				RetryDuration: 500 * time.Millisecond,
-			},
-			StopNotifier: i.stopCh,
-		},
-		EventHandler: &types.OneHandler{
-			DoAdd:    i.onUpsert,
-			DoUpdate: i.onUpsert,
-			DoDelete: i.onDelete,
+	g.mu.Lock()
+	lastPoll := g.lastPollTime
+	g.lastPollTime = time.Now()
+	g.mu.Unlock()
+
+	// build filter: updated_at > lastPollTime
+	filterExpr := &filter.Expression{
+		Op: filter.And,
+		Rules: []filter.RuleFactory{
+			tools.RuleGreaterThan("updated_at", lastPoll.Format(constant.TimeStdFormat)),
 		},
 	}
 
-	return i.event.WithOne(loopOpts)
-}
-
-// onUpsert set or update generate cache
-func (i *generateInformer) onUpsert(e *types.Event) bool {
-	logs.V(5).Infof("received generate record event, op: %s, doc: %s, rid: %s", e.OperationType, e.DocBytes, e.ID())
-
-	id := gjson.GetBytes(e.DocBytes, "generate_id").Uint()
-	if id < 0 {
-		logs.Errorf("received invalid generate record event, skip, op: %s, doc: %s, rid: %s", e.OperationType,
-			e.DocBytes, e.ID())
-		return false
+	recordIDs, err := g.queryGenerateRecords(kt, filterExpr)
+	if err != nil {
+		return err
 	}
 
-	i.queue.Add(id)
+	for _, id := range recordIDs {
+		g.queue.Add(id)
+	}
 
-	return false
+	if len(recordIDs) > 0 {
+		logs.V(5).Infof("generate informer polled %d records, rid: %s", len(recordIDs), kt.Rid)
+	}
+
+	return nil
 }
 
-// onDelete delete generate cache
-func (i *generateInformer) onDelete(e *types.Event) bool {
-	// TODO
-	return false
+// queryGenerateRecords queries generate records from data-service
+func (g *generateInformer) queryGenerateRecords(kt *kit.Kit, filterExpr *filter.Expression) ([]string, error) {
+	recordIDs := make([]string, 0)
+
+	req := &cvmapplyproto.ZiyanCvmGenerateRecordListReq{
+		Filter: filterExpr,
+		Page:   core.NewDefaultBasePage(),
+		Fields: []string{"generate_id"},
+	}
+
+	for {
+		resp, err := g.client.ZiyanCvmGenerateRecord.List(kt.Ctx, kt.Header(), req)
+		if err != nil {
+			logs.Errorf("failed to list generate records, err: %v, req: %+v, rid: %s", err, cvt.PtrToVal(req), kt.Rid)
+			return nil, err
+		}
+
+		for _, record := range resp.Details {
+			if record.GenerateID != "" {
+				recordIDs = append(recordIDs, record.GenerateID)
+			}
+		}
+
+		if len(resp.Details) < int(req.Page.Limit) {
+			break
+		}
+		req.Page.Start += uint32(req.Page.Limit)
+	}
+
+	return recordIDs, nil
 }

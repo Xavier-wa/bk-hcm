@@ -69,7 +69,7 @@ type ZiyanCvmGenerateRecord struct {
 	TaskLink string `db:"task_link" json:"task_link" validate:"max=512"`
 	// RequestInfo 请求信息
 	RequestInfo string `db:"request_info" json:"request_info"`
-	// Status 状态(-1:默认 0:成功 1:失败 2:运行中等)
+	// Status 状态(-1:默认 0:成功 1:进行中 2:失败)
 	Status *enumor.GenerateStepStatus `db:"status" json:"status"`
 	// IsMatched 是否已匹配(0:否 1:是)
 	IsMatched *bool `db:"is_matched" json:"is_matched"`

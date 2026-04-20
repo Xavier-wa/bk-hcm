@@ -186,8 +186,8 @@ func (c *CvmCvmApplyOrderConverter) ConvertToUpdate(source interface{}, target i
 		ChargeType:        applyOrder.Spec.ChargeType,
 		ChargeMonths:      cvt.ValToPtr(applyOrder.Spec.ChargeMonths),
 		InheritInstanceID: applyOrder.Spec.InheritInstanceId,
-		SystemDisk:        systemDiskJSON,
-		DataDisk:          dataDiskJSON,
+		SystemDisk:        cvt.ValToPtr(systemDiskJSON),
+		DataDisk:          cvt.ValToPtr(dataDiskJSON),
 		Remark:            applyOrder.Remark,
 	}
 
@@ -195,10 +195,10 @@ func (c *CvmCvmApplyOrderConverter) ConvertToUpdate(source interface{}, target i
 	generateRecordUpdateReq := &cvmapplyproto.ZiyanCvmGenerateRecordUpdateReq{
 		GenerateID: "", // 占位符，会在 handleMultiTableUpdate 中查询并填充真实的 generate_id
 		SuborderID: suborder.SuborderID,
-		TaskID:     applyOrder.TaskId,
-		TaskLink:   applyOrder.TaskLink,
+		TaskID:     cvt.ValToPtr(applyOrder.TaskId),
+		TaskLink:   cvt.ValToPtr(applyOrder.TaskLink),
 		Status:     cvt.ValToPtr(convertCvmApplyStatusToGenerateStatus(applyOrder.Status)),
-		Message:    applyOrder.Message,
+		Message:    cvt.ValToPtr(applyOrder.Message),
 		TotalNum:   cvt.ValToPtr(applyOrder.Total),
 		SuccessNum: cvt.ValToPtr(applyOrder.SuccessNum),
 	}

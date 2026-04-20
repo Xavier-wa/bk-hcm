@@ -21,12 +21,13 @@ package converters
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	tasktypes "hcm/cmd/woa-server/types/task"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/dal/table"
 	cvmapplytable "hcm/pkg/dal/table/cvm-apply"
 	"hcm/pkg/dal/table/types"
 	cvt "hcm/pkg/tools/converter"
@@ -39,27 +40,64 @@ func init() {
 // CvmDeviceInfoConverter 设备交付记录转换器（cr_DeviceInfo -> ziyan_cvm_device_info）
 type CvmDeviceInfoConverter struct{}
 
+// mongoDeviceInfo Mongo源表结构兼容类型（兼容generate_id为int/string）
+type mongoDeviceInfo struct {
+	OrderId          uint64                 `json:"order_id" bson:"order_id"`
+	SubOrderId       string                 `json:"suborder_id" bson:"suborder_id"`
+	GenerateId       interface{}            `json:"generate_id" bson:"generate_id"`
+	BkBizId          int                    `json:"bk_biz_id" bson:"bk_biz_id"`
+	User             string                 `json:"bk_username" bson:"bk_username"`
+	BkHostId         int64                  `json:"bk_host_id" bson:"bk_host_id"`
+	Ip               string                 `json:"ip" bson:"ip"`
+	AssetId          string                 `json:"asset_id" bson:"asset_id"`
+	InstanceID       string                 `json:"instance_id" bson:"instance_id"`
+	RequireType      enumor.RequireType     `json:"require_type" bson:"require_type"`
+	ResourceType     tasktypes.ResourceType `json:"resource_type" bson:"resource_type"`
+	DeviceType       string                 `json:"device_type" bson:"device_type"`
+	Description      string                 `json:"description" bson:"description"`
+	Remark           string                 `json:"remark" bson:"remark"`
+	ZoneName         string                 `json:"zone_name" bson:"zone_name"`
+	ZoneID           int                    `json:"zone_id" bson:"zone_id"`
+	ModuleName       string                 `json:"module_name" bson:"module_name"`
+	Equipment        string                 `json:"rack_id" bson:"rack_id"`
+	IsMatched        bool                   `json:"is_matched" bson:"is_matched"`
+	IsInited         bool                   `json:"is_inited" bson:"is_inited"`
+	IsDelivered      bool                   `json:"is_delivered" bson:"is_delivered"`
+	Deliverer        string                 `json:"deliverer" bson:"deliverer"`
+	GenerateTaskId   string                 `json:"generate_task_id" bson:"generate_task_id"`
+	GenerateTaskLink string                 `json:"generate_task_link" bson:"generate_task_link"`
+	InitTaskId       string                 `json:"init_task_id" bson:"init_task_id"`
+	InitTaskLink     string                 `json:"init_task_link" bson:"init_task_link"`
+	CreateAt         time.Time              `json:"create_at" bson:"create_at"`
+	UpdateAt         time.Time              `json:"update_at" bson:"update_at"`
+}
+
 // GetName 获取转换器名称
 func (c *CvmDeviceInfoConverter) GetName() string {
-	return "ziyan_cvm_device_info_converter"
+	return table.ZiyanCvmDeviceInfoTable + "_converter"
 }
 
 // NewSourceDataSlice 创建源数据切片
 func (c *CvmDeviceInfoConverter) NewSourceDataSlice() interface{} {
-	return &[]*tasktypes.DeviceInfo{}
+	return &[]*mongoDeviceInfo{}
 }
 
 // ConvertToCreate 转换为创建请求
 func (c *CvmDeviceInfoConverter) ConvertToCreate(source interface{}) (interface{}, error) {
-	deviceInfo, ok := source.(*tasktypes.DeviceInfo)
+	deviceInfo, ok := source.(*mongoDeviceInfo)
 	if !ok {
-		return nil, fmt.Errorf("source data type mismatch, expected *tasktypes.DeviceInfo, got: %T", source)
+		return nil, fmt.Errorf("source data type mismatch, expected *mongoDeviceInfo, got: %T", source)
+	}
+
+	generateID, err := normalizeGenerateID(deviceInfo.GenerateId)
+	if err != nil {
+		return nil, fmt.Errorf("normalize generate_id failed: %w", err)
 	}
 
 	return &cvmapplyproto.ZiyanCvmDeviceInfoCreateReq{
 		OrderID:          int64(deviceInfo.OrderId),
 		SuborderID:       deviceInfo.SubOrderId,
-		GenerateID:       strconv.FormatUint(deviceInfo.GenerateId, 10),
+		GenerateID:       generateID,
 		BkBizID:          int64(deviceInfo.BkBizId),
 		BkUsername:       deviceInfo.User,
 		IP:               deviceInfo.Ip,
@@ -86,9 +124,14 @@ func (c *CvmDeviceInfoConverter) ConvertToCreate(source interface{}) (interface{
 
 // ConvertToUpdate 转换为更新请求
 func (c *CvmDeviceInfoConverter) ConvertToUpdate(source interface{}, target interface{}) (interface{}, error) {
-	deviceInfo, ok := source.(*tasktypes.DeviceInfo)
+	deviceInfo, ok := source.(*mongoDeviceInfo)
 	if !ok {
-		return nil, fmt.Errorf("source data type mismatch, expected *tasktypes.DeviceInfo, got: %T", source)
+		return nil, fmt.Errorf("source data type mismatch, expected *mongoDeviceInfo, got: %T", source)
+	}
+
+	generateID, err := normalizeGenerateID(deviceInfo.GenerateId)
+	if err != nil {
+		return nil, fmt.Errorf("normalize generate_id failed: %w", err)
 	}
 
 	// 获取目标数据的ID（更新时必需）
@@ -96,9 +139,6 @@ func (c *CvmDeviceInfoConverter) ConvertToUpdate(source interface{}, target inte
 	if !ok {
 		return nil, fmt.Errorf("target data type mismatch, expected *cvmapplytable.ZiyanCvmDeviceInfo, got: %T", target)
 	}
-
-	// 转换 generate_id: uint64 -> string
-	generateID := strconv.FormatUint(deviceInfo.GenerateId, 10)
 
 	return &cvmapplyproto.ZiyanCvmDeviceInfoUpdateReq{
 		ID:               device.ID,
@@ -133,11 +173,16 @@ func (c *CvmDeviceInfoConverter) ConvertToUpdate(source interface{}, target inte
 // ExtractPrimaryKey 提取主键值（复合主键：order_id + suborder_id + generate_id + asset_id）
 func (c *CvmDeviceInfoConverter) ExtractPrimaryKey(data interface{}) (interface{}, error) {
 	// 尝试作为源数据类型处理
-	if deviceInfo, ok := data.(*tasktypes.DeviceInfo); ok {
+	if deviceInfo, ok := data.(*mongoDeviceInfo); ok {
+		generateID, err := normalizeGenerateID(deviceInfo.GenerateId)
+		if err != nil {
+			return nil, fmt.Errorf("normalize generate_id failed: %w", err)
+		}
+
 		return map[string]interface{}{
 			"order_id":    deviceInfo.OrderId,
 			"suborder_id": deviceInfo.SubOrderId,
-			"generate_id": strconv.FormatUint(deviceInfo.GenerateId, 10),
+			"generate_id": generateID,
 			"ip":          deviceInfo.Ip,
 			"asset_id":    deviceInfo.AssetId,
 		}, nil
@@ -154,13 +199,13 @@ func (c *CvmDeviceInfoConverter) ExtractPrimaryKey(data interface{}) (interface{
 		}, nil
 	}
 
-	return nil, fmt.Errorf("data type mismatch, expected *tasktypes.DeviceInfo or "+
+	return nil, fmt.Errorf("data type mismatch, expected *mongoDeviceInfo or "+
 		"*cvmapplytable.ZiyanCvmDeviceInfo, got: %T", data)
 }
 
 // CompareData 对比两个数据是否一致
 func (c *CvmDeviceInfoConverter) CompareData(source, target interface{}, fields []string) (bool, []string) {
-	deviceInfo, ok := source.(*tasktypes.DeviceInfo)
+	deviceInfo, ok := source.(*mongoDeviceInfo)
 	if !ok {
 		return false, []string{"source_type_mismatch"}
 	}
@@ -181,7 +226,7 @@ func (c *CvmDeviceInfoConverter) CompareData(source, target interface{}, fields 
 }
 
 // compareField 对比单个字段，返回true表示不一致
-func (c *CvmDeviceInfoConverter) compareField(deviceInfo *tasktypes.DeviceInfo,
+func (c *CvmDeviceInfoConverter) compareField(deviceInfo *mongoDeviceInfo,
 	device *cvmapplytable.ZiyanCvmDeviceInfo, field string) bool {
 
 	switch field {

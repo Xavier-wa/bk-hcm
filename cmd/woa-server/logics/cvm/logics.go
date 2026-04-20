@@ -1,13 +1,20 @@
 /*
- * Tencent is pleased to support the open source community by making 蓝鲸 available.
- * Copyright (C) 2017-2018 THL A29 Limited, a Tencent company. All rights reserved.
- * Licensed under the MIT License (the "License"); you may not use this file except
- * in compliance with the License. You may obtain a copy of the License at
- * http://opensource.org/licenses/MIT
- * Unless required by applicable law or agreed to in writing, software distributed under
- * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
- * either express or implied. See the License for the specific language governing permissions and
- * limitations under the License.
+ * TencentBlueKing is pleased to support the open source community by making
+ * 蓝鲸智云 - 混合云管理平台 (BlueKing - Hybrid Cloud Management System) available.
+ * Copyright (C) 2024 THL A29 Limited,
+ * a Tencent company. All rights reserved.
+ * Licensed under the MIT License (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://opensource.org/licenses/MIT
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ *
+ * We undertake not to change the open source license (MIT license) applicable
+ *
+ * to the current version of the project delivered to anyone in the future.
  */
 
 package cvm
@@ -16,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"time"
 
 	"hcm/cmd/woa-server/logics/config"
 	rollingserver "hcm/cmd/woa-server/logics/rolling-server"
@@ -38,19 +44,14 @@ import (
 	"hcm/pkg/thirdparty"
 	"hcm/pkg/thirdparty/api-gateway/cmdb"
 	"hcm/pkg/thirdparty/cvmapi"
-	cvt "hcm/pkg/tools/converter"
 	"hcm/pkg/tools/metadata"
 	"hcm/pkg/tools/times"
 )
 
 // Logics provides management interface for operations of model and instance and related resources like association
 type Logics interface {
-	// CreateApplyOrder creates cvm apply order
-	CreateApplyOrder(kt *kit.Kit, param *types.CvmCreateReq) (*types.CvmCreateResult, error)
-	// ExecuteApplyOrder execute cvm apply order
-	ExecuteApplyOrder(kt *kit.Kit, order *types.ApplyOrder) error
-	// CreateCvmFromTaskResult create cvm from task result
-	CreateCvmFromTaskResult(kt *kit.Kit, order *types.ApplyOrder) error
+	// CreateCvmProductApplyOrder creates cvm product apply order
+	CreateCvmProductApplyOrder(kt *kit.Kit, param *types.CvmCreateReq) (*types.CvmCreateResult, error)
 	// GetApplyOrderById get cvm apply order info
 	GetApplyOrderById(kt *kit.Kit, param *types.CvmOrderReq) (*types.CvmOrderResult, error)
 	// GetApplyOrder get cvm apply order info
@@ -89,86 +90,13 @@ func New(thirdCli *thirdparty.Client, cliConf cc.ClientConfig, confLogic config.
 	}
 }
 
-// CreateApplyOrder creates cvm apply order(CVM生产-创建单据)
-func (l *logics) CreateApplyOrder(kt *kit.Kit, param *types.CvmCreateReq) (*types.CvmCreateResult, error) {
-	id, err := model.Operation().ApplyOrder().NextSequence(kt.Ctx)
-	if err != nil {
-		logs.Errorf("failed to create cvm apply order, err: %v, rid: %s", err, kt.Rid)
-		return nil, err
-	}
-
-	now := time.Now()
-	order := &types.ApplyOrder{
-		OrderId:     id,
-		BkBizId:     param.BkBizId,
-		BkModuleId:  param.BkModuleId,
-		User:        param.User,
-		RequireType: param.RequireType,
-		Remark:      param.Remark,
-		Spec:        param.Spec,
-		Status:      types.ApplyStatusInit,
-		Message:     "",
-		TaskId:      "",
-		TaskLink:    "",
-		Total:       param.Replicas,
-		SuccessNum:  0,
-		FailedNum:   0,
-		PendingNum:  param.Replicas,
-		CreateAt:    now,
-		UpdateAt:    now,
-	}
-
-	if err = l.processingOrderByRequireType(kt, order); err != nil {
-		logs.Errorf("processing cvm apply order by require type failed, err: %v, rid: %s", err, kt.Rid)
-		return nil, err
-	}
-
-	// GPU特殊机型的计费时长校验
-	verifySubOrderReq := []*taskTypes.Suborder{
-		{
-			ResourceType: taskTypes.ResourceTypeCvm,
-			Spec: &taskTypes.ResourceSpec{
-				ChargeType:   order.Spec.ChargeType,
-				ChargeMonths: order.Spec.ChargeMonths,
-				DeviceType:   order.Spec.DeviceType,
-			},
-		},
-	}
-	if err = l.schedulerLogic.VerifyCvmGPUChargeMonth(kt, verifySubOrderReq); err != nil {
-		return nil, err
-	}
-
-	if err = model.Operation().ApplyOrder().CreateApplyOrder(kt.Ctx, order); err != nil {
-		logs.Errorf("failed to create cvm apply order, err: %v, rid: %s", err, kt.Rid)
-		return nil, err
-	}
-
-	logs.Infof("scheduler:logics:cvm:create:apply:order:init, orderId: %s, param: %+v, rid: %s",
-		id, cvt.PtrToVal(param), kt.Rid)
-
-	// execute cvm apply order
-	go func() {
-		if err = l.ExecuteApplyOrder(kt, order); err != nil {
-			logs.Errorf("failed to execute cvm apply order, err: %v, order: %+v, rid: %s", err, cvt.PtrToVal(order),
-				kt.Rid)
-			return
-		}
-	}()
-
-	rst := &types.CvmCreateResult{
-		OrderId: id,
-	}
-
-	return rst, nil
-}
-
-func (l *logics) processingOrderByRequireType(kt *kit.Kit, order *types.ApplyOrder) error {
-	switch enumor.RequireType(order.RequireType) {
+func (l *logics) processingOrderByRequireType(kt *kit.Kit, order *taskTypes.ApplyOrder) error {
+	switch order.RequireType {
 	case enumor.RequireTypeRollServer:
-		canApply, reason, err := l.rsLogic.CanApplyHost(kt, order.BkBizId, order.Total, enumor.CvmProduceAppliedType)
+		canApply, reason, err := l.rsLogic.CanApplyHost(kt, order.BkBizId, order.TotalNum, enumor.CvmProduceAppliedType)
 		if err != nil {
 			logs.Errorf("determine can apply rolling server host failed, err: %v, bizID: %s, total: %d, rid: %s",
-				err, order.BkBizId, order.Total, kt.Rid)
+				err, order.BkBizId, order.TotalNum, kt.Rid)
 			return err
 		}
 		if !canApply {
@@ -181,9 +109,9 @@ func (l *logics) processingOrderByRequireType(kt *kit.Kit, order *types.ApplyOrd
 			OrderID:     order.OrderId,
 			SubOrderID:  strconv.FormatUint(order.OrderId, 10),
 			DeviceType:  order.Spec.DeviceType,
-			Count:       int(order.Total),
+			Count:       int(order.TotalNum),
 			AppliedType: enumor.CvmProduceAppliedType,
-			RequireType: enumor.RequireType(order.RequireType),
+			RequireType: order.RequireType,
 		}
 
 		if err = l.rsLogic.CreateAppliedRecord(kt, []rstypes.CreateAppliedRecordData{data}); err != nil {
@@ -401,6 +329,7 @@ func buildOrderSpec(kt *kit.Kit, item *cvmapplytable.ZiyanCvmApplySuborder) (*ty
 		ChargeType:        item.ChargeType,
 		ChargeMonths:      item.ChargeMonths,
 		InheritInstanceId: item.InheritInstanceID,
+		BkAssetID:         item.BkAssetID,
 	}
 
 	if err := unmarshalSystemDisk(kt, string(item.SystemDisk), spec); err != nil {

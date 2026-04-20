@@ -25,6 +25,7 @@ import (
 
 	"hcm/pkg/api/core"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/audit"
 	idgenerator "hcm/pkg/dal/dao/id-generator"
@@ -139,9 +140,13 @@ func (d ZiyanCvmDeviceInfoDao) List(kt *kit.Kit, opt *types.ListOption) (
 		return nil, errf.New(errf.InvalidParameter, "list ziyan cvm device info options is nil")
 	}
 
-	if err := opt.Validate(filter.NewExprOption(filter.RuleFields(
-		cvmapplytable.ZiyanCvmDeviceInfoColumns.ColumnTypes())),
-		core.NewDefaultPageOption()); err != nil {
+	expr := filter.NewExprOption(
+		filter.RuleFields(cvmapplytable.ZiyanCvmDeviceInfoColumns.ColumnTypes()),
+		filter.MaxInLimit(constant.CvmApplyDeviceQueryInLimit),
+	)
+	// 由于前端需要导出设备列表的数据，这里特殊调整限制值
+	pageOpt := &core.PageOption{MaxLimit: constant.CvmApplyDeviceExportLimit}
+	if err := opt.Validate(expr, pageOpt); err != nil {
 		return nil, err
 	}
 

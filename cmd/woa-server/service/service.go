@@ -44,6 +44,7 @@ import (
 	"hcm/cmd/woa-server/logics/task/recoverer"
 	"hcm/cmd/woa-server/logics/task/recycler"
 	"hcm/cmd/woa-server/logics/task/scheduler"
+	taskmodel "hcm/cmd/woa-server/model/task"
 	taskStatistics "hcm/cmd/woa-server/logics/task/statistics"
 	"hcm/cmd/woa-server/service/capability"
 	"hcm/cmd/woa-server/service/config"
@@ -138,6 +139,7 @@ func NewService(dis serviced.ServiceDiscover, sd serviced.State) (*Service, erro
 	if err != nil {
 		return nil, err
 	}
+	taskmodel.InitOperation(apiClientSet)
 
 	clients, err := initClients(apiClientSet, dis)
 	if err != nil {
@@ -377,13 +379,14 @@ func initMongoComponents(dis serviced.ServiceDiscover, sd serviced.State, client
 	}
 
 	kt := core.NewBackendKit()
-	loopW, watchDB, err := initMongoDB(kt, dis)
+	_, watchDB, err := initMongoDB(kt, dis)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create leader-aware informer that only runs on master node
-	informerIf, err := informer.New(loopW, watchDB, sd)
+	ziyanClient := apiClientSet.DataService().TCloudZiyan
+	informerIf, err := informer.New(ziyanClient, sd)
 	if err != nil {
 		logs.Errorf("new informer failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
@@ -466,7 +469,7 @@ func initMongoDB(kt *kit.Kit, dis serviced.ServiceDiscover) (stream.LoopInterfac
 		logs.Errorf("new watch mongo client failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, nil, err
 	}
-	return loopW, watchDB, err
+	return loopW, watchDB, nil
 }
 
 func newOtherClient(kt *kit.Kit, service *Service, itsmCli itsm.Client, sd serviced.State) (*Service, error) {
@@ -518,7 +521,7 @@ func newOtherClient(kt *kit.Kit, service *Service, itsmCli itsm.Client, sd servi
 
 	// init recoverer client
 	recoverConf := cc.WoaServer().Recover
-	if err := recoverer.New(kt, &recoverConf, itsmCli, recyclerIf, service.schedulerIf, cvmLogic,
+	if err = recoverer.New(kt, &recoverConf, itsmCli, recyclerIf, service.schedulerIf,
 		service.cmdbCli, service.thirdCli.Sops, sd); err != nil {
 		logs.Errorf("new recoverer failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err

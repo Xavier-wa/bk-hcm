@@ -39,7 +39,7 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/find/apply/record/modify
     "count":1,
     "info":[
       {
-        "id":1,
+        "id":"1",
         "suborder_id":"1001-1",
         "bk_username":"xxx",
         "details":{
@@ -126,7 +126,7 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/find/apply/record/modify
 #### data.info
 | 参数名称      | 参数类型   | 描述           |
 |-------------|-----------|----------------|
-| id	      | int	      | 记录ID         |
+| id	      | string	  | 记录ID         |
 | suborder_id | string	  | 资源申请子单号   |
 | bk_username | string	  | 改单操作人      |
 | details	  | object	  | 改单详情        |

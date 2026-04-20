@@ -25,6 +25,7 @@ import (
 
 	"hcm/pkg/api/core"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/audit"
 	"hcm/pkg/dal/dao/orm"
@@ -131,9 +132,11 @@ func (d ZiyanCvmApplyOrderDao) List(kt *kit.Kit, opt *types.ListOption) (
 		return nil, errf.New(errf.InvalidParameter, "list ziyan cvm apply order options is nil")
 	}
 
-	if err := opt.Validate(filter.NewExprOption(filter.RuleFields(
-		cvmapplytable.ZiyanCvmApplyOrderColumns.ColumnTypes())),
-		core.NewDefaultPageOption()); err != nil {
+	expr := filter.NewExprOption(
+		filter.RuleFields(cvmapplytable.ZiyanCvmApplyOrderColumns.ColumnTypes()),
+		filter.MaxInLimit(constant.CvmApplyDeviceQueryInLimit),
+	)
+	if err := opt.Validate(expr, core.NewDefaultPageOption()); err != nil {
 		return nil, err
 	}
 

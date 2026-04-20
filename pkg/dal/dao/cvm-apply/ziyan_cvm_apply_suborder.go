@@ -156,9 +156,11 @@ func (d ZiyanCvmApplySuborderDao) List(kt *kit.Kit, opt *types.ListOption) (
 		return nil, errf.New(errf.InvalidParameter, "list ziyan cvm apply suborder options is nil")
 	}
 
-	if err := opt.Validate(filter.NewExprOption(filter.RuleFields(
-		cvmapplytable.ZiyanCvmApplySuborderColumns.ColumnTypes())),
-		core.NewDefaultPageOption()); err != nil {
+	expr := filter.NewExprOption(
+		filter.RuleFields(cvmapplytable.ZiyanCvmApplySuborderColumns.ColumnTypes()),
+		filter.MaxInLimit(constant.CvmApplyDeviceQueryInLimit),
+	)
+	if err := opt.Validate(expr, core.NewDefaultPageOption()); err != nil {
 		return nil, err
 	}
 

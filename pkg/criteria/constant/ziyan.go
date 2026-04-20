@@ -131,3 +131,9 @@ const (
 	// ProductionStageCompareMaxDurationHours 生产阶段耗时 Compare 接口最大有效时长阈值（小时）= 30 天
 	ProductionStageCompareMaxDurationHours = 720
 )
+
+// CvmApplyDeviceQueryInLimit CVM申请及设备列表查询in查询数量限制
+const CvmApplyDeviceQueryInLimit = 3000
+
+// CvmApplyDeviceExportLimit 导出CVM设备列表的数量限制
+const CvmApplyDeviceExportLimit = 5000

@@ -44,6 +44,10 @@ const (
 	CvmLaunchBiz3Id = 1073015
 	// CvmLaunchBiz3Name CVM三级业务名
 	CvmLaunchBiz3Name = "CC_SCR_加工池"
+	// CvmProductLaunchBiz3Id CVM生产-三级业务ID
+	CvmProductLaunchBiz3Id = 662584
+	// CvmProductLaunchBiz3Name CVM生产-三级业务名
+	CvmProductLaunchBiz3Name = "CC_SA云化池"
 	// CvmLaunchSystemDiskTypePremium CVM生产时系统盘类型，当前固定为高性能云盘
 	CvmLaunchSystemDiskTypePremium = "CLOUD_PREMIUM"
 	// CvmLaunchSystemDiskTypeBasic CVM生产时系统盘类型，对于固定为本地盘

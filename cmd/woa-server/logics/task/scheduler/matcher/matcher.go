@@ -16,7 +16,6 @@ package matcher
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"net/url"
 	"sort"
@@ -32,15 +31,15 @@ import (
 	"hcm/cmd/woa-server/logics/task/scheduler/record"
 	"hcm/cmd/woa-server/logics/task/sops"
 	model "hcm/cmd/woa-server/model/task"
-	daltypes "hcm/cmd/woa-server/storage/dal/types"
 	cfgtype "hcm/cmd/woa-server/types/config"
 	types "hcm/cmd/woa-server/types/task"
-	"hcm/pkg"
 	"hcm/pkg/api/core"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
-	"hcm/pkg/criteria/mapstr"
+	"hcm/pkg/criteria/errf"
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/thirdparty"
@@ -50,7 +49,6 @@ import (
 	"hcm/pkg/thirdparty/api-gateway/sopsapi"
 	cvt "hcm/pkg/tools/converter"
 	"hcm/pkg/tools/maps"
-	"hcm/pkg/tools/metadata"
 	"hcm/pkg/tools/slice"
 	toolsutil "hcm/pkg/tools/util"
 	"hcm/pkg/tools/utils/wait"
@@ -127,37 +125,38 @@ func (m *Matcher) runWorker() error {
 		return nil
 	}
 
-	generateId, err := generateInformer.Pop()
+	generateID, err := generateInformer.Pop()
 	if err != nil {
 		return err
 	}
-	if generateId == 0 {
+	if len(generateID) == 0 {
 		logs.Warnf("shutdown to deal generate informer, for get generate id from informer")
 		time.Sleep(time.Second)
 		return nil
 	}
 
+	// 为匹配任务创建后台操作的 kt
+	kt := core.NewBackendKit()
+
 	// get generate record
-	generateRecord, err := m.GetGenerateRecord(generateId)
+	generateRecord, err := m.GetGenerateRecord(kt, generateID)
 	if err != nil {
-		logs.Errorf("failed to get generate record by id: %d, err: %v", generateId, err)
+		logs.Errorf("failed to get generate record by id: %d, err: %v, rid: %s", generateID, err, kt.Rid)
 		return err
 	}
 
 	// check generate record status
 	if generateRecord.Status != types.GenerateStatusSuccess {
-		logs.Infof("generate record %d is not done yet, need not match, status: %d", generateId, generateRecord.Status)
+		logs.Infof("generate record %d is not done yet, need not match, status: %d, rid: %s",
+			generateID, generateRecord.Status, kt.Rid)
 		return nil
 	}
 
 	// check generate record matched or not
 	if generateRecord.IsMatched == true {
-		logs.Infof("generate record %d is matched, need not match again", generateId)
+		logs.Infof("generate record %d is matched, need not match again, rid: %s", generateID, kt.Rid)
 		return nil
 	}
-
-	// 为匹配任务创建后台操作的 kt
-	kt := core.NewBackendKit()
 
 	// deal match device
 	if err = m.matchHandler(kt, generateRecord); err != nil {
@@ -165,22 +164,25 @@ func (m *Matcher) runWorker() error {
 		return err
 	}
 
-	logs.Infof("match done, generate id: %d, order id: %s, rid: %s", generateId, generateRecord.SubOrderId, kt.Rid)
+	logs.Infof("match done, generate id: %s, order id: %s, rid: %s", generateID, generateRecord.SubOrderId, kt.Rid)
 
 	return nil
 }
 
 // FinalApplyStep after deliver device, check order result to regenerate device or reinit
 func (m *Matcher) FinalApplyStep(kt *kit.Kit, genRecord *types.GenerateRecord, order *types.ApplyOrder) error {
-	// set generate record matched
-	if err := m.setGenerateRecordMatched(genRecord.GenerateId); err != nil {
-		logs.Errorf("failed to update generate record, err: %v, schedule id: %d, rid: %s", err, genRecord.GenerateId,
-			kt.Rid)
-		return err
+	// CVM生产（管理员）的申请单，不需要设置IsMatched（只有走完初始化、交付流程的单据，才需要设置IsMatched）
+	if order.ProductType != enumor.ProductTypeAdmin {
+		// set generate record matched
+		if err := m.setGenerateRecordMatched(kt, genRecord.GenerateId); err != nil {
+			logs.Errorf("failed to update generate record, err: %v, schedule id: %d, rid: %s", err, genRecord.GenerateId,
+				kt.Rid)
+			return err
+		}
 	}
 
 	// update apply order status
-	if err := m.UpdateApplyOrderStatus(order); err != nil {
+	if err := m.UpdateApplyOrderStatus(kt, order); err != nil {
 		logs.Errorf("failed to update apply order status, order id: %s, err: %v, rid: %s", genRecord.SubOrderId, err,
 			kt.Rid)
 		return err
@@ -192,7 +194,7 @@ func (m *Matcher) FinalApplyStep(kt *kit.Kit, genRecord *types.GenerateRecord, o
 	}
 
 	// send ticket done notification
-	if err := m.notifyApplyDone(order.OrderId); err != nil {
+	if err := m.notifyApplyDone(kt, order.OrderId); err != nil {
 		logs.Warnf("failed to send apply done notification, order id: %s, err: %v, rid: %s",
 			genRecord.SubOrderId, err, kt.Rid)
 	}
@@ -213,7 +215,7 @@ func (m *Matcher) FinalApplyStep(kt *kit.Kit, genRecord *types.GenerateRecord, o
 // matchHandler apply order match handler
 func (m *Matcher) matchHandler(kt *kit.Kit, genRecord *types.GenerateRecord) error {
 	// get apply order by key
-	applyOrder, err := m.getApplyOrder(genRecord.SubOrderId)
+	applyOrder, err := m.getApplyOrder(kt, genRecord.SubOrderId)
 	if err != nil {
 		logs.Errorf("get apply order by key %s failed, err: %v, rid: %s", genRecord.SubOrderId, err, kt.Rid)
 		return err
@@ -227,8 +229,13 @@ func (m *Matcher) matchHandler(kt *kit.Kit, genRecord *types.GenerateRecord) err
 			applyOrder.Status)
 	}
 
+	// CVM生产（管理员）-不需要走初始化、交付流程
+	if applyOrder.ProductType == enumor.ProductTypeAdmin {
+		return m.FinalApplyStep(kt, genRecord, applyOrder)
+	}
+
 	// match device
-	if err := m.matchDevice(kt, applyOrder, genRecord.GenerateId); err != nil {
+	if err = m.matchDevice(kt, applyOrder, genRecord.GenerateId); err != nil {
 		logs.Errorf("failed to match device, order id: %s, err: %v, rid: %s", genRecord.SubOrderId, err, kt.Rid)
 		return err
 	}
@@ -237,11 +244,11 @@ func (m *Matcher) matchHandler(kt *kit.Kit, genRecord *types.GenerateRecord) err
 }
 
 // getApplyOrder gets apply order from db by order id
-func (m *Matcher) getApplyOrder(orderId string) (*types.ApplyOrder, error) {
-	filter := &mapstr.MapStr{
-		"suborder_id": orderId,
-	}
-	order, err := model.Operation().ApplyOrder().GetApplyOrder(context.Background(), filter)
+func (m *Matcher) getApplyOrder(kt *kit.Kit, orderId string) (*types.ApplyOrder, error) {
+	applyFilter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", orderId),
+	)
+	order, err := model.Operation().ApplyOrder().GetApplyOrder(kt, applyFilter)
 	if err != nil {
 		logs.Errorf("failed to get apply order by id: %s", orderId)
 		return nil, err
@@ -250,40 +257,37 @@ func (m *Matcher) getApplyOrder(orderId string) (*types.ApplyOrder, error) {
 	return order, nil
 }
 
-func (m *Matcher) updateSuspendSteps(order *types.ApplyOrder) error {
+func (m *Matcher) updateSuspendSteps(kt *kit.Kit, order *types.ApplyOrder) error {
 	now := time.Now()
-	filter := &mapstr.MapStr{
-		"suborder_id": order.SubOrderId,
-		"step_name":   types.StepNameGenerate,
-	}
-	doc := &mapstr.MapStr{
-		"status":    types.StepStatusFailed,
-		"update_at": now,
-		"end_at":    now,
-		"message":   "can not get generateId, unknown generate status, check YunTi to find if devices are generated",
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", order.SubOrderId),
+		tools.RuleEqual("step_name", types.StepNameGenerate),
+	)
+	update := &cvmapplyproto.ZiyanCvmApplyStepUpdateReq{
+		Status:  cvt.ValToPtr(types.StepStatusFailed),
+		EndAt:   now.Format(constant.DateTimeLayout),
+		Message: "can not get generateId, unknown generate status, check YunTi to find if devices are generated",
 	}
 
-	if err := model.Operation().ApplyStep().UpdateApplyStep(context.Background(), filter, doc); err != nil {
-		logs.Errorf("failed to update apply 生产 step status to apply status failed, suborderId: %s, err: %v",
-			order.SubOrderId, err)
+	if err := model.Operation().ApplyStep().UpdateApplyStep(kt, filter, update); err != nil {
+		logs.Errorf("failed to update apply 生产 step status to apply status failed, suborderId: %s, err: %v, rid: %s",
+			order.SubOrderId, err, kt.Rid)
 		return err
 	}
 	return nil
 }
 
-func (m *Matcher) updateGenerateFailed(generateId uint64) error {
-	filter := &mapstr.MapStr{
-		"generate_id": generateId,
-	}
-	now := time.Now()
-	doc := mapstr.MapStr{
-		"update_at": now,
-		"status":    types.GenerateStatusFailed,
-		"message":   "can not get generateId, unknown generate status, check YunTi to find if devices are generated",
+func (m *Matcher) updateGenerateFailed(kt *kit.Kit, generateID string) error {
+	filter := tools.ExpressionAnd(tools.RuleEqual("generate_id", generateID))
+	update := &cvmapplyproto.ZiyanCvmGenerateRecordUpdateReq{
+		Status: cvt.ValToPtr(types.GenerateStatusFailed),
+		Message: cvt.ValToPtr("can not get generateId, unknown generate status, check YunTi to find " +
+			"if devices are generated"),
 	}
 
-	if err := model.Operation().GenerateRecord().UpdateGenerateRecord(context.Background(), filter, &doc); err != nil {
-		logs.Errorf("failed to update generate record to failed, generateId: err: %v, %d", err, generateId)
+	if err := model.Operation().GenerateRecord().UpdateGenerateRecord(kt, filter, update); err != nil {
+		logs.Errorf("failed to update generate record to failed, generateID: %s, err: %v, rid: %s",
+			generateID, err, kt.Rid)
 		return err
 	}
 
@@ -291,11 +295,11 @@ func (m *Matcher) updateGenerateFailed(generateId uint64) error {
 }
 
 // UpdateApplyOrderStatus update apply order status
-func (m *Matcher) UpdateApplyOrderStatus(order *types.ApplyOrder) error {
+func (m *Matcher) UpdateApplyOrderStatus(kt *kit.Kit, order *types.ApplyOrder) error {
 	// 1. get unreleased devices from db
-	devices, err := m.GetUnreleasedDevice(order.SubOrderId)
+	devices, err := m.GetUnreleasedDevice(kt, order.SubOrderId)
 	if err != nil {
-		logs.Errorf("failed to get unreleased device, order id: %s, err: %v", order.SubOrderId, err)
+		logs.Errorf("failed to get unreleased device, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return err
 	}
 
@@ -307,9 +311,9 @@ func (m *Matcher) UpdateApplyOrderStatus(order *types.ApplyOrder) error {
 	deviceTypeCountMap, deliverGroupCntMap := m.calDeviceTypeCountMap(devices, diskType)
 	matchedCnt := calMatchCnt(devices)
 
-	genRecords, err := m.GetOrderGenRecords(order.SubOrderId)
+	genRecords, err := m.GetOrderGenRecords(kt, order.SubOrderId)
 	if err != nil {
-		logs.Errorf("failed to get generate records, order id: %s, err: %v", order.SubOrderId, err)
+		logs.Errorf("failed to get generate records, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return err
 	}
 
@@ -326,10 +330,11 @@ func (m *Matcher) UpdateApplyOrderStatus(order *types.ApplyOrder) error {
 		if recordItem.Status == types.GenerateStatusSuspend {
 			isSuspend = true
 			suspendCnt += int(recordItem.TotalNum)
-			logs.Infof("generate failed, unknown if generate interface was called, task_id not obtained, check machines")
-			if err := m.updateGenerateFailed(recordItem.GenerateId); err != nil {
-				logs.Errorf("failed to update generate status to failed, suborderId: %s, err: %v",
-					order.SubOrderId, err)
+			logs.Infof("generate failed, unknown if generate interface was called, task_id not obtained, "+
+				"check machines, rid: %s", kt.Rid)
+			if err = m.updateGenerateFailed(kt, recordItem.GenerateId); err != nil {
+				logs.Errorf("failed to update generate status to failed, suborderId: %s, err: %v, rid: %s",
+					order.SubOrderId, err, kt.Rid)
 			}
 		}
 	}
@@ -340,12 +345,12 @@ func (m *Matcher) UpdateApplyOrderStatus(order *types.ApplyOrder) error {
 	if isSuspend && suspendCnt+matchedCnt >= int(order.TotalNum) {
 		status = types.ApplyStatusTerminate
 		stage = types.TicketStageSuspend
-		if err := m.updateSuspendSteps(order); err != nil {
-			logs.Errorf("failed to update suspend steps, suborderId: %s, err: %v", order.SubOrderId, err)
+		if err = m.updateSuspendSteps(kt, order); err != nil {
+			logs.Errorf("failed to update suspend steps, suborderId: %s, err: %v, rid: %s",
+				order.SubOrderId, err, kt.Rid)
 		}
 	}
 
-	kt := core.NewBackendKit()
 	if order.RequireType.IsNeedQuotaManage() {
 		appliedTypes := []enumor.AppliedType{enumor.NormalAppliedType, enumor.ResourcePoolAppliedType}
 
@@ -456,15 +461,12 @@ func (m *Matcher) calDeviceTypeCountMap(devices []*types.DeviceInfo, diskType en
 func (m *Matcher) updateApplyOrderToDb(kt *kit.Kit, order *types.ApplyOrder, matchedCnt int, pendingCnt int,
 	stage types.TicketStage, status types.ApplyStatus, deviceTypeCountMap map[types.DeliveredCVMKey]int) error {
 
-	filter := &mapstr.MapStr{
-		"suborder_id": order.SubOrderId,
-	}
-	doc := &mapstr.MapStr{
-		"success_num": matchedCnt,
-		"pending_num": pendingCnt,
-		"stage":       stage,
-		"status":      status,
-		"update_at":   time.Now(),
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", order.SubOrderId))
+	update := &cvmapplyproto.ZiyanCvmApplySuborderUpdateReq{
+		SuccessNum: cvt.ValToPtr(uint(matchedCnt)),
+		PendingNum: cvt.ValToPtr(uint(pendingCnt)),
+		Stage:      stage,
+		Status:     status,
 	}
 	// 记录交付核数，用于预测扣除
 	if order.ResourceType == types.ResourceTypeCvm ||
@@ -475,7 +477,7 @@ func (m *Matcher) updateApplyOrderToDb(kt *kit.Kit, order *types.ApplyOrder, mat
 				err, deviceTypeCountMap, kt.Rid)
 			return err
 		}
-		doc.Set("delivered_core", sum)
+		update.DeliveredCore = cvt.ValToPtr(uint(sum))
 		planExpendGroups := slice.Map(verifyGroups, func(t plan.VerifyResPlanElemV2) types.PlanExpendGroup {
 			return types.PlanExpendGroup{
 				DeviceType: t.DeviceType,
@@ -484,7 +486,13 @@ func (m *Matcher) updateApplyOrderToDb(kt *kit.Kit, order *types.ApplyOrder, mat
 				CPUCore:    t.CpuCore,
 			}
 		})
-		doc.Set("plan_expend_group", planExpendGroups)
+		planExpendGroupsJSON, err := model.MarshalToJsonField(planExpendGroups)
+		if err != nil {
+			logs.Errorf("marshal plan expend group failed, subOrderID: %s, err: %v, planExpendGroups: %v, rid: %s",
+				order.SubOrderId, err, planExpendGroups, kt.Rid)
+			return err
+		}
+		update.PlanExpendGroup = cvt.ValToPtr(planExpendGroupsJSON)
 
 		// 为该子订单匹配CVM资源预测单并生成预测变更记录
 		if err = m.planLogics.AddMatchedPlanDemandExpendLogs(kt, order.BkBizId, order, verifyGroups); err != nil {
@@ -494,8 +502,8 @@ func (m *Matcher) updateApplyOrderToDb(kt *kit.Kit, order *types.ApplyOrder, mat
 		}
 	}
 
-	if err := model.Operation().ApplyOrder().UpdateApplyOrder(context.Background(), filter, doc); err != nil {
-		logs.Errorf("failed to update apply order, id: %s, err: %v", order.SubOrderId, err)
+	if err := model.Operation().ApplyOrder().UpdateApplyOrder(kt, filter, update); err != nil {
+		logs.Errorf("failed to update apply order, id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return err
 	}
 	return nil
@@ -548,13 +556,11 @@ func (m *Matcher) GetCpuCoreSum(kt *kit.Kit, deviceTypeCountMap map[types.Delive
 }
 
 // GetGenerateRecord gets generate record from db by generate id
-func (m *Matcher) GetGenerateRecord(id uint64) (*types.GenerateRecord, error) {
-	filter := &mapstr.MapStr{
-		"generate_id": id,
-	}
-	recordInfo, err := model.Operation().GenerateRecord().GetGenerateRecord(context.Background(), filter)
+func (m *Matcher) GetGenerateRecord(kt *kit.Kit, generateID string) (*types.GenerateRecord, error) {
+	filter := tools.ExpressionAnd(tools.RuleEqual("generate_id", generateID))
+	recordInfo, err := model.Operation().GenerateRecord().GetGenerateRecord(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to get generate record by id: %d", id)
+		logs.Errorf("failed to get generate record by id: %s, err: %v, rid: %s", generateID, err, kt.Rid)
 		return nil, err
 	}
 
@@ -562,18 +568,11 @@ func (m *Matcher) GetGenerateRecord(id uint64) (*types.GenerateRecord, error) {
 }
 
 // GetOrderGenRecords gets all generate records related to given order
-func (m *Matcher) GetOrderGenRecords(suborderId string) ([]*types.GenerateRecord, error) {
-	filter := map[string]interface{}{
-		"suborder_id": suborderId,
-	}
-	page := metadata.BasePage{
-		Start: 0,
-		Limit: pkg.BKNoLimit,
-	}
-
-	records, err := model.Operation().GenerateRecord().FindManyGenerateRecord(context.Background(), page, filter)
+func (m *Matcher) GetOrderGenRecords(kt *kit.Kit, suborderID string) ([]*types.GenerateRecord, error) {
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", suborderID))
+	records, err := model.Operation().GenerateRecord().FindManyGenerateRecord(kt, filter, nil)
 	if err != nil {
-		logs.Errorf("failed to get generate record by order id: %s", suborderId)
+		logs.Errorf("failed to get generate record by order id: %s, err: %+v, rid: %s", suborderID, err, kt.Rid)
 		return nil, err
 	}
 
@@ -581,19 +580,14 @@ func (m *Matcher) GetOrderGenRecords(suborderId string) ([]*types.GenerateRecord
 }
 
 // setGenerateRecordMatched set generate record matched
-func (m *Matcher) setGenerateRecordMatched(generateId uint64) error {
-	filter := &mapstr.MapStr{
-		"generate_id": generateId,
+func (m *Matcher) setGenerateRecordMatched(kt *kit.Kit, generateID string) error {
+	filter := tools.ExpressionAnd(tools.RuleEqual("generate_id", generateID))
+	update := &cvmapplyproto.ZiyanCvmGenerateRecordUpdateReq{
+		IsMatched: cvt.ValToPtr(true),
 	}
-
-	doc := mapstr.MapStr{
-		"is_matched": true,
-		"update_at":  time.Now(),
-	}
-
-	if err := model.Operation().GenerateRecord().UpdateGenerateRecord(context.Background(), filter, &doc); err != nil {
-		logs.Errorf("failed to update generate record, generate id: %d, update: %+v, err: %v", generateId, doc,
-			err)
+	if err := model.Operation().GenerateRecord().UpdateGenerateRecord(kt, filter, update); err != nil {
+		logs.Errorf("failed to update generate record, generate id: %s, update: %+v, err: %v, rid: %s",
+			generateID, update, err, kt.Rid)
 		return err
 	}
 
@@ -601,21 +595,23 @@ func (m *Matcher) setGenerateRecordMatched(generateId uint64) error {
 }
 
 // InitDevices start init devices
-func (m *Matcher) InitDevices(order *types.ApplyOrder, unreleased []*types.DeviceInfo) ([]*types.DeviceInfo, error) {
+func (m *Matcher) InitDevices(kt *kit.Kit, order *types.ApplyOrder, unreleased []*types.DeviceInfo) (
+	[]*types.DeviceInfo, error) {
+
 	// start init step
-	if err := record.StartStep(order.SubOrderId, types.StepNameInit); err != nil {
+	if err := record.StartStep(kt, order.SubOrderId, types.StepNameInit); err != nil {
 		logs.Errorf("failed to start init step, order id: %s, err: %v", order.SubOrderId, err)
 		return nil, err
 	}
 
-	successDeviceMap, errMap := m.ProcessInitStep(unreleased)
+	successDeviceMap, errMap := m.ProcessInitStep(kt, unreleased)
 	if len(errMap) > 0 {
 		// todo 暂时和原逻辑保持一致，这里err不做处理，ProcessInitStep内已经有打印错误日志
 	}
 
 	// update init step
-	if err := record.UpdateInitStep(order.SubOrderId, order.TotalNum); err != nil {
-		logs.Errorf("failed to update init step, subOrderID: %s, err: %v", order.SubOrderId, err)
+	if err := record.UpdateInitStep(kt, order.SubOrderId, order.TotalNum); err != nil {
+		logs.Errorf("failed to update init step, subOrderID: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return nil, err
 	}
 
@@ -625,7 +621,7 @@ func (m *Matcher) InitDevices(order *types.ApplyOrder, unreleased []*types.Devic
 // DeliverDevices deliver devices to business
 func (m *Matcher) DeliverDevices(kt *kit.Kit, order *types.ApplyOrder, observeDevices []*types.DeviceInfo) error {
 	// start deliver step
-	if err := record.StartStep(order.SubOrderId, types.StepNameDeliver); err != nil {
+	if err := record.StartStep(kt, order.SubOrderId, types.StepNameDeliver); err != nil {
 		logs.Errorf("failed to start deliver step, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return err
 	}
@@ -633,7 +629,7 @@ func (m *Matcher) DeliverDevices(kt *kit.Kit, order *types.ApplyOrder, observeDe
 	// deliver devices to business
 	// TODO: batch processing
 	for _, device := range observeDevices {
-		if err := m.DeliverDevice(device, order); err != nil {
+		if err := m.DeliverDevice(kt, device, order); err != nil {
 			logs.Errorf("failed to deliver device, subOrderId: %s, ip: %s, err: %v, rid: %s", order.SubOrderId,
 				device.Ip, err, kt.Rid)
 			continue
@@ -641,7 +637,7 @@ func (m *Matcher) DeliverDevices(kt *kit.Kit, order *types.ApplyOrder, observeDe
 	}
 
 	// update deliver step
-	if err := record.UpdateDeliverStep(order.SubOrderId, order.TotalNum); err != nil {
+	if err := record.UpdateDeliverStep(kt, order.SubOrderId, order.TotalNum); err != nil {
 		logs.Errorf("failed to update init step, subOrderId: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return err
 	}
@@ -650,7 +646,7 @@ func (m *Matcher) DeliverDevices(kt *kit.Kit, order *types.ApplyOrder, observeDe
 }
 
 // ProcessInitStep process init step
-func (m *Matcher) ProcessInitStep(devices []*types.DeviceInfo) (map[int]*types.DeviceInfo, map[int]error) {
+func (m *Matcher) ProcessInitStep(kt *kit.Kit, devices []*types.DeviceInfo) (map[int]*types.DeviceInfo, map[int]error) {
 	maxRetry := 3
 	errMap := make(map[int]error)
 	deviceInitMsgMap := make(map[int]*types.DeviceInitMsg)
@@ -665,15 +661,16 @@ func (m *Matcher) ProcessInitStep(devices []*types.DeviceInfo) (map[int]*types.D
 		curIdx := idx
 		if curDevice.IsInited {
 			successDeviceMap[curIdx] = curDevice
-			logs.Infof("host %s is initialized, need not init", curDevice.Ip)
+			logs.Infof("host %s is initialized, need not init, rid: %s", curDevice.Ip, kt.Rid)
 			continue
 		}
 		eg.Go(func() error {
 			var err error
 			var initMsg *types.DeviceInitMsg
 			for try := 0; try < maxRetry; try++ {
-				if initMsg, err = m.initDevice(curDevice); err != nil {
-					logs.Errorf("failed to init device, will retry in 60s, ip: %s, err: %v", curDevice.Ip, err)
+				if initMsg, err = m.initDevice(kt, curDevice); err != nil {
+					logs.Errorf("failed to init device, will retry in 60s, ip: %s, err: %v, rid: %s",
+						curDevice.Ip, err, kt.Rid)
 					// 从yunti同步给公司cmdb, 到cc去同步公司cmdb信息，拿到ip，有时候会有1分钟内的延迟，所以这里sleep1分钟
 					time.Sleep(time.Minute)
 					continue
@@ -697,11 +694,11 @@ func (m *Matcher) ProcessInitStep(devices []*types.DeviceInfo) (map[int]*types.D
 		curMsg := msg
 		curIdx := idx
 		eg.Go(func() error {
-			err := m.CheckSopsUpdate(curMsg.BizID, curMsg.Device, curMsg.JobUrl, curMsg.JobID)
+			err := m.CheckSopsUpdate(kt, curMsg.BizID, curMsg.Device, curMsg.JobUrl, curMsg.JobID)
 			lock.Lock()
 			defer lock.Unlock()
 			if err != nil {
-				logs.Errorf("failed to check sops task, ip: %s, err: %v", curMsg.Device.Ip, err)
+				logs.Errorf("failed to check sops task, ip: %s, err: %v, rid: %s", curMsg.Device.Ip, err, kt.Rid)
 				errMap[curIdx] = err
 				return nil
 			}
@@ -715,18 +712,18 @@ func (m *Matcher) ProcessInitStep(devices []*types.DeviceInfo) (map[int]*types.D
 }
 
 // matchDevice deal match device tasks
-func (m *Matcher) matchDevice(kt *kit.Kit, order *types.ApplyOrder, genId uint64) error {
+func (m *Matcher) matchDevice(kt *kit.Kit, order *types.ApplyOrder, generateID string) error {
 	// 1. get unreleased devices from db
-	unreleased, err := m.getGeneratedDevice(genId)
+	unreleased, err := m.getGeneratedDevice(kt, generateID, order.SubOrderId)
 	if err != nil {
 		logs.Errorf("failed to get unreleased device, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return err
 	}
 
-	observeDevices, err := m.InitDevices(order, unreleased)
+	observeDevices, err := m.InitDevices(kt, order, unreleased)
 
 	if order.EnableDiskCheck {
-		observeDevices, err = m.RunDiskCheck(order, observeDevices)
+		observeDevices, err = m.RunDiskCheck(kt, order, observeDevices)
 		if err != nil {
 			logs.Errorf("failed to run disk check task, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 			return err
@@ -737,14 +734,15 @@ func (m *Matcher) matchDevice(kt *kit.Kit, order *types.ApplyOrder, genId uint64
 }
 
 // getGeneratedDevice gets generated devices bindings to generate record
-func (m *Matcher) getGeneratedDevice(genId uint64) ([]*types.DeviceInfo, error) {
-	filter := &mapstr.MapStr{
-		"generate_id": genId,
-	}
-
-	devices, err := model.Operation().DeviceInfo().GetDeviceInfo(context.Background(), filter)
+func (m *Matcher) getGeneratedDevice(kt *kit.Kit, generateID string, subOrderID string) ([]*types.DeviceInfo, error) {
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", subOrderID),
+		tools.RuleEqual("generate_id", generateID),
+	)
+	devices, err := model.Operation().DeviceInfo().GetDeviceInfo(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to get binding devices to generate id %d, err: %v", genId, err)
+		logs.Errorf("failed to get binding devices to generate id: %s, subOrderID: %s, err: %v, rid: %s",
+			generateID, subOrderID, err, kt.Rid)
 		return nil, err
 	}
 
@@ -752,14 +750,11 @@ func (m *Matcher) getGeneratedDevice(genId uint64) ([]*types.DeviceInfo, error) 
 }
 
 // GetUnreleasedDevice gets unreleased devices bindings to current apply order
-func (m *Matcher) GetUnreleasedDevice(orderId string) ([]*types.DeviceInfo, error) {
-	filter := &mapstr.MapStr{
-		"suborder_id": orderId,
-	}
-
-	devices, err := model.Operation().DeviceInfo().GetDeviceInfo(context.Background(), filter)
+func (m *Matcher) GetUnreleasedDevice(kt *kit.Kit, subOrderID string) ([]*types.DeviceInfo, error) {
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", subOrderID))
+	devices, err := model.Operation().DeviceInfo().GetDeviceInfo(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to get binding devices to order %s, err: %v", orderId, err)
+		logs.Errorf("failed to get binding devices to order %s, err: %v, rid: %s", subOrderID, err, kt.Rid)
 		return nil, err
 	}
 
@@ -767,61 +762,111 @@ func (m *Matcher) GetUnreleasedDevice(orderId string) ([]*types.DeviceInfo, erro
 }
 
 // initDevice executes device initialization task
-func (m *Matcher) initDevice(info *types.DeviceInfo) (*types.DeviceInitMsg, error) {
+func (m *Matcher) initDevice(kt *kit.Kit, info *types.DeviceInfo) (*types.DeviceInitMsg, error) {
 	if info.IsInited {
-		logs.Infof("host %s is initialized, need not init", info.Ip)
+		logs.Infof("host %s is initialized, need not init, subOrderID: %s, rid: %s", info.Ip, info.SubOrderId, kt.Rid)
 		return &types.DeviceInitMsg{Device: info}, nil
 	}
 
+	// 获取并验证主机信息，返回bkBizID信息
+	bkBizID, initRecord, hostInfo, err := m.validateDeviceForInit(kt, info)
+	if err != nil {
+		return nil, err
+	}
+
 	// 检查是否有进行中的初始化任务
-	initRecord, err := record.GetInitRecord(core.NewBackendKit(), info.SubOrderId, info.Ip)
-	if err != nil && !errors.Is(err, daltypes.ErrDocumentNotFound) {
-		logs.Errorf("failed to get init record, err: %v, subOrderID: %s, ip: %s", err, info.SubOrderId, info.Ip)
-		return nil, err
-	}
-
-	// 根据IP获取主机信息
-	hostInfo, err := m.cc.GetHostInfoByIP(m.kt, info.Ip, 0)
-	if err != nil {
-		logs.Errorf("sops:process:check:matcher:ieod init, get host info by ip failed, ip: %s, infoBkBizID: %d, "+
-			"err: %v", info.Ip, info.BkBizId, err)
-		return nil, err
-	}
-
-	// 根据bkHostID去cmdb获取bkBizID
-	bkBizIDs, err := m.cc.GetHostBizIds(m.kt, []int64{hostInfo.BkHostID})
-	if err != nil {
-		logs.Errorf("sops:process:check:matcher:ieod init, get host info by host id failed, ip: %s, infoBkBizID: %d, "+
-			"bkHostID: %d, err: %v", info.Ip, info.BkBizId, hostInfo.BkHostID, err)
-		return nil, err
-	}
-	bkBizID, ok := bkBizIDs[hostInfo.BkHostID]
-	if !ok {
-		logs.Errorf("can not find biz id by host id: %d", hostInfo.BkHostID)
-		return nil, fmt.Errorf("can not find biz id by host id: %d", hostInfo.BkHostID)
-	}
-
-	// 把进行中的任务返回，不需要重复创建新的标准运维任务
 	if initRecord != nil && initRecord.Status == types.InitStatusHandling {
-		logs.Infof("init device host is initialing, need not init, subOrderID: %s, ip: %s", info.SubOrderId, info.Ip)
+		logs.Infof("init device host is initialing, need not init, subOrderID: %s, ip: %s, rid: %s",
+			info.SubOrderId, info.Ip, kt.Rid)
 		return &types.DeviceInitMsg{Device: info, JobUrl: initRecord.TaskLink, JobID: initRecord.TaskId,
 			BizID: bkBizID}, nil
 	}
 
 	// create init record
-	if err = record.CreateInitRecord(info.SubOrderId, info.Ip); err != nil {
-		logs.Errorf("host %s failed to initialize, err: %v", info.Ip, err)
+	if err = record.CreateInitRecord(kt, info.SubOrderId, info.Ip); err != nil {
+		logs.Errorf("host %s failed to initialize, err: %v, rid: %s", info.Ip, err, kt.Rid)
 		return nil, fmt.Errorf("host %s failed to initialize, err: %v", info.Ip, err)
 	}
 
+	// 创建初始化任务
+	return m.createInitTask(kt, info, bkBizID, hostInfo)
+}
+
+// validateDeviceForInit 验证设备是否可以进行初始化，获取主机信息和业务ID
+func (m *Matcher) validateDeviceForInit(kt *kit.Kit, info *types.DeviceInfo) (
+	int64, *types.InitRecord, *cmdb.Host, error) {
+
+	// 检查是否有进行中的初始化任务
+	initRecord, err := record.GetInitRecord(kt, info.SubOrderId, info.Ip)
+	if err != nil && errf.Error(err).Code != errf.RecordNotFound {
+		logs.Errorf("failed to get init record, err: %v, subOrderID: %s, ip: %s, rid: %s",
+			err, info.SubOrderId, info.Ip, kt.Rid)
+		return 0, nil, nil, err
+	}
+
+	// 根据IP获取主机信息
+	hostInfo, err := m.cc.GetHostInfoByIP(kt, info.Ip, 0)
+	if err != nil {
+		logs.Errorf("sops:process:check:matcher:ieod init, get host info by ip failed, ip: %s, infoBkBizID: %d, "+
+			"err: %v, rid: %s", info.Ip, info.BkBizId, err, kt.Rid)
+		return 0, nil, nil, err
+	}
+
+	// 检查固资号是否一致
+	if hostInfo.BkAssetID != info.AssetId {
+		logs.Errorf("sops:process:check:matcher:ieod init, asset id not match, infoBkBizID: %d, ip: %s, "+
+			"deviceAssetID: %s, hostAssetID: %s, rid: %s", info.BkBizId, info.Ip, info.AssetId,
+			hostInfo.BkAssetID, kt.Rid)
+		return 0, nil, nil, errf.Newf(errf.InvalidParameter, "asset id not match, ip: %s, deviceAssetID: %s, "+
+			"hostAssetID: %s", info.Ip, info.AssetId, hostInfo.BkAssetID)
+	}
+
+	// 根据bkHostID去cmdb获取bkBizID
+	bkBizID, err := m.getHostBizID(kt, info, hostInfo.BkHostID)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+
+	// 检查bkBizID是否为资源池业务
+	if bkBizID != enumor.ResourcePoolBiz {
+		logs.Errorf("sops:process:check:matcher:ieod init, biz id not match, infoBkBizID: %d, bkBizID: %d, ip: %s, "+
+			"deviceAssetID: %s, rid: %s", info.BkBizId, bkBizID, info.Ip, info.AssetId, kt.Rid)
+		return 0, nil, nil, errf.Newf(errf.InvalidParameter, "biz id not match, ip: %s, infoBkBizID: %d, bkBizID: %d",
+			info.Ip, info.BkBizId, bkBizID)
+	}
+
+	return bkBizID, initRecord, hostInfo, nil
+}
+
+// getHostBizID 根据主机ID获取业务ID
+func (m *Matcher) getHostBizID(kt *kit.Kit, info *types.DeviceInfo, bkHostID int64) (int64, error) {
+	bkBizIDs, err := m.cc.GetHostBizIds(kt, []int64{bkHostID})
+	if err != nil {
+		logs.Errorf("sops:process:check:matcher:ieod init, get host info by host id failed, ip: %s, infoBkBizID: %d, "+
+			"bkHostID: %d, err: %v, rid: %s", info.Ip, info.BkBizId, bkHostID, err, kt.Rid)
+		return 0, err
+	}
+	bkBizID, ok := bkBizIDs[bkHostID]
+	if !ok {
+		logs.Errorf("can not find biz id by host id: %d, rid: %s", bkHostID, kt.Rid)
+		return 0, fmt.Errorf("can not find biz id by host id: %d", bkHostID)
+	}
+	return bkBizID, nil
+}
+
+// createInitTask 创建设备初始化任务
+func (m *Matcher) createInitTask(kt *kit.Kit, info *types.DeviceInfo, bkBizID int64,
+	hostInfo *cmdb.Host) (*types.DeviceInitMsg, error) {
+
 	// 1. create job
-	jobId, jobUrl, err := sops.CreateInitSopsTask(m.kt, m.sops, info.Ip, m.sopsOpt.DevnetIP, bkBizID, hostInfo.BkOsType,
+	jobId, jobUrl, err := sops.CreateInitSopsTask(kt, m.sops, info.Ip, m.sopsOpt.DevnetIP, bkBizID, hostInfo.BkOsType,
 		info.SubOrderId)
 	if err != nil {
 		logs.Errorf("sops:process:check:matcher:ieod init device, host %s failed to initialize, infoBkBizID: %d, "+
-			"bkBizID: %d, bkHostID: %d, err: %v", info.Ip, info.BkBizId, bkBizID, info.BkHostId, err)
+			"bkBizID: %d, bkHostID: %d, err: %v, rid: %s", info.Ip, info.BkBizId, bkBizID, info.BkHostId, err, kt.Rid)
 		// update init record
-		errRecord := record.UpdateInitRecord(info.SubOrderId, info.Ip, "", "", err.Error(), types.InitStatusFailed)
+		errRecord := record.UpdateInitRecord(kt, info.SubOrderId, info.Ip, "", "",
+			err.Error(), types.InitStatusFailed)
 		if errRecord != nil {
 			logs.Errorf("update init record failed, host ip: %s, bkBidID: %d, bkHostID: %d, err: %v",
 				info.Ip, info.BkBizId, info.BkHostId, errRecord)
@@ -832,34 +877,36 @@ func (m *Matcher) initDevice(info *types.DeviceInfo) (*types.DeviceInitMsg, erro
 
 	jobIDStr := strconv.FormatInt(jobId, 10)
 	// update init record
-	errRecord := record.UpdateInitRecord(info.SubOrderId, info.Ip, jobIDStr, jobUrl, "handling",
+	errRecord := record.UpdateInitRecord(kt, info.SubOrderId, info.Ip, jobIDStr, jobUrl, "handling",
 		types.InitStatusHandling)
 	if errRecord != nil {
-		logs.Warnf("host %s failed to update initialize record, jobID: %d, jobUrl: %s, bkBizID: %s, err: %v",
-			info.Ip, jobId, jobUrl, bkBizID, errRecord)
+		logs.Warnf("host %s failed to update initialize record, jobID: %d, jobUrl: %s, bkBizID: %d, err: %v, rid: %s",
+			info.Ip, jobId, jobUrl, bkBizID, errRecord, kt.Rid)
 	}
 
 	return &types.DeviceInitMsg{Device: info, JobUrl: jobUrl, JobID: jobIDStr, BizID: bkBizID}, nil
 }
 
 // CheckSopsUpdate 检查sops任务状态并更新
-func (m *Matcher) CheckSopsUpdate(bkBizID int64, info *types.DeviceInfo, jobUrl string, jobIDStr string) error {
+func (m *Matcher) CheckSopsUpdate(kt *kit.Kit, bkBizID int64, info *types.DeviceInfo, jobUrl string,
+	jobIDStr string) error {
+
 	// 1. get job status
 	jobId, err := strconv.ParseInt(jobIDStr, 10, 64)
 	if err != nil {
-		logs.Errorf("can not get jobId by jobIDStr, jobIDStr: %s, err: %v", jobIDStr, err)
+		logs.Errorf("can not get jobId by jobIDStr, jobIDStr: %s, err: %v, rid: %s", jobIDStr, err, kt.Rid)
 		return fmt.Errorf("can not get jobId by jobIDStr, jobIDStr: %s", jobIDStr)
 	}
 
-	if _, err = sops.CheckTaskStatus(m.kt, m.sops, jobId, bkBizID); err != nil {
+	if _, err = sops.CheckTaskStatus(kt, m.sops, jobId, bkBizID); err != nil {
 		logs.Infof("sops:process:check:matcher:ieod init device, host %s failed to initialize, jobID: %d, "+
-			"jobUrl: %s, bkBizID: %d, err: %v", info.Ip, jobId, jobUrl, bkBizID, err)
+			"jobUrl: %s, bkBizID: %d, err: %v, rid: %s", info.Ip, jobId, jobUrl, bkBizID, err, kt.Rid)
 		// update init record
-		errRecord := record.UpdateInitRecord(info.SubOrderId, info.Ip, jobIDStr, jobUrl,
+		errRecord := record.UpdateInitRecord(kt, info.SubOrderId, info.Ip, jobIDStr, jobUrl,
 			err.Error(), types.InitStatusFailed)
 		if errRecord != nil {
-			logs.Errorf("host %s failed to initialize, bkBizID: %d, jobID: %d, jobUrl: %s, err: %v",
-				info.Ip, bkBizID, jobId, jobUrl, errRecord)
+			logs.Errorf("host %s failed to initialize, bkBizID: %d, jobID: %d, jobUrl: %s, err: %v, rid: %s",
+				info.Ip, bkBizID, jobId, jobUrl, errRecord, kt.Rid)
 			return fmt.Errorf("host %s failed to initialize, err: %v", info.Ip, errRecord)
 		}
 		return fmt.Errorf("host %s failed to initialize, jobID: %d, err: %v", info.Ip, jobId, err)
@@ -868,16 +915,17 @@ func (m *Matcher) CheckSopsUpdate(bkBizID int64, info *types.DeviceInfo, jobUrl 
 	// 2. update device status
 	info.InitTaskId = strconv.FormatInt(jobId, 10)
 	info.InitTaskLink = jobUrl
-	if err := m.SetDeviceInited(info); err != nil {
-		logs.Errorf("host %s failed to initialize, jobID: %d, jobUrl: %s, err: %v", info.Ip, jobId, jobUrl, err)
+	if err = m.SetDeviceInited(kt, info); err != nil {
+		logs.Errorf("host %s failed to initialize, jobID: %d, jobUrl: %s, err: %v, rid: %s",
+			info.Ip, jobId, jobUrl, err, kt.Rid)
 		return fmt.Errorf("host %s failed to initialize, jobID: %d, jobUrl: %s, err: %v", info.Ip, jobId, jobUrl, err)
 	}
 
 	// update init record
-	if err := record.UpdateInitRecord(info.SubOrderId, info.Ip, jobIDStr, jobUrl, "success",
+	if err = record.UpdateInitRecord(kt, info.SubOrderId, info.Ip, jobIDStr, jobUrl, "success",
 		types.InitStatusSuccess); err != nil {
-		logs.Errorf("host %s failed to initialize, bkBizID: %d, jobId: %d, jobUrl: %s, err: %v",
-			info.Ip, bkBizID, jobId, jobUrl, err)
+		logs.Errorf("host %s failed to initialize, bkBizID: %d, jobId: %d, jobUrl: %s, err: %v, rid: %s",
+			info.Ip, bkBizID, jobId, jobUrl, err, kt.Rid)
 		return fmt.Errorf("host %s failed to initialize, jobID: %d, jobUrl: %s, err: %v", info.Ip, jobId, jobUrl, err)
 	}
 	return nil
@@ -894,36 +942,43 @@ func (m *Matcher) checkDeviceDisk(info *types.DeviceInfo) error {
 }
 
 // DeliverDevice delivers device to business
-func (m *Matcher) DeliverDevice(info *types.DeviceInfo, order *types.ApplyOrder) error {
+func (m *Matcher) DeliverDevice(kt *kit.Kit, info *types.DeviceInfo, order *types.ApplyOrder) error {
 	if info.IsDelivered {
 		logs.Infof("host %s is delivered, need not deliver, subOrderID: %s", info.Ip, order.SubOrderId)
 		return nil
 	}
 
 	// create deliver record
-	if err := record.CreateDeliverRecord(info); err != nil {
-		logs.Errorf("failed to deliver device, ip: %s, subOrderID: %s, err: %v", info.Ip, order.SubOrderId, err)
+	if err := record.CreateDeliverRecord(kt, info); err != nil {
+		logs.Errorf("failed to deliver device, ip: %s, subOrderID: %s, err: %v, rid: %s",
+			info.Ip, order.SubOrderId, err, kt.Rid)
 		return fmt.Errorf("failed to deliver device, ip: %s, err: %v", info.Ip, err)
 	}
 	// 1. set host module and host operator
 	if err := m.transferHostAndSetOperator(info, order); err != nil {
-		logs.Errorf("failed to deliver device, ip: %s, subOrderID: %s, err: %v", info.Ip, order.SubOrderId, err)
+		logs.Errorf("failed to deliver device, ip: %s, subOrderID: %s, err: %v, rid: %s",
+			info.Ip, order.SubOrderId, err, kt.Rid)
 		// update deliver record
-		if errRecord := record.UpdateDeliverRecord(info, err.Error(), types.DeliverStatusFailed); errRecord != nil {
-			logs.Errorf("failed to deliver device, ip: %s, subOrderID: %s, err: %v", info.Ip, order.SubOrderId, err)
+		if errRecord := record.UpdateDeliverRecord(kt, info, err.Error(),
+			types.DeliverStatusFailed); errRecord != nil {
+			logs.Errorf("failed to deliver device, ip: %s, subOrderID: %s, err: %v, rid: %s",
+				info.Ip, order.SubOrderId, err, kt.Rid)
 			return fmt.Errorf("failed to deliver device, ip: %s, err: %v", info.Ip, err)
 		}
 		return fmt.Errorf("failed to deliver device, ip: %s, err: %v", info.Ip, err)
 	}
 	// 2. update device status
-	if err := m.SetDeviceDelivered(info); err != nil {
-		logs.Errorf("failed to deliver device, ip: %s, subOrderID: %s, err: %v", info.Ip, order.SubOrderId, err)
+	if err := m.SetDeviceDelivered(kt, info); err != nil {
+		logs.Errorf("failed to deliver device, ip: %s, subOrderID: %s, err: %v, rid: %s",
+			info.Ip, order.SubOrderId, err, kt.Rid)
 		return fmt.Errorf("failed to deliver device, ip: %s, err: %v", info.Ip, err)
 	}
 
 	// update deliver record
-	if err := record.UpdateDeliverRecord(info, "success", types.DeliverStatusSuccess); err != nil {
-		logs.Errorf("failed to deliver device, ip: %s, subOrderID: %s, err: %v", info.Ip, order.SubOrderId, err)
+	if err := record.UpdateDeliverRecord(kt, info, "success",
+		types.DeliverStatusSuccess); err != nil {
+		logs.Errorf("failed to deliver device, ip: %s, subOrderID: %s, err: %v, rid: %s",
+			info.Ip, order.SubOrderId, err, kt.Rid)
 		return fmt.Errorf("failed to deliver device, ip: %s, err: %v", info.Ip, err)
 	}
 
@@ -931,17 +986,12 @@ func (m *Matcher) DeliverDevice(info *types.DeviceInfo, order *types.ApplyOrder)
 }
 
 // setDeviceChecked set device checked flag
-func (m *Matcher) setDeviceChecked(info *types.DeviceInfo) error {
-	filter := &mapstr.MapStr{
-		"suborder_id": info.SubOrderId,
-		"ip":          info.Ip,
+func (m *Matcher) setDeviceChecked(kt *kit.Kit, info *types.DeviceInfo) error {
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", info.SubOrderId), tools.RuleEqual("ip", info.Ip))
+	update := &cvmapplyproto.ZiyanCvmDeviceInfoUpdateReq{
+		IsChecked: cvt.ValToPtr(true),
 	}
-	doc := &mapstr.MapStr{
-		"is_checked": true,
-		"update_at":  time.Now(),
-	}
-
-	if err := model.Operation().DeviceInfo().UpdateDeviceInfo(context.Background(), filter, doc); err != nil {
+	if err := model.Operation().DeviceInfo().UpdateDeviceInfo(kt, filter, update); err != nil {
 		logs.Errorf("failed to update device checked flag, ip: %s, err: %v", info.Ip, err)
 		return err
 	}
@@ -952,43 +1002,16 @@ func (m *Matcher) setDeviceChecked(info *types.DeviceInfo) error {
 }
 
 // SetDeviceInited set device inited flag
-func (m *Matcher) SetDeviceInited(info *types.DeviceInfo) error {
-	filter := &mapstr.MapStr{
-		"suborder_id": info.SubOrderId,
-		"ip":          info.Ip,
-	}
-	doc := &mapstr.MapStr{
-		"is_inited":      true,
-		"init_task_id":   info.InitTaskId,
-		"init_task_link": info.InitTaskLink,
-		"update_at":      time.Now(),
+func (m *Matcher) SetDeviceInited(kt *kit.Kit, info *types.DeviceInfo) error {
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", info.SubOrderId), tools.RuleEqual("ip", info.Ip))
+	update := &cvmapplyproto.ZiyanCvmDeviceInfoUpdateReq{
+		IsInited:     cvt.ValToPtr(true),
+		InitTaskID:   info.InitTaskId,
+		InitTaskLink: info.InitTaskLink,
 	}
 
-	if err := model.Operation().DeviceInfo().UpdateDeviceInfo(context.Background(), filter, doc); err != nil {
-		logs.Errorf("failed to update device inited flag, ip: %s, err: %v", info.Ip, err)
-		return err
-	}
-
-	info.IsInited = true
-
-	return nil
-}
-
-// setDeviceDiskChecked set device disk-checked flag
-func (m *Matcher) setDeviceDiskChecked(info *types.DeviceInfo) error {
-	filter := &mapstr.MapStr{
-		"suborder_id": info.SubOrderId,
-		"ip":          info.Ip,
-	}
-	doc := &mapstr.MapStr{
-		"is_disk_checked":      true,
-		"disk_check_task_id":   info.InitTaskId,
-		"disk_check_task_link": info.InitTaskLink,
-		"update_at":            time.Now(),
-	}
-
-	if err := model.Operation().DeviceInfo().UpdateDeviceInfo(context.Background(), filter, doc); err != nil {
-		logs.Errorf("failed to update device disk-checked flag, ip: %s, err: %v", info.Ip, err)
+	if err := model.Operation().DeviceInfo().UpdateDeviceInfo(kt, filter, update); err != nil {
+		logs.Errorf("failed to update device inited flag, ip: %s, err: %v, rid: %s", info.Ip, err, kt.Rid)
 		return err
 	}
 
@@ -998,37 +1021,28 @@ func (m *Matcher) setDeviceDiskChecked(info *types.DeviceInfo) error {
 }
 
 // SetDeviceDelivered set device delivered flag
-func (m *Matcher) SetDeviceDelivered(info *types.DeviceInfo) error {
-	filter := &mapstr.MapStr{
-		"suborder_id": info.SubOrderId,
-		"ip":          info.Ip,
-	}
-	doc := &mapstr.MapStr{
-		"is_delivered": true,
-		"update_at":    time.Now(),
+func (m *Matcher) SetDeviceDelivered(kt *kit.Kit, info *types.DeviceInfo) error {
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", info.SubOrderId), tools.RuleEqual("ip", info.Ip))
+	update := &cvmapplyproto.ZiyanCvmDeviceInfoUpdateReq{
+		IsDelivered: cvt.ValToPtr(true),
 	}
 
-	if err := model.Operation().DeviceInfo().UpdateDeviceInfo(context.Background(), filter, doc); err != nil {
-		logs.Errorf("failed to update device delivered flag, ip: %s, err: %v", info.Ip, err)
+	if err := model.Operation().DeviceInfo().UpdateDeviceInfo(kt, filter, update); err != nil {
+		logs.Errorf("failed to update device delivered flag, ip: %s, err: %v, rid: %s", info.Ip, err, kt.Rid)
 		return err
 	}
 
 	return nil
 }
 
-func (m *Matcher) notifyApplyDone(orderId uint64) error {
+func (m *Matcher) notifyApplyDone(kt *kit.Kit, orderId uint64) error {
 	// check if all apply suborders done
-	filter := map[string]interface{}{
-		"order_id": orderId,
-		"status": map[string]interface{}{
-			pkg.BKDBNE: types.ApplyStatusDone,
-		},
-		"source": map[string]interface{}{
-			pkg.BKDBNE: enumor.ApplyTicketSrcPurchaseToResPool,
-		},
-	}
-
-	cnt, err := model.Operation().ApplyOrder().CountApplyOrder(context.Background(), filter)
+	applyFilter := tools.ExpressionAnd(
+		tools.RuleEqual("order_id", orderId),
+		tools.RuleNotEqual("status", types.ApplyStatusDone),
+		tools.RuleNotEqual("source", enumor.ApplyTicketSrcPurchaseToResPool),
+	)
+	cnt, err := model.Operation().ApplyOrder().CountApplyOrder(kt, applyFilter)
 	if err != nil {
 		return err
 	}
@@ -1037,11 +1051,9 @@ func (m *Matcher) notifyApplyDone(orderId uint64) error {
 		return nil
 	}
 
-	filterTicket := &mapstr.MapStr{
-		"order_id": orderId,
-	}
+	filterTicket := tools.ExpressionAnd(tools.RuleEqual("order_id", orderId))
 
-	ticket, err := model.Operation().ApplyTicket().GetApplyTicket(context.Background(), filterTicket)
+	ticket, err := model.Operation().ApplyTicket().GetApplyTicket(kt, filterTicket)
 	if err != nil {
 		return nil
 	}
@@ -1097,17 +1109,12 @@ func (m *Matcher) notifyApplyDone(orderId uint64) error {
 // checkAndNotifyDelivery 检查并触发邮件通知
 func (m *Matcher) checkAndNotifyDelivery(kt *kit.Kit, orderId uint64) error {
 	// 检查所有子单是否都已完成
-	filter := map[string]interface{}{
-		"order_id": orderId,
-		"status": map[string]interface{}{
-			pkg.BKDBNE: types.ApplyStatusDone,
-		},
-		"source": map[string]interface{}{
-			pkg.BKDBNE: enumor.ApplyTicketSrcPurchaseToResPool,
-		},
-	}
-
-	cnt, err := model.Operation().ApplyOrder().CountApplyOrder(kt.Ctx, filter)
+	applyFilter := tools.ExpressionAnd(
+		tools.RuleEqual("order_id", orderId),
+		tools.RuleNotEqual("status", types.ApplyStatusDone),
+		tools.RuleNotEqual("source", enumor.ApplyTicketSrcPurchaseToResPool),
+	)
+	cnt, err := model.Operation().ApplyOrder().CountApplyOrder(kt, applyFilter)
 	if err != nil {
 		logs.Errorf("count apply order failed, orderId: %d, err: %v, rid: %s", orderId, err, kt.Rid)
 		return err
@@ -1132,11 +1139,9 @@ func (m *Matcher) checkAndNotifyDelivery(kt *kit.Kit, orderId uint64) error {
 	}
 
 	// 获取申请票据
-	filterTicket := &mapstr.MapStr{
-		"order_id": orderId,
-	}
+	filterTicket := tools.ExpressionAnd(tools.RuleEqual("order_id", orderId))
 
-	ticket, err := model.Operation().ApplyTicket().GetApplyTicket(kt.Ctx, filterTicket)
+	ticket, err := model.Operation().ApplyTicket().GetApplyTicket(kt, filterTicket)
 	if err != nil {
 		logs.Errorf("failed to get apply ticket, orderId: %d, err: %v, rid: %s", orderId, err, kt.Rid)
 		return err
@@ -1222,17 +1227,9 @@ func (m *Matcher) sendDeliveryEmailNotification(kt *kit.Kit, ticket *types.Apply
 
 // getDeliveryDevices 获取交付设备信息
 func (m *Matcher) getDeliveryDevices(kt *kit.Kit, orderId int64) ([]*types.DeviceInfo, error) {
-	filter := map[string]interface{}{
-		"order_id":     orderId,
-		"is_delivered": true,
-	}
+	filter := tools.ExpressionAnd(tools.RuleEqual("order_id", orderId), tools.RuleEqual("is_delivered", true))
 
-	page := metadata.BasePage{
-		Start: 0,
-		Limit: pkg.BKNoLimit,
-	}
-
-	devices, err := model.Operation().DeviceInfo().FindManyDeviceInfo(kt.Ctx, page, filter)
+	devices, err := model.Operation().DeviceInfo().FindManyDeviceInfo(kt, filter, nil)
 	if err != nil {
 		logs.Errorf("failed to query delivery devices, orderId: %d, err: %v, rid: %s", orderId, err, kt.Rid)
 		return nil, err
@@ -1299,7 +1296,7 @@ func (m *Matcher) generateDeliveryEmailContent(kt *kit.Kit, ticket *types.ApplyT
 	// 邮件标题
 	title := fmt.Sprintf(constant.HostDeliveryNoticeTitle, m.getBizName(ticket.BkBizId), ticket.OrderId)
 	// 查询子单所属园区
-	regionMap := m.fetchRegionMapBySubOrder(ticket.OrderId)
+	regionMap := m.fetchRegionMapBySubOrder(kt, ticket.OrderId)
 	// 构建表格内容
 	tableContent := buildDeliveryEmailTable(regionMap, devices)
 
@@ -1327,16 +1324,10 @@ func (m *Matcher) generateDeliveryEmailContent(kt *kit.Kit, ticket *types.ApplyT
 	return title, content, nil
 }
 
-func (m *Matcher) fetchRegionMapBySubOrder(orderID uint64) map[string]string {
+func (m *Matcher) fetchRegionMapBySubOrder(kt *kit.Kit, orderID uint64) map[string]string {
 	result := make(map[string]string)
-	filter := map[string]interface{}{
-		"order_id": orderID,
-	}
-	page := metadata.BasePage{
-		Start: 0,
-		Limit: pkg.BKNoLimit,
-	}
-	orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(context.Background(), page, filter)
+	suborderFilter := tools.ExpressionAnd(tools.RuleEqual("order_id", orderID))
+	orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt, suborderFilter, nil)
 	if err != nil {
 		logs.Warnf("failed to query apply orders for region info, orderId: %d, err: %v", orderID, err)
 		return result
@@ -1414,10 +1405,12 @@ func encodeHostApplyDeviceRules(orderId int64) (string, error) {
 }
 
 // RunDiskCheck 执行磁盘检查
-func (m *Matcher) RunDiskCheck(order *types.ApplyOrder, devices []*types.DeviceInfo) ([]*types.DeviceInfo, error) {
+func (m *Matcher) RunDiskCheck(kt *kit.Kit, order *types.ApplyOrder, devices []*types.DeviceInfo) (
+	[]*types.DeviceInfo, error) {
+
 	// start init step
-	if err := record.StartStep(order.SubOrderId, types.StepNameDiskCheck); err != nil {
-		logs.Errorf("failed to start init step, order id: %s, err: %v", order.SubOrderId, err)
+	if err := record.StartStep(kt, order.SubOrderId, types.StepNameDiskCheck); err != nil {
+		logs.Errorf("failed to start init step, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return nil, err
 	}
 
@@ -1445,7 +1438,8 @@ func (m *Matcher) RunDiskCheck(order *types.ApplyOrder, devices []*types.DeviceI
 			var err error = nil
 			for try := 0; try < maxRetry; try++ {
 				if err = m.checkDeviceDisk(device); err != nil {
-					logs.Errorf("failed to check device disk, will retry in 60s, ip: %s, err: %v", device.Ip, err)
+					logs.Errorf("failed to check device disk, will retry in 60s, ip: %s, err: %v, rid: %s",
+						device.Ip, err, kt.Rid)
 					time.Sleep(180 * time.Second)
 					continue
 				}
@@ -1462,8 +1456,8 @@ func (m *Matcher) RunDiskCheck(order *types.ApplyOrder, devices []*types.DeviceI
 	wg.Wait()
 
 	// update disk check step
-	if err := record.UpdateDiskCheckStep(order.SubOrderId, order.TotalNum); err != nil {
-		logs.Errorf("failed to update init step, order id: %s, err: %v", order.SubOrderId, err)
+	if err := record.UpdateDiskCheckStep(kt, order.SubOrderId, order.TotalNum); err != nil {
+		logs.Errorf("failed to update init step, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return nil, err
 	}
 
@@ -1476,16 +1470,12 @@ func (m *Matcher) updatePurchaseToResPoolSuborderRunning(kt *kit.Kit, order *typ
 	}
 
 	orderId := order.OrderId
-	filter := mapstr.MapStr{
-		"order_id": orderId,
-		"status": map[string]interface{}{
-			pkg.BKDBNE: types.ApplyStatusDone,
-		},
-		"source": map[string]interface{}{
-			pkg.BKDBNE: enumor.ApplyTicketSrcPurchaseToResPool,
-		},
-	}
-	cnt, err := model.Operation().ApplyOrder().CountApplyOrder(kt.Ctx, filter)
+	applyFilter := tools.ExpressionAnd(
+		tools.RuleEqual("order_id", orderId),
+		tools.RuleNotEqual("status", types.ApplyStatusDone),
+		tools.RuleNotEqual("source", enumor.ApplyTicketSrcPurchaseToResPool),
+	)
+	cnt, err := model.Operation().ApplyOrder().CountApplyOrder(kt, applyFilter)
 	if err != nil {
 		logs.Errorf("count apply order failed, orderId: %d, err: %v, rid: %s", orderId, err, kt.Rid)
 		return err
@@ -1496,12 +1486,12 @@ func (m *Matcher) updatePurchaseToResPoolSuborderRunning(kt *kit.Kit, order *typ
 		return nil
 	}
 
-	filter = mapstr.MapStr{
-		"order_id": orderId,
-		"stage":    types.TicketStageUncommit,
-		"source":   enumor.ApplyTicketSrcPurchaseToResPool,
-	}
-	cnt, err = model.Operation().ApplyOrder().CountApplyOrder(kt.Ctx, filter)
+	applyFilter = tools.ExpressionAnd(
+		tools.RuleEqual("order_id", orderId),
+		tools.RuleEqual("stage", types.TicketStageUncommit),
+		tools.RuleEqual("source", enumor.ApplyTicketSrcPurchaseToResPool),
+	)
+	cnt, err = model.Operation().ApplyOrder().CountApplyOrder(kt, applyFilter)
 	if err != nil {
 		logs.Errorf("count apply order failed, orderId: %d, err: %v, rid: %s", orderId, err, kt.Rid)
 		return err
@@ -1510,10 +1500,10 @@ func (m *Matcher) updatePurchaseToResPoolSuborderRunning(kt *kit.Kit, order *typ
 		return nil
 	}
 
-	update := &mapstr.MapStr{
-		"stage": types.TicketStageRunning,
+	update := &cvmapplyproto.ZiyanCvmApplySuborderUpdateReq{
+		Stage: types.TicketStageRunning,
 	}
-	if err := model.Operation().ApplyOrder().UpdateApplyOrder(kt.Ctx, &filter, update); err != nil {
+	if err = model.Operation().ApplyOrder().UpdateApplyOrder(kt, applyFilter, update); err != nil {
 		logs.Errorf("failed to update purchase to resource pool suborder running, err: %v, orderId: %d, rid: %s",
 			err, orderId, kt.Rid)
 		return err

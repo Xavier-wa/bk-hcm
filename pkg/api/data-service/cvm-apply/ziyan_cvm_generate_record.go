@@ -122,19 +122,19 @@ func (c *BatchUpdateZiyanCvmGenerateRecordReq) Validate() error {
 type ZiyanCvmGenerateRecordUpdateReq struct {
 	GenerateID      string                        `json:"generate_id" validate:"required"`
 	SuborderID      string                        `json:"suborder_id" validate:"omitempty,max=64"`
-	GenerateType    string                        `json:"generate_type" validate:"omitempty,max=32"`
-	TaskID          string                        `json:"task_id" validate:"omitempty,max=128"`
-	TaskLink        string                        `json:"task_link" validate:"omitempty,max=512"`
+	GenerateType    *string                       `json:"generate_type" validate:"omitempty,max=32"`
+	TaskID          *string                       `json:"task_id" validate:"omitempty,max=128"`
+	TaskLink        *string                       `json:"task_link" validate:"omitempty,max=512"`
 	RequestInfo     string                        `json:"request_info" validate:"omitempty"`
 	Status          *tasktypes.GenerateStepStatus `json:"status" validate:"omitempty"`
 	IsMatched       *bool                         `json:"is_matched" validate:"omitempty"`
-	Message         string                        `json:"message" validate:"omitempty"`
+	Message         *string                       `json:"message" validate:"omitempty"`
 	TotalNum        *uint                         `json:"total_num" validate:"omitempty"`
 	SuccessNum      *uint                         `json:"success_num" validate:"omitempty"`
-	SuccessList     types.JsonField               `json:"success_list" validate:"omitempty"`
-	StartAt         string                        `json:"start_at" validate:"omitempty"`
-	EndAt           string                        `json:"end_at" validate:"omitempty"`
-	IsManualMatched bool                          `json:"is_manual_matched" validate:"omitempty"`
+	SuccessList     *types.JsonField              `json:"success_list" validate:"omitempty"`
+	StartAt         *string                       `json:"start_at" validate:"omitempty"`
+	EndAt           *string                       `json:"end_at" validate:"omitempty"`
+	IsManualMatched *bool                         `json:"is_manual_matched" validate:"omitempty"`
 }
 
 // Validate ...

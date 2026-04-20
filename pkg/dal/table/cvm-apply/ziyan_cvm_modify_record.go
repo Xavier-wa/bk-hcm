@@ -54,6 +54,8 @@ var ZiyanCvmModifyRecordColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "pre_data_disk", NamedC: "pre_data_disk", Type: enumor.Json},
 	{Column: "pre_zones", NamedC: "pre_zones", Type: enumor.Json},
 	{Column: "pre_res_assign", NamedC: "pre_res_assign", Type: enumor.Numeric},
+	{Column: "pre_bk_asset_id", NamedC: "pre_bk_asset_id", Type: enumor.String},
+	{Column: "pre_inherit_instance_id", NamedC: "pre_inherit_instance_id", Type: enumor.String},
 	{Column: "cur_total_num", NamedC: "cur_total_num", Type: enumor.Numeric},
 	{Column: "cur_replicas", NamedC: "cur_replicas", Type: enumor.Numeric},
 	{Column: "cur_region", NamedC: "cur_region", Type: enumor.String},
@@ -71,6 +73,8 @@ var ZiyanCvmModifyRecordColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "cur_data_disk", NamedC: "cur_data_disk", Type: enumor.Json},
 	{Column: "cur_zones", NamedC: "cur_zones", Type: enumor.Json},
 	{Column: "cur_res_assign", NamedC: "cur_res_assign", Type: enumor.Numeric},
+	{Column: "cur_bk_asset_id", NamedC: "cur_bk_asset_id", Type: enumor.String},
+	{Column: "cur_inherit_instance_id", NamedC: "cur_inherit_instance_id", Type: enumor.String},
 	{Column: "status", NamedC: "status", Type: enumor.Numeric},
 	{Column: "approver", NamedC: "approver", Type: enumor.String},
 	{Column: "created_at", NamedC: "created_at", Type: enumor.Time},
@@ -119,6 +123,10 @@ type ZiyanCvmModifyRecord struct {
 	PreZones types.JsonField `db:"pre_zones" json:"pre_zones"`
 	// PreResAssign 修改前-资源分配方式
 	PreResAssign enumor.ResAssign `db:"pre_res_assign" json:"pre_res_assign"`
+	// PreBkAssetID 修改前-继承主机的固资号
+	PreBkAssetID string `db:"pre_bk_asset_id" json:"pre_bk_asset_id" validate:"max=64"`
+	// PreInheritInstanceID 修改前-被继承云主机实例ID
+	PreInheritInstanceID string `db:"pre_inherit_instance_id" json:"pre_inherit_instance_id" validate:"max=64"`
 	// CurTotalNum 修改后-总数量
 	CurTotalNum *uint `db:"cur_total_num" json:"cur_total_num"`
 	// CurReplicas 修改后-副本数
@@ -153,6 +161,10 @@ type ZiyanCvmModifyRecord struct {
 	CurZones types.JsonField `db:"cur_zones" json:"cur_zones"`
 	// CurResAssign 修改后-资源分配方式
 	CurResAssign enumor.ResAssign `db:"cur_res_assign" json:"cur_res_assign"`
+	// CurBkAssetID 修改后-继承主机的固资号
+	CurBkAssetID string `db:"cur_bk_asset_id" json:"cur_bk_asset_id" validate:"max=64"`
+	// CurInheritInstanceID 修改后-被继承云主机实例ID
+	CurInheritInstanceID string `db:"cur_inherit_instance_id" json:"cur_inherit_instance_id" validate:"max=64"`
 	// Status 状态：0-待审批, 1-已审批, 2-审批失败, 3-已拒绝, 4-审批超时/作废
 	Status enumor.CvmModifyRecordStatus `db:"status" json:"status"`
 	// Approver 审批人

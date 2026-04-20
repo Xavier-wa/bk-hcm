@@ -167,7 +167,6 @@ func (s *service) initSchedulerService(h *rest.Handler) {
 	h.Add("GetApplyDetail", http.MethodPost, "/find/apply/detail", s.GetApplyDetail)
 	h.Add("GetApplyGenerate", http.MethodPost, "/find/apply/record/generate", s.GetApplyGenerate)
 	h.Add("GetApplyInit", http.MethodPost, "/find/apply/record/init", s.GetApplyInit)
-	h.Add("GetApplyDiskCheck", http.MethodPost, "/find/apply/record/disk_check", s.GetApplyDiskCheck)
 	h.Add("GetApplyDeliver", http.MethodPost, "/find/apply/record/deliver", s.GetApplyDeliver)
 	h.Add("GetApplyDevice", http.MethodPost, "/findmany/apply/device", s.GetApplyDevice)
 	h.Add("GetDeliverDeviceByOrder", http.MethodPost, "/findmany/apply/deliver/device", s.GetDeliverDeviceByOrder)

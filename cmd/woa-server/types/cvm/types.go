@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"time"
 
+	taskTypes "hcm/cmd/woa-server/types/task"
 	"hcm/pkg"
 	"hcm/pkg/api/core"
 	"hcm/pkg/criteria/constant"
@@ -34,20 +35,17 @@ const (
 
 // CvmCreateReq create cvm request
 type CvmCreateReq struct {
-	BkBizId     int64      `json:"bk_biz_id"`
-	BkModuleId  int64      `json:"bk_module_id"`
-	User        string     `json:"bk_username"`
-	RequireType int64      `json:"require_type"`
-	Replicas    uint       `json:"replicas"`
-	Remark      string     `json:"remark"`
-	Spec        *OrderSpec `json:"spec" bson:"spec"`
+	BkBizId     int64                   `json:"bk_biz_id"`
+	BkModuleId  int64                   `json:"bk_module_id"`
+	User        string                  `json:"bk_username"`
+	RequireType enumor.RequireType      `json:"require_type"`
+	Replicas    uint                    `json:"replicas"`
+	Remark      string                  `json:"remark"`
+	Spec        *taskTypes.ResourceSpec `json:"spec" bson:"spec"`
 }
 
 // Validate whether CvmCreateReq is valid
-// errKey: invalid key
-// err: detail reason why errKey is invalid
 func (s *CvmCreateReq) Validate() error {
-
 	if s.Replicas <= 0 {
 		return fmt.Errorf("replicas invalid replicas <= 0")
 	}
@@ -61,14 +59,14 @@ func (s *CvmCreateReq) Validate() error {
 		return fmt.Errorf("remark exceed size limit %d", remarkLimit)
 	}
 
-	if err := s.Spec.Validate(); err != nil {
+	if err := s.Spec.Validate(taskTypes.ResourceTypeCvm); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// OrderSpec cvm apply order specification
+// OrderSpec cvm apply order specification（TODO: 暂时还不能删除，迁移脚本会用到）
 type OrderSpec struct {
 	Region      string          `json:"region" bson:"region"`
 	Zone        string          `json:"zone" bson:"zone"`
@@ -84,8 +82,10 @@ type OrderSpec struct {
 	// 计费时长，单位：月
 	ChargeMonths uint `json:"charge_months" bson:"charge_months"`
 	// 被继承云主机实例ID
-	InheritInstanceId string            `json:"inherit_instance_id" bson:"inherit_instance_id"`
-	SystemDisk        enumor.DiskSpec   `json:"system_disk" bson:"system_disk"`
+	InheritInstanceId string `json:"inherit_instance_id" bson:"inherit_instance_id"`
+	// 继承的固资号
+	BkAssetID  string            `json:"bk_asset_id" bson:"bk_asset_id"`
+	SystemDisk enumor.DiskSpec   `json:"system_disk" bson:"system_disk"`
 	DataDisk          []enumor.DiskSpec `json:"data_disk" bson:"data_disk"`
 }
 
@@ -155,7 +155,7 @@ type CvmCreateResult struct {
 	OrderId uint64 `json:"order_id"`
 }
 
-// ApplyOrder cvm apply order
+// ApplyOrder cvm apply order（TODO: 暂时还不能删除，迁移脚本会用到）
 type ApplyOrder struct {
 	OrderId     uint64      `json:"order_id" bson:"order_id"`
 	BkBizId     int64       `json:"bk_biz_id" bson:"bk_biz_id"`

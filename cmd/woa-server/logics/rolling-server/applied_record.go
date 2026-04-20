@@ -31,14 +31,13 @@ import (
 	rsproto "hcm/pkg/api/data-service/rolling-server"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
-	"hcm/pkg/criteria/mapstr"
+	"hcm/pkg/dal/dao/tools"
 	rstable "hcm/pkg/dal/table/rolling-server"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/runtime/filter"
 	"hcm/pkg/thirdparty/api-gateway/cmdb"
 	"hcm/pkg/tools/converter"
-	"hcm/pkg/tools/metadata"
 	"hcm/pkg/tools/querybuilder"
 	"hcm/pkg/tools/slice"
 	"hcm/pkg/tools/times"
@@ -722,9 +721,9 @@ func (l *logics) fillOutUnReturnedSubOrderMsg(kt *kit.Kit, messages []rstypes.Un
 	// 查询子单申请人
 	subOrderIDUserMap := make(map[string]string)
 	for _, ids := range slice.Split(subOrderIDs, constant.BatchOperationMaxLimit) {
-		cond := mapstr.MapStr{"suborder_id": &mapstr.MapStr{pkg.BKDBIN: ids}}
-		page := metadata.BasePage{Limit: constant.BatchOperationMaxLimit}
-		subOrders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt.Ctx, page, cond)
+		cond := tools.ExpressionAnd(tools.RuleIn("suborder_id", ids))
+		page := &core.BasePage{Limit: constant.BatchOperationMaxLimit}
+		subOrders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt, cond, page)
 		if err != nil {
 			logs.Errorf("get apply order failed, err: %v, filter: %v, rid: %s", err, cond, kt.Rid)
 			return nil, err

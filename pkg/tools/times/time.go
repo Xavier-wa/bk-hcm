@@ -245,7 +245,7 @@ func ParseTypesTime(t tabletypes.Time) (time.Time, error) {
 	parsed, err := time.Parse(constant.TimeStdFormat, string(t))
 	if err != nil {
 		// Try alternative format without timezone
-		parsed, err = time.Parse("2006-01-02T15:04:05", string(t))
+		parsed, err = time.Parse(constant.DateTimeLayoutISO, string(t))
 		if err != nil {
 			return time.Time{}, err
 		}

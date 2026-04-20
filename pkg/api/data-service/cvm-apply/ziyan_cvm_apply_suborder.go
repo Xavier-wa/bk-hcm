@@ -90,6 +90,7 @@ type ZiyanCvmApplySuborderCreateReq struct {
 	ChargeType        cvmapi.ChargeType        `json:"charge_type" validate:"max=64"`
 	ChargeMonths      uint                     `json:"charge_months" validate:"omitempty"`
 	InheritInstanceID string                   `json:"inherit_instance_id" validate:"max=64"`
+	BkAssetID         string                   `json:"bk_asset_id" validate:"max=64"`
 	ResAssign         enumor.ResAssign         `json:"res_assign" validate:"omitempty"`
 	CPUThreadSwitch   enumor.CPUThreadSwitch   `json:"cpu_thread_switch" validate:"omitempty"`
 	SystemDisk        types.JsonField          `json:"system_disk" validate:"omitempty"`
@@ -166,7 +167,7 @@ type ZiyanCvmApplySuborderUpdateReq struct {
 	SuborderID        string                   `json:"suborder_id" validate:"required,max=64"`
 	OrderID           uint64                   `json:"order_id" validate:"omitempty"`
 	BkUsername        string                   `json:"bk_username" validate:"omitempty,max=64"`
-	Follower          types.JsonField          `json:"follower" validate:"omitempty"`
+	Follower          *types.JsonField         `json:"follower" validate:"omitempty"`
 	Auditor           string                   `json:"auditor" validate:"omitempty,max=64"`
 	Source            enumor.ApplyTicketSource `json:"source" validate:"omitempty,max=64"`
 	ProductType       enumor.ProductType       `json:"product_type" validate:"omitempty"`
@@ -193,23 +194,24 @@ type ZiyanCvmApplySuborderUpdateReq struct {
 	OsType            string                   `json:"os_type" validate:"omitempty,max=64"`
 	RaidType          string                   `json:"raid_type" validate:"omitempty,max=64"`
 	Isp               string                   `json:"isp" validate:"omitempty,max=64"`
-	FailedZoneIds     types.JsonField          `json:"failed_zone_ids" validate:"omitempty"`
+	FailedZoneIds     *types.JsonField         `json:"failed_zone_ids" validate:"omitempty"`
 	ChargeType        cvmapi.ChargeType        `json:"charge_type" validate:"omitempty,max=64"`
 	ChargeMonths      *uint                    `json:"charge_months" validate:"omitempty"`
 	InheritInstanceID string                   `json:"inherit_instance_id" validate:"omitempty,max=64"`
+	BkAssetID         string                   `json:"bk_asset_id" validate:"omitempty,max=64"`
 	ResAssign         *enumor.ResAssign        `json:"res_assign" validate:"omitempty"`
 	CPUThreadSwitch   enumor.CPUThreadSwitch   `json:"cpu_thread_switch" validate:"omitempty"`
-	SystemDisk        types.JsonField          `json:"system_disk" validate:"omitempty"`
-	DataDisk          types.JsonField          `json:"data_disk" validate:"omitempty"`
-	Zones             types.JsonField          `json:"zones" validate:"omitempty"`
-	UpgradeCvmList    types.JsonField          `json:"upgrade_cvm_list" validate:"omitempty"`
+	SystemDisk        *types.JsonField         `json:"system_disk" validate:"omitempty"`
+	DataDisk          *types.JsonField         `json:"data_disk" validate:"omitempty"`
+	Zones             *types.JsonField         `json:"zones" validate:"omitempty"`
+	UpgradeCvmList    *types.JsonField         `json:"upgrade_cvm_list" validate:"omitempty"`
 	Stage             tasktypes.TicketStage    `json:"stage" validate:"omitempty,max=32"`
 	Status            tasktypes.ApplyStatus    `json:"status" validate:"omitempty,max=32"`
 	RetryTime         *uint                    `json:"retry_time" validate:"omitempty"`
 	ModifyTime        *uint                    `json:"modify_time" validate:"omitempty"`
 	AppliedCore       *uint                    `json:"applied_core" validate:"omitempty"`
 	DeliveredCore     *uint                    `json:"delivered_core" validate:"omitempty"`
-	PlanExpendGroup   types.JsonField          `json:"plan_expend_group" validate:"omitempty"`
+	PlanExpendGroup   *types.JsonField         `json:"plan_expend_group" validate:"omitempty"`
 	OriginNum         *uint                    `json:"origin_num" validate:"omitempty"`
 	TotalNum          *uint                    `json:"total_num" validate:"omitempty"`
 	SuccessNum        *uint                    `json:"success_num" validate:"omitempty"`

@@ -29,6 +29,7 @@ import (
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/orm"
 	cvmapplytable "hcm/pkg/dal/table/cvm-apply"
+	"hcm/pkg/dal/table/types"
 	"hcm/pkg/rest"
 	cvt "hcm/pkg/tools/converter"
 
@@ -71,6 +72,20 @@ func (svc *service) BatchCreateZiyanCvmApplySuborder(cts *rest.Contexts) (interf
 
 // convertToSuborder 将创建请求转换为子订单表对象
 func convertToSuborder(createReq *cvmapplyproto.ZiyanCvmApplySuborderCreateReq, user string) cvmapplytable.ZiyanCvmApplySuborder {
+	// 如果为空，默认写入 []
+	if createReq.Follower.IsEmpty() {
+		createReq.Follower = types.JsonField("[]")
+	}
+	if createReq.DataDisk.IsEmpty() {
+		createReq.DataDisk = types.JsonField("[]")
+	}
+	if createReq.Zones.IsEmpty() {
+		createReq.Zones = types.JsonField("[]")
+	}
+	if createReq.FailedZoneIds.IsEmpty() {
+		createReq.FailedZoneIds = types.JsonField("[]")
+	}
+
 	return cvmapplytable.ZiyanCvmApplySuborder{
 		SuborderID:        createReq.SuborderID,
 		OrderID:           createReq.OrderID,
@@ -107,6 +122,7 @@ func convertToSuborder(createReq *cvmapplyproto.ZiyanCvmApplySuborderCreateReq, 
 		ChargeType:        createReq.ChargeType,
 		ChargeMonths:      createReq.ChargeMonths,
 		InheritInstanceID: createReq.InheritInstanceID,
+		BkAssetID:         createReq.BkAssetID,
 		ResAssign:         createReq.ResAssign,
 		CPUThreadSwitch:   createReq.CPUThreadSwitch,
 		SystemDisk:        createReq.SystemDisk,

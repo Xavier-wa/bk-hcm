@@ -29,6 +29,7 @@ import (
 	"hcm/pkg/dal/dao/tools"
 	cvmapplytable "hcm/pkg/dal/table/cvm-apply"
 	"hcm/pkg/rest"
+	cvt "hcm/pkg/tools/converter"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -67,19 +68,19 @@ func (svc *service) BatchUpdateZiyanCvmGenerateRecord(cts *rest.Contexts) (inter
 func buildUpdateGenerateRecord(updateReq cvmapplyproto.ZiyanCvmGenerateRecordUpdateReq,
 	reviser string) *cvmapplytable.ZiyanCvmGenerateRecord {
 	recordReq := &cvmapplytable.ZiyanCvmGenerateRecord{
-		GenerateType:    updateReq.GenerateType,
-		TaskID:          updateReq.TaskID,
-		TaskLink:        updateReq.TaskLink,
+		GenerateType:    cvt.PtrToVal(updateReq.GenerateType),
+		TaskID:          cvt.PtrToVal(updateReq.TaskID),
+		TaskLink:        cvt.PtrToVal(updateReq.TaskLink),
 		RequestInfo:     updateReq.RequestInfo,
 		Status:          updateReq.Status,
 		IsMatched:       updateReq.IsMatched,
-		Message:         updateReq.Message,
+		Message:         cvt.PtrToVal(updateReq.Message),
 		TotalNum:        updateReq.TotalNum,
 		SuccessNum:      updateReq.SuccessNum,
-		SuccessList:     updateReq.SuccessList,
-		StartAt:         updateReq.StartAt,
-		EndAt:           updateReq.EndAt,
-		IsManualMatched: updateReq.IsManualMatched,
+		SuccessList:     cvt.PtrToVal(updateReq.SuccessList),
+		StartAt:         cvt.PtrToVal(updateReq.StartAt),
+		EndAt:           cvt.PtrToVal(updateReq.EndAt),
+		IsManualMatched: cvt.PtrToVal(updateReq.IsManualMatched),
 		Reviser:         reviser,
 	}
 

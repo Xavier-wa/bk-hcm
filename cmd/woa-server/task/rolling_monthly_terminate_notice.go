@@ -31,17 +31,19 @@ import (
 	configtypes "hcm/cmd/woa-server/types/config"
 	types "hcm/cmd/woa-server/types/task"
 	"hcm/pkg"
+	"hcm/pkg/api/core"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
-	"hcm/pkg/criteria/mapstr"
 	croncore "hcm/pkg/cron/core"
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/runtime/filter"
 	"hcm/pkg/thirdparty/api-gateway/cmsi"
 	"hcm/pkg/tools/maps"
-	"hcm/pkg/tools/metadata"
 	"hcm/pkg/tools/slice"
 )
 
@@ -110,18 +112,14 @@ func (r *RollingMonthlyTerminateNoticeTask) DoWithMonth(kt *kit.Kit, targetMonth
 	targetMonth = time.Date(targetMonth.Year(), targetMonth.Month(), 1, 0, 0, 0, 0, loc)
 	nextMonth := targetMonth.AddDate(0, 1, 0) // 下月1号
 
-	filter := map[string]interface{}{
-		"create_at": mapstr.MapStr{
-			pkg.BKDBGTE: targetMonth,
-			pkg.BKDBLT:  nextMonth,
-		},
-		"require_type": enumor.RequireTypeRollServer,
-		"stage": mapstr.MapStr{
-			pkg.BKDBIN: []types.TicketStage{types.TicketStageAudit, types.TicketStageSuspend,
-				types.TicketStageUncommit, types.TicketStageConfirming},
-		},
-	}
-	page := metadata.BasePage{Limit: pkg.BKMaxInstanceLimit, Start: 0}
+	filter := tools.ExpressionAnd(
+		tools.RuleGreaterThanEqual("created_at", targetMonth.Format(constant.TimeStdFormat)),
+		tools.RuleLessThan("created_at", nextMonth.Format(constant.TimeStdFormat)),
+		tools.RuleEqual("require_type", enumor.RequireTypeRollServer),
+		tools.RuleIn("stage", []types.TicketStage{types.TicketStageAudit, types.TicketStageSuspend,
+			types.TicketStageUncommit, types.TicketStageConfirming}),
+	)
+	page := core.NewDefaultBasePage()
 
 	userOrders, bizIDMap, err := r.processOrdersBatch(kt, page, filter)
 	if err != nil {
@@ -132,22 +130,22 @@ func (r *RollingMonthlyTerminateNoticeTask) DoWithMonth(kt *kit.Kit, targetMonth
 }
 
 // processOrdersBatch 处理订单批次，终止订单、收集用户订单信息
-func (r *RollingMonthlyTerminateNoticeTask) processOrdersBatch(kt *kit.Kit, page metadata.BasePage,
-	filter map[string]interface{}) (map[string][]*types.ApplyOrder, map[int64]struct{}, error) {
+func (r *RollingMonthlyTerminateNoticeTask) processOrdersBatch(kt *kit.Kit, page *core.BasePage,
+	filter *filter.Expression) (map[string][]*types.ApplyOrder, map[int64]struct{}, error) {
 
 	// 先查出所有待处理单据
 	allOrders := make([]*types.ApplyOrder, 0)
 	for {
-		orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt.Ctx, page, filter)
+		orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt, filter, page)
 		if err != nil {
 			logs.Errorf("find apply order failed, err: %v, rid: %s", err, kt.Rid)
 			return nil, nil, err
 		}
 		allOrders = append(allOrders, orders...)
-		if len(orders) < page.Limit {
+		if len(orders) < int(page.Limit) {
 			break
 		}
-		page.Start += page.Limit
+		page.Start += uint32(page.Limit)
 	}
 
 	// 批量终止，仅将成功终止的单据加入 userOrders，失败批次不发送通知
@@ -179,18 +177,13 @@ func (r *RollingMonthlyTerminateNoticeTask) processOrdersBatch(kt *kit.Kit, page
 
 // batchTerminateOrders 批量终止订单
 func (r *RollingMonthlyTerminateNoticeTask) batchTerminateOrders(kt *kit.Kit, subOrderIds []string) error {
-	update := &mapstr.MapStr{
-		"stage":     types.TicketStageTerminate,
-		"status":    types.ApplyStatusTerminate,
-		"update_at": time.Now(),
+	update := &cvmapplyproto.ZiyanCvmApplySuborderUpdateReq{
+		Stage:  types.TicketStageTerminate,
+		Status: types.ApplyStatusTerminate,
 	}
-	updateFilter := &mapstr.MapStr{
-		"suborder_id": mapstr.MapStr{
-			pkg.BKDBIN: subOrderIds,
-		},
-	}
+	updateFilter := tools.ExpressionAnd(tools.RuleIn("suborder_id", subOrderIds))
 
-	err := model.Operation().ApplyOrder().UpdateApplyOrder(kt.Ctx, updateFilter, update)
+	err := model.Operation().ApplyOrder().UpdateApplyOrder(kt, updateFilter, update)
 	if err != nil {
 		logs.Errorf("batch update apply order terminate failed, suborders: %v, err: %v, rid: %s", subOrderIds,
 			err, kt.Rid)

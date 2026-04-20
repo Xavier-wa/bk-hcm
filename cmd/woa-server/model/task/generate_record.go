@@ -15,78 +15,227 @@ package model
 
 import (
 	"context"
+	"fmt"
 
 	daltypes "hcm/cmd/woa-server/storage/dal/types"
 	"hcm/cmd/woa-server/storage/driver/mongodb"
 	types "hcm/cmd/woa-server/types/task"
 	"hcm/pkg"
-	"hcm/pkg/criteria/mapstr"
-	"hcm/pkg/tools/metadata"
+	"hcm/pkg/api/core"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	"hcm/pkg/client"
+	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/errf"
+	cvmapplytable "hcm/pkg/dal/table/cvm-apply"
+	tabletypes "hcm/pkg/dal/table/types"
+	"hcm/pkg/kit"
+	"hcm/pkg/logs"
+	"hcm/pkg/runtime/filter"
+	cvt "hcm/pkg/tools/converter"
+	"hcm/pkg/tools/json"
+	"hcm/pkg/tools/times"
 )
 
 type generateRecord struct {
-}
-
-// NextSequence returns next apply order generate record sequence id from db
-func (g *generateRecord) NextSequence(ctx context.Context) (uint64, error) {
-	return mongodb.Client().NextSequence(ctx, pkg.BKTableNameGenerateRecord)
+	apiClientSet *client.ClientSet
 }
 
 // CreateGenerateRecord creates apply order generate record in db
-func (g *generateRecord) CreateGenerateRecord(ctx context.Context, inst *types.GenerateRecord) error {
-	return mongodb.Client().Table(pkg.BKTableNameGenerateRecord).Insert(ctx, inst)
+func (g *generateRecord) CreateGenerateRecord(kt *kit.Kit, inst *types.GenerateRecord) (string, error) {
+	if g.apiClientSet == nil {
+		return "", fmt.Errorf("data service client not initialized")
+	}
+
+	// Convert SuccessList from []string to JsonField
+	// 注意：即使是空切片也需要 marshal，否则 JsonField 零值会被序列化为 {} 而非 []
+	successList := inst.SuccessList
+	if successList == nil {
+		successList = make([]string, 0)
+	}
+	jsonBytes, err := json.Marshal(successList)
+	if err != nil {
+		logs.Errorf("marshal success list failed, err: %v, rid: %s", err, kt.Rid)
+		return "", err
+	}
+	successListJSON := tabletypes.JsonField(jsonBytes)
+
+	createReq := cvmapplyproto.ZiyanCvmGenerateRecordCreateReq{
+		GenerateID:   inst.GenerateId,
+		SuborderID:   inst.SubOrderId,
+		GenerateType: inst.GenerateType,
+		TaskID:       inst.TaskId,
+		TaskLink:     inst.TaskLink,
+		RequestInfo:  inst.RequestInfo,
+		Status:       inst.Status,
+		IsMatched:    inst.IsMatched,
+		Message:      inst.Message,
+		TotalNum:     inst.TotalNum,
+		SuccessNum:   inst.SuccessNum,
+		SuccessList:  successListJSON,
+		StartAt:      times.ConvStdTimeFormat(inst.StartAt),
+		EndAt:        times.ConvStdTimeFormat(inst.EndAt),
+	}
+
+	req := &cvmapplyproto.BatchCreateZiyanCvmGenerateRecordReq{
+		GenerateRecords: []cvmapplyproto.ZiyanCvmGenerateRecordCreateReq{createReq},
+	}
+
+	resp, err := g.apiClientSet.DataService().TCloudZiyan.ZiyanCvmGenerateRecord.BatchCreate(kt.Ctx, kt.Header(), req)
+	if err != nil {
+		logs.Errorf("create generate record failed, err: %v, rid: %s", err, kt.Rid)
+		return "", err
+	}
+
+	if len(resp.IDs) == 0 {
+		return "", errf.Newf(errf.InvalidParameter, "create generate record failed, ids is empty, resp: %+v", resp)
+	}
+
+	return resp.IDs[0], nil
 }
 
 // GetGenerateRecord gets apply order generate record by filter from db
-func (g *generateRecord) GetGenerateRecord(ctx context.Context, filter *mapstr.MapStr) (*types.GenerateRecord, error) {
-	inst := new(types.GenerateRecord)
+func (g *generateRecord) GetGenerateRecord(kt *kit.Kit, filterExpr *filter.Expression) (*types.GenerateRecord, error) {
 
-	if err := mongodb.Client().Table(pkg.BKTableNameGenerateRecord).Find(filter).One(ctx, inst); err != nil {
+	if g.apiClientSet == nil {
+		return nil, fmt.Errorf("data service client not initialized")
+	}
+
+	req := &cvmapplyproto.ZiyanCvmGenerateRecordListReq{
+		Filter: filterExpr,
+		Page:   &core.BasePage{Start: 0, Limit: 1},
+	}
+
+	resp, err := g.apiClientSet.DataService().TCloudZiyan.ZiyanCvmGenerateRecord.List(kt.Ctx, kt.Header(), req)
+	if err != nil {
 		return nil, err
 	}
 
-	return inst, nil
+	if len(resp.Details) == 0 {
+		return nil, fmt.Errorf("generate record not found")
+	}
+
+	return convertMySQLToGenerateRecord(resp.Details[0])
 }
 
 // CountGenerateRecord gets apply order generate record count by filter from db
-func (g *generateRecord) CountGenerateRecord(ctx context.Context, filter map[string]interface{}) (uint64, error) {
-	total, err := mongodb.Client().Table(pkg.BKTableNameGenerateRecord).Find(filter).Count(ctx)
+func (g *generateRecord) CountGenerateRecord(kt *kit.Kit, filterExpr *filter.Expression) (uint64, error) {
+
+	if g.apiClientSet == nil {
+		return 0, fmt.Errorf("data service client not initialized")
+	}
+
+	req := &cvmapplyproto.ZiyanCvmGenerateRecordListReq{
+		Filter: filterExpr,
+		Page:   core.NewCountPage(),
+	}
+
+	resp, err := g.apiClientSet.DataService().TCloudZiyan.ZiyanCvmGenerateRecord.List(kt.Ctx, kt.Header(), req)
 	if err != nil {
 		return 0, err
 	}
 
-	return total, nil
+	return resp.Count, nil
 }
 
 // FindManyGenerateRecord gets generate record list by filter from db
-func (g *generateRecord) FindManyGenerateRecord(ctx context.Context, page metadata.BasePage,
-	filter map[string]interface{}) ([]*types.GenerateRecord, error) {
+func (g *generateRecord) FindManyGenerateRecord(kt *kit.Kit, filterExpr *filter.Expression, page *core.BasePage) (
+	[]*types.GenerateRecord, error) {
 
-	limit := uint64(page.Limit)
-	start := uint64(page.Start)
-	query := mongodb.Client().Table(pkg.BKTableNameGenerateRecord).Find(filter).Limit(limit).Start(start)
-	if len(page.Sort) > 0 {
-		query = query.Sort(page.Sort)
-	} else {
-		query = query.Sort("generate_id")
+	if g.apiClientSet == nil {
+		return nil, fmt.Errorf("data service client not initialized")
+	}
+
+	isAll := false
+	if page == nil || page.Limit == 0 {
+		page = core.NewDefaultBasePage()
+		isAll = true
 	}
 
 	insts := make([]*types.GenerateRecord, 0)
-	if err := query.All(ctx, &insts); err != nil {
-		return nil, err
+	req := &cvmapplyproto.ZiyanCvmGenerateRecordListReq{
+		Filter: filterExpr,
+		Page:   page,
+	}
+	for {
+		resp, err := g.apiClientSet.DataService().TCloudZiyan.ZiyanCvmGenerateRecord.List(kt.Ctx, kt.Header(), req)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, mysqlRecord := range resp.Details {
+			record, err := convertMySQLToGenerateRecord(mysqlRecord)
+			if err != nil {
+				return nil, err
+			}
+			insts = append(insts, record)
+		}
+
+		if !isAll || len(resp.Details) < int(req.Page.Limit) {
+			break
+		}
+		req.Page.Start += uint32(req.Page.Limit)
 	}
 
 	return insts, nil
 }
 
 // UpdateGenerateRecord updates apply order generate record by filter and doc in db
-func (g *generateRecord) UpdateGenerateRecord(ctx context.Context, filter *mapstr.MapStr, doc *mapstr.MapStr) error {
-	return mongodb.Client().Table(pkg.BKTableNameGenerateRecord).Update(ctx, filter, doc)
-}
+func (g *generateRecord) UpdateGenerateRecord(kt *kit.Kit, filterExpr *filter.Expression,
+	updateData *cvmapplyproto.ZiyanCvmGenerateRecordUpdateReq) error {
 
-// DeleteGenerateRecord deletes apply order generate record from db
-func (g *generateRecord) DeleteGenerateRecord() {
+	if g.apiClientSet == nil {
+		return fmt.Errorf("data service client not initialized")
+	}
 
+	if updateData == nil {
+		return fmt.Errorf("update generate record data is nil")
+	}
+
+	listReq := &cvmapplyproto.ZiyanCvmGenerateRecordListReq{
+		Filter: filterExpr,
+		Page:   &core.BasePage{Start: 0, Limit: uint(constant.BatchOperationMaxLimit)},
+	}
+	for {
+		listResp, err := g.apiClientSet.DataService().TCloudZiyan.ZiyanCvmGenerateRecord.List(
+			kt.Ctx, kt.Header(), listReq)
+		if err != nil {
+			return err
+		}
+
+		if len(listResp.Details) == 0 {
+			break
+		}
+
+		updateReqs := make([]cvmapplyproto.ZiyanCvmGenerateRecordUpdateReq, 0, len(listResp.Details))
+		for _, record := range listResp.Details {
+			updateReq := *updateData
+			updateReq.GenerateID = record.GenerateID
+			updateReq.SuborderID = record.SuborderID
+			updateReqs = append(updateReqs, updateReq)
+		}
+
+		for start := 0; start < len(updateReqs); start += constant.BatchOperationMaxLimit {
+			end := start + constant.BatchOperationMaxLimit
+			if end > len(updateReqs) {
+				end = len(updateReqs)
+			}
+
+			batchReq := &cvmapplyproto.BatchUpdateZiyanCvmGenerateRecordReq{
+				GenerateRecords: updateReqs[start:end],
+			}
+			if err = g.apiClientSet.DataService().TCloudZiyan.ZiyanCvmGenerateRecord.BatchUpdate(
+				kt.Ctx, kt.Header(), batchReq); err != nil {
+				return err
+			}
+		}
+
+		if len(listResp.Details) < int(listReq.Page.Limit) {
+			break
+		}
+		listReq.Page.Start += uint32(listReq.Page.Limit)
+	}
+
+	return nil
 }
 
 // AggregateAll generate record aggregate all operation
@@ -99,4 +248,54 @@ func (g *generateRecord) AggregateAll(ctx context.Context, pipeline interface{},
 	}
 
 	return nil
+}
+
+// convertMySQLToGenerateRecord converts MySQL record to types.GenerateRecord
+func convertMySQLToGenerateRecord(mysqlRecord *cvmapplytable.ZiyanCvmGenerateRecord) (*types.GenerateRecord, error) {
+	var successList []string
+	rawSuccessList := string(mysqlRecord.SuccessList)
+	if len(mysqlRecord.SuccessList) > 0 && rawSuccessList != "{}" {
+		if err := json.Unmarshal([]byte(mysqlRecord.SuccessList), &successList); err != nil {
+			return nil, err
+		}
+	}
+
+	startAt, err := times.ParseDateTime(constant.TimeStdFormat, mysqlRecord.StartAt)
+	if err != nil {
+		return nil, err
+	}
+
+	endAt, err := times.ParseDateTime(constant.TimeStdFormat, mysqlRecord.EndAt)
+	if err != nil {
+		return nil, err
+	}
+
+	createdAt, err := times.ParseTypesTime(mysqlRecord.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse created_at failed: %w", err)
+	}
+	updatedAt, err := times.ParseTypesTime(mysqlRecord.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse updated_at failed: %w", err)
+	}
+
+	return &types.GenerateRecord{
+		SubOrderId:      mysqlRecord.SuborderID,
+		GenerateId:      mysqlRecord.GenerateID,
+		GenerateType:    mysqlRecord.GenerateType,
+		TaskId:          mysqlRecord.TaskID,
+		TaskLink:        mysqlRecord.TaskLink,
+		RequestInfo:     mysqlRecord.RequestInfo,
+		Status:          cvt.PtrToVal(mysqlRecord.Status),
+		IsMatched:       cvt.PtrToVal(mysqlRecord.IsMatched),
+		Message:         mysqlRecord.Message,
+		TotalNum:        cvt.PtrToVal(mysqlRecord.TotalNum),
+		SuccessNum:      cvt.PtrToVal(mysqlRecord.SuccessNum),
+		SuccessList:     successList,
+		CreateAt:        createdAt,
+		UpdateAt:        updatedAt,
+		StartAt:         startAt,
+		EndAt:           endAt,
+		IsManualMatched: mysqlRecord.IsManualMatched,
+	}, nil
 }

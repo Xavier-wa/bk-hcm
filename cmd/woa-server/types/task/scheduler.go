@@ -20,15 +20,16 @@ import (
 
 	"hcm/cmd/woa-server/dal/task/table"
 	"hcm/pkg"
+	"hcm/pkg/api/core"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
-	"hcm/pkg/criteria/mapstr"
+	"hcm/pkg/criteria/errf"
 	"hcm/pkg/criteria/validator"
+	"hcm/pkg/dal/dao/tools"
+	"hcm/pkg/runtime/filter"
 	"hcm/pkg/thirdparty/api-gateway/bkbotapproval"
 	"hcm/pkg/thirdparty/api-gateway/itsm"
 	"hcm/pkg/thirdparty/cvmapi"
-	"hcm/pkg/tools/metadata"
-	"hcm/pkg/tools/querybuilder"
 	"hcm/pkg/tools/util"
 )
 
@@ -44,6 +45,7 @@ type ApplyOrder struct {
 	ExpectTime   string                   `json:"expect_time" bson:"expect_time"`
 	ResourceType ResourceType             `json:"resource_type" bson:"resource_type"`
 	Source       enumor.ApplyTicketSource `json:"source" bson:"source"`
+	ProductType  enumor.ProductType       `json:"product_type" bson:"product_type"`
 	Spec         *ResourceSpec            `json:"spec" bson:"spec"`
 	// UpgradeCVMList cvm升降配列表
 	UpgradeCVMList    []*UpgradeCVMSpec `json:"upgrade_cvm_list" bson:"upgrade_cvm_list"`
@@ -136,7 +138,7 @@ const (
 // GenerateRecord apply order vm generate record
 type GenerateRecord struct {
 	SubOrderId   string `json:"suborder_id" bson:"suborder_id"`
-	GenerateId   uint64 `json:"generate_id" bson:"generate_id"`
+	GenerateId   string `json:"generate_id" bson:"generate_id"`
 	GenerateType string `json:"generate_type" bson:"generate_type"`
 	TaskId       string `json:"task_id" bson:"task_id"`
 	TaskLink     string `json:"task_link" bson:"task_link"`
@@ -169,49 +171,34 @@ const (
 
 // GetApplyDeviceReq get resource apply delivered devices request
 type GetApplyDeviceReq struct {
-	Filter *querybuilder.QueryFilter `json:"filter" bson:"filter"`
-	Page   metadata.BasePage         `json:"page" bson:"page"`
+	BkBizIDs []int64            `json:"bk_biz_ids"`
+	Filter   *filter.Expression `json:"filter"`
+	Page     *core.BasePage     `json:"page"`
 }
 
 // Validate whether GetApplyDeviceReq is valid
-// errKey: invalid key
-// err: detail reason why errKey is invalid
-func (req *GetApplyDeviceReq) Validate() (errKey string, err error) {
+func (req *GetApplyDeviceReq) Validate() error {
+	if req.Filter == nil {
+		return errf.New(errf.InvalidParameter, "filter is required")
+	}
+
+	if req.Page == nil {
+		return errf.New(errf.InvalidParameter, "page is required")
+	}
+
 	// 兼容原来直接调用req.Page.Validate(true)逻辑，只是放开了最大的限制
 	page := req.Page
-	if page.EnableCount {
+	if page.Count {
 		if page.Start > 0 || page.Limit > 0 || page.Sort != "" {
-			return "page", fmt.Errorf("params page can not be set")
+			return fmt.Errorf("params page can not be set")
 		}
-		return "", nil
+		return nil
 	}
-	if page.Limit > 5000 && page.Limit != pkg.BKNoLimit {
-		return "limit", fmt.Errorf("exceed max page size: %d", 5000)
-	}
-
-	if req.Filter != nil {
-		if key, err := req.Filter.Validate(&querybuilder.RuleOption{NeedSameSliceElementType: true}); err != nil {
-			return fmt.Sprintf("filter.%s", key), err
-		}
-		if req.Filter.GetDeep() > querybuilder.MaxDeep {
-			return "filter.rules", fmt.Errorf("exceed max query condition deepth: %d",
-				querybuilder.MaxDeep)
-		}
+	if page.Limit > constant.CvmApplyDeviceExportLimit && page.Limit != pkg.BKNoLimit {
+		return fmt.Errorf("limit exceed max page size: %d", constant.CvmApplyDeviceExportLimit)
 	}
 
-	return "", nil
-}
-
-// GetFilter get mgo filter
-func (req GetApplyDeviceReq) GetFilter() (map[string]interface{}, error) {
-	if req.Filter != nil {
-		mgoFilter, key, err := req.Filter.ToMgo()
-		if err != nil {
-			return nil, fmt.Errorf("invalid key:filter.%s, err: %s", key, err)
-		}
-		return mgoFilter, nil
-	}
-	return make(map[string]interface{}), nil
+	return nil
 }
 
 // GetApplyDeviceRst get resource apply delivered devices result
@@ -238,47 +225,21 @@ func (req *GetDeliverDeviceReq) Validate() (errKey string, err error) {
 
 // ExportDeliverDeviceReq export resource apply delivered devices request
 type ExportDeliverDeviceReq struct {
-	BkBizId int64                     `json:"bk_biz_id" bson:"bk_biz_id"`
-	Filter  *querybuilder.QueryFilter `json:"filter" bson:"filter"`
+	BkBizId int64              `json:"bk_biz_id"`
+	Filter  *filter.Expression `json:"filter"`
 }
 
 // Validate whether ExportDeliverDeviceReq is valid
-// errKey: invalid key
-// err: detail reason why errKey is invalid
-func (req *ExportDeliverDeviceReq) Validate() (errKey string, err error) {
+func (req *ExportDeliverDeviceReq) Validate() error {
 	if req.BkBizId <= 0 {
-		return "bk_biz_id", errors.New("invalid bk_biz_id <= 0")
+		return errors.New("invalid bk_biz_id <= 0")
 	}
 
-	if req.Filter != nil {
-		if key, err := req.Filter.Validate(&querybuilder.RuleOption{NeedSameSliceElementType: true}); err != nil {
-			return fmt.Sprintf("filter.%s", key), err
-		}
-		if req.Filter.GetDeep() > querybuilder.MaxDeep {
-			return "filter.rules", fmt.Errorf("exceed max query condition deepth: %d",
-				querybuilder.MaxDeep)
-		}
+	if req.Filter == nil {
+		return errf.New(errf.InvalidParameter, "filter is required")
 	}
 
-	return "", nil
-}
-
-// GetFilter get mgo filter
-func (req ExportDeliverDeviceReq) GetFilter() (map[string]interface{}, error) {
-	if req.Filter != nil {
-		mgoFilter, key, err := req.Filter.ToMgo()
-		if err != nil {
-			return nil, fmt.Errorf("invalid key:filter.%s, err: %s", key, err)
-		}
-		mgoFilter["bk_biz_id"] = req.BkBizId
-		return mgoFilter, nil
-	}
-
-	filter := map[string]interface{}{
-		"bk_biz_id": req.BkBizId,
-	}
-
-	return filter, nil
+	return nil
 }
 
 // GetMatchDeviceReq get resource apply match devices request
@@ -431,7 +392,7 @@ func (param *MatchPoolDeviceReq) Validate() (errKey string, err error) {
 type DeviceInfo struct {
 	OrderId      uint64             `json:"order_id" bson:"order_id"`
 	SubOrderId   string             `json:"suborder_id" bson:"suborder_id"`
-	GenerateId   uint64             `json:"generate_id" bson:"generate_id"`
+	GenerateId   string             `json:"generate_id" bson:"generate_id"`
 	BkBizId      int                `json:"bk_biz_id" bson:"bk_biz_id"`
 	User         string             `json:"bk_username" bson:"bk_username"`
 	BkHostId     int64              `json:"bk_host_id" bson:"bk_host_id"`
@@ -484,6 +445,8 @@ type ApplyTicket struct {
 	OldSuborders []*Suborder        `json:"old_suborders" bson:"old_suborders"`
 	CreateAt     time.Time          `json:"create_at" bson:"create_at"`
 	UpdateAt     time.Time          `json:"update_at" bson:"update_at"`
+	// 生产类型(business:业务生产 admin:管理员生产)
+	ProductType enumor.ProductType `json:"product_type"`
 }
 
 // TicketStage resource apply ticket stage（类型定义已下沉至 pkg/criteria/enumor/cvm_apply.go）
@@ -719,6 +682,7 @@ type ApplyReq struct {
 	Remark       string             `json:"remark" bson:"remark"`
 	Suborders    []*Suborder        `json:"suborders" bson:"suborders"`
 	OldSuborders *[]*Suborder       `json:"old_suborders" bson:"old_suborders"`
+	ProductType  enumor.ProductType `json:"product_type" bson:"product_type"`
 }
 
 // Validate whether ApplyRequest is valid
@@ -857,6 +821,8 @@ type ResourceSpec struct {
 	ChargeMonths uint `json:"charge_months" bson:"charge_months"`
 	// 被继承云主机实例ID
 	InheritInstanceId string `json:"inherit_instance_id" bson:"inherit_instance_id"`
+	// 继承的固资号
+	BkAssetID string `json:"bk_asset_id" bson:"bk_asset_id"`
 	// 分区生产时报错的可用区ID列表
 	FailedZoneIDs []string          `json:"failed_zone_ids" bson:"failed_zone_ids"`
 	SystemDisk    enumor.DiskSpec   `json:"system_disk" bson:"system_disk"`
@@ -1103,14 +1069,14 @@ type GetApplyParam struct {
 	Stage       []TicketStage              `json:"stage" bson:"stage"`
 	Start       string                     `json:"start" bson:"start"`
 	End         string                     `json:"end" bson:"end"`
-	Page        metadata.BasePage          `json:"page" bson:"page"`
+	Page        *core.BasePage             `json:"page" bson:"page"`
 	GetProduct  bool                       `json:"get_product" bson:"get_product"` // 是否获取CVM生产数据
 	Source      []enumor.ApplyTicketSource `json:"source" bson:"source"`
+	// 生产类型：business业务生产，admin管理员生产
+	ProductType []enumor.ProductType `json:"product_type" bson:"product_type"`
 }
 
 // Validate whether GetApplyParam is valid
-// errKey: invalid key
-// err: detail reason why errKey is invalid
 func (param *GetApplyParam) Validate() error {
 	arrayLimit := 20
 	if len(param.BkBizID) == 0 {
@@ -1136,6 +1102,24 @@ func (param *GetApplyParam) Validate() error {
 		return fmt.Errorf("stage exceed limit %d", arrayLimit)
 	}
 
+	if len(param.ProductType) > arrayLimit {
+		return fmt.Errorf("product_type exceed limit %d", arrayLimit)
+	}
+
+	for _, pt := range param.ProductType {
+		if err := pt.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if param.Page == nil {
+		return fmt.Errorf("page is required")
+	}
+
+	if err := param.Page.Validate(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -1147,65 +1131,98 @@ const (
 )
 
 // GetFilter get mgo filter
-func (param *GetApplyParam) GetFilter(isTicket bool) map[string]interface{} {
-	filter := make(map[string]interface{})
+func (param *GetApplyParam) GetFilter(isTicket bool) *filter.Expression {
+	rules := make([]*filter.AtomRule, 0)
+	rules = param.appendBaseRules(rules)
+	if isTicket {
+		rules = param.appendTicketStageRules(rules)
+	} else {
+		rules = param.appendOrderRules(rules)
+	}
+	rules = param.appendTimeRangeRules(rules)
+	return tools.ExpressionAnd(rules...)
+}
+
+// appendBaseRules appends common base filter rules
+func (param *GetApplyParam) appendBaseRules(rules []*filter.AtomRule) []*filter.AtomRule {
 	if len(param.BkBizID) > 0 {
-		filter["bk_biz_id"] = mapstr.MapStr{pkg.BKDBIN: param.BkBizID}
+		rules = append(rules, tools.RuleIn("bk_biz_id", param.BkBizID))
 	}
 	if len(param.OrderID) > 0 {
-		filter["order_id"] = mapstr.MapStr{pkg.BKDBIN: param.OrderID}
-	}
-	if len(param.SuborderID) > 0 {
-		filter["suborder_id"] = mapstr.MapStr{pkg.BKDBIN: param.SuborderID}
+		rules = append(rules, tools.RuleIn("order_id", param.OrderID))
 	}
 	if len(param.User) > 0 {
-		filter["bk_username"] = mapstr.MapStr{pkg.BKDBIN: param.User}
+		rules = append(rules, tools.RuleIn("bk_username", param.User))
 	}
 	if len(param.RequireType) > 0 {
-		filter["require_type"] = mapstr.MapStr{pkg.BKDBIN: param.RequireType}
+		rules = append(rules, tools.RuleIn("require_type", param.RequireType))
 	}
-	if isTicket {
-		// get UNCOMMIT and AUDIT tickets only
-		ticketStageList := make([]TicketStage, 0)
-		if util.InArray(TicketStageUncommit, param.Stage) || len(param.Stage) == 0 {
-			ticketStageList = append(ticketStageList, TicketStageUncommit)
-		}
-		if util.InArray(TicketStageAudit, param.Stage) || len(param.Stage) == 0 {
-			ticketStageList = append(ticketStageList, TicketStageAudit)
-		}
-		if util.InArray(TicketStageTerminate, param.Stage) || len(param.Stage) == 0 {
-			ticketStageList = append(ticketStageList, TicketStageTerminate)
-		}
-		filter["stage"] = mapstr.MapStr{pkg.BKDBIN: ticketStageList}
+	if len(param.ProductType) == 0 {
+		rules = append(rules, tools.RuleNotEqual("product_type", enumor.ProductTypeAdmin))
 	} else {
-		if len(param.Stage) > 0 {
-			filter["stage"] = mapstr.MapStr{pkg.BKDBIN: param.Stage}
-		}
-
-		filter["source"] = mapstr.MapStr{pkg.BKDBIN: param.Source}
-		if len(param.Source) == 0 {
-			filter["source"] = mapstr.MapStr{pkg.BKDBNE: enumor.ApplyTicketSrcPurchaseToResPool}
-		}
+		rules = append(rules, tools.RuleIn("product_type", param.ProductType))
 	}
-	timeCond := make(map[string]interface{})
+	return rules
+}
+
+// appendTicketStageRules appends ticket stage filter rules (for ticket query)
+func (param *GetApplyParam) appendTicketStageRules(rules []*filter.AtomRule) []*filter.AtomRule {
+	// get UNCOMMIT and AUDIT tickets only
+	ticketStageList := make([]TicketStage, 0)
+	if util.InArray(TicketStageUncommit, param.Stage) || len(param.Stage) == 0 {
+		ticketStageList = append(ticketStageList, TicketStageUncommit)
+	}
+	if util.InArray(TicketStageAudit, param.Stage) || len(param.Stage) == 0 {
+		ticketStageList = append(ticketStageList, TicketStageAudit)
+	}
+	if util.InArray(TicketStageTerminate, param.Stage) || len(param.Stage) == 0 {
+		ticketStageList = append(ticketStageList, TicketStageTerminate)
+	}
+	if len(param.Stage) > 0 {
+		ticketStageList = append(ticketStageList, param.Stage...)
+	}
+	return append(rules, tools.RuleIn("stage", ticketStageList))
+}
+
+// appendOrderRules appends order filter rules (for order query)
+func (param *GetApplyParam) appendOrderRules(rules []*filter.AtomRule) []*filter.AtomRule {
+	if len(param.SuborderID) > 0 {
+		rules = append(rules, tools.RuleIn("suborder_id", param.SuborderID))
+	}
+	if len(param.Stage) > 0 {
+		rules = append(rules, tools.RuleIn("stage", param.Stage))
+	}
+	if len(param.Source) == 0 {
+		rules = append(rules, tools.RuleNotEqual("source", enumor.ApplyTicketSrcPurchaseToResPool))
+	} else {
+		rules = append(rules, tools.RuleIn("source", param.Source))
+	}
+	return rules
+}
+
+// appendTimeRangeRules appends time range filter rules
+func (param *GetApplyParam) appendTimeRangeRules(rules []*filter.AtomRule) []*filter.AtomRule {
 	if len(param.Start) != 0 {
 		startTime, err := time.Parse(dateLayout, param.Start)
 		if err == nil {
-			timeCond[pkg.BKDBGTE] = startTime
+			rules = append(rules, tools.RuleGreaterThanEqual("created_at", startTime.Format(constant.TimeStdFormat)))
 		}
 	}
 	if len(param.End) != 0 {
 		endTime, err := time.Parse(dateLayout, param.End)
 		if err == nil {
 			// '%lte: 2006-01-02' means '%lt: 2006-01-03 00:00:00'
-			timeCond[pkg.BKDBLT] = endTime.AddDate(0, 0, 1)
+			rules = append(rules, tools.RuleLessThan("created_at",
+				endTime.AddDate(0, 0, 1).Format(constant.TimeStdFormat)))
 		}
 	}
-	if len(timeCond) != 0 {
-		filter["create_at"] = timeCond
-	}
+	return rules
+}
 
-	return filter
+// OnlyQuerySubOrderList only query suborder list
+// CVM申请-单据列表接口跟单据详情是共用的，查询子单详情时，需要限定只查询子单表，不查询主单信息（因为主单表不存在子单ID字段）
+func (param *GetApplyParam) OnlyQuerySubOrderList() bool {
+	return len(param.SuborderID) > 0
 }
 
 // GetApplyOrderRst get apply order result
@@ -1216,10 +1233,10 @@ type GetApplyOrderRst struct {
 
 // GetBizApplyParam get business apply order request parameter
 type GetBizApplyParam struct {
-	BkBizID int64             `json:"bk_biz_id" bson:"bk_biz_id"`
-	Start   string            `json:"start" bson:"start"`
-	End     string            `json:"end" bson:"end"`
-	Page    metadata.BasePage `json:"page" bson:"page"`
+	BkBizID int64          `json:"bk_biz_id" bson:"bk_biz_id"`
+	Start   string         `json:"start" bson:"start"`
+	End     string         `json:"end" bson:"end"`
+	Page    *core.BasePage `json:"page" bson:"page"`
 }
 
 // Validate whether GetApplyParam is valid
@@ -1242,8 +1259,12 @@ func (param *GetBizApplyParam) Validate() (errKey string, err error) {
 		}
 	}
 
-	if key, err := param.Page.Validate(false); err != nil {
-		return key, err
+	if param.Page == nil {
+		return "page", errors.New("page is required")
+	}
+
+	if err = param.Page.Validate(); err != nil {
+		return "page", err
 	}
 
 	if param.Page.Start < 0 {
@@ -1274,42 +1295,26 @@ type GetApplyDetailRst struct {
 
 // GetApplyGenerateReq get apply order generate record request
 type GetApplyGenerateReq struct {
-	SuborderId string                    `json:"suborder_id"`
-	Filter     *querybuilder.QueryFilter `json:"filter" bson:"filter"`
-	Page       metadata.BasePage         `json:"page" bson:"page"`
+	SuborderId string             `json:"suborder_id" validate:"required"`
+	Filter     *filter.Expression `json:"filter"`
+	Page       *core.BasePage     `json:"page"`
 }
 
 // Validate whether GetApplyGenerateReq is valid
-// errKey: invalid key
-// err: detail reason why errKey is invalid
-func (req *GetApplyGenerateReq) Validate() (errKey string, err error) {
-	if key, err := req.Page.Validate(true); err != nil {
-		return fmt.Sprintf("page.%s", key), err
+func (req *GetApplyGenerateReq) Validate() error {
+	if req.Filter == nil {
+		return errf.New(errf.InvalidParameter, "filter is required")
 	}
 
-	if req.Filter != nil {
-		if key, err := req.Filter.Validate(&querybuilder.RuleOption{NeedSameSliceElementType: true}); err != nil {
-			return fmt.Sprintf("filter.%s", key), err
-		}
-		if req.Filter.GetDeep() > querybuilder.MaxDeep {
-			return "filter.rules", fmt.Errorf("exceed max query condition deepth: %d",
-				querybuilder.MaxDeep)
-		}
+	if req.Page == nil {
+		return errf.New(errf.InvalidParameter, "page is required")
 	}
 
-	return "", nil
-}
-
-// GetFilter get mgo filter
-func (req *GetApplyGenerateReq) GetFilter() (map[string]interface{}, error) {
-	if req.Filter != nil {
-		mgoFilter, key, err := req.Filter.ToMgo()
-		if err != nil {
-			return nil, fmt.Errorf("invalid key:filter.%s, err: %s", key, err)
-		}
-		return mgoFilter, nil
+	if err := req.Page.Validate(); err != nil {
+		return err
 	}
-	return make(map[string]interface{}), nil
+
+	return validator.Validate.Struct(req)
 }
 
 // GetApplyGenerateRst get apply order generate record result
@@ -1320,42 +1325,26 @@ type GetApplyGenerateRst struct {
 
 // GetApplyInitReq get apply order init record request
 type GetApplyInitReq struct {
-	SuborderId string                    `json:"suborder_id"`
-	Filter     *querybuilder.QueryFilter `json:"filter" bson:"filter"`
-	Page       metadata.BasePage         `json:"page" bson:"page"`
+	SuborderId string             `json:"suborder_id" validate:"required"`
+	Filter     *filter.Expression `json:"filter"`
+	Page       *core.BasePage     `json:"page"`
 }
 
 // Validate whether GetApplyInitReq is valid
-// errKey: invalid key
-// err: detail reason why errKey is invalid
-func (req *GetApplyInitReq) Validate() (errKey string, err error) {
-	if key, err := req.Page.Validate(false); err != nil {
-		return fmt.Sprintf("page.%s", key), err
+func (req *GetApplyInitReq) Validate() error {
+	if req.Filter == nil {
+		return errf.New(errf.InvalidParameter, "filter is required")
 	}
 
-	if req.Filter != nil {
-		if key, err := req.Filter.Validate(&querybuilder.RuleOption{NeedSameSliceElementType: true}); err != nil {
-			return fmt.Sprintf("filter.%s", key), err
-		}
-		if req.Filter.GetDeep() > querybuilder.MaxDeep {
-			return "filter.rules", fmt.Errorf("exceed max query condition deepth: %d",
-				querybuilder.MaxDeep)
-		}
+	if req.Page == nil {
+		return errf.New(errf.InvalidParameter, "page is required")
 	}
 
-	return "", nil
-}
-
-// GetFilter get mgo filter
-func (req GetApplyInitReq) GetFilter() (map[string]interface{}, error) {
-	if req.Filter != nil {
-		mgoFilter, key, err := req.Filter.ToMgo()
-		if err != nil {
-			return nil, fmt.Errorf("invalid key:filter.%s, err: %s", key, err)
-		}
-		return mgoFilter, nil
+	if err := req.Page.Validate(); err != nil {
+		return err
 	}
-	return make(map[string]interface{}), nil
+
+	return validator.Validate.Struct(req)
 }
 
 // GetApplyInitRst get apply order init record result
@@ -1364,50 +1353,28 @@ type GetApplyInitRst struct {
 	Info  []*InitRecord `json:"info"`
 }
 
-// GetApplyDiskCheckRst get apply order disk check record result
-type GetApplyDiskCheckRst struct {
-	Count int64              `json:"count"`
-	Info  []*DiskCheckRecord `json:"info"`
-}
-
 // GetApplyDeliverReq get apply order deliver record request
 type GetApplyDeliverReq struct {
-	SuborderId string                    `json:"suborder_id"`
-	Filter     *querybuilder.QueryFilter `json:"filter" bson:"filter"`
-	Page       metadata.BasePage         `json:"page" bson:"page"`
+	SuborderId string             `json:"suborder_id" validate:"required"`
+	Filter     *filter.Expression `json:"filter"`
+	Page       *core.BasePage     `json:"page"`
 }
 
 // Validate whether GetApplyDeliverReq is valid
-// errKey: invalid key
-// err: detail reason why errKey is invalid
-func (req *GetApplyDeliverReq) Validate() (errKey string, err error) {
-	if key, err := req.Page.Validate(false); err != nil {
-		return fmt.Sprintf("page.%s", key), err
+func (req *GetApplyDeliverReq) Validate() error {
+	if req.Filter == nil {
+		return errf.New(errf.InvalidParameter, "filter is required")
 	}
 
-	if req.Filter != nil {
-		if key, err := req.Filter.Validate(&querybuilder.RuleOption{NeedSameSliceElementType: true}); err != nil {
-			return fmt.Sprintf("filter.%s", key), err
-		}
-		if req.Filter.GetDeep() > querybuilder.MaxDeep {
-			return "filter.rules", fmt.Errorf("exceed max query condition deepth: %d",
-				querybuilder.MaxDeep)
-		}
+	if req.Page == nil {
+		return errf.New(errf.InvalidParameter, "page is required")
 	}
 
-	return "", nil
-}
-
-// GetFilter get mgo filter
-func (req GetApplyDeliverReq) GetFilter() (map[string]interface{}, error) {
-	if req.Filter != nil {
-		mgoFilter, key, err := req.Filter.ToMgo()
-		if err != nil {
-			return nil, fmt.Errorf("invalid key:filter.%s, err: %s", key, err)
-		}
-		return mgoFilter, nil
+	if err := req.Page.Validate(); err != nil {
+		return err
 	}
-	return make(map[string]interface{}), nil
+
+	return validator.Validate.Struct(req)
 }
 
 // GetApplyDeliverRst get apply order deliver record result
@@ -1485,31 +1452,6 @@ const (
 	InitStatusSuccess  = enumor.InitStatusSuccess
 	InitStatusHandling = enumor.InitStatusHandling
 	InitStatusFailed   = enumor.InitStatusFailed
-)
-
-// DiskCheckRecord apply order disk check record
-type DiskCheckRecord struct {
-	SubOrderId string              `json:"suborder_id" bson:"suborder_id"`
-	Ip         string              `json:"ip" bson:"ip"`
-	TaskId     string              `json:"task_id" bson:"task_id"`
-	TaskLink   string              `json:"task_link" bson:"task_link"`
-	Status     DiskCheckStepStatus `json:"status" bson:"status"`
-	Message    string              `json:"message" bson:"message"`
-	CreateAt   time.Time           `json:"create_at" bson:"create_at"`
-	UpdateAt   time.Time           `json:"update_at" bson:"update_at"`
-	StartAt    time.Time           `json:"start_at" bson:"start_at"`
-	EndAt      time.Time           `json:"end_at" bson:"end_at"`
-}
-
-// DiskCheckStepStatus disk check step status
-type DiskCheckStepStatus int
-
-// DiskCheckStepStatus disk check step status
-const (
-	DiskCheckStatusInit     DiskCheckStepStatus = -1
-	DiskCheckStatusSuccess  DiskCheckStepStatus = 0
-	DiskCheckStatusHandling DiskCheckStepStatus = 1
-	DiskCheckStatusFailed   DiskCheckStepStatus = 2
 )
 
 // DeliverRecord apply order deliver record
@@ -1648,57 +1590,53 @@ type RecommendApplyRst struct {
 
 // GetApplyModifyReq get apply order modify record request
 type GetApplyModifyReq struct {
-	ID         []uint64                       `json:"id"`
+	ID         []string                       `json:"id"`
 	SuborderID []string                       `json:"suborder_id"`
 	Status     []enumor.CvmModifyRecordStatus `json:"status"`
-	Page       metadata.BasePage              `json:"page" bson:"page"`
+	Page       *core.BasePage                 `json:"page"`
 }
 
 // Validate whether GetApplyModifyReq is valid
-// errKey: invalid key
-// err: detail reason why errKey is invalid
-func (param *GetApplyModifyReq) Validate() (errKey string, err error) {
-	if key, err := param.Page.Validate(false); err != nil {
-		return key, err
+func (param *GetApplyModifyReq) Validate() error {
+	if param.Page == nil {
+		return fmt.Errorf("page is required")
+	}
+
+	if err := param.Page.Validate(); err != nil {
+		return err
 	}
 
 	if param.Page.Start < 0 {
-		return "page.start", fmt.Errorf("invalid start < 0")
+		return fmt.Errorf("page.start invalid start < 0")
 	}
 
 	if param.Page.Limit < 0 {
-		return "page.limit", fmt.Errorf("invalid limit < 0")
+		return fmt.Errorf("page.limit invalid limit < 0")
 	}
 
-	if param.Page.Limit > 200 {
-		return "page.limit", fmt.Errorf("exceed limit 200")
+	if param.Page.Limit > 500 {
+		return fmt.Errorf("page.limit exceed limit 500")
 	}
 
-	return "", nil
+	return nil
 }
 
-// GetFilter get mgo filter
-func (param *GetApplyModifyReq) GetFilter() (map[string]interface{}, error) {
-	filter := make(map[string]interface{})
-	if len(param.SuborderID) > 0 {
-		filter["suborder_id"] = mapstr.MapStr{
-			pkg.BKDBIN: param.SuborderID,
-		}
-	}
-
-	if len(param.Status) > 0 {
-		filter["status"] = mapstr.MapStr{
-			pkg.BKDBIN: param.Status,
-		}
-	}
-
+// GetFilter get filter for MySQL/DataService
+func (param *GetApplyModifyReq) GetFilter() *filter.Expression {
+	rules := make([]*filter.AtomRule, 0)
 	if len(param.ID) > 0 {
-		filter["id"] = mapstr.MapStr{
-			pkg.BKDBIN: param.ID,
-		}
+		rules = append(rules, tools.RuleIn("id", param.ID))
 	}
-
-	return filter, nil
+	if len(param.SuborderID) > 0 {
+		rules = append(rules, tools.RuleIn("suborder_id", param.SuborderID))
+	}
+	if len(param.Status) > 0 {
+		rules = append(rules, tools.RuleIn("status", param.Status))
+	}
+	if len(rules) == 0 {
+		return tools.AllExpression()
+	}
+	return tools.ExpressionAnd(rules...)
 }
 
 // GetApplyModifyRst get apply order modify record result

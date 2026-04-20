@@ -26,6 +26,7 @@ import (
 	tasktypes "hcm/cmd/woa-server/types/task"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/dal/table"
 	cvmapplytable "hcm/pkg/dal/table/cvm-apply"
 	"hcm/pkg/dal/table/types"
 	cvt "hcm/pkg/tools/converter"
@@ -40,7 +41,7 @@ type CvmDeliverRecordConverter struct{}
 
 // GetName 获取转换器名称
 func (c *CvmDeliverRecordConverter) GetName() string {
-	return "ziyan_cvm_deliver_record_converter"
+	return table.ZiyanCvmDeliverRecordTable + "_converter"
 }
 
 // NewSourceDataSlice 创建源数据切片

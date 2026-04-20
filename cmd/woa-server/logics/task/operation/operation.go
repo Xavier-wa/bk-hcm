@@ -256,7 +256,8 @@ func (op *operation) getOrderStats(filter map[string]interface{}, dimension type
 	}
 
 	aggRst := make([]metadata.StringIDCount, 0)
-	if err := model.Operation().ApplyOrder().AggregateAll(context.Background(), pipeline, &aggRst); err != nil {
+	if err := model.Operation().ApplyOrder().AggregateAll(
+		context.Background(), pipeline, &aggRst); err != nil {
 		logs.Errorf("failed to get resource apply order operation statistics, err: %v", err)
 		return nil, err
 	}
@@ -287,7 +288,8 @@ func (op *operation) getDeviceStats(filter map[string]interface{}, dimension typ
 	}
 
 	aggRst := make([]metadata.StringIDCount, 0)
-	if err := model.Operation().DeviceInfo().AggregateAll(context.Background(), pipeline, &aggRst); err != nil {
+	if err := model.Operation().DeviceInfo().AggregateAll(
+		context.Background(), pipeline, &aggRst); err != nil {
 		logs.Errorf("failed to get resource apply delivered device operation statistics, err: %v", err)
 		return nil, err
 	}
@@ -306,7 +308,9 @@ func (op *operation) getManualOrderList(filter map[string]interface{}) ([]interf
 		pkg.BKDBNE: "icr",
 	}
 
-	orderList, err := model.Operation().DeviceInfo().Distinct(context.Background(), "suborder_id", manualFilter)
+	orderList, err := model.Operation().DeviceInfo().Distinct(
+		context.Background(), "suborder_id", manualFilter)
+
 	if err != nil {
 		return nil, err
 	}
