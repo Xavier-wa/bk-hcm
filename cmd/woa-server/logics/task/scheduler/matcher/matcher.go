@@ -147,14 +147,14 @@ func (m *Matcher) runWorker() error {
 
 	// check generate record status
 	if generateRecord.Status != types.GenerateStatusSuccess {
-		logs.Infof("generate record %d is not done yet, need not match, status: %d, rid: %s",
+		logs.Infof("generate record %s is not done yet, need not match, status: %d, rid: %s",
 			generateID, generateRecord.Status, kt.Rid)
 		return nil
 	}
 
 	// check generate record matched or not
 	if generateRecord.IsMatched == true {
-		logs.Infof("generate record %d is matched, need not match again, rid: %s", generateID, kt.Rid)
+		logs.Infof("generate record %s is matched, need not match again, rid: %s", generateID, kt.Rid)
 		return nil
 	}
 
@@ -175,8 +175,8 @@ func (m *Matcher) FinalApplyStep(kt *kit.Kit, genRecord *types.GenerateRecord, o
 	if order.ProductType != enumor.ProductTypeAdmin {
 		// set generate record matched
 		if err := m.setGenerateRecordMatched(kt, genRecord.GenerateId); err != nil {
-			logs.Errorf("failed to update generate record, err: %v, schedule id: %d, rid: %s", err, genRecord.GenerateId,
-				kt.Rid)
+			logs.Errorf("failed to update generate record, err: %v, schedule id: %s, rid: %s",
+				err, genRecord.GenerateId, kt.Rid)
 			return err
 		}
 	}

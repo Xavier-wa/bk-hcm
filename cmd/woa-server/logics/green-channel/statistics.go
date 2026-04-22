@@ -43,12 +43,12 @@ func buildSuborderFilter(dateRange gctypes.DateRange, bkBizIDs []int64) (*filter
 		&filter.AtomRule{
 			Field: "created_at",
 			Op:    filter.GreaterThanEqual.Factory(),
-			Value: dateRange.Start.GetTime().Format(constant.DateTimeLayout),
+			Value: dateRange.Start.GetTime().Format(constant.TimeStdFormat),
 		},
 		&filter.AtomRule{
 			Field: "created_at",
 			Op:    filter.LessThanEqual.Factory(),
-			Value: dateRange.End.GetTime().Format(constant.DateTimeLayout),
+			Value: dateRange.End.GetTime().Format(constant.TimeStdFormat),
 		},
 		tools.RuleEqual("require_type", enumor.RequireTypeGreenChannel),
 	}

@@ -149,16 +149,27 @@ func (c *CvmGenerateRecordConverter) ConvertToUpdate(source interface{}, target 
 	}, nil
 }
 
-// ExtractPrimaryKey 提取主键值（generate_id）
+// ExtractPrimaryKey 提取主键值（复合主键：suborder_id + generate_id）
 func (c *CvmGenerateRecordConverter) ExtractPrimaryKey(data interface{}) (interface{}, error) {
 	// 尝试作为源数据类型处理（MongoDB中GenerateId可能是int/string）
 	if generateRecord, ok := data.(*mongoGenerateRecord); ok {
-		return normalizeGenerateID(generateRecord.GenerateId)
+		generateID, err := normalizeGenerateID(generateRecord.GenerateId)
+		if err != nil {
+			return nil, err
+		}
+
+		return map[string]interface{}{
+			"suborder_id": generateRecord.SubOrderId,
+			"generate_id": generateID,
+		}, nil
 	}
 
 	// 尝试作为目标数据类型处理（MySQL中是string）
 	if record, ok := data.(*cvmapplytable.ZiyanCvmGenerateRecord); ok {
-		return record.GenerateID, nil
+		return map[string]interface{}{
+			"suborder_id": record.SuborderID,
+			"generate_id": record.GenerateID,
+		}, nil
 	}
 
 	return nil, fmt.Errorf("data type mismatch, expected *mongoGenerateRecord or "+
