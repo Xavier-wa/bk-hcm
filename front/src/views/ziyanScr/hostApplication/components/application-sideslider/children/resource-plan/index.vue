@@ -202,6 +202,7 @@ const handleReset = () => {
           multiple
           clearable
           collapse-tags
+          filterable
           @change="handleDeviceGroupChange"
         >
           <bk-option v-for="(item, index) in deviceGroups" :key="index" :value="item" :label="item" />

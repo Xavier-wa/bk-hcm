@@ -76,6 +76,7 @@ func batchCreateDeviceType(cts *rest.Contexts, svc *service, vendor enumor.Vendo
 			Zone:            createReq.Zone,
 			Disable:         cvt.ValToPtr(createReq.Disable),
 			Source:          createReq.Source,
+			GenerationType:  createReq.GenerationType,
 			Creator:         cts.Kit.User,
 			Reviser:         cts.Kit.User,
 		}

@@ -181,6 +181,7 @@ export default defineComponent({
             <bk-form-item label={t('机型类型')} property='device_class' required class={cssModule['span-3']}>
               <bk-select
                 disabled={props.type === AdjustType.time}
+                filterable
                 clearable
                 loading={isLoadingDeviceClasses.value}
                 modelValue={props.planTicketDemand.cvm.device_class}
@@ -194,6 +195,7 @@ export default defineComponent({
             <bk-form-item label={t('机型规格')} property='device_type' required class={cssModule['span-3']}>
               <bk-select
                 disabled={props.type === AdjustType.time}
+                filterable
                 clearable
                 loading={isLoadingDeviceTypes.value}
                 modelValue={props.planTicketDemand.cvm.device_type}

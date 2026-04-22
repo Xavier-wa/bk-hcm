@@ -16,13 +16,15 @@ export interface ICvmSubnet {
 }
 type ICvmSubnetList = Array<ICvmSubnet>;
 
-const { Option } = Select;
-
 defineOptions({ name: 'CvmSubnetSelector' });
 
 const model = defineModel<string>();
+
 const props = defineProps<{ region: string; zone: string; vpc: string; disabled: boolean }>();
+
 const emit = defineEmits<(e: 'change', val: ICvmSubnet) => void>();
+
+const { Option } = Select;
 
 const optionList = ref<ICvmSubnetList>([]);
 
@@ -65,7 +67,7 @@ defineExpose({ findCvmSubnetBySubnetId });
 </script>
 
 <template>
-  <Select class="w600" v-model="selectedId" :disabled="props.disabled">
+  <Select class="w600" v-model="selectedId" :disabled="props.disabled" filterable>
     <Option
       v-for="{ id, subnet_id: subnetId, subnet_name: subnetName } in optionList"
       :key="id"

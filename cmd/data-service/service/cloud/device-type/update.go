@@ -103,6 +103,9 @@ func batchUpdateDeviceType(cts *rest.Contexts, svc *service, vendor enumor.Vendo
 			if updateReq.Source != nil {
 				record.Source = cvt.PtrToVal(updateReq.Source)
 			}
+			if updateReq.GenerationType != nil {
+				record.GenerationType = cvt.PtrToVal(updateReq.GenerationType)
+			}
 
 			flt := tools.EqualExpression("id", updateReq.ID)
 			if err := svc.dao.DeviceType().UpdateWithTx(cts.Kit, txn, flt, record); err != nil {

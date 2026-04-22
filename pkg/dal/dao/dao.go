@@ -47,6 +47,7 @@ import (
 	loadbalancer "hcm/pkg/dal/dao/cloud/load-balancer"
 	networkinterface "hcm/pkg/dal/dao/cloud/network-interface"
 	nicvmrel "hcm/pkg/dal/dao/cloud/network-interface-cvm-rel"
+	permissionpolicylibrary "hcm/pkg/dal/dao/cloud/permission-policy-library"
 	"hcm/pkg/dal/dao/cloud/region"
 	resflow "hcm/pkg/dal/dao/cloud/resource-flow"
 	resourcegroup "hcm/pkg/dal/dao/cloud/resource-group"
@@ -202,6 +203,7 @@ type Set interface {
 	ResUsageBizRel() cloud.ResUsageBizRel
 	Tenant() tenant.Tenant
 	DeviceCapacity() devicecapacity.DeviceCapacity
+	PermissionPolicyLibrary() permissionpolicylibrary.PermissionPolicyLibrary
 
 	ZiyanCvmApplyOrder() cvmapply.ZiyanCvmApplyOrderInterface
 	ZiyanCvmApplySuborder() cvmapply.ZiyanCvmApplySuborderInterface
@@ -1194,6 +1196,15 @@ func (s *set) OrgTopo() orgtopo.Interface {
 func (s *set) ResUsageBizRel() cloud.ResUsageBizRel {
 	return &cloud.ResUsageBizRelDao{
 		Orm: s.orm,
+	}
+}
+
+// PermissionPolicyLibrary return permission policy library dao.
+func (s *set) PermissionPolicyLibrary() permissionpolicylibrary.PermissionPolicyLibrary {
+	return &permissionpolicylibrary.PermissionPolicyLibraryDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+		Audit: s.audit,
 	}
 }
 

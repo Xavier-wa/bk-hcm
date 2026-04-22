@@ -28,3 +28,10 @@ func (a *ApplicationClient) QueryBPaasApplicationDetail(kt *kit.Kit, req *hcserv
 	return common.Request[hcservice.GetBPaasApplicationReq, json.RawMessage](
 		a.client, rest.POST, kt, req, "/application/bpaas/query")
 }
+
+// DeliverBPaasApplication BPaaS审批通过后触发安全组规则补偿同步
+func (a *ApplicationClient) DeliverBPaasApplication(kt *kit.Kit,
+	req *hcservice.DeliverBPaasApplicationReq) error {
+
+	return common.RequestNoResp(a.client, rest.POST, kt, req, "/application/bpaas/deliver")
+}

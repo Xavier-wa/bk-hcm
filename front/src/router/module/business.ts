@@ -501,6 +501,13 @@ const businessMenus: RouteRecordRaw[] = [
       groupTitle: '其他',
     },
   },
+  // {
+  //   path: '/business',
+  //   children: [...cloudAccountManageRouteConfig],
+  //   meta: {
+  //     groupTitle: '账号',
+  //   },
+  // },
   {
     path: '/business',
     children: [

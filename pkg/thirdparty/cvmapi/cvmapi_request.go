@@ -807,3 +807,42 @@ type CpuTopology struct {
 	CoreCount     int64                  `json:"coreCount"`     // CPU核数
 	ThreadPerCore enumor.CPUThreadSwitch `json:"threadPerCore"` // 每核线程数(1:关闭 2:开启)
 }
+
+// ConfirmOrderForIEGReq CRP 预测单据审批请求（自动过单）
+type ConfirmOrderForIEGReq struct {
+	ReqMeta `json:",inline"`
+	Params  *ConfirmOrderForIEGParam `json:"params"`
+}
+
+// ConfirmOrderForIEGParam CRP 预测单据审批参数（IEG部门管理员审批接口）
+type ConfirmOrderForIEGParam struct {
+	// TodoOrderId 订单ID（注意：CRP接口字段名为 todoOrderId）
+	TodoOrderId string `json:"todoOrderId"`
+	// ApproveResult 审批结果：0-同意，1-驳回
+	ApproveResult ConfirmOrderApproveResult `json:"approveResult"`
+	// ApproveMemo 审批意见
+	ApproveMemo string `json:"approveMemo,omitempty"`
+	// Operator 审批人RTX，只有部门管理员可用该接口
+	Operator string `json:"operator"`
+	// Status 审批节点，固定为1，为部门管理员
+	Status PlanOrderStatus `json:"status"`
+}
+
+// ConfirmOrderApproveResult CRP 审批结果
+type ConfirmOrderApproveResult int
+
+const (
+	// ConfirmOrderApproveResultApprove 同意
+	ConfirmOrderApproveResultApprove ConfirmOrderApproveResult = 0
+	// ConfirmOrderApproveResultReject 驳回
+	ConfirmOrderApproveResultReject ConfirmOrderApproveResult = 1
+)
+
+// QueryZoneCityListReq 查询可用区与城市映射请求
+type QueryZoneCityListReq struct {
+	ReqMeta `json:",inline"`
+	Params  *QueryZoneCityListParams `json:"params"`
+}
+
+// QueryZoneCityListParams 查询可用区与城市映射参数（接口返回全量数据，无需传参）
+type QueryZoneCityListParams struct{}

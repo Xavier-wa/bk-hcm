@@ -76,6 +76,7 @@ type Client struct {
 	DeviceCapacity             *DeviceCapacityClient
 	TCloudZiyanPmDeviceType    *TCloudZiyanPmDeviceTypeClient
 	DeviceType                 *DeviceTypeClient
+	PermissionPolicyLibrary    *PermissionPolicyLibraryClient
 }
 
 type restClient struct {
@@ -133,5 +134,6 @@ func NewClient(client rest.ClientInterface) *Client {
 		DeviceCapacity:             NewDeviceCapacityClient(client),
 		TCloudZiyanPmDeviceType:    NewTCloudZiyanPmDeviceTypeClient(client),
 		DeviceType:                 NewDeviceTypeClient(client),
+		PermissionPolicyLibrary:    NewPermissionPolicyLibraryClient(client),
 	}
 }

@@ -1,4 +1,4 @@
-import { defineComponent, onMounted, ref, watch, nextTick, computed, reactive, useTemplateRef } from 'vue';
+import { defineComponent, onMounted, ref, watch, nextTick, computed, useTemplateRef } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import './index.scss';
 import classes from './style.module.scss';
@@ -140,7 +140,6 @@ export default defineComponent({
       zones: [], // 园区，cvm支持多可用区，使用此字段
       charge_type: cvmChargeTypes.PREPAID,
       charge_months: 36, // 计费时长
-      bk_asset_id: '', // 继承套餐的机器代表固资号
     });
     // 侧边栏腾讯云CVM
     const QCLOUDCVMForm = ref({
@@ -154,7 +153,8 @@ export default defineComponent({
         system_disk: { disk_type: '', disk_size: 0, disk_num: 1 },
         data_disk: [],
         network_type: 'TENTHOUSAND',
-        inherit_instance_id: '', // 继承套餐的机器代表实例ID
+        bk_asset_id: '', // 继承套餐的机器固资号
+        inherit_instance_id: '', // 继承套餐的机器实例ID
         cpu: undefined,
         res_assign: undefined,
         cpu_thread_switch: undefined, // CPU超线程开关
@@ -172,10 +172,6 @@ export default defineComponent({
     const IDCPMIndex = ref(-1);
     const QCLOUDCVMIndex = ref(-1);
     const resourceFormRef = ref();
-    const dropdownMenuShowState = reactive({
-      idc: false,
-      cvm: false,
-    });
     const { columns: CloudHostcolumns, generateColumnsSettings } = useColumns('CloudHost');
     let cloudHostSetting = generateColumnsSettings(CloudHostcolumns);
     const { columns: PhysicalMachinecolumns } = useColumns('PhysicalMachine');
@@ -198,8 +194,8 @@ export default defineComponent({
       if (from === 'confirm') {
         const { deviceTypeList, inheritInstanceId, inheritAssetId } = data;
         QCLOUDCVMForm.value.spec.cpu = deviceTypeList?.[0]?.cpu_core;
+        QCLOUDCVMForm.value.spec.bk_asset_id = inheritAssetId;
         QCLOUDCVMForm.value.spec.inherit_instance_id = inheritInstanceId;
-        resourceForm.value.bk_asset_id = inheritAssetId;
 
         // zones有变更
         if (changed?.zones) {
@@ -231,24 +227,16 @@ export default defineComponent({
               克隆
             </Button>
             <Dropdown
-              trigger='manual'
-              isShow={IDCPMIndex.value === index && dropdownMenuShowState.idc}
+              trigger='click'
               popoverOptions={{
                 renderType: 'shown',
-                onAfterHidden: () => {
-                  IDCPMIndex.value = -1;
-                  dropdownMenuShowState.idc = false;
-                },
-                forceClickoutside: true,
+                clickContentAutoHide: true,
+                onAfterShow: () => (IDCPMIndex.value = index),
+                onAfterHidden: () => (IDCPMIndex.value = -1),
               }}>
               {{
                 default: () => (
-                  <div
-                    class={`more-action${IDCPMIndex.value === index ? ' current-operate-row' : ''}`}
-                    onClick={() => {
-                      IDCPMIndex.value = index;
-                      dropdownMenuShowState.idc = true;
-                    }}>
+                  <div class={`more-action${IDCPMIndex.value === index ? ' current-operate-row' : ''}`}>
                     <i class='hcm-icon bkhcm-icon-more-fill' />
                   </div>
                 ),
@@ -258,16 +246,10 @@ export default defineComponent({
                       key='retry'
                       onClick={() => {
                         modifylist(row, index, 'IDCPM');
-                        dropdownMenuShowState.idc = false;
                       }}>
                       修改
                     </DropdownItem>
-                    <DropdownItem
-                      key='stop'
-                      onClick={() => {
-                        deletelist(index, 'IDCPM');
-                        dropdownMenuShowState.idc = false;
-                      }}>
+                    <DropdownItem key='stop' onClick={() => deletelist(index, 'IDCPM')}>
                       删除
                     </DropdownItem>
                   </DropdownMenu>
@@ -289,24 +271,16 @@ export default defineComponent({
               克隆
             </Button>
             <Dropdown
-              trigger='manual'
-              isShow={QCLOUDCVMIndex.value === index && dropdownMenuShowState.cvm}
+              trigger='click'
               popoverOptions={{
                 renderType: 'shown',
-                onAfterHidden: () => {
-                  QCLOUDCVMIndex.value = -1;
-                  dropdownMenuShowState.cvm = false;
-                },
-                forceClickoutside: true,
+                clickContentAutoHide: true,
+                onAfterShow: () => (QCLOUDCVMIndex.value = index),
+                onAfterHidden: () => (QCLOUDCVMIndex.value = -1),
               }}>
               {{
                 default: () => (
-                  <div
-                    class={`more-action${QCLOUDCVMIndex.value === index ? ' current-operate-row' : ''}`}
-                    onClick={() => {
-                      QCLOUDCVMIndex.value = index;
-                      dropdownMenuShowState.cvm = true;
-                    }}>
+                  <div class={`more-action${QCLOUDCVMIndex.value === index ? ' current-operate-row' : ''}`}>
                     <i class='hcm-icon bkhcm-icon-more-fill' />
                   </div>
                 ),
@@ -316,7 +290,6 @@ export default defineComponent({
                       key='retry'
                       onClick={() => {
                         modifylist(row, index, 'QCLOUDCVM');
-                        dropdownMenuShowState.cvm = false;
                       }}>
                       修改
                     </DropdownItem>
@@ -324,7 +297,6 @@ export default defineComponent({
                       key='stop'
                       onClick={() => {
                         deletelist(index, 'QCLOUDCVM');
-                        dropdownMenuShowState.cvm = false;
                       }}>
                       删除
                     </DropdownItem>
@@ -487,10 +459,10 @@ export default defineComponent({
       resourceForm.value.resourceType = resourceType;
       modifyresourceType.value = resourceType;
 
-      const { anti_affinity_level, bk_asset_id, remark, replicas, spec } = cloneRow;
+      const { anti_affinity_level, remark, replicas, spec } = cloneRow;
       const { region, zone, zones, charge_type, charge_months } = spec;
 
-      Object.assign(resourceForm.value, { bk_asset_id, region, zone, zones, remark });
+      Object.assign(resourceForm.value, { region, zone, zones, remark });
 
       if (resourceType === 'QCLOUDCVM') {
         QCLOUDCVMForm.value.spec = { ...spec, anti_affinity_level, replicas: +replicas };
@@ -643,6 +615,7 @@ export default defineComponent({
         system_disk: { disk_type: '', disk_size: 0, disk_num: 1 },
         data_disk: [],
         network_type: 'TENTHOUSAND',
+        bk_asset_id: '',
         inherit_instance_id: '',
         cpu: data.cpu,
         res_assign: data.res_assign,
@@ -704,7 +677,6 @@ export default defineComponent({
         enable_disk_check: false,
         charge_type: cvmChargeTypes.PREPAID,
         charge_months: 36,
-        bk_asset_id: resourceForm.value.bk_asset_id, // 继承套餐的机器固资号不用清除
       };
       QCLOUDCVMForm.value = {
         spec: {
@@ -717,6 +689,7 @@ export default defineComponent({
           system_disk: { disk_type: '', disk_size: 0, disk_num: 1 },
           data_disk: [],
           network_type: 'TENTHOUSAND',
+          bk_asset_id: QCLOUDCVMForm.value.spec.bk_asset_id, // 继承套餐的机器固资号不用清除
           inherit_instance_id: QCLOUDCVMForm.value.spec.inherit_instance_id, // 继承套餐的机器实例id不用清除
           cpu: undefined,
           res_assign: undefined,
@@ -743,11 +716,9 @@ export default defineComponent({
         zones,
         charge_type,
         charge_months,
-        bk_asset_id,
       } = resourceForm.value;
 
       return {
-        bk_asset_id,
         resource_type,
         remark,
         enable_disk_check,
@@ -975,7 +946,7 @@ export default defineComponent({
       isSpecialRequirement,
       (val) => {
         if (!val) {
-          resourceForm.value.bk_asset_id = '';
+          QCLOUDCVMForm.value.spec.bk_asset_id = '';
           QCLOUDCVMForm.value.spec.inherit_instance_id = '';
           cloudTableColumns.value = [...CloudHostcolumns, ...CVMVerifyColumns, CloudHostoperation.value];
           cloudHostSetting = generateColumnsSettings(cloudTableColumns.value);
@@ -1461,6 +1432,7 @@ export default defineComponent({
                       form-type='vertical'>
                       <bk-form-item label='主机类型' required property='resourceType'>
                         <bk-select
+                          filterable
                           class={'selection-box'}
                           v-model={resourceForm.value.resourceType}
                           onChange={onResourceTypeChange}
@@ -1534,7 +1506,7 @@ export default defineComponent({
                                   vendor={VendorEnum.ZIYAN}
                                   requireType={order.value.model.requireType}
                                   region={resourceForm.value.region}
-                                  assetId={resourceForm.value.bk_asset_id}
+                                  assetId={QCLOUDCVMForm.value.spec.bk_asset_id}
                                   instanceId={QCLOUDCVMForm.value.spec.inherit_instance_id}
                                   disabled={resourceForm.value.region === ''}
                                   isEditing={isOneClickApplication.value || title.value === '修改资源需求'}
@@ -1678,14 +1650,17 @@ export default defineComponent({
                               <div class={'raidText'}> {pmForm.value.spec.raid_type || '-'}</div>
                             </bk-form-item>
                             <bk-form-item label='操作系统' required property='os_type'>
-                              <bk-select class={'commonCard-form-select'} v-model={pmForm.value.spec.os_type}>
+                              <bk-select
+                                class={'commonCard-form-select'}
+                                v-model={pmForm.value.spec.os_type}
+                                filterable>
                                 {pmForm.value.options.osTypes.map((osType) => (
                                   <bk-option key={osType} value={osType} label={osType}></bk-option>
                                 ))}
                               </bk-select>
                             </bk-form-item>
                             <bk-form-item label='运营商'>
-                              <bk-select class={'commonCard-form-select'} v-model={pmForm.value.spec.isp}>
+                              <bk-select class={'commonCard-form-select'} v-model={pmForm.value.spec.isp} filterable>
                                 <bk-option key='无' value='' label='无'></bk-option>
                                 {pmForm.value.options.isps.map((isp) => (
                                   <bk-option key={isp} value={isp} label={isp}></bk-option>

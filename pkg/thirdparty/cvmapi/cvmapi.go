@@ -96,6 +96,12 @@ type CVMClientInterface interface {
 	// CreateTransOrder 预测转移
 	CreateTransOrder(ctx context.Context, header http.Header, req *TransOrderReq) (
 		*TransOrderResp, error)
+	// ConfirmOrderForIEG CRP预测单据审批（自动过单）
+	ConfirmOrderForIEG(ctx context.Context, header http.Header, req *ConfirmOrderForIEGReq) (
+		*ConfirmOrderForIEGResp, error)
+	// QueryZoneCityList 查询可用区与城市映射列表
+	QueryZoneCityList(ctx context.Context, header http.Header, req *QueryZoneCityListReq) (*QueryZoneCityListResp,
+		error)
 }
 
 // NewCVMClientInterface creates a cvm api instance
@@ -764,6 +770,52 @@ func (c *cvmApi) QueryMatchTask(ctx context.Context, header http.Header, req *Qu
 
 	if err != nil {
 		logs.Errorf("cvm:query:match:task:failed, err: %v, subPath: %s, req: %+v", err, subPath, req)
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+// ConfirmOrderForIEG CRP预测单据审批（自动过单）
+func (c *cvmApi) ConfirmOrderForIEG(ctx context.Context, header http.Header, req *ConfirmOrderForIEGReq) (
+	*ConfirmOrderForIEGResp, error) {
+
+	subPath := "/yunti-demand/external"
+	resp := new(ConfirmOrderForIEGResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(req).
+		SubResourcef(subPath).
+		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+
+	if err != nil {
+		logs.Errorf("crp:confirm:order:failed, err: %v, subPath: %s, req: %+v", err, subPath, req)
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+// QueryZoneCityList 查询可用区与城市映射列表
+func (c *cvmApi) QueryZoneCityList(ctx context.Context, header http.Header, req *QueryZoneCityListReq) (
+	*QueryZoneCityListResp, error) {
+
+	subPath := "/yunti-demand/external"
+	resp := new(QueryZoneCityListResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(req).
+		SubResourcef(subPath).
+		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+
+	if err != nil {
+		logs.Errorf("cvm:query:zone:city:list:failed, err: %v, subPath: %s, req: %+v", err, subPath, req)
 		return nil, err
 	}
 

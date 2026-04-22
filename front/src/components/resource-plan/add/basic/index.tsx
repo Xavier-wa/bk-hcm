@@ -316,6 +316,7 @@ export default defineComponent({
           <bk-form-item label={t('城市')} property='region_id' required>
             <bk-select
               disabled={props.type === AdjustType.time}
+              filterable
               clearable
               loading={isLoadingRegion.value}
               modelValue={props.planTicketDemand.region_id}
@@ -329,6 +330,7 @@ export default defineComponent({
           <bk-form-item label={t('可用区')} property='zone_id'>
             <bk-select
               disabled={props.type === AdjustType.time}
+              filterable
               clearable
               loading={isLoadingZone.value}
               modelValue={props.planTicketDemand.zone_id}
@@ -399,6 +401,7 @@ export default defineComponent({
             <>
               <bk-form-item label={t('变更原因')} property='demand_source'>
                 <bk-select
+                  filterable
                   clearable={false}
                   loading={isLoadingSource.value}
                   modelValue={props.planTicketDemand.demand_source}

@@ -278,7 +278,7 @@ func (svc *cosSvc) deleteBizTCloudZiyanCosBucket(kt *kit.Kit, bizID int64,
 	delReq := &protocos.TCloudDeleteBucketReq{
 		AccountID: req.AccountID,
 		Region:    req.Region,
-		Name:      req.CloudName,
+		CloudName: req.CloudName,
 	}
 
 	if err = svc.client.HCService().TCloudZiyan.Cos.DeleteCosBucket(kt, delReq); err != nil {

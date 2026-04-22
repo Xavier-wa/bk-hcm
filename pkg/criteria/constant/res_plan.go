@@ -27,4 +27,11 @@ const (
 	// When a candidate's remaining cores exceed the demand by no more than this value,
 	// the candidate is treated as an exact match and no pre-split is triggered.
 	TransferCoreToleranceThreshold int64 = 2
+
+	// AutoApproveCPUCoreThreshold CPU核心数阈值，整单CPU核心数≤该值时可自动过单
+	AutoApproveCPUCoreThreshold int64 = 1500
+
+	// AutoApproveCBSSizeThreshold CBS容量阈值（单位：GB），整单CBS容量≤该值时可自动过单
+	// 45TB = 45 * 1024 = 46080GB
+	AutoApproveCBSSizeThreshold int64 = 46080
 )

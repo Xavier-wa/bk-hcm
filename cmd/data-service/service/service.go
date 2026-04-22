@@ -63,6 +63,7 @@ import (
 	loadbalancer "hcm/cmd/data-service/service/cloud/load-balancer"
 	networkinterface "hcm/cmd/data-service/service/cloud/network-interface"
 	networkcvmrel "hcm/cmd/data-service/service/cloud/network-interface-cvm-rel"
+	"hcm/cmd/data-service/service/cloud/permission-policy-library"
 	"hcm/cmd/data-service/service/cloud/region"
 	resusagebizrel "hcm/cmd/data-service/service/cloud/res-usage-biz-rel"
 	resourcegroup "hcm/cmd/data-service/service/cloud/resource-group"
@@ -95,6 +96,7 @@ import (
 	rollingfinedetail "hcm/cmd/data-service/service/rolling-server/rolling-fine-detail"
 	"hcm/cmd/data-service/service/rolling-server/rolling-returned"
 	"hcm/cmd/data-service/service/task"
+	dissolverecyclehost "hcm/cmd/data-service/service/dissolve/recycle-host"
 	tcloudziyanpmdevicetype "hcm/cmd/data-service/service/tcloud-ziyan-pm-device-type"
 	"hcm/cmd/data-service/service/tenant"
 	"hcm/cmd/data-service/service/user"
@@ -314,6 +316,7 @@ func (s *Service) apiSet() *restful.Container {
 	rollingreturned.InitService(capability)
 	rollingfinedetail.InitService(capability)
 	rollingbill.InitService(capability)
+	dissolverecyclehost.InitService(capability)
 	globalconfig.InitService(capability)
 	orgtopo.InitService(capability)
 	woadevicetype.InitService(capability)
@@ -324,6 +327,7 @@ func (s *Service) apiSet() *restful.Container {
 	tenant.InitService(capability)
 
 	resusagebizrel.InitService(capability)
+	permissionpolicylibrary.InitService(capability)
 	devicecapacity.InitService(capability)
 
 	cvmapplyorder.InitService(capability)

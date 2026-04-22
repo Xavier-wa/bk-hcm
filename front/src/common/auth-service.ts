@@ -29,7 +29,8 @@ export type AuthResourceType =
   | 'main_account'
   | 'account_bill'
   | 'load_balancer'
-  | 'ziyan_resource_dissolve_manage';
+  | 'ziyan_resource_dissolve_manage'
+  | 'permission_policy_library';
 
 // 权限校验参数
 export interface IVerifyResourceItem {
@@ -46,7 +47,9 @@ export interface IVerifyParams {
 
 // 一个权限点的定义
 export interface IAuthDefinition {
+  // iam的permission.actions[number].id，用于读取权限信息并展示
   id: string;
+  // hcm权限action和type
   action: AuthActionType;
   resourceType: AuthResourceType;
   transform?: (
@@ -57,7 +60,7 @@ export interface IAuthDefinition {
 
 const basicTransform = (
   definition: IAuthDefinition,
-  meta?: { bk_biz_id?: number; resource_id?: number | string; [key: string]: number | string },
+  meta?: { bk_biz_id?: number; resource_id?: number | string;[key: string]: number | string },
 ) => {
   const { action, resourceType } = definition;
   return {
@@ -307,5 +310,20 @@ export const AUTH_DEFINITIONS = Object.freeze<Record<symbol, IAuthDefinition>>({
     id: 'ziyan_resource_dissolve_manage',
     action: 'update',
     resourceType: 'ziyan_resource_dissolve_manage',
+  },
+  [authSymbol.AUTH_FIND_PERMISSION_POLICY_LIBRARY]: {
+    id: 'cloud_vendor_config',
+    action: 'find',
+    resourceType: 'permission_policy_library',
+  },
+  [authSymbol.AUTH_CREATE_PERMISSION_POLICY_LIBRARY]: {
+    id: 'cloud_vendor_config',
+    action: 'create',
+    resourceType: 'permission_policy_library',
+  },
+  [authSymbol.AUTH_UPDATE_PERMISSION_POLICY_LIBRARY]: {
+    id: 'cloud_vendor_config',
+    action: 'update',
+    resourceType: 'permission_policy_library',
   },
 });

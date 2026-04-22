@@ -463,7 +463,7 @@ func (svc *cvmSvc) BatchAssociateZiyanSecurityGroup(cts *rest.Contexts) (any, er
 func (svc *cvmSvc) syncTCloudZiyanCvmWithRelRes(kt *kit.Kit, ziyan tziyan.TCloudZiyan, accountID string, bkBizID int64,
 	hostIDs []int64) error {
 
-	syncClient := syncziyan.NewClient(svc.dataCli, ziyan, cmdb.CmdbClient())
+	syncClient := syncziyan.NewClient(svc.dataCli, ziyan, cmdb.CmdbClient(), svc.crpCli)
 	params := &syncziyan.SyncHostParams{
 		AccountID: accountID,
 		BizID:     bkBizID,

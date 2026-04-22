@@ -41,6 +41,7 @@ export enum TaskSource {
   SOPS = 'sops',
   EXCEL = 'excel',
   API = 'api',
+  WEB = 'web',
 }
 
 export enum TaskDetailStatus {

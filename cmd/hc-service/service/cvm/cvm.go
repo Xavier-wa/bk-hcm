@@ -36,6 +36,7 @@ import (
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/thirdparty/cvmapi"
 	"hcm/pkg/tools/slice"
 )
 
@@ -44,6 +45,7 @@ func InitCvmService(cap *capability.Capability) {
 	svc := &cvmSvc{
 		ad:      cap.CloudAdaptor,
 		dataCli: cap.ClientSet.DataService(),
+		crpCli:  cap.CrpCli,
 	}
 
 	svc.initTCloudCvmService(cap)
@@ -58,6 +60,7 @@ type cvmSvc struct {
 	ad      *cloudadaptor.CloudAdaptorClient
 	dataCli *dataservice.Client
 	client  *client.ClientSet
+	crpCli  cvmapi.CVMClientInterface
 }
 
 func (svc *cvmSvc) listCvms(kt *kit.Kit, cvmIDs ...string) ([]corecvm.BaseCvm, error) {

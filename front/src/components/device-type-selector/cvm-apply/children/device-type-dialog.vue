@@ -4,7 +4,7 @@ import { Loading } from 'bkui-vue';
 import { PrimaryTable, type TableProps } from '@blueking/tdesign-ui';
 import { VendorEnum } from '@/common/constant';
 import apiService from '@/api/scrApi';
-import { useCvmDeviceStore, type ICvmDevicetypeItem, type IRollingServerCvm } from '@/store/cvm/device';
+import { useCvmDeviceStore, type ICvmDevicetypeItem, type IInheritCvm } from '@/store/cvm/device';
 import useCvmChargeType from '@/views/ziyanScr/hooks/use-cvm-charge-type';
 import { transformSimpleCondition } from '@/utils/search';
 import { RequirementType } from '@/store/config/requirement';
@@ -40,12 +40,18 @@ const DEVICE_ROW_KEY = 'device_type';
 const ZONE_ALL = 'all';
 
 const isRollingServer = inject<Ref<boolean>>('isRollingServer');
+const isDissolve = inject<Ref<boolean>>('isDissolve');
 const isGreenChannel = inject<Ref<boolean>>('isGreenChannel');
 const isSpringPool = inject<Ref<boolean>>('isSpringPool');
 const isGreenChannelOrSpringPool = inject<Ref<boolean>>('isGreenChannelOrSpringPool');
 const isNonPlanType = inject<Ref<boolean>>('isNonPlanType');
 
 const editMode = inject<boolean>('editMode');
+
+// 机房裁撤-继承裁撤机器套餐勾选
+const isInheritDissolve = ref(isDissolve.value && !!props.defaultData?.inheritAssetId);
+// 是否为继承套餐模式（滚服始终继承，机房裁撤通过勾选继承）
+const isInheritPackage = computed(() => isRollingServer.value || isInheritDissolve.value);
 
 const cvmDeviceStore = useCvmDeviceStore();
 
@@ -118,8 +124,8 @@ const condition = shallowReactive({
 // 接口获得的机型列表
 const deviceTypeList = ref<ICvmDevicetypeItem[]>([]);
 
-// 滚服继承套餐的机器
-const rollingServerCvm = ref<IRollingServerCvm>();
+// 继承套餐的机器信息
+const inheritCvm = ref<IInheritCvm>();
 
 const inventoryState = shallowReactive({
   activeRowKey: null,
@@ -137,27 +143,10 @@ const displayDeviceTypeList = computed(() => {
       if (item.disable) {
         available = false;
         unavailableTip = '该机型已被禁用';
-      } else if (isRollingServer.value) {
-        if (item.device_type_class === 'SpecialType') {
-          available = false;
-          unavailableTip = '滚服不支持专用机型';
-        } else if (item.device_family !== rollingServerCvm.value?.device_group) {
-          available = false;
-          unavailableTip = `机型族与继承套餐不匹配，需要「${rollingServerCvm.value?.device_group}」`;
-        } else if (item.device_type.toLowerCase().startsWith('da')) {
-          available = false;
-          unavailableTip = '滚服不支持 DA 系列机型';
-        }
-      } else if (isGreenChannel.value || isSpringPool.value) {
-        // 小额绿通禁用了available，在接口默认条件中已经过滤掉了，这里直接返回true
-        available = true;
-      } else {
-        // 当前计费模式对应的有效机型
+      } else if (!isNonPlanType.value) {
+        // 预测检查（第一优先级）
         const chargeTypeAvailableDeviceTypeMap = availableDeviceTypeMap.value.get(applyData.chargeType);
-
-        // 机型接口与机型预测接口的数据不一定对应，也即这里可能得到空
         const availableDeviceType = chargeTypeAvailableDeviceTypeMap?.get(item.device_type);
-
         available = !!availableDeviceType;
         maxLimit = Math.floor(
           item.cpu_core > 0 && availableDeviceType ? availableDeviceType?.remain_core / item.cpu_core : 0,
@@ -165,6 +154,36 @@ const displayDeviceTypeList = computed(() => {
         if (!available) {
           unavailableTip = '当前计费模式下无该机型的预测';
         }
+
+        // 继承裁撤额外校验（仅在预测通过后才需要进一步校验）
+        if (available && isInheritDissolve.value) {
+          if (!inheritCvm.value) {
+            available = false;
+            unavailableTip = '请先输入固资号并匹配到有效的继承机型数据';
+          } else if (item.device_family !== inheritCvm.value.device_group) {
+            available = false;
+            unavailableTip = `机型族与继承套餐不匹配，需要「${inheritCvm.value.device_group}」`;
+          } else if (inheritCvm.value.generation_type && item.generation_type !== inheritCvm.value.generation_type) {
+            available = false;
+            unavailableTip = `机型代次与继承套餐不匹配，需要「${inheritCvm.value.generation_type}」`;
+          }
+        }
+      } else if (isRollingServer.value) {
+        if (!inheritCvm.value) {
+          available = false;
+          unavailableTip = '请先输入固资号并匹配到有效的继承机型数据';
+        } else if (item.device_type_class === 'SpecialType') {
+          available = false;
+          unavailableTip = '滚服不支持专用机型';
+        } else if (item.device_family !== inheritCvm.value?.device_group) {
+          available = false;
+          unavailableTip = `机型族与继承套餐不匹配，需要「${inheritCvm.value?.device_group}」`;
+        } else if (item.device_type.toLowerCase().startsWith('da')) {
+          available = false;
+          unavailableTip = '滚服不支持 DA 系列机型';
+        }
+      } else {
+        available = true;
       }
 
       return {
@@ -199,6 +218,9 @@ const { isDefaultFourYears, isGpuDeviceType } = useChargeTypeDefault({
 });
 
 watchEffect(async () => {
+  // 继承套餐模式下，计费模式和时长由继承的机器决定，不需要自动设置
+  if (isInheritPackage.value) return;
+
   // 需要看预测的情况下，如有预测内的预测，则包年包月可用，否则默认选中按量计费
   if (!isNonPlanType.value && availableDeviceTypeMap.value.get(cvmChargeTypes.PREPAID)?.size === 0) {
     applyData.chargeType = cvmChargeTypes.POSTPAID_BY_HOUR;
@@ -343,7 +365,8 @@ const resAssignTypeDisabled = computed(() => {
 const confirmDisabled = computed(() => {
   return (
     selectedRowKeys.value.length === 0 ||
-    (!resAssignTypeDisabled.value && [undefined, 0].includes(applyData.resAssignType))
+    (!resAssignTypeDisabled.value && [undefined, 0].includes(applyData.resAssignType)) ||
+    (isInheritPackage.value && !inheritCvm.value)
   );
 });
 
@@ -507,30 +530,40 @@ const handleRemoveSelectedItem = (deviceType: string) => {
   }
 };
 
-const handleAssetMatchSuccess = (cvm: IRollingServerCvm) => {
+const handleAssetMatchSuccess = (cvm: IInheritCvm) => {
   const { instance_charge_type: chargeType, charge_months: chargeMonths, bk_cloud_inst_id } = cvm;
   applyData.chargeType = chargeType;
   applyData.chargeMonths = chargeType === cvmChargeTypes.PREPAID ? chargeMonths : undefined;
   applyData.inheritInstanceId = bk_cloud_inst_id;
 
-  // 机型族与上次数据不一致时需要清除机型选择
-  if (
-    rollingServerCvm.value &&
-    cvm.device_group !== rollingServerCvm.value.device_group &&
-    selectedRowKeys.value.length > 0
-  ) {
-    selectedRowKeys.value = [];
+  // 继承关键属性与上次不一致时需要清除机型选择：滚服看机型族，裁撤看机型代次
+  if (inheritCvm.value && selectedRowKeys.value.length > 0) {
+    const isGroupChanged = isRollingServer.value && cvm.device_group !== inheritCvm.value.device_group;
+    const isGenerationChanged = isInheritDissolve.value && cvm.generation_type !== inheritCvm.value.generation_type;
+    if (isGroupChanged || isGenerationChanged) {
+      selectedRowKeys.value = [];
+    }
   }
-  rollingServerCvm.value = cvm;
+  inheritCvm.value = cvm;
 };
 const handleAssetMatchFail = () => {
-  // 恢复默认值
   applyData.chargeType = cvmChargeTypes.PREPAID;
   applyData.chargeMonths = 36;
   if (selectedRowKeys.value.length > 0) {
     selectedRowKeys.value = [];
   }
-  rollingServerCvm.value = null;
+  inheritCvm.value = null;
+};
+
+const handleInheritDissolveChange = (checked: boolean) => {
+  if (!checked) {
+    applyData.inheritAssetId = undefined;
+    applyData.inheritInstanceId = undefined;
+    inheritCvm.value = null;
+    applyData.chargeType = cvmChargeTypes.PREPAID;
+    applyData.chargeMonths = 36;
+    selectedRowKeys.value = [];
+  }
 };
 
 const handleConfirm = () => {
@@ -545,6 +578,7 @@ const handleConfirm = () => {
 };
 
 provide('requireType', props.requireType);
+provide('isInheritPackage', isInheritPackage);
 </script>
 
 <template>
@@ -637,10 +671,31 @@ provide('requireType', props.requireType);
         </div>
       </div>
       <div class="device-type">
-        <div class="title required">机型选择</div>
+        <div class="title">
+          <div class="required">机型选择</div>
+          <bk-checkbox
+            v-if="isDissolve"
+            class="inherit-dissolve-checkbox"
+            v-model="isInheritDissolve"
+            @change="handleInheritDissolveChange"
+          >
+            继承裁撤机器套餐
+          </bk-checkbox>
+        </div>
         <div class="top-container">
           <div class="plan-empty-container" v-if="!isNonPlanType && !hasPlanedDeviceType">
             <device-type-plan-empty-alert :bk-biz-id="bizId" />
+          </div>
+          <div class="asset-match-container" v-if="isInheritPackage">
+            <asset-match
+              :biz-id="bizId"
+              :region="region"
+              :require-type="requireType"
+              :inherit-instance-id="applyData.inheritInstanceId"
+              v-model="applyData.inheritAssetId"
+              @check-success="handleAssetMatchSuccess"
+              @check-fail="handleAssetMatchFail"
+            />
           </div>
           <div class="charge-type-container">
             <charge-type
@@ -654,16 +709,6 @@ provide('requireType', props.requireType);
               :disabled="editMode"
               :disabled-tips="'修改需求的配置时，计费模式保持不变'"
               @change="handleChargeTypeChange"
-            />
-          </div>
-          <div class="asset-match-container" v-if="isRollingServer">
-            <asset-match
-              :biz-id="bizId"
-              :region="region"
-              :inherit-instance-id="applyData.inheritInstanceId"
-              v-model="applyData.inheritAssetId"
-              @check-success="handleAssetMatchSuccess"
-              @check-fail="handleAssetMatchFail"
             />
           </div>
         </div>
@@ -726,7 +771,8 @@ provide('requireType', props.requireType);
             <primary-table
               class="device-type-table"
               table-layout="fixed"
-              :height="420 - (isRollingServer ? 36 : 0) - (!isNonPlanType && !hasPlanedDeviceType ? 74 : 0)"
+              :need-custom-scroll="false"
+              :height="420 - (isInheritPackage ? 36 : 0) - (!isNonPlanType && !hasPlanedDeviceType ? 74 : 0)"
               :hover="true"
               :hide-sort-tips="true"
               :row-key="DEVICE_ROW_KEY"
@@ -869,6 +915,7 @@ provide('requireType', props.requireType);
   .title {
     display: flex;
     align-items: center;
+    gap: 8px;
     height: 56px;
     padding: 0 24px;
     font-size: 16px;
@@ -914,6 +961,11 @@ provide('requireType', props.requireType);
 
     .title {
       background: #fff;
+
+      .inherit-dissolve-checkbox {
+        font-size: 12px;
+        font-weight: normal;
+      }
     }
 
     .top-container {

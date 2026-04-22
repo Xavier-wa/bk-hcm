@@ -1645,22 +1645,24 @@ type GetApplyModifyRst struct {
 	Info  []*table.ModifyRecord `json:"info"`
 }
 
-// CheckRollingServerHostReq check rolling server host request
-type CheckRollingServerHostReq struct {
-	AssetID string `json:"bk_asset_id" validate:"required"`
-	BizID   int64  `json:"bk_biz_id"`
-	Region  string `json:"region" validate:"required"`
+// CheckInheritedHostReq check inherited host request
+type CheckInheritedHostReq struct {
+	AssetID     string             `json:"bk_asset_id" validate:"required"`
+	BizID       int64              `json:"bk_biz_id"`
+	Region      string             `json:"region" validate:"required"`
+	RequireType enumor.RequireType `json:"require_type" validate:"required"`
 }
 
-// Validate CheckRollingServerHostReq
-func (c *CheckRollingServerHostReq) Validate() error {
+// Validate CheckInheritedHostReq
+func (c *CheckInheritedHostReq) Validate() error {
 	return validator.Validate.Struct(c)
 }
 
-// CheckRollingServerHostResp check rolling server host response
-type CheckRollingServerHostResp struct {
+// CheckInheritedHostResp check inherited host response
+type CheckInheritedHostResp struct {
 	DeviceType           string    `json:"device_type"`
 	DeviceGroup          string    `json:"device_group"`
+	GenerationType       string    `json:"generation_type"`
 	InstanceChargeType   string    `json:"instance_charge_type"`
 	ChargeMonths         int       `json:"charge_months"`
 	BillingStartTime     time.Time `json:"billing_start_time"`

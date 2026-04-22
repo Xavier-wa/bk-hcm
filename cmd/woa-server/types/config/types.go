@@ -595,6 +595,7 @@ type DeviceTypeCpuItem struct {
 	CoreType        enumor.CoreType          `json:"core_type"`         // 机型核心类型
 	TechnicalClass  string                   `json:"technical_class"`   // 技术分类
 	DeviceTypeClass cvmapi.InstanceTypeClass `json:"device_type_class"` // 通/专用机型
+	GenerationType  string                   `json:"generation_type"`   // 机型代次
 }
 
 // UpsertRegionDftVpcReq upsert region default vpc request.

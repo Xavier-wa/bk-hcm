@@ -84,6 +84,8 @@ type DeviceTypeCreate struct {
 	Disable bool `json:"disable"`
 	// Source 机型来源
 	Source enumor.DeviceTypeSource `json:"source"`
+	// GenerationType 机型代次
+	GenerationType string `json:"generation_type" validate:"lte=64"`
 }
 
 // Validate validate
@@ -119,6 +121,8 @@ type DeviceTypeUpdate struct {
 	Disable *bool `json:"disable,omitempty"`
 	// Source 机型来源
 	Source *enumor.DeviceTypeSource `json:"source,omitempty" validate:"omitempty,lte=64"`
+	// GenerationType 机型代次
+	GenerationType *string `json:"generation_type,omitempty" validate:"omitempty,lte=64"`
 }
 
 // Validate validate

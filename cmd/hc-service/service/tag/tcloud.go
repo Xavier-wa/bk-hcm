@@ -37,7 +37,7 @@ func InitTagService(cap *capability.Capability) {
 	v := &tag{
 		ad:      cap.CloudAdaptor,
 		cs:      cap.ClientSet,
-		syncCli: ressync.NewClient(cap.CloudAdaptor, cap.ClientSet.DataService()),
+		syncCli: ressync.NewClient(cap.CloudAdaptor, cap.ClientSet.DataService(), cap.CrpCli),
 	}
 
 	h := rest.NewHandler()

@@ -46,6 +46,7 @@ type DeviceType struct {
 	TechnicalClass  string                   `json:"technical_class"`
 	Disable         bool                     `json:"disable"`
 	Source          enumor.DeviceTypeSource  `json:"source"`
+	GenerationType  string                   `json:"generation_type"`
 	Creator         string                   `json:"creator"`
 	Reviser         string                   `json:"reviser"`
 }
@@ -97,6 +98,7 @@ func ConvTableToDeviceType(one dt.DeviceTypeTable) DeviceType {
 		TechnicalClass:  one.TechnicalClass,
 		Disable:         cvt.PtrToVal(one.Disable),
 		Source:          one.Source,
+		GenerationType:  one.GenerationType,
 		Creator:         one.Creator,
 		Reviser:         one.Reviser,
 	}
@@ -116,6 +118,7 @@ type DistinctDeviceType struct {
 	DeviceTypeClass cvmapi.InstanceTypeClass `json:"device_type_class"`
 	Disable         bool                     `json:"disable"`
 	Source          enumor.DeviceTypeSource  `json:"source"`
+	GenerationType  string                   `json:"generation_type"`
 	Creator         string                   `json:"creator"`
 	Reviser         string                   `json:"reviser"`
 }
@@ -135,6 +138,7 @@ func ConvTableToDistinctDeviceType(one dt.DeviceTypeTable) DistinctDeviceType {
 		DeviceTypeClass: one.DeviceTypeClass,
 		Disable:         cvt.PtrToVal(one.Disable),
 		Source:          one.Source,
+		GenerationType:  one.GenerationType,
 		Creator:         one.Creator,
 		Reviser:         one.Reviser,
 	}

@@ -118,7 +118,7 @@ func (svc *cosSvc) DeleteTCloudCosBucket(cts *rest.Contexts) (interface{}, error
 	}
 
 	opt := &typecos.TCloudBucketDeleteOption{
-		Name:   req.Name,
+		Name:   req.CloudName,
 		Region: req.Region,
 		AppID:  accountInfo.AppID,
 	}

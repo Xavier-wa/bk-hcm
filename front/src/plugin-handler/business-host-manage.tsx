@@ -80,6 +80,7 @@ const useColumns = ({ columnType = 'cvms', isSimpleShow = false, vendor, extra }
                   trigger='click'
                   popoverOptions={{
                     renderType: 'shown',
+                    clickContentAutoHide: true,
                     onAfterShow: () => (currentOperateRowIndex.value = index),
                     onAfterHidden: () => (currentOperateRowIndex.value = -1),
                   }}>
