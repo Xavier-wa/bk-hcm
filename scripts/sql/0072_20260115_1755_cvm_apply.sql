@@ -18,7 +18,7 @@
  */
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9
+    SQLVER=0072,HCMVER=v1.8.11.3
 
     Notes:
     1. 新增 ziyan_cvm_apply_order 表
@@ -369,6 +369,6 @@ insert into id_generator(`resource`, `max_id`) values
 ('ziyan_cvm_modify_record', '0');
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.8.11.3' as `hcm_ver`, '0072' as `sql_ver`;
 
 COMMIT;
