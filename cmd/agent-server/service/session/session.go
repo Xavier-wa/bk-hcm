@@ -24,25 +24,61 @@ import (
 	"net/http"
 
 	"hcm/cmd/agent-server/service/capability"
+	"hcm/pkg/api/core"
+	dsaiagent "hcm/pkg/api/data-service/aiagent"
+	"hcm/pkg/client"
+	"hcm/pkg/criteria/errf"
+	"hcm/pkg/dal/dao/tools"
+	"hcm/pkg/dal/table/aiagent"
 	"hcm/pkg/rest"
 
 	"trpc.group/trpc-go/trpc-agent-go/session"
 )
 
 // InitService initialize the session service.
-func InitService(cap *capability.Capability, sessionSvc session.Service, appName string) {
+func InitService(cap *capability.Capability, sessionSvc session.Service, resolver *Resolver, appName string) {
 	svc := &service{
+		cli:        cap.ClientSet,
+		resolver:   resolver,
 		sessionSvc: sessionSvc,
 		appName:    appName,
 	}
 
 	h := rest.NewHandler()
-	h.Add("GetContextStats", http.MethodGet, "/sessions/{thread_id}/context-stats", svc.GetContextStats)
+	// Session management APIs.
+	h.Add("CreateSession", http.MethodPost, "/sessions/create", svc.CreateSession)
+	h.Add("ListSessions", http.MethodPost, "/sessions/list", svc.ListSessions)
+	h.Add("UpdateSession", http.MethodPatch, "/sessions/{session_code}", svc.UpdateSession)
+	h.Add("DeleteSession", http.MethodDelete, "/sessions/{session_code}", svc.DeleteSession)
+	// Context stats (uses session_code now).
+	h.Add("GetContextStats", http.MethodGet, "/sessions/{thread_id}/context_stats", svc.GetContextStats)
 
 	h.Load(cap.WebService)
 }
 
 type service struct {
+	cli *client.ClientSet
+
+	resolver   *Resolver
 	sessionSvc session.Service
 	appName    string
+}
+
+// getSessionByCode queries a session by session_code and returns it.
+func (svc *service) getSessionByCode(cts *rest.Contexts, sessionCode string) (*aiagent.SessionTable, error) {
+	listReq := &dsaiagent.ListAiagentSessionReq{
+		Filter: tools.EqualExpression("session_code", sessionCode),
+		Page:   &core.BasePage{Start: 0, Limit: 1},
+	}
+
+	result, err := svc.cli.DataService().Aiagent.Session.List(cts.Kit, listReq)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result.Details) == 0 {
+		return nil, errf.New(errf.RecordNotFound, "session not found")
+	}
+
+	return &result.Details[0], nil
 }

@@ -87,6 +87,7 @@ import (
 	rollingbill "hcm/cmd/data-service/service/rolling-server/rolling-bill"
 	rollingfinedetail "hcm/cmd/data-service/service/rolling-server/rolling-fine-detail"
 	"hcm/cmd/data-service/service/rolling-server/rolling-returned"
+	dsaiagent "hcm/cmd/data-service/service/aiagent"
 	"hcm/cmd/data-service/service/task"
 	dissolverecyclehost "hcm/cmd/data-service/service/dissolve/recycle-host"
 	tcloudziyanpmdevicetype "hcm/cmd/data-service/service/tcloud-ziyan-pm-device-type"
@@ -317,6 +318,7 @@ func (s *Service) apiSet() *restful.Container {
 
 	task.InitService(capability)
 	tenant.InitService(capability)
+	dsaiagent.InitService(capability)
 
 	resusagebizrel.InitService(capability)
 	permissionpolicylibrary.InitService(capability)

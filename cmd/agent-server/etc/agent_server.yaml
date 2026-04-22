@@ -46,7 +46,7 @@ storage:
     dsn: "user:password@tcp(host:3306)/dbname?charset=utf8mb4&parseTime=true"
     tablePrefix: "aiagent_"   # 可选，所有 session 表名的前缀
     # skipDBInit: false      # false=启动时自动建表；true=表由外部管理，跳过建表
-    summary:
+    summary: 
       enabled: true         # true=开启 LLM 自动摘要（需配置 aidev 中的 LLM 模型）
       policy: "any"          # 触发策略：any=满足任一阈值即触发；all=所有阈值均满足才触发
       # eventThreshold: 20     # 未摘要的事件数超过该值时触发（0=不使用此条件）
@@ -55,13 +55,12 @@ storage:
       maxWords: 200          # 生成摘要的最大字数上限（0=不限制）
   memory:
     dsn: "user:password@tcp(host:3306)/dbname?charset=utf8mb4&parseTime=true"
-    tableName: "hcm_memories"  # 可选，默认为 "memories"
-    skipDBInit: false           # false=启动时自动建表；true=表由外部管理，跳过建表
+    tableName: "aiagent__memories"  # 可选，默认为 "memories"
+    # skipDBInit: false           # false=启动时自动建表；true=表由外部管理，跳过建表
     limit: 100                  # 每个用户最多保留的记忆条数，0 表示使用默认值 100
-
-    autoExtract: false          # true=开启 LLM 自动记忆提取（每轮对话结束后异步触发）
+    autoExtract: true          # true=开启 LLM 自动记忆提取（每轮对话结束后异步触发）
     autoExtractPolicy: "any"    # 多阈值组合策略：any=满足其一即触发（默认）；all=全部满足才触发
-    autoExtractMessages: 100      # 触发阈值：新消息数 > 该值才提取，0=不设消息数门槛
+    autoExtractMessages: 0      # 触发阈值：新消息数 > 该值才提取，0=不设消息数门槛
     # autoExtractInterval: "30m"     # 触发阈值：距上次提取超过该时长才提取，空=不设时间间隔
 
 # aidev 配置兼容 OpenAI API 协议的蓝鲸 AI 网关。
@@ -97,8 +96,8 @@ aidev:
 #
 # AG-UI 端点说明（--enable-agui 开启后生效）：
 #   POST /api/v1/agent/agui        主聊天接口（SSE 流式返回 AG-UI 协议事件）
-#   POST /api/v1/agent/cancel      取消正在进行的 Run（请求体与主接口相同，threadId 必填）
-#                                   200=成功取消；404=该 threadId 无正在运行的 Run
+#   POST /api/v1/agent/cancel      取消正在进行的 Run（请求体传 sessionCode，由中间件解析为 threadId）
+#                                   200=成功取消；404=该 sessionCode 对应会话无正在运行的 Run
 #   POST /api/v1/agent/history     历史消息回放（配置 storage.session.dsn 后自动开启）
 # 注：客户端断开 SSE 连接时，服务端会自动取消对应的 LLM 调用。
 agui:
@@ -106,7 +105,7 @@ agui:
   path: "/api/v1/agent/agui"
   defaultModel: "gpt-4o"
   appName: hcm-agent
-  stream: true        # true=流式输出，每个 token 单独推送一个 TEXT_MESSAGE_CONTENT SSE 事件（逐字打字机效果）
+  stream: true       # true=流式输出，每个 token 单独推送一个 TEXT_MESSAGE_CONTENT SSE 事件（逐字打字机效果）
 
   # prompt 配置 Agent 的系统提示词和任务指令，均从文件加载。
   # 支持绝对路径或相对路径（相对于进程工作目录，通常为项目根目录）。
@@ -116,6 +115,7 @@ agui:
     systemPromptFile: "cmd/agent-server/etc/prompts/system_prompt.md"
     # instructionFile：Instruction，追加在请求末尾。适合写任务说明和动态占位符。
     instructionFile: "cmd/agent-server/etc/prompts/instruction.md"
+
   allowedModels: []
   #   - deepseek-v3
   #   - dsv32-thinking
@@ -145,19 +145,19 @@ tools:
       transport: "streamable_http"  # 传输方式：stdio | sse | streamable_http
       serverUrl: "http://localhost:3000/mcp"   # MCP server URL（sse/streamable_http 必填）
       timeout: "30s"             # 每次请求超时，留空表示不限制
-  #     # headers 用于 HTTP 鉴权（鉴权字段稍后补充）
-  #     # headers:
-  #     #   Authorization: "Bearer your-token"
-  #     # filter 限制暴露给 agent 的工具范围
-  #     # filter:
-  #     #   mode: "include"        # include=白名单；exclude=黑名单
-  #     #   names:
-  #     #     - "tool_a"
-  #     #     - "tool_b"
-  #     # reconnect 配置 session 自动重连
-  #     # reconnect:
-  #     #   enabled: true
-  #     #   maxAttempts: 3
+      # headers 用于 HTTP 鉴权（鉴权字段稍后补充）
+      # headers:
+      #   Authorization: "Bearer your-token"
+      # filter 限制暴露给 agent 的工具范围
+      # filter:
+      #   mode: "include"        # include=白名单；exclude=黑名单
+      #   names:
+      #     - "tool_a"
+      #     - "tool_b"
+      # reconnect 配置 session 自动重连
+      # reconnect:
+      #   enabled: true
+      #   maxAttempts: 3
   #   - name: "local-mcp"
   #     transport: "stdio"
   #     command: "/usr/local/bin/my-mcp-server"
@@ -166,7 +166,7 @@ tools:
   #       - "value"
 
   # skill 仓库配置。指向包含 SKILL.md 文件的目录，每个子目录为一个 skill。
-  # skills:
-  #   root: "./skills"             # 主 skill 目录
-  #   extraDirs:                   # 可选额外目录（优先级低于 root）
-  #     - "/opt/hcm/skills"
+  skills:
+    root: "./skills"             # 主 skill 目录
+    # extraDirs:                   # 可选额外目录（优先级低于 root）
+    #   - "/opt/hcm/skills"

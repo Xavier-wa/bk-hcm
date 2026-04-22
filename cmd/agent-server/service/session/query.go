@@ -24,8 +24,11 @@ import (
 	"unicode/utf8"
 
 	proto "hcm/pkg/api/agent-server/session"
+	"hcm/pkg/api/core"
 	"hcm/pkg/cc"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/errf"
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 
@@ -33,21 +36,60 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/session"
 )
 
-const (
-	// stateLastIncludedTS is the session state key the framework's summary checkers
-	// use to track which events have already been included in a summary.
-	stateLastIncludedTS = "summary:last_included_ts"
+// ListSessions queries the current user's session list.
+//
+// POST /api/v1/agent/sessions/list
+func (svc *service) ListSessions(cts *rest.Contexts) (interface{}, error) {
+	req := new(core.ListReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
 
-	// approxRunesPerToken matches the default in model.SimpleTokenCounter.
-	approxRunesPerToken = 4.0
-)
+	if err := req.Validate(); err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	combined := tools.EqualExpression("user", cts.Kit.User)
+	var err error
+	if req.Filter != nil {
+		combined, err = tools.And(combined, req.Filter)
+		if err != nil {
+			logs.Errorf("list sessions failed, filter invalid, err: %v, user: %s, filter: %+v, rid: %s",
+				err, cts.Kit.User, req.Filter, cts.Kit.Rid)
+			return nil, errf.NewFromErr(errf.InvalidParameter, err)
+		}
+	}
+
+	listReq := &core.ListReq{
+		Filter: combined,
+		Page:   req.Page,
+		Fields: req.Fields,
+	}
+
+	result, err := svc.cli.DataService().Aiagent.Session.List(cts.Kit, listReq)
+	if err != nil {
+		logs.Errorf("list sessions failed, user: %s, err: %v, rid: %s", cts.Kit.User, err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return &proto.ListSessionsResult{
+		Count:   result.Count,
+		Details: result.Details,
+	}, nil
+}
 
 // GetContextStats computes and serves the context consumption statistics
-// for a given session identified by its thread_id path parameter.
+// for a given session identified by its session_code path parameter.
 func (svc *service) GetContextStats(cts *rest.Contexts) (interface{}, error) {
-	threadID := cts.PathParameter("thread_id").String()
-	if threadID == "" {
-		return nil, errf.New(errf.InvalidParameter, `missing path parameter "thread_id"`)
+	sessionCode := cts.PathParameter("session_code").String()
+	if sessionCode == "" {
+		return nil, errf.New(errf.InvalidParameter, `missing path parameter "session_code"`)
+	}
+
+	threadID, err := svc.resolver.Resolve(cts.Kit, sessionCode)
+	if err != nil {
+		logs.Errorf("context-stats: resolve session_code %s failed: %v, rid: %s", sessionCode, err, cts.Kit.Rid)
+		return nil, err
 	}
 
 	key := session.Key{
@@ -58,8 +100,8 @@ func (svc *service) GetContextStats(cts *rest.Contexts) (interface{}, error) {
 
 	sess, err := svc.sessionSvc.GetSession(cts.Kit.Ctx, key)
 	if err != nil {
-		logs.Errorf("context-stats: get session %+v: %v, rid: %s", key, err, cts.Kit.Rid)
-		return nil, errf.New(errf.RecordNotFound, "session not found")
+		logs.Errorf("context-stats: get session %+v failed: %v, rid: %s", key, err, cts.Kit.Rid)
+		return nil, err
 	}
 
 	return buildContextStatsResponse(sess), nil
@@ -116,7 +158,7 @@ func buildContextStatsResponse(sess *session.Session) *proto.ContextStatsRespons
 // parseSummaryCutoff reads the framework-internal state key that records the
 // timestamp of the last event included in a summary.
 func parseSummaryCutoff(sess *session.Session) time.Time {
-	raw, ok := sess.GetState(stateLastIncludedTS)
+	raw, ok := sess.GetState(constant.SessionStateLastIncludedTS)
 	if !ok || len(raw) == 0 {
 		return time.Time{}
 	}
@@ -164,7 +206,7 @@ func estimateTokens(events []event.Event) int {
 			}
 		}
 	}
-	return int(float64(totalRunes) / approxRunesPerToken)
+	return int(float64(totalRunes) / constant.ApproxRunesPerToken)
 }
 
 // latestSummaryInfo inspects the session's Summaries map and returns whether

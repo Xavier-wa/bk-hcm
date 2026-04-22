@@ -299,6 +299,9 @@ const (
 
 	// PermissionPolicyLibraryTable is permission_policy_library table's name.
 	PermissionPolicyLibraryTable Name = "permission_policy_library"
+
+	// AiagentSessionTable is aiagent_session table's name.
+	AiagentSessionTable Name = "aiagent_session"
 )
 
 // Validate whether the table name is valid or not.
@@ -460,6 +463,8 @@ var TableMap = map[Name]TableConfig{
 
 	PermissionPolicyLibraryTable: {EnableTenant: true},
 	DeviceCapacityTable: {},
+
+	AiagentSessionTable: {},
 }
 
 // Register 注册表名

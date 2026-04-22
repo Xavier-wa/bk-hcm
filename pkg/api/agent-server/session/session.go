@@ -20,6 +20,51 @@
 // Package session ...
 package session
 
+import (
+	"errors"
+
+	"hcm/pkg/api/core"
+	"hcm/pkg/dal/table/aiagent"
+)
+
+// CreateSessionReq is the request body for creating a session.
+type CreateSessionReq struct {
+	SessionName string `json:"session_name"`
+}
+
+// Validate validates the request body.
+func (r *CreateSessionReq) Validate() error {
+	if r.SessionName == "" {
+		return errors.New("session_name is required")
+	}
+	return nil
+}
+
+// CreateSessionResp is the response body for creating a session.
+type CreateSessionResp struct {
+	ID          string `json:"id"`
+	SessionCode string `json:"session_code"`
+	ThreadID    string `json:"thread_id"`
+	SessionName string `json:"session_name"`
+}
+
+// UpdateSessionReq is the request body for updating a session.
+type UpdateSessionReq struct {
+	SessionName string `json:"session_name"`
+}
+
+// Validate validates the request body.
+func (r *UpdateSessionReq) Validate() error {
+	// TODO session_name is not required, if we support update other fields.
+	if r.SessionName == "" {
+		return errors.New("session_name is required")
+	}
+	return nil
+}
+
+// ListSessionsResult is the response body for listing sessions.
+type ListSessionsResult = core.ListResultT[aiagent.SessionTable]
+
 // ContextStatsResponse is the JSON body returned by the context-stats endpoint.
 type ContextStatsResponse struct {
 	TotalEvents        int                `json:"total_events"`

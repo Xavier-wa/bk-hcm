@@ -22,37 +22,31 @@ package logics
 import (
 	"context"
 	"fmt"
-)
 
-// bkapiContextKey is an unexported type for BK API context keys to avoid collisions.
-type bkapiContextKey string
-
-const (
-	bkapiContextKeyUsername bkapiContextKey = "bk_username"
-	bkapiContextKeyTicket   bkapiContextKey = "bk_ticket"
+	"hcm/pkg/criteria/constant"
 )
 
 // WithBKUsername returns a new context carrying the given BK username.
 func WithBKUsername(ctx context.Context, username string) context.Context {
-	return context.WithValue(ctx, bkapiContextKeyUsername, username)
+	return context.WithValue(ctx, constant.UserKey, username)
 }
 
 // WithBKTicket returns a new context carrying the given BK ticket.
 func WithBKTicket(ctx context.Context, ticket string) context.Context {
-	return context.WithValue(ctx, bkapiContextKeyTicket, ticket)
+	return context.WithValue(ctx, constant.BKTicket, ticket)
 }
 
 // BKUsernameFromContext extracts the BK username stored in ctx.
 // Returns an empty string if not set.
 func BKUsernameFromContext(ctx context.Context) string {
-	v, _ := ctx.Value(bkapiContextKeyUsername).(string)
+	v, _ := ctx.Value(constant.UserKey).(string)
 	return v
 }
 
 // BKTicketFromContext extracts the BK ticket stored in ctx.
 // Returns an empty string if not set.
 func BKTicketFromContext(ctx context.Context) string {
-	v, _ := ctx.Value(bkapiContextKeyTicket).(string)
+	v, _ := ctx.Value(constant.BKTicket).(string)
 	return v
 }
 

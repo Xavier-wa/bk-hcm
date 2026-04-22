@@ -28,6 +28,7 @@ import (
 
 	"hcm/pkg/cc"
 	accountset "hcm/pkg/dal/dao/account-set"
+	daoaiagent "hcm/pkg/dal/dao/aiagent"
 	"hcm/pkg/dal/dao/application"
 	daoasync "hcm/pkg/dal/dao/async"
 	"hcm/pkg/dal/dao/audit"
@@ -202,6 +203,8 @@ type Set interface {
 	Tenant() tenant.Tenant
 	DeviceCapacity() devicecapacity.DeviceCapacity
 	PermissionPolicyLibrary() permissionpolicylibrary.PermissionPolicyLibrary
+
+	AiagentSession() daoaiagent.AiagentSession
 
 	Txn() *Txn
 }
@@ -1195,4 +1198,9 @@ func (s *set) PermissionPolicyLibrary() permissionpolicylibrary.PermissionPolicy
 // DeviceCapacity return device capacity dao.
 func (s *set) DeviceCapacity() devicecapacity.DeviceCapacity {
 	return devicecapacity.NewDeviceCapacityDao(s.orm, s.idGen, s.audit)
+}
+
+// AiagentSession return aiagent session dao.
+func (s *set) AiagentSession() daoaiagent.AiagentSession {
+	return daoaiagent.NewAiagentSessionDao(s.orm, s.idGen, s.audit)
 }

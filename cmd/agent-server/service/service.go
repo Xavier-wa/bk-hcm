@@ -23,9 +23,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -36,11 +39,13 @@ import (
 	"hcm/cmd/agent-server/service/capability"
 	"hcm/cmd/agent-server/service/memory"
 	"hcm/cmd/agent-server/service/session"
+	dsaiagent "hcm/pkg/api/data-service/aiagent"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/handler"
+	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 	restcli "hcm/pkg/rest/client"
@@ -56,25 +61,11 @@ import (
 	aguirunner "trpc.group/trpc-go/trpc-agent-go/server/agui/runner"
 )
 
-const (
-	// headerBKTicket is the incoming request header that carries the BK login ticket.
-	// The value is forwarded to the downstream BK API gateway as bk_ticket.
-	// For MCP toolsets of type "bkaidev", this same value is used to construct
-	// the X-Bkapi-Authorization header on each MCP request.
-	headerBKTicket = "X-Bk-Ticket"
-
-	// aguiPath is the HTTP path for the AG-UI endpoint.
-	aguiPath = "/api/v1/agent/agui"
-	// aguiCancelPath is the HTTP path for the AG-UI cancel endpoint.
-	aguiCancelPath = "/api/v1/agent/cancel"
-	// aguiHistoryPath is the HTTP path for the AG-UI history (MessagesSnapshot) endpoint.
-	aguiHistoryPath = "/api/v1/agent/history"
-)
-
 // Service do all the agent server's work
 type Service struct {
 	serve     *http.Server
 	clientSet *client.ClientSet
+	resolver  *session.Resolver
 	runTime   *logics.Runtime
 }
 
@@ -98,6 +89,7 @@ func NewService(sd serviced.ServiceDiscover) (*Service, error) {
 
 	return &Service{
 		clientSet: apiClientSet,
+		resolver:  session.NewResolver(apiClientSet.DataService()),
 		runTime:   rt,
 	}, nil
 }
@@ -206,10 +198,10 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 	//   - "DELETE /api/v1/agent/memory/{memory_id}" → delete a memory entry (only when memory backend is configured)
 	//   - "DELETE /api/v1/agent/memory" → clear all memory entries (only when memory backend is configured)
 	aguiOpts := []agui.Option{
-		agui.WithPath(aguiPath),
+		agui.WithPath(constant.AGUIPath),
 		// Cancel endpoint: clients POST {threadId} to abort an in-progress run.
 		agui.WithCancelEnabled(true),
-		agui.WithCancelPath(aguiCancelPath),
+		agui.WithCancelPath(constant.AGUICancelPath),
 		agui.WithAGUIRunnerOptions(
 			aguirunner.WithUserIDResolver(resolveAGUIUserID),
 			aguirunner.WithRunOptionResolver(makeModelRunOptionResolver(svcCfg.AllowedModels)),
@@ -229,7 +221,7 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 		aguiOpts = append(aguiOpts,
 			agui.WithSessionService(sessionSvc),
 			agui.WithMessagesSnapshotEnabled(true),
-			agui.WithMessagesSnapshotPath(aguiHistoryPath),
+			agui.WithMessagesSnapshotPath(constant.AGUIHistoryPath),
 		)
 	}
 
@@ -240,10 +232,13 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 
 	// cancel 和 history 路径注册在 aguiServer 内部的 ServeMux 中，
 	// 外部 mux 也必须单独挂载同一个 handler，才能将请求路由进去。
-	mux.Handle(aguiServer.Path(), aguiServer.Handler())
-	mux.Handle(aguiCancelPath, aguiServer.Handler())
+	// /agui、/cancel 和 /history 在 session-code middleware 可用时进行包装，
+	// 使得 session_code 在请求到达 AG-UI runner 前被解析为 thread_id。
+	aguiHandler := s.sessionCodeMiddleware(aguiServer.Handler())
+	mux.Handle(aguiServer.Path(), aguiHandler)
+	mux.Handle(constant.AGUICancelPath, aguiHandler)
 	if sessionSvc != nil {
-		mux.Handle(aguiHistoryPath, aguiServer.Handler())
+		mux.Handle(constant.AGUIHistoryPath, aguiHandler)
 	}
 
 	return nil
@@ -261,7 +256,7 @@ func (s *Service) apiSet() *restful.Container {
 
 	appName := cc.AgentServer().AGUI.AppName
 	memory.InitService(c, s.runTime.MemorySvc(), appName)
-	session.InitService(c, s.runTime.SessionSvc(), appName)
+	session.InitService(c, s.runTime.SessionSvc(), s.resolver, appName)
 
 	return restful.NewContainer().Add(c.WebService)
 }
@@ -299,6 +294,82 @@ func (s *Service) Alivez(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+// sessionCodeMiddleware intercepts /agui, /cancel and /history requests, resolves sessionCode to threadId,
+// generates a runId, rewrites the request body, and forwards to the downstream handler.
+// For /agui requests, it also asynchronously increments session_content_count after SSE ends.
+func (s *Service) sessionCodeMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "failed to read request body", http.StatusBadRequest)
+			return
+		}
+		r.Body.Close()
+
+		var reqMap map[string]interface{}
+		if err = json.Unmarshal(body, &reqMap); err != nil {
+			http.Error(w, "invalid JSON body", http.StatusBadRequest)
+			return
+		}
+
+		sessionCodeVal, ok := reqMap["sessionCode"]
+		if !ok {
+			http.Error(w, `missing field "sessionCode"`, http.StatusBadRequest)
+			return
+		}
+
+		sessionCode, ok := sessionCodeVal.(string)
+		if !ok || strings.TrimSpace(sessionCode) == "" {
+			http.Error(w, `"sessionCode" must be a non-empty string`, http.StatusBadRequest)
+			return
+		}
+
+		kt, err := kit.FromHeader(r.Context(), r.Header)
+		if err != nil {
+			logs.Errorf("sessionCodeMiddleware: build kit from header failed: %v", err)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		threadID, err := s.resolver.Resolve(kt, sessionCode)
+		if err != nil {
+			logs.Errorf("sessionCodeMiddleware: resolve %s failed: %v", sessionCode, err)
+			http.Error(w, "invalid session code", http.StatusBadRequest)
+			return
+		}
+
+		runID := uuid.UUID()
+
+		delete(reqMap, "sessionCode")
+		reqMap["threadId"] = threadID
+		reqMap["runId"] = runID
+
+		newBody, err := json.Marshal(reqMap)
+		if err != nil {
+			http.Error(w, "failed to rewrite request body", http.StatusInternalServerError)
+			return
+		}
+
+		r.Body = io.NopCloser(bytes.NewReader(newBody))
+		r.ContentLength = int64(len(newBody))
+
+		isAGUI := strings.HasSuffix(r.URL.Path, "/agui")
+		next.ServeHTTP(w, r)
+
+		if isAGUI {
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), constant.SessionIncrContentCountTimeout)
+				defer cancel()
+				asyncKt := kt.NewSubKitWithCtx(ctx)
+				req := &dsaiagent.IncrContentCountReq{SessionCode: sessionCode}
+				if err := s.clientSet.DataService().Aiagent.Session.IncrContentCount(asyncKt, req); err != nil {
+					logs.Errorf("async incr content count failed, session_code: %s, err: %v", sessionCode, err)
+				}
+			}()
+		}
+	})
+}
+
 // bkapiContextMiddleware extracts BK auth parameters from the incoming HTTP
 // request headers and injects them into the request context so that the
 // downstream LLM client middleware and MCP toolsets of type "bkaidev" can include
@@ -317,7 +388,7 @@ func bkapiContextMiddleware(next http.Handler) http.Handler {
 		if username := r.Header.Get(constant.UserKey); username != "" {
 			ctx = logics.WithBKUsername(ctx, username)
 		}
-		if ticket := r.Header.Get(headerBKTicket); ticket != "" {
+		if ticket := r.Header.Get(constant.BKTicket); ticket != "" {
 			ctx = logics.WithBKTicket(ctx, ticket)
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))

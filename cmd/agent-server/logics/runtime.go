@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"hcm/pkg/cc"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/logs"
 	cvt "hcm/pkg/tools/converter"
@@ -392,7 +393,7 @@ func newAgentWithModel(defaultMdl model.Model, modelsMap map[string]model.Model,
 // hasBKAIDevToolSet reports whether any MCP toolset config has type "bkaidev".
 func hasBKAIDevToolSet() bool {
 	for _, cfg := range cc.AgentServer().Tools.MCPToolSets {
-		if strings.EqualFold(strings.TrimSpace(cfg.Type), mcpTypeBKAIDev) {
+		if strings.EqualFold(strings.TrimSpace(cfg.Type), constant.MCPTypeBKAIDev) {
 			return true
 		}
 	}
@@ -461,7 +462,7 @@ func buildOneMCPToolSet(cfg cc.AgentMCPToolSet) (tool.ToolSet, error) {
 		opts = append(opts, mcp.WithSessionReconnect(attempts))
 	}
 
-	if strings.EqualFold(strings.TrimSpace(cfg.Type), mcpTypeBKAIDev) {
+	if strings.EqualFold(strings.TrimSpace(cfg.Type), constant.MCPTypeBKAIDev) {
 		if cc.AgentServer().Tools.BKAIDev == nil {
 			logs.Warnf("AGUI MCP toolset %q: type=bkaidev but tools.bkAIDev config is nil, "+
 				"X-Bkapi-Authorization will NOT be injected", cfg.Name)
@@ -475,7 +476,7 @@ func buildOneMCPToolSet(cfg cc.AgentMCPToolSet) (tool.ToolSet, error) {
 				trpcmcp.WithHTTPBeforeRequest(func(ctx context.Context, req *http.Request) error {
 					ticket := BKTicketFromContext(ctx)
 					if ticket != "" {
-						req.Header.Set(headerBkapiAuthorization,
+						req.Header.Set(constant.BKGWAuthKey,
 							bkapiMCPAuthHeaderValue(appCode, appSecret, ticket))
 						logs.Infof("bkaidev MCP hook: injected auth header for %s %s",
 							req.Method, req.URL.Path)
@@ -491,14 +492,6 @@ func buildOneMCPToolSet(cfg cc.AgentMCPToolSet) (tool.ToolSet, error) {
 
 	return mcp.NewMCPToolSet(conn, opts...), nil
 }
-
-const (
-	// mcpTypeBKAIDev is the MCP toolset type that enables automatic
-	// X-Bkapi-Authorization header injection for BK AI Dev gateways.
-	mcpTypeBKAIDev = "bkaidev"
-	// headerBkapiAuthorization is the BK API gateway authentication header name.
-	headerBkapiAuthorization = "X-Bkapi-Authorization"
-)
 
 // buildSkillTools constructs skill tool instances from the given config.
 // Returns nil when cfg is nil or no root directories are configured.
