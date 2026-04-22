@@ -35,6 +35,7 @@ export default defineComponent({
     });
     const deviceConfigDisabled = ref(false);
     const deviceTypeDisabled = ref(false);
+    const getDeviceGroup = () => (Array.isArray(filter.value.device_group) ? filter.value.device_group : []);
     const page = ref({
       limit: 50,
       start: 0,
@@ -43,10 +44,10 @@ export default defineComponent({
       [
         filter.value.region.length && { field: 'dc.region', op: 'in', value: filter.value.region },
         filter.value.zone.length && { field: 'dc.zone', op: 'in', value: filter.value.zone },
-        filter.value.device_group.length && {
+        getDeviceGroup().length && {
           field: 'device_family',
           op: 'in',
-          value: filter.value.device_group,
+          value: getDeviceGroup(),
         },
         filter.value.device_type.length && { field: 'dc.device_type', op: 'in', value: filter.value.device_type },
         filter.value.cpu && { field: 'cpu_core', op: 'eq', value: filter.value.cpu },
@@ -87,10 +88,10 @@ export default defineComponent({
       queryRules.value = [
         filter.value.region.length && { field: 'dc.region', op: 'in', value: filter.value.region },
         filter.value.zone.length && { field: 'dc.zone', op: 'in', value: filter.value.zone },
-        filter.value.device_group.length && {
+        getDeviceGroup().length && {
           field: 'device_family',
           op: 'in',
-          value: filter.value.device_group,
+          value: getDeviceGroup(),
         },
         filter.value.device_type.length && { field: 'dc.device_type', op: 'in', value: filter.value.device_type },
         filter.value.cpu && { field: 'cpu_core', op: 'eq', value: filter.value.cpu },
@@ -108,12 +109,12 @@ export default defineComponent({
     };
 
     const cvmDevicetypeParams = computed(() => {
-      const { region, zone, device_group, cpu, mem, disk } = filter.value;
+      const { region, zone, cpu, mem, disk } = filter.value;
       return {
         vendor: VendorEnum.ZIYAN,
         region,
         zone,
-        device_family: device_group,
+        device_family: getDeviceGroup(),
         cpu,
         mem,
         disk,
@@ -152,7 +153,7 @@ export default defineComponent({
             page: page.value,
           },
           pageEnableCountKey: 'count',
-          clearRules: true,
+          clearRules: false,
         };
       },
     });

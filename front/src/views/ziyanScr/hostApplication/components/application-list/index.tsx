@@ -692,6 +692,8 @@ export default defineComponent({
       if (payload.bk_biz_id?.[0] === 0) {
         payload.bk_biz_id = businessGlobalStore.businessAuthorizedList.map((item: any) => item.id);
       }
+      // 与列表查询保持一致，避免导出分页请求缺少排序字段导致后端校验失败。
+      payload.page = { sort: 'created_at', order: 'DESC' };
       const list = await rollRequest({
         httpClient: http,
         pageEnableCountKey: 'count',
@@ -699,7 +701,7 @@ export default defineComponent({
         '/api/v1/woa/task/findmany/apply',
         payload,
         {
-          limit: 5000,
+          limit: 500,
           total: pagination.count,
           listGetter: (res: { data: { info: any[] } }) => res.data.info,
           countGetter: (res: { data: { count: number } }) => res.data.count,
@@ -875,7 +877,7 @@ export default defineComponent({
           />
         </CommonDialog>
 
-        <Sideslider v-model:isShow={isMatchPanelShow.value} title='待匹配' width={1600} renderDirective='if'>
+        <Sideslider v-model:isShow={isMatchPanelShow.value} title='待匹配' width={1180} renderDirective='if'>
           <MatchPanel data={curRow.value} handleClose={() => (isMatchPanelShow.value = false)} />
         </Sideslider>
       </div>
