@@ -81,15 +81,23 @@ const getHistoryStepTag = (log: IPlanTicketAuditLog, auditType: 'itsm' | 'crp') 
 };
 // 历史节点的content展示：itsm只展示操作时间；crp展示操作人、信息、操作时间
 const getHistoryStepContent = (
-  { operate_at, operator, message = '' }: IPlanTicketAuditLog,
+  { operate_at, operator, message = '', operate_info }: IPlanTicketAuditLog & { operate_info?: string },
   auditType: 'itsm' | 'crp',
 ) => {
-  return auditType === 'itsm'
-    ? h(TimelineContent, { class: 'time-value' }, operate_at)
-    : h(TimelineContent, null, [
-        h('p', { class: 'message' }, [h(WName, { name: operator, class: 'mr4' }), `${message}`]),
-        h('p', { class: 'time-value' }, timeFormatter(operate_at)),
-      ]);
+  if (auditType === 'itsm') {
+    return h(TimelineContent, { class: 'time-value' }, operate_at);
+  }
+
+  const contentChildren = [h('p', { class: 'message' }, [h(WName, { name: operator, class: 'mr4' }), `${message}`])];
+
+  // 展示审批意见（如果有）
+  if (operate_info) {
+    contentChildren.push(h('p', { class: 'operate-info' }, `审批意见：${operate_info}`));
+  }
+
+  contentChildren.push(h('p', { class: 'time-value' }, timeFormatter(operate_at)));
+
+  return h(TimelineContent, null, contentChildren);
 };
 
 const getHistoryStepItems = (
@@ -142,6 +150,7 @@ const getCurrentStepItems = (
           ? h(
               comp,
               {
+                key: `approval-btn-${name}`,
                 class: 'ml24',
                 loading: approvalLoading.value,
                 confirmHandler: auditType === 'admin' ? approvalAdminAudit : approvalItsmAudit,
@@ -272,9 +281,10 @@ const approvalItsmAudit = async ({ approval, remark }: { approval: boolean; rema
     props.fetchData();
   }, 5000);
 };
-const approvalAdminAudit = async (params: { approval: boolean; use_transfer_pool: boolean }) => {
+const approvalAdminAudit = async (params: { approval: boolean; use_transfer_pool: boolean; operate_info?: string }) => {
   const store = useResSubTicketStore();
   const { id } = props.detail;
+
   await store.approveAdminNode(id, params, bizId.value);
 
   Message({ theme: 'success', message: t('请求已提交，5s后自动刷新') });
@@ -471,5 +481,10 @@ onUnmounted(() => {
   img {
     margin-right: 9px;
   }
+}
+
+:deep(.operate-info) {
+  color: #63656e;
+  margin-top: 4px;
 }
 </style>
