@@ -147,6 +147,7 @@ onBeforeMount(() => {
           <SubTicketList
             ref="subTicketList"
             :ticket-status="ticketDetail?.status_info?.status"
+            :demands="ticketDetail?.demands"
             @retry-ticket="getResultData"
           />
         </bk-tab-panel>
