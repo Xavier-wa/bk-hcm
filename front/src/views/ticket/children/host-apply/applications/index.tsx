@@ -529,7 +529,7 @@ export default defineComponent({
     const searchValues = ref<Record<string, any>>({});
 
     const getSearchCompProps = (field: ModelProperty) => {
-      if (field.id === 'create_at') {
+      if (field.id === 'created_at') {
         return {
           type: 'daterange',
           format: 'yyyy-MM-dd',
@@ -570,7 +570,7 @@ export default defineComponent({
       () => route.query,
       async (query) => {
         condition.value = searchQs.get(query, {
-          create_at: getDateRange('last30d', true),
+          created_at: getDateRange('last30d', true),
           bk_username: [userStore.username],
         });
 

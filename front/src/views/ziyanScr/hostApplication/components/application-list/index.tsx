@@ -584,7 +584,7 @@ export default defineComponent({
       () => route.query,
       async (query) => {
         const defaultCondition = {
-          create_at: getDateRange('last30d', true),
+          created_at: getDateRange('last30d', true),
           bk_biz_id: businessGlobalStore.getCacheSelected(serviceShareBizSelectedKey) ?? [0],
         };
         condition.value = searchQs.get(query, defaultCondition);
