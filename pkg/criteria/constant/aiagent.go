@@ -36,6 +36,26 @@ const (
 	// MCPTypeBKAIDev is the MCP toolset type that enables automatic
 	// X-Bkapi-Authorization header injection for BK AI Dev gateways.
 	MCPTypeBKAIDev = "bkaidev"
+
+	// DefaultProviderName is the well-known provider name that the "aidev" config
+	// section is mapped to. Models without an explicit provider use this one.
+	DefaultProviderName = "aidev"
+)
+
+// Default upper bounds for the agent invocation loop.
+const (
+	// DefaultMaxLLMCalls caps LLM requests per invocation to prevent runaway loops.
+	DefaultMaxLLMCalls = 50
+	// DefaultMaxToolIterations caps tool-call iterations per invocation.
+	DefaultMaxToolIterations = 25
+	// DefaultMaxHistoryRuns limits preserved full-message history runs when session
+	// summary is enabled; older runs are represented by the summary only.
+	DefaultMaxHistoryRuns = 10
+
+	// DefaultPreloadMemoryLimit loads the most recent N memories into the system prompt.
+	DefaultPreloadMemoryLimit = 20
+	// DefaultLLMRequestBodyLogLimit is the limit of the LLM request body log.
+	DefaultLLMRequestBodyLogLimit = 16 * 1024
 )
 
 // session constant

@@ -995,6 +995,10 @@ func genGreenChannelResource(*meta.ResourceAttribute) (client.ActionID, []client
 	return sys.GreenChannel, make([]client.Resource, 0), nil
 }
 
+func genAgentAssistantResource(*meta.ResourceAttribute) (client.ActionID, []client.Resource, error) {
+	return sys.AgentAssistant, make([]client.Resource, 0), nil
+}
+
 func genGlobalConfigResource(a *meta.ResourceAttribute) (client.ActionID, []client.Resource, error) {
 	switch a.Basic.Action {
 	case meta.Create:

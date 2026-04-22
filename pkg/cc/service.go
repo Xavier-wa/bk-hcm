@@ -24,6 +24,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"hcm/pkg/criteria/enumor"
 )
 
 var (
@@ -992,6 +994,87 @@ type AgentPromptConfig struct {
 	InstructionFile string `yaml:"instructionFile"`
 }
 
+// AgentModelProvider defines a named LLM provider endpoint.
+// Each provider represents an independent OpenAI-compatible API gateway
+// with its own base URL and authentication credentials.
+// Models reference a provider by name via AgentModelConfig.Provider.
+type AgentModelProvider struct {
+	ApiGateway `yaml:",inline"`
+
+	// Name uniquely identifies this provider (e.g. "aidev", "deepseek").
+	Name string `yaml:"name"`
+	// Type is the type of the provider.
+	Type enumor.AgentModelProviderType `yaml:"type"`
+	// BaseURL is the base URL of the OpenAI-compatible endpoint.
+	BaseURL string `yaml:"baseURL"`
+	// APIKey is the optional Bearer token for providers that use API-key auth.
+	APIKey string `yaml:"apiKey"`
+}
+
+// Validate validates the agent model provider.
+func (a *AgentModelProvider) Validate() error {
+	if err := a.Type.Validate(); err != nil {
+		return err
+	}
+
+	switch a.Type {
+	case enumor.AgentModelProviderTypeBKAPIGW:
+		return a.ApiGateway.validate()
+	case enumor.AgentModelProviderTypeOpenAI:
+		if a.BaseURL == "" {
+			return fmt.Errorf("baseURL should not be empty")
+		}
+		if a.APIKey == "" {
+			return fmt.Errorf("apiKey should not be empty")
+		}
+	}
+
+	return nil
+}
+
+// IsBKAPIProvider checks if the model provider is a BK API gateway provider.
+func (a *AgentModelProvider) IsBKAPIProvider() bool {
+	return a.Type == enumor.AgentModelProviderTypeBKAPIGW
+}
+
+// ConvertToBKAPIProvider converts the model provider to a BK API gateway provider.
+func (a *AgentModelProvider) ConvertToBKAPIProvider() *AgentModelProvider {
+	return &AgentModelProvider{
+		ApiGateway: a.ApiGateway,
+		Name:       a.Name,
+		Type:       enumor.AgentModelProviderTypeBKAPIGW,
+		BaseURL:    a.BaseURL,
+		APIKey:     a.APIKey,
+	}
+}
+
+// IsOpenAIProvider checks if the model provider is an OpenAI provider.
+func (a *AgentModelProvider) IsOpenAIProvider() bool {
+	return a.Type == enumor.AgentModelProviderTypeOpenAI
+}
+
+// ConvertToOpenAIProvider converts the model provider to an OpenAI provider.
+func (a *AgentModelProvider) ConvertToOpenAIProvider() *AgentModelProvider {
+	return &AgentModelProvider{
+		Name:    a.Name,
+		Type:    enumor.AgentModelProviderTypeOpenAI,
+		BaseURL: a.BaseURL,
+		APIKey:  a.APIKey,
+	}
+}
+
+// AgentModelConfig describes one allowed AI model with its context window size.
+type AgentModelConfig struct {
+	// Name is the model identifier (e.g. "deepseek-v3").
+	Name string `yaml:"name"`
+	// Provider references an AgentModelProvider.Name to select which LLM endpoint to use.
+	// Empty means use the default provider ("aidev" section).
+	Provider string `yaml:"provider"`
+	// ContextWindow is the model's context window size in tokens.
+	// 0 means use the framework's built-in lookup table or the default (8192).
+	ContextWindow int `yaml:"contextWindow"`
+}
+
 // AgentAGUI configures the AG-UI protocol endpoint and its optional history feature.
 type AgentAGUI struct {
 	// Enable enables the AG-UI protocol endpoint.
@@ -1001,10 +1084,9 @@ type AgentAGUI struct {
 	// Recommended to set in all deployments.
 	// Example: "hcm-agent"
 	AppName string `yaml:"appName"`
-	// AllowedModels is the list of AI model identifiers that the platform permits.
+	// AllowedModels is the list of permitted AI models.
 	// When empty, the platform default list (pkg/criteria/enumor.DefaultAllowedAIModels) is used.
-	// Example: ["gpt-4o", "deepseek-v3", "hunyuan-turbo"]
-	AllowedModels []string `yaml:"allowedModels"`
+	AllowedModels []AgentModelConfig `yaml:"allowedModels"`
 	// DefaultModel is the default LLM model identifier used by the agent.
 	// When empty, the first model in AllowedModels is used as default.
 	DefaultModel string `yaml:"defaultModel"`
@@ -1021,15 +1103,48 @@ func (a *AgentAGUI) trySetDefault() {
 	// TODO
 }
 
+// AllowedModelNames returns the plain model name list (for backward-compatible call sites).
+func (a AgentAGUI) AllowedModelNames() []string {
+	names := make([]string, len(a.AllowedModels))
+	for i, m := range a.AllowedModels {
+		names[i] = m.Name
+	}
+	return names
+}
+
+// ModelProviderMapping returns a map of model name → provider name for entries
+// that have an explicit provider configured.
+func (a AgentAGUI) ModelProviderMapping() map[string]string {
+	m := make(map[string]string)
+	for _, cfg := range a.AllowedModels {
+		if cfg.Provider != "" {
+			m[cfg.Name] = cfg.Provider
+		}
+	}
+	return m
+}
+
+// ModelContextWindows returns a map of model name → context window for entries
+// that have an explicit contextWindow > 0 configured.
+func (a AgentAGUI) ModelContextWindows() map[string]int {
+	m := make(map[string]int)
+	for _, cfg := range a.AllowedModels {
+		if cfg.ContextWindow > 0 {
+			m[cfg.Name] = cfg.ContextWindow
+		}
+	}
+	return m
+}
+
 // AgentServerSetting defines agent server used setting options.
 type AgentServerSetting struct {
-	Network Network          `yaml:"network"`
-	Service Service          `yaml:"service"`
-	Log     LogOption        `yaml:"log"`
-	AIDev   AIDevConfig      `yaml:"aidev"`
-	Storage AgentStorage     `yaml:"storage"`
-	Tools   AgentToolsConfig `yaml:"tools"`
-	AGUI    AgentAGUI        `yaml:"agui"`
+	Network   Network              `yaml:"network"`
+	Service   Service              `yaml:"service"`
+	Log       LogOption            `yaml:"log"`
+	Providers []AgentModelProvider `yaml:"providers"`
+	Storage   AgentStorage         `yaml:"storage"`
+	Tools     AgentToolsConfig     `yaml:"tools"`
+	AGUI      AgentAGUI            `yaml:"agui"`
 }
 
 // trySetFlagBindIP try set flag bind ip.
@@ -1059,22 +1174,23 @@ func (s AgentServerSetting) Validate() error {
 }
 
 // TenantEnable returns false as agent-server does not support multi-tenancy.
-func (s *AgentServerSetting) TenantEnable() bool {
+func (s AgentServerSetting) TenantEnable() bool {
 	return false
 }
 
-// AIDevConfig holds the configuration for the AIDev API gateway.
-type AIDevConfig struct {
-	ApiGateway `yaml:",inline"`
-	// APIKey is the optional API key (Bearer token) for the gateway.
-	// Leave empty if the gateway does not require one.
-	APIKey string `yaml:"apiKey"`
-}
+// GetProviders returns a map of provider name → provider config.
+func (s AgentServerSetting) GetProviders() map[string]*AgentModelProvider {
+	m := make(map[string]*AgentModelProvider, 1+len(s.Providers))
 
-// Validate AIDevConfig option.
-func (s *AIDevConfig) Validate() error {
-	if err := s.ApiGateway.validate(); err != nil {
-		return err
+	// Explicit providers.
+	for _, p := range s.Providers {
+		switch p.Type {
+		case enumor.AgentModelProviderTypeOpenAI:
+			m[p.Name] = p.ConvertToOpenAIProvider()
+		default:
+			// default to BK API gateway provider
+			m[p.Name] = p.ConvertToBKAPIProvider()
+		}
 	}
-	return nil
+	return m
 }

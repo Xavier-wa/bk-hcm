@@ -756,6 +756,16 @@ func genZiYanPlatformManageActions() []client.ResourceAction {
 			Version:              1,
 			Hidden:               true,
 		},
+		{
+			ID:                   AgentAssistant,
+			Name:                 ActionIDNameMap[AgentAssistant],
+			NameEn:               "Agent Assistant",
+			Type:                 View,
+			RelatedResourceTypes: nil,
+			RelatedActions:       nil,
+			Version:              1,
+			Hidden:               true,
+		},
 	}
 }
 

@@ -21,7 +21,9 @@
 package capability
 
 import (
+	"hcm/cmd/agent-server/logics"
 	"hcm/pkg/client"
+	"hcm/pkg/iam/auth"
 
 	"github.com/emicklei/go-restful/v3"
 )
@@ -30,4 +32,6 @@ import (
 type Capability struct {
 	WebService *restful.WebService
 	ClientSet  *client.ClientSet
+	Authorizer auth.Authorizer
+	RunTime    *logics.Runtime
 }

@@ -70,3 +70,24 @@ var DefaultAllowedAIModels = []AIModel{
 	AIModelQwen3,
 	AIModelQwen3NoThinking,
 }
+
+// AgentModelProviderType is the type of the agent model provider.
+type AgentModelProviderType string
+
+const (
+	// AgentModelProviderTypeBKAPIGW is the type of the BK API gateway provider.
+	AgentModelProviderTypeBKAPIGW AgentModelProviderType = "bkapigw"
+	// AgentModelProviderTypeOpenAI is the type of the OpenAI provider.
+	AgentModelProviderTypeOpenAI AgentModelProviderType = "openai"
+)
+
+// Validate validates the agent model provider type.
+func (t AgentModelProviderType) Validate() error {
+	switch t {
+	case AgentModelProviderTypeBKAPIGW:
+	case AgentModelProviderTypeOpenAI:
+	default:
+		return fmt.Errorf("unsupported agent model provider type: %s", t)
+	}
+	return nil
+}

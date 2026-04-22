@@ -46,7 +46,7 @@ storage:
     dsn: "user:password@tcp(host:3306)/dbname?charset=utf8mb4&parseTime=true"
     tablePrefix: "aiagent_"   # 可选，所有 session 表名的前缀
     # skipDBInit: false      # false=启动时自动建表；true=表由外部管理，跳过建表
-    summary: 
+    summary:
       enabled: true         # true=开启 LLM 自动摘要（需配置 aidev 中的 LLM 模型）
       policy: "any"          # 触发策略：any=满足任一阈值即触发；all=所有阈值均满足才触发
       # eventThreshold: 20     # 未摘要的事件数超过该值时触发（0=不使用此条件）
@@ -55,12 +55,12 @@ storage:
       maxWords: 200          # 生成摘要的最大字数上限（0=不限制）
   memory:
     dsn: "user:password@tcp(host:3306)/dbname?charset=utf8mb4&parseTime=true"
-    tableName: "aiagent__memories"  # 可选，默认为 "memories"
-    # skipDBInit: false           # false=启动时自动建表；true=表由外部管理，跳过建表
+    tableName: "aiagent_memories"  # 可选，默认为 "memories"
+    skipDBInit: false           # false=启动时自动建表；true=表由外部管理，跳过建表
     limit: 100                  # 每个用户最多保留的记忆条数，0 表示使用默认值 100
     autoExtract: true          # true=开启 LLM 自动记忆提取（每轮对话结束后异步触发）
     autoExtractPolicy: "any"    # 多阈值组合策略：any=满足其一即触发（默认）；all=全部满足才触发
-    autoExtractMessages: 0      # 触发阈值：新消息数 > 该值才提取，0=不设消息数门槛
+    autoExtractMessages: 100      # 触发阈值：新消息数 > 该值才提取，0=不设消息数门槛
     # autoExtractInterval: "30m"     # 触发阈值：距上次提取超过该时长才提取，空=不设时间间隔
 
 # aidev 配置兼容 OpenAI API 协议的蓝鲸 AI 网关。
@@ -89,6 +89,47 @@ aidev:
     # the password to decrypt the certificate.
     password:
 
+# LLM 提供方配置。
+# 目前支持两种类型：
+# - bkapigw：蓝鲸 API 网关
+# - openai：OpenAI 兼容的 LLM endpoint
+# 此处可配置其他 OpenAI 兼容的 LLM endpoint（如 DeepSeek、OpenAI 等），
+# 模型通过 allowedModels[].provider 字段关联到对应的 provider。
+providers:
+  - name: aidev
+    type: bkapigw
+    endpoints:
+      - https://path/to/apigw/test
+    # AppCode is the BlueKing app code of irisbot to request aidev.
+    appCode: aidev-iris
+    # AppSecret is the BlueKing app secret of irisbot to request aidev.
+    appSecret: xxxxx
+    # User is the BlueKing user of irisbot to request aidev.
+    user:
+    # BkTicket is the BlueKing access ticket of irisbot to request aidev.
+    bkTicket:
+    # defines tls related options.
+    tls:
+      # server should be accessed without verifying the TLS certificate.
+      insecureSkipVerify:
+      # server requires TLS client certificate authentication.
+      certFile:
+      # server requires TLS client certificate authentication.
+      keyFile:
+      # trusted root certificates for server.
+      caFile:
+      # the password to decrypt the certificate.
+      password:
+  #  - name: deepseek
+  #    type: openai
+  #    baseURL: "https://api.deepseek.com"
+  #    apiKey: "sk-your-deepseek-api-key"
+  #  - name: openai
+  #    type: openai
+  #    baseURL: "https://api.openai.com/v1"
+  #    apiKey: "sk-your-openai-api-key"
+
+
 # AG-UI 协议配置。
 # appName：会话数据在存储后端的命名空间，建议设置。
 # allowedModels：允许使用的 AI 模型列表，留空则使用平台默认列表
@@ -116,16 +157,30 @@ agui:
     # instructionFile：Instruction，追加在请求末尾。适合写任务说明和动态占位符。
     instructionFile: "cmd/agent-server/etc/prompts/instruction.md"
 
+  # allowedModels 配置允许使用的模型及其上下文窗口大小（tokens）。
+  # contextWindow 用于框架的 Token Tailoring（自动裁剪超长对话），
+  # 设为 0 则使用框架内置查表值（私有模型未收录时默认 8192）。
+  # allowedModels 配置允许使用的模型及其上下文窗口大小（tokens）。
+  # provider 指定模型使用哪个 LLM 提供方（对应 providers[].name）。
   allowedModels: []
-  #   - deepseek-v3
-  #   - dsv32-thinking
-  #   - dsv32
-  #   - deepseek-r1
-  #   - hunyuan2-thinking
-  #   - hunyuan-turbo
-  #   - gptoss-120b
-  #   - qwen3
-  #   - qwen3-nothinking
+  #   - name: deepseek-v3
+  #     contextWindow: 131072
+  #   - name: dsv32-thinking
+  #     contextWindow: 131072
+  #   - name: dsv32
+  #     contextWindow: 131072
+  #   - name: deepseek-r1
+  #     contextWindow: 131072
+  #   - name: hunyuan2-thinking
+  #     contextWindow: 196608
+  #   - name: hunyuan-turbo
+  #     contextWindow: 32768
+  #   - name: gptoss-120b
+  #     contextWindow: 128000
+  #   - name: qwen3
+  #     contextWindow: 128000
+  #   - name: qwen3-nothinking
+  #     contextWindow: 128000
 
 # AGUI Agent 工具配置。
 # 在此配置的 MCP toolset 和 skill 将直接注入到 AGUI agent 的工具链中。

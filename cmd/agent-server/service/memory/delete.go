@@ -21,6 +21,7 @@ package memory
 
 import (
 	"hcm/pkg/criteria/errf"
+	"hcm/pkg/iam/meta"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 
@@ -33,6 +34,12 @@ import (
 func (svc *service) DeleteMemory(cts *rest.Contexts) (interface{}, error) {
 	if svc.memorySvc == nil {
 		return nil, errf.New(errf.PermissionDenied, "memory backend is not configured")
+	}
+
+	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit,
+		meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Delete}}); err != nil {
+		logs.Errorf("agent auth: permission denied, user: %s, err: %v, rid: %s", cts.Kit.User, err, cts.Kit.Rid)
+		return nil, errf.New(errf.PermissionDenied, "permission denied")
 	}
 
 	memID := cts.PathParameter("memory_id").String()
@@ -54,6 +61,12 @@ func (svc *service) DeleteMemory(cts *rest.Contexts) (interface{}, error) {
 func (svc *service) ClearMemories(cts *rest.Contexts) (interface{}, error) {
 	if svc.memorySvc == nil {
 		return nil, errf.New(errf.PermissionDenied, "memory backend is not configured")
+	}
+
+	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit,
+		meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Delete}}); err != nil {
+		logs.Errorf("agent auth: permission denied, user: %s, err: %v, rid: %s", cts.Kit.User, err, cts.Kit.Rid)
+		return nil, errf.New(errf.PermissionDenied, "permission denied")
 	}
 
 	userKey := memory.UserKey{AppName: svc.appName, UserID: cts.Kit.User}

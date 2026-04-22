@@ -26,22 +26,25 @@ import (
 	"hcm/cmd/agent-server/service/capability"
 	"hcm/pkg/api/core"
 	dsaiagent "hcm/pkg/api/data-service/aiagent"
+	"hcm/pkg/cc"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/dal/table/aiagent"
+	"hcm/pkg/iam/auth"
 	"hcm/pkg/rest"
 
 	"trpc.group/trpc-go/trpc-agent-go/session"
 )
 
 // InitService initialize the session service.
-func InitService(cap *capability.Capability, sessionSvc session.Service, resolver *Resolver, appName string) {
+func InitService(cap *capability.Capability, resolver *Resolver) {
 	svc := &service{
 		cli:        cap.ClientSet,
+		authorizer: cap.Authorizer,
 		resolver:   resolver,
-		sessionSvc: sessionSvc,
-		appName:    appName,
+		sessionSvc: cap.RunTime.SessionSvc(),
+		appName:    cc.AgentServer().AGUI.AppName,
 	}
 
 	h := rest.NewHandler()
@@ -57,7 +60,8 @@ func InitService(cap *capability.Capability, sessionSvc session.Service, resolve
 }
 
 type service struct {
-	cli *client.ClientSet
+	cli        *client.ClientSet
+	authorizer auth.Authorizer
 
 	resolver   *Resolver
 	sessionSvc session.Service

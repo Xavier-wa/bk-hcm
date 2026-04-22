@@ -319,6 +319,13 @@ func genPlatformManageActionGroups() client.ActionGroup {
 					{ID: GreenChannel},
 				},
 			},
+			{
+				Name:   "智能体助手",
+				NameEn: "Agent Assistant",
+				Actions: []client.ActionWithID{
+					{ID: AgentAssistant},
+				},
+			},
 		},
 	}
 }

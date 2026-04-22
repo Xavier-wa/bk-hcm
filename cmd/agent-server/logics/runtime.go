@@ -41,7 +41,6 @@ import (
 	openaiopt "github.com/openai/openai-go/option"
 	"trpc.group/trpc-go/trpc-agent-go/agent"
 	"trpc.group/trpc-go/trpc-agent-go/agent/llmagent"
-	localexec "trpc.group/trpc-go/trpc-agent-go/codeexecutor/local"
 	"trpc.group/trpc-go/trpc-agent-go/memory"
 	"trpc.group/trpc-go/trpc-agent-go/memory/extractor"
 	memmysql "trpc.group/trpc-go/trpc-agent-go/memory/mysql"
@@ -54,7 +53,6 @@ import (
 	skillpkg "trpc.group/trpc-go/trpc-agent-go/skill"
 	"trpc.group/trpc-go/trpc-agent-go/tool"
 	"trpc.group/trpc-go/trpc-agent-go/tool/mcp"
-	skilltool "trpc.group/trpc-go/trpc-agent-go/tool/skill"
 	trpcmcp "trpc.group/trpc-go/trpc-mcp-go"
 )
 
@@ -79,30 +77,44 @@ func (rt *Runtime) MemorySvc() memory.Service {
 	return rt.aguiMemorySvc
 }
 
-// New initialises the Agent Runtime from the given options.
-// It constructs the []string args expected by app.NewRuntime from the structured
-// Option fields so that callers never need to deal with raw CLI args.
+// New initialises the Agent Runtime from the global configuration (cc.AgentServer).
+// It wires up model providers, storage services, MCP toolsets, skills and the AGUI runner.
 func New() (*Runtime, error) {
-	gatewayCfg := cc.AgentServer().AIDev
 	aguiCfg := cc.AgentServer().AGUI
+	providers := cc.AgentServer().GetProviders()
 	// Compute the effective allowed model list: config overrides platform defaults.
 	// Also update aguiCfg so the service layer (models endpoint, resolver) sees the
 	// resolved list without having to repeat the defaulting logic.
-	if len(aguiCfg.AllowedModels) == 0 {
+	allowedModels := aguiCfg.AllowedModelNames()
+	if len(allowedModels) == 0 {
 		defaults := enumor.DefaultAllowedAIModels
-		aguiCfg.AllowedModels = make([]string, len(defaults))
+		allowedModels = make([]string, len(defaults))
 		for i, m := range defaults {
-			aguiCfg.AllowedModels[i] = string(m)
+			allowedModels[i] = string(m)
 		}
 	}
 
-	// Build one model instance per allowed model name (all share gateway auth config).
-	// The per-request resolver selects among them via agent.WithModelName.
-	modelsMap := buildAllModels(aguiCfg.AllowedModels, &gatewayCfg)
+	// Register operator-supplied context windows for private models so that
+	// the framework's token tailoring can resolve them correctly.
+	if cw := aguiCfg.ModelContextWindows(); len(cw) > 0 {
+		model.RegisterModelContextWindows(cw)
+		logs.Infof("registered custom model context windows: %v", cw)
+	}
+
+	// Build one model instance per allowed model name.
+	// Each model is associated with its provider's gateway config; models without
+	// an explicit provider use the default "aidev" provider.
+	modelsMap, err := buildAllModels(allowedModels, aguiCfg.ModelProviderMapping(), providers)
+	if err != nil {
+		return nil, fmt.Errorf("build all models: %w", err)
+	}
 
 	// Pick the default model: --model-name flag takes precedence, then first allowed.
-	defaultMdl := resolveDefaultModel(strings.TrimSpace(aguiCfg.DefaultModel), aguiCfg.AllowedModels,
-		modelsMap, &gatewayCfg)
+	defaultMdl, err := resolveDefaultModel(strings.TrimSpace(aguiCfg.DefaultModel), allowedModels,
+		modelsMap, aguiCfg.ModelProviderMapping(), providers)
+	if err != nil {
+		return nil, fmt.Errorf("resolve default model: %w", err)
+	}
 
 	// Share the default model with the session summarizer (both need the same LLM endpoint).
 	sessionSvc, memorySvc, err := buildStorageServices(defaultMdl)
@@ -116,11 +128,11 @@ func New() (*Runtime, error) {
 		return nil, fmt.Errorf("build MCP toolsets: %w", err)
 	}
 
-	// Build skill tools from configuration.
-	skillTools, err := buildSkillTools()
+	// Build skill repository from configuration.
+	skillRepo, err := buildSkillRepo()
 	if err != nil {
 		closeMCPToolSets(mcpToolSets)
-		return nil, fmt.Errorf("build skill tools: %w", err)
+		return nil, fmt.Errorf("build skill repo: %w", err)
 	}
 
 	systemPrompt := loadPromptFile(aguiCfg.Prompt.SystemPromptFile)
@@ -132,7 +144,7 @@ func New() (*Runtime, error) {
 	// is available so MCP session initialization can authenticate successfully.
 	refreshOnRun := hasBKAIDevToolSet()
 	agt := newAgentWithModel(defaultMdl, modelsMap, aguiCfg.Stream, systemPrompt, instruction,
-		skillTools, mcpToolSets, refreshOnRun)
+		skillRepo, mcpToolSets, refreshOnRun)
 	runnerOpts := buildRunnerOpts(sessionSvc, memorySvc)
 	agUIRunner := runner.NewRunner(agt.Info().Name, agt, runnerOpts...)
 
@@ -250,7 +262,8 @@ func buildMemoryExtractor(cfg cc.AgentMemoryStorage, mdl model.Model) extractor.
 }
 
 // buildSummarizer constructs a SessionSummarizer from the given config.
-// Returns nil when summary is disabled, no thresholds are configured, or mdl is nil.
+// Returns nil when summary is disabled or mdl is nil.
+// When no thresholds are configured, a default event threshold of 20 is used.
 func buildSummarizer(cfg cc.AgentSessionSummary, mdl model.Model) summary.SessionSummarizer {
 	if !cfg.Enabled || mdl == nil {
 		return nil
@@ -305,42 +318,69 @@ func buildRunnerOpts(sessionSvc session.Service, memorySvc memory.Service) []run
 	return opts
 }
 
-// buildModel creates a single OpenAI-compatible model instance.
-// Used directly by the session summarizer which always uses the default model.
-func buildModel(modelName string, gatewayCfg *cc.AIDevConfig) model.Model {
-	return openai.New(modelName, buildOpenAIOptions(gatewayCfg)...)
+// resolveProviderConfig looks up the gateway config for a named provider.
+// Returns an error if the provider name is empty or not found in the map.
+func resolveProviderConfig(providerName string, providers map[string]*cc.AgentModelProvider) (
+	*cc.AgentModelProvider, error) {
+
+	if providerName == "" {
+		return nil, fmt.Errorf("provider name is empty")
+	}
+
+	if cfg, ok := providers[providerName]; ok {
+		return cfg, nil
+	}
+	return nil, fmt.Errorf("provider %q not found", providerName)
 }
 
-// buildAllModels creates one model instance per name in allowedNames, sharing
-// the same gateway auth config. All per-request model switches draw from this map.
-func buildAllModels(allowedNames []string, gatewayCfg *cc.AIDevConfig) map[string]model.Model {
+// buildModelWithConfig creates a single OpenAI-compatible model instance
+// using the given gateway config.
+func buildModelWithConfig(modelName string, gatewayCfg *cc.AgentModelProvider) model.Model {
 	opts := buildOpenAIOptions(gatewayCfg)
+	opts = append(opts, openai.WithEnableTokenTailoring(true))
+	return openai.New(modelName, opts...)
+}
+
+// buildAllModels creates one model instance per name in allowedNames.
+// Each model is wired to its provider's gateway config via modelProviders mapping.
+// An error is returned when a model's mapped provider is missing or empty.
+func buildAllModels(allowedNames []string, modelProviders map[string]string,
+	providers map[string]*cc.AgentModelProvider) (map[string]model.Model, error) {
+
 	m := make(map[string]model.Model, len(allowedNames))
 	for _, name := range allowedNames {
-		m[name] = openai.New(name, opts...)
+		gatewayCfg, err := resolveProviderConfig(modelProviders[name], providers)
+		if err != nil {
+			return nil, err
+		}
+		m[name] = buildModelWithConfig(name, gatewayCfg)
 	}
-	return m
+	return m, nil
 }
 
 // resolveDefaultModel picks the model to use when no per-request model is specified.
-// Priority: --model-name flag (if in modelsMap) → first allowed model → new instance from flag.
+// Priority: --model-name flag (if in modelsMap) → new instance from flag → first allowed model.
 func resolveDefaultModel(flagModelName string, allowedNames []string, modelsMap map[string]model.Model,
-	gatewayCfg *cc.AIDevConfig) model.Model {
+	modelProviders map[string]string, providers map[string]*cc.AgentModelProvider) (model.Model, error) {
 
 	if flagModelName != "" {
 		if m, ok := modelsMap[flagModelName]; ok {
-			return m
+			return m, nil
 		}
 		// Flag names an unlisted model — build it anyway so legacy configs still work.
-		mdl := buildModel(flagModelName, gatewayCfg)
+		gatewayCfg, err := resolveProviderConfig(modelProviders[flagModelName], providers)
+		if err != nil {
+			return nil, err
+		}
+		mdl := buildModelWithConfig(flagModelName, gatewayCfg)
 		modelsMap[flagModelName] = mdl
 		logs.Warnf("model %q is not in allowedModels list but set via --model-name; added to map", flagModelName)
-		return mdl
+		return mdl, nil
 	}
 	if len(allowedNames) > 0 {
-		return modelsMap[allowedNames[0]]
+		return modelsMap[allowedNames[0]], nil
 	}
-	return nil
+	return nil, fmt.Errorf("no default model found")
 }
 
 // newAgentWithModel assembles the AGUI llm agent.
@@ -348,11 +388,12 @@ func resolveDefaultModel(flagModelName string, allowedNames []string, modelsMap 
 // modelsMap registers all models that can be selected per-request via agent.WithModelName.
 // systemPrompt is the GlobalInstruction content (prepended to every LLM request).
 // instruction is the per-request task instruction content (appended to every LLM request).
-// tools contains individual tool.Tool instances (e.g. skill tools).
+// skillRepo is the optional skill repository for progressive skill loading (may be nil).
 // toolSets contains ToolSet instances (e.g. MCP server toolsets).
 // refreshOnRun controls whether toolset tool lists are resolved lazily per-run.
 func newAgentWithModel(defaultMdl model.Model, modelsMap map[string]model.Model, isStream bool,
-	systemPrompt, instruction string, tools []tool.Tool, toolSets []tool.ToolSet, refreshOnRun bool) agent.Agent {
+	systemPrompt, instruction string, skillRepo skillpkg.Repository, toolSets []tool.ToolSet,
+	refreshOnRun bool) agent.Agent {
 
 	generationConfig := model.GenerationConfig{
 		MaxTokens:   cvt.ValToPtr(4096),
@@ -362,6 +403,13 @@ func newAgentWithModel(defaultMdl model.Model, modelsMap map[string]model.Model,
 
 	opts := []llmagent.Option{
 		llmagent.WithGenerationConfig(generationConfig),
+		llmagent.WithMaxLLMCalls(constant.DefaultMaxLLMCalls),
+		llmagent.WithMaxToolIterations(constant.DefaultMaxToolIterations),
+		llmagent.WithAddCurrentTime(true),
+		llmagent.WithTimezone("Asia/Shanghai"),
+		llmagent.WithAddSessionSummary(true),
+		llmagent.WithMaxHistoryRuns(constant.DefaultMaxHistoryRuns),
+		llmagent.WithPreloadMemory(constant.DefaultPreloadMemoryLimit),
 	}
 	if systemPrompt != "" {
 		opts = append(opts, llmagent.WithGlobalInstruction(systemPrompt))
@@ -375,8 +423,8 @@ func newAgentWithModel(defaultMdl model.Model, modelsMap map[string]model.Model,
 	if len(modelsMap) > 0 {
 		opts = append(opts, llmagent.WithModels(modelsMap))
 	}
-	if len(tools) > 0 {
-		opts = append(opts, llmagent.WithTools(tools))
+	if skillRepo != nil {
+		opts = append(opts, llmagent.WithSkills(skillRepo))
 	}
 	if len(toolSets) > 0 {
 		opts = append(opts, llmagent.WithToolSets(toolSets))
@@ -385,8 +433,11 @@ func newAgentWithModel(defaultMdl model.Model, modelsMap map[string]model.Model,
 		}
 	}
 
-	logs.Infof("AGUI agent: models=%d tools=%d toolSets=%d refreshToolSetsOnRun=%v systemPrompt=%v instruction=%v",
-		len(modelsMap), len(tools), len(toolSets), refreshOnRun, systemPrompt != "", instruction != "")
+	opts = append(opts, llmagent.WithToolCallbacks(makeToolLogger()))
+	opts = append(opts, llmagent.WithModelCallbacks(makeModelLogger()))
+
+	logs.Infof("AGUI agent: models=%d skills=%v toolSets=%d refreshToolSetsOnRun=%v systemPrompt=%v instruction=%v",
+		len(modelsMap), skillRepo != nil, len(toolSets), refreshOnRun, systemPrompt != "", instruction != "")
 	return llmagent.New(cc.AgentServer().AGUI.AppName, opts...)
 }
 
@@ -400,9 +451,9 @@ func hasBKAIDevToolSet() bool {
 	return false
 }
 
-// buildMCPToolSets constructs MCP ToolSet instances from the given slice of configs.
+// buildMCPToolSets constructs MCP ToolSet instances from the global configuration.
 // Each config maps 1-to-1 to a mcp.ToolSet. Errors from any entry abort the whole build.
-// bkaidevCfg provides BK application credentials for toolsets with Type == "bkaidev".
+// BK application credentials for toolsets with Type == "bkaidev" are read from cc.AgentServer().Tools.BKAIDev.
 func buildMCPToolSets() ([]tool.ToolSet, error) {
 	cfgs := cc.AgentServer().Tools.MCPToolSets
 
@@ -421,8 +472,8 @@ func buildMCPToolSets() ([]tool.ToolSet, error) {
 }
 
 // buildOneMCPToolSet constructs a single MCP ToolSet from the given config.
-// When cfg.Type is "bkaidev" and bkaidevCfg is non-nil, a per-request
-// X-Bkapi-Authorization header is injected using bkaidevCfg credentials and
+// When cfg.Type is "bkaidev" and the global BKAIDev config is non-nil, a per-request
+// X-Bkapi-Authorization header is injected using BKAIDev credentials and
 // the bk_ticket resolved from the request context at call time.
 func buildOneMCPToolSet(cfg cc.AgentMCPToolSet) (tool.ToolSet, error) {
 	conn := mcp.ConnectionConfig{
@@ -493,10 +544,9 @@ func buildOneMCPToolSet(cfg cc.AgentMCPToolSet) (tool.ToolSet, error) {
 	return mcp.NewMCPToolSet(conn, opts...), nil
 }
 
-// buildSkillTools constructs skill tool instances from the given config.
+// buildSkillRepo constructs a filesystem-backed skill repository from the given config.
 // Returns nil when cfg is nil or no root directories are configured.
-// The returned tools include: load, run, list-docs, and select-docs.
-func buildSkillTools() ([]tool.Tool, error) {
+func buildSkillRepo() (skillpkg.Repository, error) {
 	cfg := cc.AgentServer().Tools.Skills
 	if cfg == nil {
 		return nil, nil
@@ -520,16 +570,9 @@ func buildSkillTools() ([]tool.Tool, error) {
 		return nil, fmt.Errorf("create skill repository: %w", err)
 	}
 
-	exec := localexec.New()
-	tools := []tool.Tool{
-		skilltool.NewLoadTool(repo),
-		skilltool.NewRunTool(repo, exec),
-		skilltool.NewListDocsTool(repo),
-		skilltool.NewSelectDocsTool(repo),
-	}
-	logs.Infof("AGUI skill tools registered: root=%q extraDirs=%v skills=%d",
+	logs.Infof("AGUI skill repo loaded: root=%q extraDirs=%v skills=%d",
 		cfg.Root, cfg.ExtraDirs, len(repo.Summaries()))
-	return tools, nil
+	return repo, nil
 }
 
 // closeMCPToolSets closes a slice of ToolSets, logging any errors.
@@ -545,16 +588,14 @@ func closeMCPToolSets(sets []tool.ToolSet) {
 // When AppCode or AppSecret is configured, a per-request middleware is registered
 // that injects the X-Bkapi-Authorization header; bk_username and bk_ticket are
 // read from the request context at call time (see WithBKUsername / WithBKTicket).
-func buildOpenAIOptions(cfg *cc.AIDevConfig) []openai.Option {
+func buildOpenAIOptions(cfg *cc.AgentModelProvider) []openai.Option {
 	var opts []openai.Option
 
-	if len(cfg.Endpoints) > 0 {
-		opts = append(opts, openai.WithBaseURL(cfg.Endpoints[0]))
-	}
-	if cfg.APIKey != "" {
+	opts = append(opts, openai.WithBaseURL(cfg.BaseURL))
+	if cfg.IsOpenAIProvider() {
 		opts = append(opts, openai.WithAPIKey(cfg.APIKey))
 	}
-	if cfg.AppCode != "" || cfg.AppSecret != "" {
+	if cfg.IsBKAPIProvider() {
 		appCode := cfg.AppCode
 		appSecret := cfg.AppSecret
 		defaultUser := cfg.User
@@ -583,16 +624,15 @@ func buildOpenAIOptions(cfg *cc.AIDevConfig) []openai.Option {
 	return opts
 }
 
-const llmRequestBodyLogLimit = 16 * 1024
-
 func llmRequestLogger(r *http.Request, next openaiopt.MiddlewareNext) (*http.Response, error) {
+	logBodyLimit := constant.DefaultLLMRequestBodyLogLimit
 	if r.Body != nil {
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err == nil {
 			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 			body := string(bodyBytes)
-			if len(body) > llmRequestBodyLogLimit {
-				body = body[:llmRequestBodyLogLimit] + fmt.Sprintf("... (truncated, total %d bytes)", len(bodyBytes))
+			if len(body) > logBodyLimit {
+				body = body[:logBodyLimit] + fmt.Sprintf("... (truncated, total %d bytes)", len(bodyBytes))
 			}
 			logs.Infof("LLM request: %s %s body=%s", r.Method, r.URL.String(), body)
 		} else {

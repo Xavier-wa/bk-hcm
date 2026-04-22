@@ -29,6 +29,7 @@ import (
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/tools"
+	"hcm/pkg/iam/meta"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 
@@ -47,6 +48,12 @@ func (svc *service) ListSessions(cts *rest.Contexts) (interface{}, error) {
 
 	if err := req.Validate(); err != nil {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit,
+		meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Find}}); err != nil {
+		logs.Errorf("agent auth: permission denied, user: %s, err: %v, rid: %s", cts.Kit.User, err, cts.Kit.Rid)
+		return nil, errf.New(errf.PermissionDenied, "permission denied")
 	}
 
 	combined := tools.EqualExpression("user", cts.Kit.User)
@@ -84,6 +91,12 @@ func (svc *service) GetContextStats(cts *rest.Contexts) (interface{}, error) {
 	sessionCode := cts.PathParameter("session_code").String()
 	if sessionCode == "" {
 		return nil, errf.New(errf.InvalidParameter, `missing path parameter "session_code"`)
+	}
+
+	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit,
+		meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Find}}); err != nil {
+		logs.Errorf("agent auth: permission denied, user: %s, err: %v, rid: %s", cts.Kit.User, err, cts.Kit.Rid)
+		return nil, errf.New(errf.PermissionDenied, "permission denied")
 	}
 
 	threadID, err := svc.resolver.Resolve(cts.Kit, sessionCode)

@@ -22,6 +22,7 @@ package memory
 import (
 	proto "hcm/pkg/api/agent-server/memory"
 	"hcm/pkg/criteria/errf"
+	"hcm/pkg/iam/meta"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 
@@ -43,6 +44,12 @@ func (svc *service) AddMemory(cts *rest.Contexts) (interface{}, error) {
 
 	if err := req.Validate(); err != nil {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit,
+		meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Create}}); err != nil {
+		logs.Errorf("agent auth: permission denied, user: %s, err: %v, rid: %s", cts.Kit.User, err, cts.Kit.Rid)
+		return nil, errf.New(errf.PermissionDenied, "permission denied")
 	}
 
 	userKey := memory.UserKey{AppName: svc.appName, UserID: cts.Kit.User}

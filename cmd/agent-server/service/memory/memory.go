@@ -24,16 +24,19 @@ import (
 	"net/http"
 
 	"hcm/cmd/agent-server/service/capability"
+	"hcm/pkg/cc"
+	"hcm/pkg/iam/auth"
 	"hcm/pkg/rest"
 
 	"trpc.group/trpc-go/trpc-agent-go/memory"
 )
 
 // InitService initialize the memory service.
-func InitService(cap *capability.Capability, memorySvc memory.Service, appName string) {
+func InitService(cap *capability.Capability) {
 	svc := &service{
-		memorySvc: memorySvc,
-		appName:   appName,
+		authorizer: cap.Authorizer,
+		memorySvc:  cap.RunTime.MemorySvc(),
+		appName:    cc.AgentServer().AGUI.AppName,
 	}
 
 	h := rest.NewHandler()
@@ -46,6 +49,8 @@ func InitService(cap *capability.Capability, memorySvc memory.Service, appName s
 }
 
 type service struct {
+	authorizer auth.Authorizer
+
 	memorySvc memory.Service
 	appName   string
 }

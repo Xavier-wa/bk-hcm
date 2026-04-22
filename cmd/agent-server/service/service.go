@@ -45,6 +45,8 @@ import (
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/handler"
+	"hcm/pkg/iam/auth"
+	"hcm/pkg/iam/meta"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
@@ -63,10 +65,11 @@ import (
 
 // Service do all the agent server's work
 type Service struct {
-	serve     *http.Server
-	clientSet *client.ClientSet
-	resolver  *session.Resolver
-	runTime   *logics.Runtime
+	serve      *http.Server
+	authorizer auth.Authorizer
+	clientSet  *client.ClientSet
+	resolver   *session.Resolver
+	runTime    *logics.Runtime
 }
 
 // NewService create a service instance.
@@ -74,6 +77,12 @@ func NewService(sd serviced.ServiceDiscover) (*Service, error) {
 	tlsConfig, err := initTLSConfig()
 	if err != nil {
 		return nil, err
+	}
+
+	// Create authorizer for IAM permission checks.
+	authorizer, err := auth.NewAuthorizer(sd, cc.AgentServer().Network.TLS)
+	if err != nil {
+		return nil, fmt.Errorf("create authorizer failed: %w", err)
 	}
 
 	apiClientSet, err := initAPIClient(tlsConfig, sd)
@@ -88,9 +97,10 @@ func NewService(sd serviced.ServiceDiscover) (*Service, error) {
 	}
 
 	return &Service{
-		clientSet: apiClientSet,
-		resolver:  session.NewResolver(apiClientSet.DataService()),
-		runTime:   rt,
+		authorizer: authorizer,
+		clientSet:  apiClientSet,
+		resolver:   session.NewResolver(apiClientSet.DataService()),
+		runTime:    rt,
 	}, nil
 }
 
@@ -204,7 +214,7 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 		agui.WithCancelPath(constant.AGUICancelPath),
 		agui.WithAGUIRunnerOptions(
 			aguirunner.WithUserIDResolver(resolveAGUIUserID),
-			aguirunner.WithRunOptionResolver(makeModelRunOptionResolver(svcCfg.AllowedModels)),
+			aguirunner.WithRunOptionResolver(makeModelRunOptionResolver(svcCfg.AllowedModelNames())),
 			// Auto-cancel the LLM call when the SSE connection drops (client disconnects).
 			aguirunner.WithCancelOnContextDoneEnabled(true),
 		),
@@ -230,11 +240,16 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 		return fmt.Errorf("create AG-UI server failed: %v", err)
 	}
 
-	// cancel 和 history 路径注册在 aguiServer 内部的 ServeMux 中，
-	// 外部 mux 也必须单独挂载同一个 handler，才能将请求路由进去。
 	// /agui、/cancel 和 /history 在 session-code middleware 可用时进行包装，
 	// 使得 session_code 在请求到达 AG-UI runner 前被解析为 thread_id。
 	aguiHandler := s.sessionCodeMiddleware(aguiServer.Handler())
+	// 添加权限校验中间件
+	authMW := agentAuthMiddleware(s.authorizer)
+	aguiHandler = authMW(aguiHandler)
+	// 注入 BK 用户信息到 context，供 AGUI runner 使用
+	aguiHandler = bkapiContextMiddleware(aguiHandler)
+	// cancel 和 history 路径注册在 aguiServer 内部的 ServeMux 中，
+	// 外部 mux 也必须单独挂载同一个 handler，才能将请求路由进去。
 	mux.Handle(aguiServer.Path(), aguiHandler)
 	mux.Handle(constant.AGUICancelPath, aguiHandler)
 	if sessionSvc != nil {
@@ -252,11 +267,12 @@ func (s *Service) apiSet() *restful.Container {
 	c := &capability.Capability{
 		WebService: ws,
 		ClientSet:  s.clientSet,
+		Authorizer: s.authorizer,
+		RunTime:    s.runTime,
 	}
 
-	appName := cc.AgentServer().AGUI.AppName
-	memory.InitService(c, s.runTime.MemorySvc(), appName)
-	session.InitService(c, s.runTime.SessionSvc(), s.resolver, appName)
+	memory.InitService(c)
+	session.InitService(c, s.resolver)
 
 	return restful.NewContainer().Add(c.WebService)
 }
@@ -393,6 +409,33 @@ func bkapiContextMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// agentAuthMiddleware returns an HTTP middleware that verifies the caller has
+// the AgentAssistant permission via IAM before forwarding the request.
+func agentAuthMiddleware(authorizer auth.Authorizer) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			kt, err := kit.FromHeader(r.Context(), r.Header)
+			if err != nil {
+				logs.Errorf("agent auth: build kit failed, err: %v", err)
+				w.WriteHeader(http.StatusUnauthorized)
+				rest.WriteResp(w, rest.NewBaseResp(errf.DoAuthorizeFailed, "invalid request identity"))
+				return
+			}
+
+			if err := authorizer.AuthorizeWithPerm(kt, meta.ResourceAttribute{
+				Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Find},
+			}); err != nil {
+				logs.Errorf("agent auth: permission denied, user: %s, err: %v, rid: %s", kt.User, err, kt.Rid)
+				w.WriteHeader(http.StatusForbidden)
+				rest.WriteResp(w, rest.NewBaseResp(errf.PermissionDenied, "no permission to access agent assistant"))
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // resolveAGUIUserID derives the session user identifier for an AG-UI run from

@@ -20,12 +20,11 @@
 package session
 
 import (
-	"fmt"
-
 	"hcm/pkg/api/core"
 	dsaiagent "hcm/pkg/api/data-service/aiagent"
 	dataservice "hcm/pkg/client/data-service"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
@@ -65,7 +64,7 @@ func (r *Resolver) Resolve(kt *kit.Kit, sessionCode string) (string, error) {
 	}
 
 	if len(result.Details) == 0 {
-		return "", fmt.Errorf("session not found for code: %s", sessionCode)
+		return "", errf.Newf(errf.RecordNotFound, "session not found for code: %s", sessionCode)
 	}
 
 	threadID := result.Details[0].ThreadID

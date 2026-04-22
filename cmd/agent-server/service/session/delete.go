@@ -25,6 +25,7 @@ import (
 	dsaiagent "hcm/pkg/api/data-service/aiagent"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/tools"
+	"hcm/pkg/iam/meta"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 )
@@ -40,6 +41,12 @@ func (svc *service) DeleteSession(cts *rest.Contexts) (interface{}, error) {
 	sessionCode := cts.PathParameter("session_code").String()
 	if sessionCode == "" {
 		return nil, errf.New(errf.InvalidParameter, `missing path parameter "session_code"`)
+	}
+
+	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit,
+		meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Delete}}); err != nil {
+		logs.Errorf("agent auth: permission denied, user: %s, err: %v, rid: %s", cts.Kit.User, err, cts.Kit.Rid)
+		return nil, errf.New(errf.PermissionDenied, "permission denied")
 	}
 
 	// Verify session belongs to current user.
