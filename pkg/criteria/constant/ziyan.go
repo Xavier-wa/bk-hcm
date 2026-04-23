@@ -120,3 +120,6 @@ const CrpCvmApplySubnetMaxNum = 10
 
 // GpuInstanceClassValue  GPU机型族
 const GpuInstanceClassValue = "GPU型"
+
+// GpuHighFreqInstanceClassValue GPU高主频型机型族
+const GpuHighFreqInstanceClassValue = "GPU高主频型"
