@@ -611,7 +611,7 @@ export default defineComponent({
         subnet: '', //  子网
         replicas: 1,
         anti_affinity_level: 'ANTI_NONE',
-        image_id: 'img-fjxtfi0n', // 镜像
+        image_id: '', // 镜像
         system_disk: { disk_type: '', disk_size: 0, disk_num: 1 },
         data_disk: [],
         network_type: 'TENTHOUSAND',
