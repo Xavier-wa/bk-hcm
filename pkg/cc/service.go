@@ -22,10 +22,13 @@ package cc
 import (
 	"fmt"
 	"net"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/logs"
 )
 
 var (
@@ -842,6 +845,11 @@ type AgentStorage struct {
 	Memory  AgentMemoryStorage  `yaml:"memory"`
 }
 
+func (s *AgentStorage) trySetDefault() {
+	s.Session.trySetDefault()
+	s.Memory.trySetDefault()
+}
+
 // AgentSessionStorage defines MySQL settings for AGUI chat history (session) persistence.
 type AgentSessionStorage struct {
 	// DSN is the MySQL connection string. Leave empty to use in-memory storage.
@@ -854,6 +862,10 @@ type AgentSessionStorage struct {
 	// Summary configures automatic LLM-based session summarization.
 	// Requires the AGUI LLM model to be configured (aidev section).
 	Summary AgentSessionSummary `yaml:"summary"`
+}
+
+func (s *AgentSessionStorage) trySetDefault() {
+	s.Summary.trySetDefault()
 }
 
 // AgentSessionSummary configures LLM-based session summarization for the AGUI runner.
@@ -876,6 +888,8 @@ type AgentSessionSummary struct {
 	// MaxWords caps the word count of the generated summary. 0 means no cap.
 	MaxWords int `yaml:"maxWords"`
 }
+
+func (s *AgentSessionSummary) trySetDefault() {}
 
 // AgentMemoryStorage defines MySQL settings for AGUI long-term memory persistence.
 type AgentMemoryStorage struct {
@@ -903,6 +917,27 @@ type AgentMemoryStorage struct {
 	// "any"  – extract when at least one enabled checker passes.
 	// "all"  – extract only when every enabled checker passes.
 	AutoExtractPolicy string `yaml:"autoExtractPolicy"`
+	// ExtractPromptFile is the path to a custom extraction prompt file.
+	// When set, the file content replaces the framework's default extraction prompt,
+	// allowing fine-grained control over what the LLM considers memorable.
+	// Supports absolute or relative paths (relative to the process working directory).
+	ExtractPromptFile string `yaml:"extractPromptFile"`
+	// ExtractPrompt is the extract prompt content.
+	ExtractPrompt string
+}
+
+func (s *AgentMemoryStorage) trySetDefault() {
+	s.ExtractPrompt = loadPromptFile(s.ExtractPromptFile)
+}
+
+// AgentEmbeddingConfig configures the embedding model used by vector-based memory backends.
+// The API endpoint and authentication are inherited from the aidev gateway config,
+// so only model-specific settings are needed here.
+type AgentEmbeddingConfig struct {
+	// Model is the embedding model name. Default: "text-embedding-3-small".
+	Model string `yaml:"model"`
+	// Dimensions is the embedding vector dimension. Default: 1536.
+	Dimensions int `yaml:"dimensions"`
 }
 
 // AgentMCPFilter configures MCP tool name filtering for the AGUI agent.
@@ -966,6 +1001,40 @@ type AgentBKAIDevConfig struct {
 	AppSecret string `yaml:"appSecret"`
 }
 
+// AgentDynamicToolLoadingConfig configures BM25/keyword-based dynamic tool
+// filtering so the LLM only sees tools relevant to each user message.
+type AgentDynamicToolLoadingConfig struct {
+	// Enabled turns on dynamic tool filtering. Default: false.
+	Enabled bool `yaml:"enabled"`
+	// Strategy is the search strategy: "keyword" or "bm25". Default: "bm25".
+	Strategy string `yaml:"strategy"`
+	// TopN is the maximum number of tools returned per search. Must be > 0 when enabled.
+	TopN int `yaml:"topN"`
+	// ScoreThreshold is a relative score cutoff (0.0–1.0). Results scoring below
+	// maxScore*ScoreThreshold are discarded before the TopN cap is applied. Default: 0.
+	ScoreThreshold float64 `yaml:"scoreThreshold"`
+	// ToolTags maps raw MCP tool names to extra search keywords (e.g. Chinese synonyms).
+	ToolTags map[string][]string `yaml:"toolTags"`
+	// QueryContextWindow controls how many recent user messages are included in the
+	// search query. A sliding window of the last N user messages from the session is
+	// concatenated to form the query, so short follow-ups like "继续" still carry
+	// enough context to match relevant tools. Default: 3.
+	QueryContextWindow int `yaml:"queryContextWindow"`
+	// Embedding holds model/dimension config when Strategy is "embedding".
+	// Endpoint and auth inherit from the aidev gateway (same as memory sqlitevec).
+	Embedding AgentEmbeddingConfig `yaml:"embedding"`
+}
+
+func (s *AgentDynamicToolLoadingConfig) trySetDefault() {
+	if s.TopN <= 0 {
+		s.TopN = 10
+	}
+
+	if s.QueryContextWindow <= 0 {
+		s.QueryContextWindow = 3
+	}
+}
+
 // AgentToolsConfig holds all tool configurations injected into the AGUI agent.
 type AgentToolsConfig struct {
 	// MCPToolSets lists MCP server toolsets to expose to the AGUI agent.
@@ -977,6 +1046,12 @@ type AgentToolsConfig struct {
 	// on every request using these credentials combined with the per-request bk_ticket
 	// extracted from the incoming HTTP request Cookie.
 	BKAIDev *AgentBKAIDevConfig `yaml:"bkAIDev"`
+	// DynamicToolLoading configures index-based dynamic tool filtering.
+	DynamicToolLoading *AgentDynamicToolLoadingConfig `yaml:"dynamicToolLoading"`
+}
+
+func (s *AgentToolsConfig) trySetDefault() {
+	s.DynamicToolLoading.trySetDefault()
 }
 
 // AgentPromptConfig configures the prompt files loaded into the AGUI agent.
@@ -992,6 +1067,29 @@ type AgentPromptConfig struct {
 	// state-injection placeholders for dynamic per-user context.
 	// Empty means no instruction is injected.
 	InstructionFile string `yaml:"instructionFile"`
+	// SystemPrompt is the system prompt content.
+	SystemPrompt string
+	// Instruction is the instruction content.
+	Instruction string
+}
+
+func (s *AgentPromptConfig) trySetDefault() {
+	s.SystemPrompt = loadPromptFile(s.SystemPromptFile)
+	s.Instruction = loadPromptFile(s.InstructionFile)
+}
+
+// loadPromptFile reads a prompt text file and returns its trimmed content.
+// Returns an empty string when path is empty or the file cannot be read.
+func loadPromptFile(path string) string {
+	if path = strings.TrimSpace(path); path == "" {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		logs.Warnf("failed to load prompt file %q: %v", path, err)
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // AgentModelProvider defines a named LLM provider endpoint.
@@ -1100,7 +1198,7 @@ type AgentAGUI struct {
 }
 
 func (a *AgentAGUI) trySetDefault() {
-	// TODO
+	a.Prompt.trySetDefault()
 }
 
 // AllowedModelNames returns the plain model name list (for backward-compatible call sites).
@@ -1158,6 +1256,8 @@ func (s *AgentServerSetting) trySetDefault() {
 	s.Service.trySetDefault()
 	s.Log.trySetDefault()
 	s.AGUI.trySetDefault()
+	s.Storage.trySetDefault()
+	s.Tools.trySetDefault()
 }
 
 // Validate AgentServerSetting option.

@@ -61,6 +61,7 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/server/agui"
 	"trpc.group/trpc-go/trpc-agent-go/server/agui/adapter"
 	aguirunner "trpc.group/trpc-go/trpc-agent-go/server/agui/runner"
+	"trpc.group/trpc-go/trpc-agent-go/tool"
 )
 
 // Service do all the agent server's work
@@ -214,7 +215,8 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 		agui.WithCancelPath(constant.AGUICancelPath),
 		agui.WithAGUIRunnerOptions(
 			aguirunner.WithUserIDResolver(resolveAGUIUserID),
-			aguirunner.WithRunOptionResolver(makeModelRunOptionResolver(svcCfg.AllowedModelNames())),
+			aguirunner.WithRunOptionResolver(
+				makeRunOptionResolver(svcCfg.AllowedModelNames(), s.runTime.DynamicToolFilter())),
 			// Auto-cancel the LLM call when the SSE connection drops (client disconnects).
 			aguirunner.WithCancelOnContextDoneEnabled(true),
 		),
@@ -448,31 +450,38 @@ func resolveAGUIUserID(ctx context.Context, _ *adapter.RunAgentInput) (string, e
 	return "anonymous", nil
 }
 
-// makeModelRunOptionResolver returns an AG-UI RunOptionResolver that reads the
-// "modelName" field from forwardedProps and translates it into an agent.WithModelName
-// RunOption. If the requested model is not in the allowed list the run is rejected
-// with an error so the client receives a clear HTTP 500 / RunError event instead of
-// silently falling back to the default model.
+// makeRunOptionResolver returns an AG-UI RunOptionResolver that handles both
+// per-request model selection and dynamic tool filtering.
 //
-// allowedModels is the effective list already computed by runtime.New (config or
-// platform defaults); it is never empty when this resolver is called.
-func makeModelRunOptionResolver(allowedModels []string) aguirunner.RunOptionResolver {
+// Model selection: reads "modelName" from forwardedProps and translates it into
+// agent.WithModelName. Rejects unknown models with an error.
+//
+// Tool filtering: when toolFilter is non-nil, injects agent.WithToolFilter so
+// that each Run performs index-based tool retrieval.
+func makeRunOptionResolver(allowedModels []string, toolFilter tool.FilterFunc) aguirunner.RunOptionResolver {
 	allowed := make(map[string]struct{}, len(allowedModels))
 	for _, m := range allowedModels {
 		allowed[m] = struct{}{}
 	}
 	return func(_ context.Context, input *adapter.RunAgentInput) ([]agent.RunOption, error) {
-		props, ok := input.ForwardedProps.(map[string]any)
-		if !ok {
-			return nil, nil
+		var opts []agent.RunOption
+
+		// Model selection.
+		if props, ok := input.ForwardedProps.(map[string]any); ok {
+			if modelName, _ := props["modelName"].(string); modelName != "" {
+				modelName = strings.TrimSpace(modelName)
+				if _, ok := allowed[modelName]; !ok {
+					return nil, fmt.Errorf("model %q is not in the allowed models list", modelName)
+				}
+				opts = append(opts, agent.WithModelName(modelName))
+			}
 		}
-		modelName, _ := props["modelName"].(string)
-		if modelName = strings.TrimSpace(modelName); modelName == "" {
-			return nil, nil
+
+		// Dynamic tool filtering.
+		if toolFilter != nil {
+			opts = append(opts, agent.WithToolFilter(toolFilter))
 		}
-		if _, ok := allowed[modelName]; !ok {
-			return nil, fmt.Errorf("model %q is not in the allowed models list", modelName)
-		}
-		return []agent.RunOption{agent.WithModelName(modelName)}, nil
+
+		return opts, nil
 	}
 }

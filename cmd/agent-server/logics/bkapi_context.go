@@ -59,11 +59,9 @@ func bkapiAuthHeaderValue(appCode, appSecret, username, ticket string) string {
 }
 
 // bkapiMCPAuthHeaderValue builds the X-Bkapi-Authorization header value for MCP requests.
-// Unlike bkapiAuthHeaderValue, it omits bk_username as MCP servers authenticate solely
-// via bk_ticket.
-func bkapiMCPAuthHeaderValue(appCode, appSecret, ticket string) string {
+func bkapiMCPAuthHeaderValue(appCode, appSecret, username, ticket string) string {
 	return fmt.Sprintf(
-		`{"bk_app_code":"%s","bk_app_secret":"%s","bk_ticket":"%s"}`,
-		appCode, appSecret, ticket,
+		`{"bk_app_code":"%s","bk_app_secret":"%s","bk_username":"%s","bk_ticket":"%s"}`,
+		appCode, appSecret, username, ticket,
 	)
 }

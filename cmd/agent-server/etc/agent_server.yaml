@@ -62,6 +62,7 @@ storage:
     autoExtractPolicy: "any"    # 多阈值组合策略：any=满足其一即触发（默认）；all=全部满足才触发
     autoExtractMessages: 100      # 触发阈值：新消息数 > 该值才提取，0=不设消息数门槛
     # autoExtractInterval: "30m"     # 触发阈值：距上次提取超过该时长才提取，空=不设时间间隔
+    extractPromptFile: "cmd/agent-server/etc/prompts/memory_extract_prompt.md"  # 自定义记忆提取提示词，留空使用框架默认
 
 # aidev 配置兼容 OpenAI API 协议的蓝鲸 AI 网关。
 aidev:
@@ -219,6 +220,30 @@ tools:
   #     args:
   #       - "--flag"
   #       - "value"
+
+  # 动态工具加载：基于索引，每条用户消息仅向 LLM 暴露最相关的 Top-N 个 MCP 工具。
+  # 启用后，ToolFilter 会在每次 Run 中检索匹配工具，减少 token 消耗并提升推理质量。
+  # enabled: false 时不注入 ToolFilter，MCP 工具全量暴露（默认行为）。
+  dynamicToolLoading:
+    enabled: true
+    # 检索策略：
+    #   keyword  — 关键词子串匹配（最快，适合工具名精确匹配）
+    #   bm25     — BM25 全文检索（默认，平衡速度与召回率）
+    #   embedding — 向量余弦相似度（语义最强，需要 aidev 网关可访问）
+    #              使用 embedding 策略时需同时配置下方 embedding 字段，
+    #              Build 阶段会并发调用 aidev 网关 /embeddings 接口生成工具向量。
+    strategy: "embedding"
+    topN: 10                   # 返回 Top-N 最相关工具
+    queryContextWindow: 5      # 查询上下文窗口：拼接最近 N 条用户消息作为检索 query
+    scoreThreshold: 0.3        # 相对分数阈值 (0.0~1.0)，0=不启用
+    # embedding 字段仅在 strategy: "embedding" 时生效。
+    # model / dimensions 留空则使用 SDK 默认值（text-embedding-3-small，1536 维）。
+    embedding:
+      model: "hunyuan-embedding"
+      dimensions: 1536
+    # toolTags:                  # 工具标签（key 为 MCP 原始工具名，value 为额外检索关键词）
+    #   list_cvms: ["CVM", "云服务器", "主机"]
+    #   query_bill: ["账单", "费用", "计费"]
 
   # skill 仓库配置。指向包含 SKILL.md 文件的目录，每个子目录为一个 skill。
   skills:

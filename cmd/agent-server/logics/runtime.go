@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -39,8 +38,10 @@ import (
 	cvt "hcm/pkg/tools/converter"
 
 	openaiopt "github.com/openai/openai-go/option"
+	"github.com/tidwall/gjson"
 	"trpc.group/trpc-go/trpc-agent-go/agent"
 	"trpc.group/trpc-go/trpc-agent-go/agent/llmagent"
+	openaiembed "trpc.group/trpc-go/trpc-agent-go/knowledge/embedder/openai"
 	"trpc.group/trpc-go/trpc-agent-go/memory"
 	"trpc.group/trpc-go/trpc-agent-go/memory/extractor"
 	memmysql "trpc.group/trpc-go/trpc-agent-go/memory/mysql"
@@ -58,11 +59,17 @@ import (
 
 // Runtime wraps app.Runtime and adds an idempotent Close.
 type Runtime struct {
-	AGUIRunner      runner.Runner
-	aguiSessionSvc  session.Service // non-nil when MySQL session backend is configured
-	aguiMemorySvc   memory.Service  // non-nil when MySQL memory backend is configured
-	aguiMCPToolSets []tool.ToolSet  // non-nil when MCP toolsets are configured
-	closeOnce       sync.Once
+	AGUIRunner        runner.Runner
+	aguiSessionSvc    session.Service // non-nil when MySQL session backend is configured
+	aguiMemorySvc     memory.Service  // non-nil when MySQL memory backend is configured
+	aguiMCPToolSets   []tool.ToolSet  // non-nil when MCP toolsets are configured
+	dynamicToolFilter tool.FilterFunc // non-nil when dynamic tool loading is enabled
+	closeOnce         sync.Once
+}
+
+// DynamicToolFilter returns the dynamic tool filter function, or nil if not enabled.
+func (rt *Runtime) DynamicToolFilter() tool.FilterFunc {
+	return rt.dynamicToolFilter
 }
 
 // SessionSvc returns the session service used by the AGUI runner.
@@ -82,18 +89,9 @@ func (rt *Runtime) MemorySvc() memory.Service {
 func New() (*Runtime, error) {
 	aguiCfg := cc.AgentServer().AGUI
 	providers := cc.AgentServer().GetProviders()
-	// Compute the effective allowed model list: config overrides platform defaults.
-	// Also update aguiCfg so the service layer (models endpoint, resolver) sees the
-	// resolved list without having to repeat the defaulting logic.
-	allowedModels := aguiCfg.AllowedModelNames()
-	if len(allowedModels) == 0 {
-		defaults := enumor.DefaultAllowedAIModels
-		allowedModels = make([]string, len(defaults))
-		for i, m := range defaults {
-			allowedModels[i] = string(m)
-		}
-	}
+	toolsCfg := cc.AgentServer().Tools
 
+	allowedModels := resolveAllowedModels(aguiCfg)
 	// Register operator-supplied context windows for private models so that
 	// the framework's token tailoring can resolve them correctly.
 	if cw := aguiCfg.ModelContextWindows(); len(cw) > 0 {
@@ -128,6 +126,16 @@ func New() (*Runtime, error) {
 		return nil, fmt.Errorf("build MCP toolsets: %w", err)
 	}
 
+	var dynFilter tool.FilterFunc
+	if d := toolsCfg.DynamicToolLoading; d != nil && d.Enabled {
+		var err error
+		dynFilter, err = buildDynamicToolFilter(d, mcpToolSets, providers)
+		if err != nil {
+			closeMCPToolSets(mcpToolSets)
+			return nil, err
+		}
+	}
+
 	// Build skill repository from configuration.
 	skillRepo, err := buildSkillRepo()
 	if err != nil {
@@ -135,39 +143,60 @@ func New() (*Runtime, error) {
 		return nil, fmt.Errorf("build skill repo: %w", err)
 	}
 
-	systemPrompt := loadPromptFile(aguiCfg.Prompt.SystemPromptFile)
-	instruction := loadPromptFile(aguiCfg.Prompt.InstructionFile)
-
 	// When any MCP toolset requires per-request authentication (e.g. type "bkaidev"),
 	// disable eager tool loading at construction time. Tools are fetched lazily on
 	// the first agent run, at which point the real request context (with bk_ticket)
 	// is available so MCP session initialization can authenticate successfully.
 	refreshOnRun := hasBKAIDevToolSet()
-	agt := newAgentWithModel(defaultMdl, modelsMap, aguiCfg.Stream, systemPrompt, instruction,
-		skillRepo, mcpToolSets, refreshOnRun)
+	agt := newAgentWithModel(defaultMdl, modelsMap, aguiCfg.Stream,
+		aguiCfg.Prompt.SystemPrompt, aguiCfg.Prompt.Instruction, skillRepo, mcpToolSets, refreshOnRun)
 	runnerOpts := buildRunnerOpts(sessionSvc, memorySvc)
 	agUIRunner := runner.NewRunner(agt.Info().Name, agt, runnerOpts...)
 
 	return &Runtime{
-		AGUIRunner:      agUIRunner,
-		aguiSessionSvc:  sessionSvc,
-		aguiMemorySvc:   memorySvc,
-		aguiMCPToolSets: mcpToolSets,
+		AGUIRunner:        agUIRunner,
+		aguiSessionSvc:    sessionSvc,
+		aguiMemorySvc:     memorySvc,
+		aguiMCPToolSets:   mcpToolSets,
+		dynamicToolFilter: dynFilter,
 	}, nil
 }
 
-// loadPromptFile reads a prompt text file and returns its trimmed content.
-// Returns an empty string when path is empty or the file cannot be read.
-func loadPromptFile(path string) string {
-	if path = strings.TrimSpace(path); path == "" {
-		return ""
+// resolveAllowedModels returns the configured allowed model names,
+// falling back to platform defaults when none are configured.
+func resolveAllowedModels(aguiCfg cc.AgentAGUI) []string {
+	allowedModels := aguiCfg.AllowedModelNames()
+	if len(allowedModels) == 0 {
+		defaults := enumor.DefaultAllowedAIModels
+		allowedModels = make([]string, len(defaults))
+		for i, m := range defaults {
+			allowedModels[i] = string(m)
+		}
 	}
-	data, err := os.ReadFile(path)
+	return allowedModels
+}
+
+// buildDynamicToolFilter builds the dynamic tool filter from the given config.
+// It performs per-invocation BM25/keyword retrieval so the LLM only sees relevant MCP tools.
+func buildDynamicToolFilter(cfg *cc.AgentDynamicToolLoadingConfig, mcpToolSets []tool.ToolSet,
+	providers map[string]*cc.AgentModelProvider) (tool.FilterFunc, error) {
+
+	aidevGW, err := resolveProviderConfig(constant.DefaultProviderName, providers)
 	if err != nil {
-		logs.Warnf("failed to load prompt file %q: %v", path, err)
-		return ""
+		return nil, fmt.Errorf("resolve default provider: %w, provider name: %s", err, constant.DefaultProviderName)
 	}
-	return strings.TrimSpace(string(data))
+	idx := buildToolIndex(cfg, aidevGW)
+	lazy := &lazyToolIndex{
+		mcpToolSets:        mcpToolSets,
+		toolTags:           cfg.ToolTags,
+		scoreThreshold:     cfg.ScoreThreshold,
+		topN:               cfg.TopN,
+		queryContextWindow: cfg.QueryContextWindow,
+		index:              idx,
+	}
+	logs.Infof("dynamic tool loading: enabled (strategy=%s, topN=%d, scoreThreshold=%.2f, tags=%d)",
+		cfg.Strategy, cfg.TopN, cfg.ScoreThreshold, len(cfg.ToolTags))
+	return makeDynamicToolFilter(lazy), nil
 }
 
 // buildStorageServices creates MySQL-backed session and memory services when DSNs are
@@ -233,6 +262,84 @@ func buildStorageServices(mdl model.Model) (session.Service, memory.Service, err
 	return sessionSvc, memorySvc, nil
 }
 
+// buildEmbeddingClient constructs an OpenAI-compatible embedder from gateway and embedding configs.
+// Supports both APIKey auth and BK application auth (X-Bkapi-Authorization header injection).
+// Used by both memory service and EmbeddingIndex tool retrieval.
+func buildEmbeddingClient(provider *cc.AgentModelProvider, embedCfg *cc.AgentEmbeddingConfig) *openaiembed.Embedder {
+	var embedOpts []openaiembed.Option
+	embedOpts = append(embedOpts, openaiembed.WithBaseURL(provider.BaseURL))
+
+	// use openai api key auth
+	if provider.IsOpenAIProvider() {
+		embedOpts = append(embedOpts, openaiembed.WithAPIKey(provider.APIKey))
+	}
+
+	// use bk api gateway auth
+	username := provider.User
+	if provider.IsBKAPIProvider() {
+		appCode := provider.AppCode
+		appSecret := provider.AppSecret
+		defaultTicket := provider.BkTicket
+
+		embedOpts = append(embedOpts, openaiembed.WithRequestOptions(
+			openaiopt.WithMiddleware(func(r *http.Request, next openaiopt.MiddlewareNext) (*http.Response, error) {
+				username = BKUsernameFromContext(r.Context())
+				ticket := BKTicketFromContext(r.Context())
+				if ticket == "" {
+					ticket = defaultTicket
+				}
+				r.Header.Set(constant.BKGWAuthKey, bkapiAuthHeaderValue(appCode, appSecret, username, ticket))
+				return next(r)
+			}),
+		))
+	}
+
+	// logging middleware: records transport errors and HTTP error responses (body snippet)
+	// to diagnose gateway 403/401 etc.
+	embedOpts = append(embedOpts, openaiembed.WithRequestOptions(
+		openaiopt.WithMiddleware(func(r *http.Request, next openaiopt.MiddlewareNext) (*http.Response, error) {
+			resp, err := next(r)
+			if err != nil {
+				logs.Warnf("embedding API: transport error %s %s: %v (api_key_set=%v bk_user=%q model=%q dims=%d)",
+					r.Method, r.URL.String(), err, provider.APIKey, username, embedCfg.Model, embedCfg.Dimensions)
+				return resp, err
+			}
+			if resp == nil {
+				return resp, err
+			}
+			if resp.StatusCode >= 400 {
+				bodyStr := ""
+				if resp.Body != nil {
+					slurp, readErr := io.ReadAll(io.LimitReader(resp.Body, constant.DefaultLLMRequestBodyLogLimit))
+					_ = resp.Body.Close()
+					resp.Body = io.NopCloser(bytes.NewReader(slurp))
+					if readErr != nil {
+						bodyStr = fmt.Sprintf("<read body: %v>", readErr)
+					} else {
+						bodyStr = string(slurp)
+						if len(bodyStr) > constant.DefaultLLMRequestBodyLogLimit {
+							bodyStr = bodyStr[:constant.DefaultLLMRequestBodyLogLimit] +
+								fmt.Sprintf("... (truncated, total %d bytes)", len(slurp))
+						}
+					}
+				}
+				logs.Errorf("embedding API: HTTP %s %s %s (api_key_set=%v bk_user=%q model=%q dims=%d) response_body=%q",
+					resp.Status, r.Method, r.URL.String(), provider.APIKey, username, embedCfg.Model,
+					embedCfg.Dimensions, bodyStr)
+			}
+			return resp, err
+		}),
+	))
+
+	if embedCfg.Model != "" {
+		embedOpts = append(embedOpts, openaiembed.WithModel(embedCfg.Model))
+	}
+	if embedCfg.Dimensions > 0 {
+		embedOpts = append(embedOpts, openaiembed.WithDimensions(embedCfg.Dimensions))
+	}
+	return openaiembed.New(embedOpts...)
+}
+
 // buildMemoryExtractor constructs a MemoryExtractor from the given config.
 // Checkers are combined according to AutoExtractPolicy ("any" = OR, "all" = AND).
 // When no checker is configured the extractor runs after every Run.
@@ -257,6 +364,10 @@ func buildMemoryExtractor(cfg cc.AgentMemoryStorage, mdl model.Model) extractor.
 		} else {
 			opts = append(opts, extractor.WithCheckersAny(checkers...))
 		}
+	}
+	if cfg.ExtractPrompt != "" {
+		opts = append(opts, extractor.WithPrompt(cfg.ExtractPrompt))
+		logs.Infof("AGUI memory extract prompt: custom (%d bytes)", len(cfg.ExtractPrompt))
 	}
 	return extractor.NewExtractor(mdl, opts...)
 }
@@ -396,7 +507,7 @@ func newAgentWithModel(defaultMdl model.Model, modelsMap map[string]model.Model,
 	refreshOnRun bool) agent.Agent {
 
 	generationConfig := model.GenerationConfig{
-		MaxTokens:   cvt.ValToPtr(4096),
+		MaxTokens:   cvt.ValToPtr(38000),
 		Temperature: cvt.ValToPtr(0.7),
 		Stream:      isStream,
 	}
@@ -434,7 +545,10 @@ func newAgentWithModel(defaultMdl model.Model, modelsMap map[string]model.Model,
 	}
 
 	opts = append(opts, llmagent.WithToolCallbacks(makeToolLogger()))
-	opts = append(opts, llmagent.WithModelCallbacks(makeModelLogger()))
+
+	modelCb := makeModelLogger()
+	modelCb.BeforeModel = append(modelCb.BeforeModel, makeHistoricalToolResultFilter())
+	opts = append(opts, llmagent.WithModelCallbacks(modelCb))
 
 	logs.Infof("AGUI agent: models=%d skills=%v toolSets=%d refreshToolSetsOnRun=%v systemPrompt=%v instruction=%v",
 		len(modelsMap), skillRepo != nil, len(toolSets), refreshOnRun, systemPrompt != "", instruction != "")
@@ -528,7 +642,7 @@ func buildOneMCPToolSet(cfg cc.AgentMCPToolSet) (tool.ToolSet, error) {
 					ticket := BKTicketFromContext(ctx)
 					if ticket != "" {
 						req.Header.Set(constant.BKGWAuthKey,
-							bkapiMCPAuthHeaderValue(appCode, appSecret, ticket))
+							bkapiMCPAuthHeaderValue(appCode, appSecret, BKUsernameFromContext(ctx), ticket))
 						logs.Infof("bkaidev MCP hook: injected auth header for %s %s",
 							req.Method, req.URL.Path)
 					} else {
@@ -540,6 +654,12 @@ func buildOneMCPToolSet(cfg cc.AgentMCPToolSet) (tool.ToolSet, error) {
 			))
 		}
 	}
+
+	// Log HTTP >=400 response bodies: trpc-mcp-go does not attach body to errors on non-200.
+	// See trpcmcp streamable_client.send(). Disable via env AGENT_SERVER_MCP_HTTP_LOG_ERROR_BODY=0.
+	opts = append(opts, mcp.WithMCPOptions(
+		trpcmcp.WithHTTPReqHandler(newMCPHTTPLoggingHandler(trpcmcp.NewDefaultHTTPReqHandler(), cfg.Name)),
+	))
 
 	return mcp.NewMCPToolSet(conn, opts...), nil
 }
@@ -611,7 +731,7 @@ func buildOpenAIOptions(cfg *cc.AgentModelProvider) []openai.Option {
 				if ticket == "" {
 					ticket = defaultTicket
 				}
-				r.Header.Set("X-Bkapi-Authorization", bkapiAuthHeaderValue(appCode, appSecret, username, ticket))
+				r.Header.Set(constant.BKGWAuthKey, bkapiAuthHeaderValue(appCode, appSecret, username, ticket))
 				return next(r)
 			}),
 		))
@@ -631,10 +751,22 @@ func llmRequestLogger(r *http.Request, next openaiopt.MiddlewareNext) (*http.Res
 		if err == nil {
 			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 			body := string(bodyBytes)
+
+			logLLMToolsSummary(body)
+			logLLMTokenConfig(body)
+
+			// Estimate input tokens: roughly chars/4 for English, chars/2 for Chinese;
+			// use chars/4 as a conservative lower-bound heuristic for mixed content.
+			var estTokens int
+			for _, msg := range gjson.Get(body, "messages").Array() {
+				estTokens += len(msg.Get("content").String()) / 4
+			}
+			estTokens += len(body) / 10 // account for system prompts, tool definitions, etc.
+
 			if len(body) > logBodyLimit {
 				body = body[:logBodyLimit] + fmt.Sprintf("... (truncated, total %d bytes)", len(bodyBytes))
 			}
-			logs.Infof("LLM request: %s %s body=%s", r.Method, r.URL.String(), body)
+			logs.Infof("LLM request: %s %s body=%s est_input_tokens≈%d", r.Method, r.URL.String(), body, estTokens)
 		} else {
 			logs.Warnf("LLM request: failed to read body: %v", err)
 		}
@@ -642,6 +774,52 @@ func llmRequestLogger(r *http.Request, next openaiopt.MiddlewareNext) (*http.Res
 		logs.Infof("LLM request: %s %s (no body)", r.Method, r.URL.String())
 	}
 	return next(r)
+}
+
+// logLLMToolsSummary extracts tool names from the OpenAI request JSON and logs
+// a compact summary so operators can verify dynamic tool filtering at a glance.
+func logLLMToolsSummary(body string) {
+	tools := gjson.Get(body, "tools")
+	if !tools.Exists() {
+		return
+	}
+	arr := tools.Array()
+	var mcpNames, otherNames []string
+	for _, t := range arr {
+		name := t.Get("function.name").String()
+		if name == "" {
+			continue
+		}
+		if strings.HasPrefix(name, "skill_") || strings.HasPrefix(name, "transfer_to_") ||
+			name == "knowledge_search" || name == "agentic_knowledge_search" {
+			otherNames = append(otherNames, name)
+		} else {
+			mcpNames = append(mcpNames, name)
+		}
+	}
+	logs.Infof("LLM request tools: total=%d, mcp=%d %v, framework/skill=%d %v",
+		len(mcpNames)+len(otherNames), len(mcpNames), mcpNames, len(otherNames), otherNames)
+}
+
+// logLLMTokenConfig extracts token budget fields from the OpenAI request JSON
+// to help diagnose max_tokens issues with upstream API gateways.
+func logLLMTokenConfig(body string) {
+	model := gjson.Get(body, "model").String()
+	maxTokens := gjson.Get(body, "max_tokens")
+	maxCompletionTokens := gjson.Get(body, "max_completion_tokens")
+	stream := gjson.Get(body, "stream")
+
+	msgCount := len(gjson.Get(body, "messages").Array())
+	var inputChars int
+	for _, msg := range gjson.Get(body, "messages").Array() {
+		inputChars += len(msg.Get("content").String())
+	}
+
+	logs.Infof("LLM request token config: model=%s, messages=%d, input_chars≈%d, stream=%v, "+
+		"max_tokens=%v (present=%v), max_completion_tokens=%v (present=%v)",
+		model, msgCount, inputChars, stream.String(),
+		maxTokens.String(), maxTokens.Exists(),
+		maxCompletionTokens.String(), maxCompletionTokens.Exists())
 }
 
 // Close releases all resources held by the Runtime. It is safe to call multiple

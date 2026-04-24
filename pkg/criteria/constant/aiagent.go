@@ -69,10 +69,16 @@ const (
 	// SessionIncrContentCountTimeout is the timeout of the session incr content count.
 	SessionIncrContentCountTimeout = 5 * time.Second
 
+	// ApproxRunesPerToken matches the default in model.SimpleTokenCounter.
+	ApproxRunesPerToken = 4.0
+)
+
+// agent state key
+const (
 	// SessionStateLastIncludedTS is the session state key the framework's summary checkers
 	// use to track which events have already been included in a summary.
 	SessionStateLastIncludedTS = "summary:last_included_ts"
 
-	// ApproxRunesPerToken matches the default in model.SimpleTokenCounter.
-	ApproxRunesPerToken = 4.0
+	// RetrievedToolsCacheKey is the cache key for the retrieved tools.
+	RetrievedToolsCacheKey = "custom:retrieved_tools"
 )
