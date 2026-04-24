@@ -150,6 +150,7 @@ export default defineComponent({
       <Select
         modelValue={props.modelValue}
         class='bandwidth-package-selector w500'
+        filterable
         onScroll-end={handleScrollEnd}
         loading={isDataLoad.value}
         scrollLoading={isDataLoad.value}

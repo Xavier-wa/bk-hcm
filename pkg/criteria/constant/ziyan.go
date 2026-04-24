@@ -121,6 +121,9 @@ const CrpCvmApplySubnetMaxNum = 10
 // GpuInstanceClassValue  GPU机型族
 const GpuInstanceClassValue = "GPU型"
 
+// GpuHighFreqInstanceClassValue GPU高主频型机型族
+const GpuHighFreqInstanceClassValue = "GPU高主频型"
+
 const (
 	// ProductionStageMinValidTime 生产阶段耗时最小有效时间，用于过滤异常时间数据
 	ProductionStageMinValidTime = "2000-01-01 00:00:00"
