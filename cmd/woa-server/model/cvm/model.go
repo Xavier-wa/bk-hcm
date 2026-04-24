@@ -59,21 +59,11 @@ type Model interface {
 
 // ApplyOrder apply order operation interface
 type ApplyOrder interface {
-	// NextSequence returns next apply order sequence id from db
-	NextSequence(ctx context.Context) (uint64, error)
-	// CreateApplyOrder creates apply order in db
-	CreateApplyOrder(ctx context.Context, inst *types.ApplyOrder) error
-	// GetApplyOrder gets apply order by filter from db
-	GetApplyOrder(ctx context.Context, filter *mapstr.MapStr) (*types.ApplyOrder, error)
 	// CountApplyOrder gets apply order count by filter from db
 	CountApplyOrder(ctx context.Context, filter map[string]interface{}) (uint64, error)
 	// FindManyApplyOrder gets apply order list by filter from db
 	FindManyApplyOrder(ctx context.Context, page metadata.BasePage, filter map[string]interface{}) (
 		[]*types.ApplyOrder, error)
-	// UpdateApplyOrder updates apply order by filter and doc in db
-	UpdateApplyOrder(ctx context.Context, filter *mapstr.MapStr, doc *mapstr.MapStr) error
-	// DeleteApplyOrder deletes apply order from db
-	DeleteApplyOrder()
 }
 
 // CvmInfo cvm info operation interface

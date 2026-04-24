@@ -17,12 +17,15 @@ import (
 	"fmt"
 	"time"
 
+	taskTypes "hcm/cmd/woa-server/types/task"
 	"hcm/pkg"
+	"hcm/pkg/api/core"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/mapstr"
+	"hcm/pkg/dal/dao/tools"
+	"hcm/pkg/runtime/filter"
 	"hcm/pkg/thirdparty/cvmapi"
-	"hcm/pkg/tools/metadata"
 )
 
 const (
@@ -32,20 +35,17 @@ const (
 
 // CvmCreateReq create cvm request
 type CvmCreateReq struct {
-	BkBizId     int64      `json:"bk_biz_id"`
-	BkModuleId  int64      `json:"bk_module_id"`
-	User        string     `json:"bk_username"`
-	RequireType int64      `json:"require_type"`
-	Replicas    uint       `json:"replicas"`
-	Remark      string     `json:"remark"`
-	Spec        *OrderSpec `json:"spec" bson:"spec"`
+	BkBizId     int64                   `json:"bk_biz_id"`
+	BkModuleId  int64                   `json:"bk_module_id"`
+	User        string                  `json:"bk_username"`
+	RequireType enumor.RequireType      `json:"require_type"`
+	Replicas    uint                    `json:"replicas"`
+	Remark      string                  `json:"remark"`
+	Spec        *taskTypes.ResourceSpec `json:"spec" bson:"spec"`
 }
 
 // Validate whether CvmCreateReq is valid
-// errKey: invalid key
-// err: detail reason why errKey is invalid
 func (s *CvmCreateReq) Validate() error {
-
 	if s.Replicas <= 0 {
 		return fmt.Errorf("replicas invalid replicas <= 0")
 	}
@@ -59,14 +59,14 @@ func (s *CvmCreateReq) Validate() error {
 		return fmt.Errorf("remark exceed size limit %d", remarkLimit)
 	}
 
-	if err := s.Spec.Validate(); err != nil {
+	if err := s.Spec.Validate(taskTypes.ResourceTypeCvm); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// OrderSpec cvm apply order specification
+// OrderSpec cvm apply order specification（TODO: 暂时还不能删除，迁移脚本会用到）
 type OrderSpec struct {
 	Region      string          `json:"region" bson:"region"`
 	Zone        string          `json:"zone" bson:"zone"`
@@ -82,8 +82,10 @@ type OrderSpec struct {
 	// 计费时长，单位：月
 	ChargeMonths uint `json:"charge_months" bson:"charge_months"`
 	// 被继承云主机实例ID
-	InheritInstanceId string            `json:"inherit_instance_id" bson:"inherit_instance_id"`
-	SystemDisk        enumor.DiskSpec   `json:"system_disk" bson:"system_disk"`
+	InheritInstanceId string `json:"inherit_instance_id" bson:"inherit_instance_id"`
+	// 继承的固资号
+	BkAssetID  string            `json:"bk_asset_id" bson:"bk_asset_id"`
+	SystemDisk enumor.DiskSpec   `json:"system_disk" bson:"system_disk"`
 	DataDisk          []enumor.DiskSpec `json:"data_disk" bson:"data_disk"`
 }
 
@@ -153,7 +155,7 @@ type CvmCreateResult struct {
 	OrderId uint64 `json:"order_id"`
 }
 
-// ApplyOrder cvm apply order
+// ApplyOrder cvm apply order（TODO: 暂时还不能删除，迁移脚本会用到）
 type ApplyOrder struct {
 	OrderId     uint64      `json:"order_id" bson:"order_id"`
 	BkBizId     int64       `json:"bk_biz_id" bson:"bk_biz_id"`
@@ -170,8 +172,8 @@ type ApplyOrder struct {
 	SuccessNum  uint        `json:"success_num" bson:"success_num"`
 	FailedNum   uint        `json:"failed_num" bson:"failed_num"`
 	PendingNum  uint        `json:"pending_num" bson:"pending_num"`
-	CreateAt    time.Time   `json:"create_at" bson:"create_at"`
-	UpdateAt    time.Time   `json:"update_at" bson:"update_at"`
+	CreateAt    time.Time   `json:"created_at" bson:"create_at"`
+	UpdateAt    time.Time   `json:"updated_at" bson:"update_at"`
 }
 
 // ApplyStatus cvm apply order status
@@ -189,17 +191,17 @@ const (
 
 // GetApplyParam get apply order request parameter
 type GetApplyParam struct {
-	OrderId     []uint64          `json:"order_id" bson:"order_id"`
-	TaskId      []string          `json:"task_id" bson:"task_id"`
-	User        []string          `json:"bk_username" bson:"bk_username"`
-	RequireType []int64           `json:"require_type" bson:"require_type"`
-	Status      []ApplyStatus     `json:"status" bson:"status"`
-	Region      []string          `json:"region" bson:"region"`
-	Zone        []string          `json:"zone" bson:"zone"`
-	DeviceType  []string          `json:"device_type" bson:"device_type"`
-	Start       string            `json:"start" bson:"start"`
-	End         string            `json:"end" bson:"end"`
-	Page        metadata.BasePage `json:"page" bson:"page"`
+	OrderId     []uint64       `json:"order_id" bson:"order_id"`
+	TaskId      []string       `json:"task_id" bson:"task_id"`
+	User        []string       `json:"bk_username" bson:"bk_username"`
+	RequireType []int64        `json:"require_type" bson:"require_type"`
+	Status      []ApplyStatus  `json:"status" bson:"status"`
+	Region      []string       `json:"region" bson:"region"`
+	Zone        []string       `json:"zone" bson:"zone"`
+	DeviceType  []string       `json:"device_type" bson:"device_type"`
+	Start       string         `json:"start" bson:"start"`
+	End         string         `json:"end" bson:"end"`
+	Page        *core.BasePage `json:"page" bson:"page"`
 }
 
 // Validate whether GetApplyParam is valid
@@ -239,6 +241,11 @@ func (param *GetApplyParam) Validate() error {
 		return fmt.Errorf("device_type exceed limit %d", arrayLimit)
 	}
 
+	if param.Page != nil {
+		if err := param.Page.Validate(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -309,6 +316,57 @@ func (param *GetApplyParam) GetFilter() map[string]interface{} {
 	}
 
 	return filter
+}
+
+// GetFilterExpression build filter expression for data-service query
+func (param *GetApplyParam) GetFilterExpression() *filter.Expression {
+	rules := make([]filter.RuleFactory, 0)
+	// CVM生产接口固定查询 product_type==admin 的数据
+	rules = append(rules, tools.RuleEqual("product_type", enumor.ProductTypeAdmin))
+
+	if len(param.OrderId) > 0 {
+		rules = append(rules, tools.RuleIn("order_id", param.OrderId))
+	}
+	if len(param.User) > 0 {
+		rules = append(rules, tools.RuleIn("bk_username", param.User))
+	}
+	if len(param.RequireType) > 0 {
+		rules = append(rules, tools.RuleIn("require_type", param.RequireType))
+	}
+	if len(param.Status) > 0 {
+		rules = append(rules, tools.RuleIn("status", param.Status))
+	}
+	if len(param.Region) > 0 {
+		rules = append(rules, tools.RuleIn("region", param.Region))
+	}
+	if len(param.Zone) > 0 {
+		rules = append(rules, tools.RuleIn("zone", param.Zone))
+	}
+	if len(param.DeviceType) > 0 {
+		rules = append(rules, tools.RuleIn("device_type", param.DeviceType))
+	}
+	if len(param.Start) != 0 {
+		startTime, err := time.Parse(dateLayout, param.Start)
+		if err == nil {
+			rules = append(rules, tools.RuleGreaterThanEqual("created_at", startTime.Format(constant.TimeStdFormat)))
+		}
+	}
+	if len(param.End) != 0 {
+		endTime, err := time.Parse(dateLayout, param.End)
+		if err == nil {
+			rules = append(rules, tools.RuleLessThan("created_at",
+				endTime.AddDate(0, 0, 1).Format(constant.TimeStdFormat)))
+		}
+	}
+
+	if len(rules) == 0 {
+		return tools.AllExpression()
+	}
+
+	return &filter.Expression{
+		Op:    filter.And,
+		Rules: rules,
+	}
 }
 
 // CvmInfo cvm device info

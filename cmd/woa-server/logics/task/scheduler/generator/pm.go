@@ -14,7 +14,6 @@
 package generator
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 
@@ -32,7 +31,7 @@ func (g *Generator) matchPM(kt *kit.Kit, order *types.ApplyOrder, existDevices [
 	replicas := order.TotalNum - uint(len(existDevices))
 
 	// 1. init generate record
-	generateId, err := g.initGenerateRecord(kt.Ctx, order.ResourceType, order.SubOrderId, replicas, false)
+	generateId, err := g.initGenerateRecord(kt, order.ResourceType, order.SubOrderId, replicas, false)
 	if err != nil {
 		logs.Errorf("failed to match pm when init generate record, err: %v, order id: %s", err, order.SubOrderId)
 		return fmt.Errorf("failed to match pm, err: %v, order id: %s", err, order.SubOrderId)
@@ -41,11 +40,10 @@ func (g *Generator) matchPM(kt *kit.Kit, order *types.ApplyOrder, existDevices [
 	candidates, err := g.getMatchDevice(order, replicas)
 	if err != nil {
 		// update generate record status to Done
-		if errRecord := g.UpdateGenerateRecord(context.Background(), order.ResourceType, generateId,
-			types.GenerateStatusFailed, err.Error(),
-			"", nil); errRecord != nil {
-			logs.Errorf("failed to match pm when update generate record, order id: %s, err: %v", order.SubOrderId,
-				errRecord)
+		if errRecord := g.UpdateGenerateRecord(kt, order, generateId,
+			types.GenerateStatusFailed, err.Error(), "", nil); errRecord != nil {
+			logs.Errorf("failed to match pm when update generate record, order id: %s, err: %v, rid: %s",
+				order.SubOrderId, errRecord, kt.Rid)
 			return fmt.Errorf("failed to match pm, order id: %s, err: %v", order.SubOrderId, errRecord)
 		}
 
@@ -55,10 +53,10 @@ func (g *Generator) matchPM(kt *kit.Kit, order *types.ApplyOrder, existDevices [
 	if len(candidates) == 0 {
 		// update generate record status to Done
 		msg := "match no devices"
-		if errRecord := g.UpdateGenerateRecord(context.Background(), order.ResourceType, generateId,
+		if errRecord := g.UpdateGenerateRecord(kt, order, generateId,
 			types.GenerateStatusFailed, msg, "", nil); errRecord != nil {
-			logs.Errorf("failed to match pm when update generate record, order id: %s, err: %v", order.SubOrderId,
-				errRecord)
+			logs.Errorf("failed to match pm when update generate record, order id: %s, err: %v, rid: %s",
+				order.SubOrderId, errRecord, kt.Rid)
 			return fmt.Errorf("failed to match pm, order id: %s, err: %v", order.SubOrderId, errRecord)
 		}
 
@@ -66,9 +64,10 @@ func (g *Generator) matchPM(kt *kit.Kit, order *types.ApplyOrder, existDevices [
 	}
 
 	// 3. update generate record status to handling
-	if err := g.UpdateGenerateRecord(context.Background(), order.ResourceType, generateId, types.GenerateStatusHandling,
+	if err = g.UpdateGenerateRecord(kt, order, generateId, types.GenerateStatusHandling,
 		"handling", "", nil); err != nil {
-		logs.Errorf("failed to match pm when update generate record, order id: %s, err: %v", order.SubOrderId, err)
+		logs.Errorf("failed to match pm when update generate record, order id: %s, err: %v, rid: %s",
+			order.SubOrderId, err, kt.Rid)
 		return fmt.Errorf("failed to match pm, order id: %s, err: %v", order.SubOrderId, err)
 	}
 
@@ -91,9 +90,10 @@ func (g *Generator) matchPM(kt *kit.Kit, order *types.ApplyOrder, existDevices [
 	}
 
 	// 5. update generate record status to success
-	if err := g.UpdateGenerateRecord(context.Background(), order.ResourceType, generateId, types.GenerateStatusSuccess,
+	if err = g.UpdateGenerateRecord(kt, order, generateId, types.GenerateStatusSuccess,
 		"success", "", successIps); err != nil {
-		logs.Errorf("failed to match pm when update generate record, err: %v, order id: %s", err, order.SubOrderId)
+		logs.Errorf("failed to match pm when update generate record, err: %v, order id: %s, rid: %s",
+			err, order.SubOrderId, kt.Rid)
 		return fmt.Errorf("failed to match pm, err: %v, order id: %s", err, order.SubOrderId)
 	}
 	return nil

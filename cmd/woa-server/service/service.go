@@ -44,10 +44,12 @@ import (
 	"hcm/cmd/woa-server/logics/task/recoverer"
 	"hcm/cmd/woa-server/logics/task/recycler"
 	"hcm/cmd/woa-server/logics/task/scheduler"
+	taskmodel "hcm/cmd/woa-server/model/task"
 	taskStatistics "hcm/cmd/woa-server/logics/task/statistics"
 	"hcm/cmd/woa-server/service/capability"
 	"hcm/cmd/woa-server/service/config"
 	"hcm/cmd/woa-server/service/cvm"
+	datamigration "hcm/cmd/woa-server/service/data-migration"
 	"hcm/cmd/woa-server/service/dissolve"
 	greenchannel "hcm/cmd/woa-server/service/green-channel"
 	"hcm/cmd/woa-server/service/meta"
@@ -97,6 +99,7 @@ import (
 type Service struct {
 	client         *client.ClientSet
 	dao            dao.Set
+	mongodb        *local.Mongo
 	planController planctrl.Logics
 	cmdbCli        cmdb.Client
 	itsmCli        itsm.Client
@@ -122,6 +125,7 @@ type Service struct {
 	taskStatistics taskStatistics.Interface
 	cvmLogic       cvmlogic.Logics
 	tasks          map[enumor.CronTask]croncore.Task
+	sd             serviced.State
 }
 
 // NewService create a service instance.
@@ -135,6 +139,7 @@ func NewService(dis serviced.ServiceDiscover, sd serviced.State) (*Service, erro
 	if err != nil {
 		return nil, err
 	}
+	taskmodel.InitOperation(apiClientSet)
 
 	clients, err := initClients(apiClientSet, dis)
 	if err != nil {
@@ -146,12 +151,13 @@ func NewService(dis serviced.ServiceDiscover, sd serviced.State) (*Service, erro
 		return nil, err
 	}
 
-	mongoComponents, err := initMongoComponents(dis, clients, apiClientSet, logics)
+	mongoComponents, err := initMongoComponents(dis, sd, clients, apiClientSet, logics)
 	if err != nil {
 		return nil, err
 	}
 
 	service := assembleService(apiClientSet, clients, logics, mongoComponents)
+	service.sd = sd
 	service, err = newOtherClient(core.NewBackendKit(), service, clients.itsmCli, sd)
 	if err != nil {
 		return nil, err
@@ -361,10 +367,11 @@ func initLogics(sd serviced.State, apiClientSet *client.ClientSet, clients *clie
 type mongoComponentSet struct {
 	informerIf  informer.Interface
 	schedulerIf scheduler.Interface
+	mongodb     *local.Mongo
 }
 
 // initMongoComponents 初始化涉及MongoDB的逻辑
-func initMongoComponents(dis serviced.ServiceDiscover, clients *clientSet, apiClientSet *client.ClientSet,
+func initMongoComponents(dis serviced.ServiceDiscover, sd serviced.State, clients *clientSet, apiClientSet *client.ClientSet,
 	logics *logicSet) (*mongoComponentSet, error) {
 
 	if !cc.WoaServer().UseMongo {
@@ -372,12 +379,14 @@ func initMongoComponents(dis serviced.ServiceDiscover, clients *clientSet, apiCl
 	}
 
 	kt := core.NewBackendKit()
-	loopW, watchDB, err := initMongoDB(kt, dis)
+	_, watchDB, err := initMongoDB(kt, dis)
 	if err != nil {
 		return nil, err
 	}
 
-	informerIf, err := informer.New(loopW, watchDB)
+	// Create leader-aware informer that only runs on master node
+	ziyanClient := apiClientSet.DataService().TCloudZiyan
+	informerIf, err := informer.New(ziyanClient, sd)
 	if err != nil {
 		logs.Errorf("new informer failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
@@ -395,6 +404,7 @@ func initMongoComponents(dis serviced.ServiceDiscover, clients *clientSet, apiCl
 	return &mongoComponentSet{
 		informerIf:  informerIf,
 		schedulerIf: schedulerIf,
+		mongodb:     watchDB,
 	}, nil
 }
 
@@ -404,6 +414,7 @@ func assembleService(apiClientSet *client.ClientSet, clients *clientSet, logics 
 	return &Service{
 		client:         apiClientSet,
 		dao:            clients.daoSet,
+		mongodb:        mongoComponents.mongodb,
 		cmdbCli:        clients.cmdbCli,
 		itsmCli:        clients.itsmCli,
 		finOpsCli:      clients.finOpsCli,
@@ -458,7 +469,7 @@ func initMongoDB(kt *kit.Kit, dis serviced.ServiceDiscover) (stream.LoopInterfac
 		logs.Errorf("new watch mongo client failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, nil, err
 	}
-	return loopW, watchDB, err
+	return loopW, watchDB, nil
 }
 
 func newOtherClient(kt *kit.Kit, service *Service, itsmCli itsm.Client, sd serviced.State) (*Service, error) {
@@ -505,12 +516,12 @@ func newOtherClient(kt *kit.Kit, service *Service, itsmCli itsm.Client, sd servi
 	service.taskLogic = taskLogic
 
 	cvmLogic := cvmlogic.New(service.thirdCli, service.clientConf.ClientConfig,
-		service.configLogics, service.cmdbCli, service.rsLogic, service.taskLogic, service.schedulerIf)
+		service.configLogics, service.cmdbCli, service.rsLogic, service.taskLogic, service.schedulerIf, service.client)
 	service.cvmLogic = cvmLogic
 
 	// init recoverer client
 	recoverConf := cc.WoaServer().Recover
-	if err := recoverer.New(kt, &recoverConf, itsmCli, recyclerIf, service.schedulerIf, cvmLogic,
+	if err = recoverer.New(kt, &recoverConf, itsmCli, recyclerIf, service.schedulerIf,
 		service.cmdbCli, service.thirdCli.Sops, sd); err != nil {
 		logs.Errorf("new recoverer failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
@@ -564,6 +575,10 @@ func (s *Service) ListenAndServeRest() error {
 
 			logs.Infof("start shutdown restful server gracefully...")
 
+			if s.informerIf != nil {
+				s.informerIf.Close()
+			}
+
 			ctx, cancel := context.WithTimeout(context.TODO(), 20*time.Second)
 			defer cancel()
 			if err := server.Shutdown(ctx); err != nil {
@@ -592,6 +607,7 @@ func (s *Service) apiSet() *restful.Container {
 
 	c := &capability.Capability{
 		Dao:            s.dao,
+		MongoDB:        s.mongodb,
 		WebService:     ws,
 		Authorizer:     s.authorizer,
 		PlanController: s.planController,
@@ -628,6 +644,7 @@ func (s *Service) apiSet() *restful.Container {
 	rollingserver.InitService(c)
 	greenchannel.InitService(c)
 	ressync.InitService(c)
+	datamigration.InitService(c)
 
 	return restful.NewContainer().Add(c.WebService)
 }
@@ -673,7 +690,7 @@ func (s *Service) initCronTask() error {
 	}
 	s.tasks = make(map[enumor.CronTask]croncore.Task)
 
-	deviceCapacityTask, err := crontask.NewDeviceCapacityTask(s.client, s.configLogics)
+	deviceCapacityTask, err := crontask.NewDeviceCapacityTask(s.client, s.configLogics, s.sd)
 	if err != nil {
 		logs.Errorf("init device capacity task failed, err: %v", err)
 		return err

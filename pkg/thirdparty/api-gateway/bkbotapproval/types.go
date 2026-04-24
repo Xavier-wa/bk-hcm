@@ -51,7 +51,7 @@ type CvmApplyModifyConfirmCallbackData struct {
 	BkBizID    int64      `json:"bk_biz_id" validate:"required"`
 	Action     ActionType `json:"action" validate:"required"`
 	SuborderID string     `json:"suborder_id" validate:"required"`
-	ModifyID   uint64     `json:"modify_id" validate:"required"`
+	ModifyID   string     `json:"modify_id" validate:"required"`
 }
 
 // Validate validate

@@ -20,6 +20,7 @@
 package plan
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -28,19 +29,19 @@ import (
 	"sync"
 	"time"
 
-	model "hcm/cmd/woa-server/model/task"
 	ptypes "hcm/cmd/woa-server/types/plan"
 	tasktypes "hcm/cmd/woa-server/types/task"
-	"hcm/pkg"
 	"hcm/pkg/api/core"
 	dt "hcm/pkg/api/core/cloud/device-type"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	rpproto "hcm/pkg/api/data-service/resource-plan"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
-	"hcm/pkg/criteria/mapstr"
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/dal/dao/types"
+	cvmapplytable "hcm/pkg/dal/table/cvm-apply"
 	rpd "hcm/pkg/dal/table/resource-plan/res-plan-demand"
+	tabletypes "hcm/pkg/dal/table/types"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/runtime/filter"
@@ -49,7 +50,7 @@ import (
 	"hcm/pkg/thirdparty/cvmapi"
 	"hcm/pkg/tools/concurrence"
 	cvt "hcm/pkg/tools/converter"
-	"hcm/pkg/tools/metadata"
+	"hcm/pkg/tools/slice"
 	"hcm/pkg/tools/times"
 
 	"github.com/shopspring/decimal"
@@ -1427,26 +1428,197 @@ func (c *Controller) GetProdResConsumePoolV2(kt *kit.Kit, bkBizIDs []int64, star
 func (c *Controller) listApplyOrder(kt *kit.Kit, bkBizIDs []int64, startDay, endDay time.Time) (
 	[]*tasktypes.ApplyOrder, error) {
 
-	listFilter := map[string]interface{}{
-		"bk_biz_id": mapstr.MapStr{
-			pkg.BKDBIN: bkBizIDs,
-		},
-		"create_at": mapstr.MapStr{
-			pkg.BKDBGTE: startDay,
-			pkg.BKDBLTE: endDay,
-		},
-	}
-	page := metadata.BasePage{
-		Limit: pkg.BKNoLimit,
+	result := make([]*tasktypes.ApplyOrder, 0)
+	batches := slice.Split(bkBizIDs, int(core.DefaultMaxPageLimit))
+	for _, batch := range batches {
+		filterExpr := tools.ExpressionAnd(
+			tools.RuleIn("bk_biz_id", batch),
+			tools.RuleGreaterThanEqual("created_at", startDay.Format(constant.TimeStdFormat)),
+			tools.RuleLessThanEqual("created_at", endDay.Format(constant.TimeStdFormat)),
+		)
+
+		listReq := &cvmapplyproto.ZiyanCvmApplySuborderListReq{
+			Filter: filterExpr,
+			Page:   core.NewDefaultBasePage(),
+		}
+
+		for {
+			resp, err := c.client.DataService().TCloudZiyan.ZiyanCvmApplySuborder.List(kt.Ctx, kt.Header(), listReq)
+			if err != nil {
+				logs.Errorf("failed to list cvm apply suborder, req: %+v, err: %v, rid: %s", listReq, err, kt.Rid)
+				return nil, err
+			}
+
+			for _, sub := range resp.Details {
+				applyOrder, err := convertSuborderToApplyOrder(kt, sub)
+				if err != nil {
+					logs.Errorf("convert suborder to apply order failed, suborder_id: %s, err: %v, rid: %s",
+						sub.SuborderID, err, kt.Rid)
+					return nil, err
+				}
+				result = append(result, applyOrder)
+			}
+
+			if len(resp.Details) < int(listReq.Page.Limit) {
+				break
+			}
+			listReq.Page.Start += uint32(listReq.Page.Limit)
+		}
 	}
 
-	orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt.Ctx, page, listFilter)
-	if err != nil {
-		logs.Errorf("failed to list apply order by bkBizIDs: %v, rid: %s", bkBizIDs, kt.Rid)
+	return result, nil
+}
+
+// convertSuborderToApplyOrder convert ziyan suborder model to scheduler ApplyOrder.
+func convertSuborderToApplyOrder(kt *kit.Kit, sub *cvmapplytable.ZiyanCvmApplySuborder) (*tasktypes.ApplyOrder, error) {
+	apply := initApplyOrder(sub)
+
+	if err := parseApplyOrderFields(kt, sub, apply); err != nil {
+		logs.Errorf("parse apply order fields failed, suborder_id: %s, err: %v, rid: %s",
+			sub.SuborderID, err, kt.Rid)
 		return nil, err
 	}
 
-	return orders, nil
+	spec := initResourceSpec(sub)
+	if err := parseResourceSpecFields(kt, sub, spec); err != nil {
+		logs.Errorf("parse resource spec fields failed, suborder_id: %s, err: %v, rid: %s",
+			sub.SuborderID, err, kt.Rid)
+		return nil, err
+	}
+	// DeviceType 为空时 Spec 无意义，置为 nil，由调用方通过 Spec == nil 判断走 PlanExpendGroup 分支
+	if spec.DeviceType == "" {
+		spec = nil
+	}
+	apply.Spec = spec
+
+	return apply, nil
+}
+
+// initApplyOrder initialize ApplyOrder with basic fields
+func initApplyOrder(sub *cvmapplytable.ZiyanCvmApplySuborder) *tasktypes.ApplyOrder {
+	return &tasktypes.ApplyOrder{
+		OrderId:           sub.OrderID,
+		SubOrderId:        sub.SuborderID,
+		BkBizId:           sub.BkBizID,
+		User:              sub.BkUsername,
+		Auditor:           sub.Auditor,
+		RequireType:       sub.RequireType,
+		ExpectTime:        sub.ExpectTime,
+		ResourceType:      sub.ResourceType,
+		Source:            sub.Source,
+		AntiAffinityLevel: sub.AntiAffinityLevel,
+		EnableDiskCheck:   cvt.PtrToVal(sub.EnableDiskCheck),
+		Description:       sub.Description,
+		Remark:            sub.Remark,
+		Stage:             sub.Stage,
+		Status:            sub.Status,
+		OriginNum:         cvt.PtrToVal(sub.OriginNum),
+		TotalNum:          cvt.PtrToVal(sub.TotalNum),
+		SuccessNum:        cvt.PtrToVal(sub.SuccessNum),
+		PendingNum:        cvt.PtrToVal(sub.PendingNum),
+		AppliedCore:       cvt.PtrToVal(sub.AppliedCore),
+		DeliveredCore:     cvt.PtrToVal(sub.DeliveredCore),
+		ObsProject:        sub.ObsProject,
+		RetryTime:         cvt.PtrToVal(sub.RetryTime),
+		ModifyTime:        cvt.PtrToVal(sub.ModifyTime),
+	}
+}
+
+// parseApplyOrderFields parse fields for ApplyOrder
+func parseApplyOrderFields(kt *kit.Kit, sub *cvmapplytable.ZiyanCvmApplySuborder, apply *tasktypes.ApplyOrder) error {
+	if err := parseJSONField(sub.Follower, &apply.Follower); err != nil {
+		logs.Errorf("failed to parse follower, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID, kt.Rid)
+		return err
+	}
+	if err := parseJSONField(sub.PlanExpendGroup, &apply.PlanExpendGroup); err != nil {
+		logs.Errorf("failed to parse plan expend group, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID,
+			kt.Rid)
+		return err
+	}
+	if err := parseJSONField(sub.UpgradeCvmList, &apply.UpgradeCVMList); err != nil {
+		logs.Errorf("failed to parse upgrade cvm list, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID,
+			kt.Rid)
+		return err
+	}
+	var err error
+	apply.CreateAt, err = parseTime(kt, sub.CreatedAt)
+	if err != nil {
+		logs.Errorf("failed to parse created at, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID, kt.Rid)
+		return err
+	}
+	apply.UpdateAt, err = parseTime(kt, sub.UpdatedAt)
+	if err != nil {
+		logs.Errorf("failed to parse updated at, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID, kt.Rid)
+		return err
+	}
+	return nil
+}
+
+// initResourceSpec initialize ResourceSpec with basic fields
+func initResourceSpec(sub *cvmapplytable.ZiyanCvmApplySuborder) *tasktypes.ResourceSpec {
+	return &tasktypes.ResourceSpec{
+		Region:            sub.Region,
+		Zone:              sub.Zone,
+		DeviceGroup:       sub.DeviceGroup,
+		DeviceSize:        sub.DeviceSize,
+		DeviceType:        sub.DeviceType,
+		ImageId:           sub.ImageID,
+		Image:             sub.Image,
+		DiskSize:          sub.DiskSize,
+		DiskType:          sub.DiskType,
+		NetworkType:       sub.NetworkType,
+		Vpc:               sub.Vpc,
+		Subnet:            sub.Subnet,
+		OsType:            sub.OsType,
+		RaidType:          sub.RaidType,
+		Isp:               sub.Isp,
+		ChargeType:        sub.ChargeType,
+		ChargeMonths:      sub.ChargeMonths,
+		InheritInstanceId: sub.InheritInstanceID,
+		BkAssetID:         sub.BkAssetID,
+		ResAssign:         sub.ResAssign,
+		CPUThreadSwitch:   sub.CPUThreadSwitch,
+	}
+}
+
+// parseResourceSpecFields parse fields for ResourceSpec
+func parseResourceSpecFields(kt *kit.Kit, sub *cvmapplytable.ZiyanCvmApplySuborder, spec *tasktypes.ResourceSpec) error {
+	if err := parseJSONField(sub.SystemDisk, &spec.SystemDisk); err != nil {
+		logs.Errorf("failed to parse system disk, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID, kt.Rid)
+		return err
+	}
+	if err := parseJSONField(sub.DataDisk, &spec.DataDisk); err != nil {
+		logs.Errorf("failed to parse data disk, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID, kt.Rid)
+		return err
+	}
+	if err := parseJSONField(sub.FailedZoneIds, &spec.FailedZoneIDs); err != nil {
+		logs.Errorf("failed to parse failed zone ids, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID,
+			kt.Rid)
+		return err
+	}
+	if err := parseJSONField(sub.Zones, &spec.Zones); err != nil {
+		logs.Errorf("failed to parse zones, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID, kt.Rid)
+		return err
+	}
+	return nil
+}
+
+// parseJSONField 解析JSON字段并将其转换为指定的接口类型
+func parseJSONField(field tabletypes.JsonField, out any) error {
+	if field.IsEmpty() {
+		return nil
+	}
+	return json.Unmarshal([]byte(field), out)
+}
+
+// parseTime 将 tabletypes.Time 类型转换为 time.Time 类型
+func parseTime(kt *kit.Kit, t tabletypes.Time) (time.Time, error) {
+	parsed, err := time.Parse(constant.TimeStdFormat, t.String())
+	if err != nil {
+		logs.Errorf("failed to parse time, err: %v, time: %s, rid: %s", err, t.String(), kt.Rid)
+		return time.Time{}, err
+	}
+	return parsed, nil
 }
 
 // getApplyOrderConsumePoolMapV2 get apply order consume resource plan pool map.

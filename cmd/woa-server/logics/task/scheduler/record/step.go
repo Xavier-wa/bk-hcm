@@ -14,22 +14,25 @@
 package record
 
 import (
-	"context"
 	"time"
 
 	"hcm/cmd/woa-server/model/task"
 	types "hcm/cmd/woa-server/types/task"
-	"hcm/pkg/criteria/mapstr"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	"hcm/pkg/criteria/constant"
+	"hcm/pkg/dal/dao/tools"
+	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	cvt "hcm/pkg/tools/converter"
 )
 
 // CreateCommitStep init apply order commit step info
-func CreateCommitStep(ctx context.Context, suborderId string, replicas uint, stepID int) error {
-	filter := map[string]interface{}{
-		"suborder_id": suborderId,
-		"step_name":   types.StepNameCommit,
-	}
-	stepCnt, err := model.Operation().ApplyStep().CountApplyStep(ctx, filter)
+func CreateCommitStep(kt *kit.Kit, suborderId string, replicas uint, stepID int) error {
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", suborderId),
+		tools.RuleEqual("step_name", types.StepNameCommit),
+	)
+	stepCnt, err := model.Operation().ApplyStep().CountApplyStep(kt, filter)
 	if err != nil {
 		logs.Errorf("failed to create commit step, err: %v", err)
 		return err
@@ -55,8 +58,8 @@ func CreateCommitStep(ctx context.Context, suborderId string, replicas uint, ste
 		StartAt:    now,
 		EndAt:      now,
 	}
-	if err := model.Operation().ApplyStep().CreateApplyStep(ctx, step); err != nil {
-		logs.Errorf("failed to create commit step, err: %v", err)
+	if err = model.Operation().ApplyStep().CreateApplyStep(kt, step); err != nil {
+		logs.Errorf("failed to create commit step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
@@ -64,14 +67,16 @@ func CreateCommitStep(ctx context.Context, suborderId string, replicas uint, ste
 }
 
 // CreateGenerateStep init apply order generate step info
-func CreateGenerateStep(ctx context.Context, suborderId string, replicas uint, stepID int) error {
-	filter := map[string]interface{}{
-		"suborder_id": suborderId,
-		"step_name":   types.StepNameGenerate,
-	}
-	stepCnt, err := model.Operation().ApplyStep().CountApplyStep(ctx, filter)
+func CreateGenerateStep(kt *kit.Kit, suborderId string, replicas uint,
+	stepID int) error {
+
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", suborderId),
+		tools.RuleEqual("step_name", types.StepNameGenerate),
+	)
+	stepCnt, err := model.Operation().ApplyStep().CountApplyStep(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to create generate step, err: %v", err)
+		logs.Errorf("failed to create generate step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 	if stepCnt > 0 {
@@ -93,8 +98,8 @@ func CreateGenerateStep(ctx context.Context, suborderId string, replicas uint, s
 		CreateAt:   now,
 		UpdateAt:   now,
 	}
-	if err := model.Operation().ApplyStep().CreateApplyStep(ctx, step); err != nil {
-		logs.Errorf("failed to create generate step, err: %v", err)
+	if err = model.Operation().ApplyStep().CreateApplyStep(kt, step); err != nil {
+		logs.Errorf("failed to create generate step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
@@ -102,28 +107,29 @@ func CreateGenerateStep(ctx context.Context, suborderId string, replicas uint, s
 }
 
 // UpdateGenerateStep update apply order generate step info
-func UpdateGenerateStep(suborderId string, total uint, errStep error) error {
+func UpdateGenerateStep(kt *kit.Kit, suborderId string,
+	total uint, errStep error) error {
+
 	now := time.Now()
 	if errStep != nil {
-		filter := mapstr.MapStr{
-			"suborder_id": suborderId,
-			"step_name":   types.StepNameGenerate,
-		}
-		doc := mapstr.MapStr{
-			"status":    types.StepStatusFailed,
-			"message":   errStep.Error(),
-			"update_at": now,
-			"end_at":    now,
+		filter := tools.ExpressionAnd(
+			tools.RuleEqual("suborder_id", suborderId),
+			tools.RuleEqual("step_name", types.StepNameGenerate),
+		)
+		update := &cvmapplyproto.ZiyanCvmApplyStepUpdateReq{
+			Status:  cvt.ValToPtr(types.StepStatusFailed),
+			Message: errStep.Error(),
+			EndAt:   now.Format(constant.DateTimeLayout),
 		}
 
-		if err := model.Operation().ApplyStep().UpdateApplyStep(context.Background(), &filter, &doc); err != nil {
-			logs.Errorf("failed to update generate step, err: %v", err)
+		if err := model.Operation().ApplyStep().UpdateApplyStep(kt, filter, update); err != nil {
+			logs.Errorf("failed to update generate step, err: %v, rid: %s", err, kt.Rid)
 			return err
 		}
 		return nil
 	}
 
-	devices, err := getUnreleasedDevice(suborderId)
+	devices, err := getUnreleasedDevice(kt, suborderId)
 	if err != nil {
 		logs.Errorf("failed to update generate step, err: %v", err)
 		return err
@@ -137,24 +143,23 @@ func UpdateGenerateStep(suborderId string, total uint, errStep error) error {
 		message = types.StepMsgSuccess
 	}
 
-	filter := mapstr.MapStr{
-		"suborder_id": suborderId,
-		"step_name":   types.StepNameGenerate,
-	}
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", suborderId),
+		tools.RuleEqual("step_name", types.StepNameGenerate),
+	)
 
-	doc := mapstr.MapStr{
-		"status":      status,
-		"message":     message,
-		"success_num": count,
-		"update_at":   now,
+	update := &cvmapplyproto.ZiyanCvmApplyStepUpdateReq{
+		Status:     cvt.ValToPtr(status),
+		Message:    message,
+		SuccessNum: cvt.ValToPtr(count),
 	}
 
 	if status == types.StepStatusSuccess {
-		doc["end_at"] = now
+		update.EndAt = now.Format(constant.DateTimeLayout)
 	}
 
-	if err := model.Operation().ApplyStep().UpdateApplyStep(context.Background(), &filter, &doc); err != nil {
-		logs.Errorf("failed to update generate step, err: %v", err)
+	if err = model.Operation().ApplyStep().UpdateApplyStep(kt, filter, update); err != nil {
+		logs.Errorf("failed to update generate step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
@@ -162,14 +167,14 @@ func UpdateGenerateStep(suborderId string, total uint, errStep error) error {
 }
 
 // CreateInitStep init apply order init step info
-func CreateInitStep(ctx context.Context, suborderId string, replicas uint, stepID int) error {
-	filter := map[string]interface{}{
-		"suborder_id": suborderId,
-		"step_name":   types.StepNameInit,
-	}
-	stepCnt, err := model.Operation().ApplyStep().CountApplyStep(ctx, filter)
+func CreateInitStep(kt *kit.Kit, suborderId string, replicas uint, stepID int) error {
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", suborderId),
+		tools.RuleEqual("step_name", types.StepNameInit),
+	)
+	stepCnt, err := model.Operation().ApplyStep().CountApplyStep(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to create init step, err: %v", err)
+		logs.Errorf("failed to create init step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 	if stepCnt > 0 {
@@ -191,8 +196,8 @@ func CreateInitStep(ctx context.Context, suborderId string, replicas uint, stepI
 		CreateAt:   now,
 		UpdateAt:   now,
 	}
-	if err := model.Operation().ApplyStep().CreateApplyStep(ctx, step); err != nil {
-		logs.Errorf("failed to create init step, err: %v", err)
+	if err = model.Operation().ApplyStep().CreateApplyStep(kt, step); err != nil {
+		logs.Errorf("failed to create init step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
@@ -200,10 +205,10 @@ func CreateInitStep(ctx context.Context, suborderId string, replicas uint, stepI
 }
 
 // UpdateInitStep update apply order init step info
-func UpdateInitStep(suborderId string, total uint) error {
-	devices, err := getUnreleasedDevice(suborderId)
+func UpdateInitStep(kt *kit.Kit, suborderId string, total uint) error {
+	devices, err := getUnreleasedDevice(kt, suborderId)
 	if err != nil {
-		logs.Errorf("failed to update init step, err: %v", err)
+		logs.Errorf("failed to update init step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
@@ -220,25 +225,24 @@ func UpdateInitStep(suborderId string, total uint) error {
 		message = types.StepMsgSuccess
 	}
 
-	filter := mapstr.MapStr{
-		"suborder_id": suborderId,
-		"step_name":   types.StepNameInit,
-	}
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", suborderId),
+		tools.RuleEqual("step_name", types.StepNameInit),
+	)
 
 	now := time.Now()
-	doc := mapstr.MapStr{
-		"status":      status,
-		"message":     message,
-		"success_num": count,
-		"update_at":   now,
+	update := &cvmapplyproto.ZiyanCvmApplyStepUpdateReq{
+		Status:     cvt.ValToPtr(status),
+		Message:    message,
+		SuccessNum: cvt.ValToPtr(count),
 	}
 
 	if status == types.StepStatusSuccess {
-		doc["end_at"] = now
+		update.EndAt = now.Format(constant.DateTimeLayout)
 	}
 
-	if err := model.Operation().ApplyStep().UpdateApplyStep(context.Background(), &filter, &doc); err != nil {
-		logs.Errorf("failed to update init step, err: %v", err)
+	if err = model.Operation().ApplyStep().UpdateApplyStep(kt, filter, update); err != nil {
+		logs.Errorf("failed to update init step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
@@ -246,14 +250,14 @@ func UpdateInitStep(suborderId string, total uint) error {
 }
 
 // CreateDiskCheckStep init apply order disk check step info
-func CreateDiskCheckStep(ctx context.Context, suborderId string, replicas uint, stepID int) error {
-	filter := map[string]interface{}{
-		"suborder_id": suborderId,
-		"step_name":   types.StepNameDiskCheck,
-	}
-	stepCnt, err := model.Operation().ApplyStep().CountApplyStep(ctx, filter)
+func CreateDiskCheckStep(kt *kit.Kit, suborderId string, replicas uint, stepID int) error {
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", suborderId),
+		tools.RuleEqual("step_name", types.StepNameDiskCheck),
+	)
+	stepCnt, err := model.Operation().ApplyStep().CountApplyStep(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to create disk check step, err: %v", err)
+		logs.Errorf("failed to create disk check step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 	if stepCnt > 0 {
@@ -275,8 +279,8 @@ func CreateDiskCheckStep(ctx context.Context, suborderId string, replicas uint, 
 		CreateAt:   now,
 		UpdateAt:   now,
 	}
-	if err := model.Operation().ApplyStep().CreateApplyStep(ctx, step); err != nil {
-		logs.Errorf("failed to create disk check step, err: %v", err)
+	if err = model.Operation().ApplyStep().CreateApplyStep(kt, step); err != nil {
+		logs.Errorf("failed to create disk check step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
@@ -284,10 +288,10 @@ func CreateDiskCheckStep(ctx context.Context, suborderId string, replicas uint, 
 }
 
 // UpdateDiskCheckStep update apply order disk check step info
-func UpdateDiskCheckStep(suborderId string, total uint) error {
-	devices, err := getUnreleasedDevice(suborderId)
+func UpdateDiskCheckStep(kt *kit.Kit, suborderId string, total uint) error {
+	devices, err := getUnreleasedDevice(kt, suborderId)
 	if err != nil {
-		logs.Errorf("failed to update disk check step, err: %v", err)
+		logs.Errorf("failed to update disk check step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
@@ -304,25 +308,24 @@ func UpdateDiskCheckStep(suborderId string, total uint) error {
 		message = types.StepMsgSuccess
 	}
 
-	filter := mapstr.MapStr{
-		"suborder_id": suborderId,
-		"step_name":   types.StepNameDiskCheck,
-	}
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", suborderId),
+		tools.RuleEqual("step_name", types.StepNameDiskCheck),
+	)
 
 	now := time.Now()
-	doc := mapstr.MapStr{
-		"status":      status,
-		"message":     message,
-		"success_num": count,
-		"update_at":   now,
+	update := &cvmapplyproto.ZiyanCvmApplyStepUpdateReq{
+		Status:     cvt.ValToPtr(status),
+		Message:    message,
+		SuccessNum: cvt.ValToPtr(count),
 	}
 
 	if status == types.StepStatusSuccess {
-		doc["end_at"] = now
+		update.EndAt = now.Format(constant.DateTimeLayout)
 	}
 
-	if err := model.Operation().ApplyStep().UpdateApplyStep(context.Background(), &filter, &doc); err != nil {
-		logs.Errorf("failed to update disk check step, err: %v", err)
+	if err = model.Operation().ApplyStep().UpdateApplyStep(kt, filter, update); err != nil {
+		logs.Errorf("failed to update disk check step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
@@ -330,14 +333,14 @@ func UpdateDiskCheckStep(suborderId string, total uint) error {
 }
 
 // CreateDeliverStep init apply order deliver step info
-func CreateDeliverStep(ctx context.Context, suborderId string, replicas uint, stepID int) error {
-	filter := map[string]interface{}{
-		"suborder_id": suborderId,
-		"step_name":   types.StepNameDeliver,
-	}
-	stepCnt, err := model.Operation().ApplyStep().CountApplyStep(ctx, filter)
+func CreateDeliverStep(kt *kit.Kit, suborderId string, replicas uint, stepID int) error {
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", suborderId),
+		tools.RuleEqual("step_name", types.StepNameDeliver),
+	)
+	stepCnt, err := model.Operation().ApplyStep().CountApplyStep(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to create deliver step, err: %v", err)
+		logs.Errorf("failed to create deliver step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 	if stepCnt > 0 {
@@ -359,8 +362,8 @@ func CreateDeliverStep(ctx context.Context, suborderId string, replicas uint, st
 		CreateAt:   now,
 		UpdateAt:   now,
 	}
-	if err := model.Operation().ApplyStep().CreateApplyStep(ctx, step); err != nil {
-		logs.Errorf("failed to create deliver step, err: %v", err)
+	if err = model.Operation().ApplyStep().CreateApplyStep(kt, step); err != nil {
+		logs.Errorf("failed to create deliver step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
@@ -368,10 +371,10 @@ func CreateDeliverStep(ctx context.Context, suborderId string, replicas uint, st
 }
 
 // UpdateDeliverStep update apply order deliver step info
-func UpdateDeliverStep(suborderId string, total uint) error {
-	devices, err := getUnreleasedDevice(suborderId)
+func UpdateDeliverStep(kt *kit.Kit, suborderId string, total uint) error {
+	devices, err := getUnreleasedDevice(kt, suborderId)
 	if err != nil {
-		logs.Errorf("failed to update deliver step, err: %v", err)
+		logs.Errorf("failed to update deliver step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
@@ -388,25 +391,24 @@ func UpdateDeliverStep(suborderId string, total uint) error {
 		message = types.StepMsgSuccess
 	}
 
-	filter := mapstr.MapStr{
-		"suborder_id": suborderId,
-		"step_name":   types.StepNameDeliver,
-	}
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", suborderId),
+		tools.RuleEqual("step_name", types.StepNameDeliver),
+	)
 
 	now := time.Now()
-	doc := mapstr.MapStr{
-		"status":      status,
-		"message":     message,
-		"success_num": count,
-		"update_at":   now,
+	update := &cvmapplyproto.ZiyanCvmApplyStepUpdateReq{
+		Status:     cvt.ValToPtr(status),
+		Message:    message,
+		SuccessNum: cvt.ValToPtr(count),
 	}
 
 	if status == types.StepStatusSuccess {
-		doc["end_at"] = now
+		update.EndAt = now.Format(constant.DateTimeLayout)
 	}
 
-	if err := model.Operation().ApplyStep().UpdateApplyStep(context.Background(), &filter, &doc); err != nil {
-		logs.Errorf("failed to update deliver step, err: %v", err)
+	if err = model.Operation().ApplyStep().UpdateApplyStep(kt, filter, update); err != nil {
+		logs.Errorf("failed to update deliver step, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
@@ -414,23 +416,22 @@ func UpdateDeliverStep(suborderId string, total uint) error {
 }
 
 // StartStep update apply order step with start info
-func StartStep(suborderId string, stepName string) error {
-	filter := mapstr.MapStr{
-		"suborder_id": suborderId,
-		"step_name":   stepName,
-		"status":      types.StepStatusInit,
-	}
+func StartStep(kt *kit.Kit, suborderId string, stepName string) error {
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", suborderId),
+		tools.RuleEqual("step_name", stepName),
+		tools.RuleEqual("status", types.StepStatusInit),
+	)
 
 	now := time.Now()
-	doc := mapstr.MapStr{
-		"status":    types.StepStatusHandling,
-		"message":   types.StepMsgHandling,
-		"start_at":  now,
-		"update_at": now,
+	update := &cvmapplyproto.ZiyanCvmApplyStepUpdateReq{
+		Status:  cvt.ValToPtr(types.StepStatusHandling),
+		Message: types.StepMsgHandling,
+		StartAt: now.Format(constant.DateTimeLayout),
 	}
 
-	if err := model.Operation().ApplyStep().UpdateApplyStep(context.Background(), &filter, &doc); err != nil {
-		logs.Errorf("failed to start order %s step name %s, err: %v", suborderId, stepName, err)
+	if err := model.Operation().ApplyStep().UpdateApplyStep(kt, filter, update); err != nil {
+		logs.Errorf("failed to start order %s step name %s, err: %v, rid: %s", suborderId, stepName, err, kt.Rid)
 		return err
 	}
 
@@ -438,14 +439,12 @@ func StartStep(suborderId string, stepName string) error {
 }
 
 // getUnreleasedDevice gets unreleased devices binding to given apply order
-func getUnreleasedDevice(orderId string) ([]*types.DeviceInfo, error) {
-	filter := &mapstr.MapStr{
-		"suborder_id": orderId,
-	}
-
-	devices, err := model.Operation().DeviceInfo().GetDeviceInfo(context.Background(), filter)
+func getUnreleasedDevice(kt *kit.Kit, subOrderID string) ([]*types.DeviceInfo, error) {
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", subOrderID))
+	devices, err := model.Operation().DeviceInfo().GetDeviceInfo(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to get binding devices to order %s, err: %v", orderId, err)
+		logs.Errorf("failed to get binding devices to subOrderID: %s, err: %v, rid: %s", subOrderID, err, kt.Rid)
+		return nil, err
 	}
 
 	return devices, nil

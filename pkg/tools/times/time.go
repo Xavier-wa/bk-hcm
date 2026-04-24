@@ -24,6 +24,7 @@ import (
 
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/errf"
+	tabletypes "hcm/pkg/dal/table/types"
 )
 
 // ConvStdTimeFormat 转为HCM标准时间格式
@@ -231,4 +232,23 @@ func ParseDateTime(layout, t string) (time.Time, error) {
 	}
 
 	return pdTime, nil
+}
+
+// ParseTypesTime converts types.Time (ISO 8601 string) to time.Time
+// If the input is empty or invalid, returns zero time
+func ParseTypesTime(t tabletypes.Time) (time.Time, error) {
+	if len(t) == 0 {
+		return time.Time{}, nil
+	}
+
+	// types.Time uses ISO 8601 format: "2006-01-02T15:04:05Z07:00"
+	parsed, err := time.Parse(constant.TimeStdFormat, string(t))
+	if err != nil {
+		// Try alternative format without timezone
+		parsed, err = time.Parse(constant.DateTimeLayoutISO, string(t))
+		if err != nil {
+			return time.Time{}, err
+		}
+	}
+	return parsed, nil
 }

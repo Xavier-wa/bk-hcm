@@ -28,9 +28,12 @@ import (
 	"hcm/cmd/woa-server/logics/task/scheduler/record"
 	model "hcm/cmd/woa-server/model/task"
 	types "hcm/cmd/woa-server/types/task"
-	"hcm/pkg/criteria/mapstr"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	"hcm/pkg/criteria/constant"
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	cvt "hcm/pkg/tools/converter"
 )
 
 // recoverGenerateStep 恢复generateStep为StepStatusInit｜StepStatusHandling的订单
@@ -76,11 +79,11 @@ func (r *applyRecoverer) recoverPmHandling(kt *kit.Kit, generateRecord *types.Ge
 		return "", err
 	}
 	if len(devices) == 0 {
-		logs.Infof("unkown generate status, check cmdb to find if matched pm, subOrderId: %s, generateId: %d, "+
+		logs.Infof("unkown generate status, check cmdb to find if matched pm, subOrderId: %s, generateId: %s, "+
 			"status: %d, rid: %s", order.SubOrderId, generateRecord.GenerateId, generateRecord.Status, kt.Rid)
 		msg := "unkown generate status, check cmdb to find if matched pm"
 		return msg, fmt.Errorf("unkown generate status, check cmdb to find if matched pm, subOrderId: %s, "+
-			"generateId: %d, status: %d", order.SubOrderId, generateRecord.GenerateId, generateRecord.Status)
+			"generateId: %s, status: %d", order.SubOrderId, generateRecord.GenerateId, generateRecord.Status)
 	}
 
 	if len(devices) >= int(order.TotalNum) {
@@ -88,7 +91,7 @@ func (r *applyRecoverer) recoverPmHandling(kt *kit.Kit, generateRecord *types.Ge
 		for _, host := range devices {
 			successIps = append(successIps, host.Ip)
 		}
-		err = r.schedulerIf.GetGenerator().UpdateGenerateRecord(kt.Ctx, order.ResourceType,
+		err = r.schedulerIf.GetGenerator().UpdateGenerateRecord(kt, order,
 			generateRecord.GenerateId, types.GenerateStatusSuccess, "success", "", successIps)
 		if err != nil {
 			logs.Errorf("failed to match pm when update generate record, err: %v, subOrderId: %s, rid: %s", err,
@@ -96,7 +99,7 @@ func (r *applyRecoverer) recoverPmHandling(kt *kit.Kit, generateRecord *types.Ge
 			return "", err
 		}
 		// update generate step record
-		if err = record.UpdateGenerateStep(order.SubOrderId, order.TotalNum, nil); err != nil {
+		if err = record.UpdateGenerateStep(kt, order.SubOrderId, order.TotalNum, nil); err != nil {
 			logs.Errorf("failed to update generate step, subOrderId: %s, err: %v, rid: %s", order.SubOrderId, err,
 				kt.Rid)
 			return "", err
@@ -128,10 +131,10 @@ func (r *applyRecoverer) recoverPmResource(kt *kit.Kit, generateRecord *types.Ge
 	case types.GenerateStatusSuspend:
 		logs.Infof("ignore generate suspend order, subOrderId: %s, rid: %s", order.SubOrderId, kt.Rid)
 	default:
-		logs.Errorf("recover concentrated generate: unknown generate status, subOrderId: %s, generateId: %d, status: %d,"+
-			"rid: %s", order.SubOrderId, generateRecord.GenerateId, generateRecord.Status, kt.Rid)
-		return "", fmt.Errorf("recover concentrated generate: unknown generate status, subOrderId: %s, generateId: %d, "+
-			"status: %d", order.SubOrderId, generateRecord.GenerateId, generateRecord.Status)
+		logs.Errorf("recover concentrated generate: unknown generate status, subOrderId: %s, generateId: %s, "+
+			"status: %d, rid: %s", order.SubOrderId, generateRecord.GenerateId, generateRecord.Status, kt.Rid)
+		return "", fmt.Errorf("recover concentrated generate: unknown generate status, subOrderId: %s, "+
+			"generateId: %s, status: %d", order.SubOrderId, generateRecord.GenerateId, generateRecord.Status)
 	}
 	return "", nil
 }
@@ -147,7 +150,7 @@ func (r *applyRecoverer) recoverGenerate(kt *kit.Kit, generateRecords []*types.G
 		if record.Status == types.GenerateStatusInit {
 			// 未获得云梯生产id,未知是否调用生产，此记录设置状态为GenerateStatusSuspend，不再触发后续生产
 			if err := r.updateGenerateSuspend(kt, record.GenerateId, types.GenerateStatusSuspend); err != nil {
-				logs.Errorf("failed to update generate suspend, err: %v, generateId: %d, rid: %s", err,
+				logs.Errorf("failed to update generate suspend, err: %v, generateId: %s, rid: %s", err,
 					record.GenerateId, kt.Rid)
 			}
 			isSuspend = true
@@ -191,16 +194,17 @@ func (r *applyRecoverer) recoverMatchingNoGenerate(kt *kit.Kit, subOrderId strin
 		logs.Errorf("failed to recover generate start step, err: %v, subOrderId: %s, rid: %s", err, subOrderId, kt.Rid)
 		return err
 	}
-	filter := &mapstr.MapStr{
-		"suborder_id": subOrderId,
-		"status":      types.ApplyStatusMatching,
-	}
-	doc := &mapstr.MapStr{
-		"status":    types.ApplyStatusWaitForMatch,
-		"update_at": time.Now(),
+
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", subOrderId),
+		tools.RuleEqual("status", types.ApplyStatusMatching),
+	)
+
+	update := &cvmapplyproto.ZiyanCvmApplySuborderUpdateReq{
+		Status: types.ApplyStatusWaitForMatch,
 	}
 
-	if err := model.Operation().ApplyOrder().UpdateApplyOrder(kt.Ctx, filter, doc); err != nil {
+	if err := model.Operation().ApplyOrder().UpdateApplyOrder(kt, filter, update); err != nil {
 		logs.Errorf("failed to recover and update apply order update status, err: %v, suborderId: %s, rid: %s",
 			err, subOrderId, kt.Rid)
 		return err
@@ -210,18 +214,17 @@ func (r *applyRecoverer) recoverMatchingNoGenerate(kt *kit.Kit, subOrderId strin
 
 // terminateApplyOrder 恢复申请状态为ApplyStatusMatching且generateRecord状态为init的订单
 func (r *applyRecoverer) terminateApplyOrder(kt *kit.Kit, subOrderId string) error {
-	filter := &mapstr.MapStr{
-		"suborder_id": subOrderId,
-		"status":      types.ApplyStatusMatching,
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", subOrderId),
+		tools.RuleEqual("status", types.ApplyStatusMatching),
+	)
+
+	update := &cvmapplyproto.ZiyanCvmApplySuborderUpdateReq{
+		Stage:  types.TicketStageSuspend,
+		Status: types.ApplyStatusTerminate,
 	}
 
-	doc := &mapstr.MapStr{
-		"status":    types.ApplyStatusTerminate,
-		"stage":     types.TicketStageSuspend,
-		"update_at": time.Now(),
-	}
-
-	if err := model.Operation().ApplyOrder().UpdateApplyOrder(kt.Ctx, filter, doc); err != nil {
+	if err := model.Operation().ApplyOrder().UpdateApplyOrder(kt, filter, update); err != nil {
 		logs.Errorf("failed to update apply order status to apply status terminate, err: %v, suborderId: %s, rid: %s",
 			err, subOrderId, kt.Rid)
 		return err
@@ -234,7 +237,7 @@ func (r *applyRecoverer) recoverGenerateSuccess(kt *kit.Kit, order *types.ApplyO
 	generateRecord *types.GenerateRecord) error {
 
 	// update generate step record
-	if err := record.UpdateGenerateStep(order.SubOrderId, order.TotalNum, nil); err != nil {
+	if err := record.UpdateGenerateStep(kt, order.SubOrderId, order.TotalNum, nil); err != nil {
 		logs.Errorf("failed to update generate step, err: %v, subOrderId: %s, rid: %s", err, order.SubOrderId, kt.Rid)
 		return err
 	}
@@ -260,7 +263,7 @@ func (r *applyRecoverer) recoverGenerateHandling(kt *kit.Kit, order *types.Apply
 		taskId := recordInfo.TaskId
 
 		wg.Add(1)
-		go func(taskId string, generateId uint64, order *types.ApplyOrder, recordInfo *types.GenerateRecord) {
+		go func(taskId string, generateId string, order *types.ApplyOrder, recordInfo *types.GenerateRecord) {
 			defer wg.Done()
 			switch recordInfo.Status {
 			case types.GenerateStatusHandling:
@@ -271,7 +274,7 @@ func (r *applyRecoverer) recoverGenerateHandling(kt *kit.Kit, order *types.Apply
 					atomic.AddInt64(&errorNum, 1)
 					return
 				}
-				logs.Infof("success to launch cvm, suborderId: %s, generateId: %d, rid: %s", order.SubOrderId,
+				logs.Infof("success to launch cvm, suborderId: %s, generateId: %s, rid: %s", order.SubOrderId,
 					generateId, kt.Rid)
 				atomic.AddInt64(&generateNum, 1)
 
@@ -284,7 +287,7 @@ func (r *applyRecoverer) recoverGenerateHandling(kt *kit.Kit, order *types.Apply
 				atomic.AddInt64(&generateNum, 1)
 
 			default:
-				logs.Errorf("recover generate: unKown generate status, suborderId: %s, generateId: %d, status: %d, "+
+				logs.Errorf("recover generate: unKown generate status, suborderId: %s, generateId: %s, status: %d, "+
 					"rid: %s", order.SubOrderId, generateId, recordInfo.Status, kt.Rid)
 			}
 		}(taskId, generateId, order, recordInfo)
@@ -300,14 +303,14 @@ func (r *applyRecoverer) recoverGenerateHandling(kt *kit.Kit, order *types.Apply
 	// 有生产错误记录，且不是suspend状态，更新apply order状态
 	if errorNum > 0 && !isSuspend {
 		// check all generate records and update apply order status
-		if err := r.schedulerIf.UpdateOrderStatus(order.ResourceType, order.SubOrderId); err != nil {
+		if err := r.schedulerIf.UpdateOrderStatus(kt, order.ResourceType, order.SubOrderId); err != nil {
 			logs.Errorf("failed to update order status, err: %v, subOrderId: %s, rid: %s", err, order.SubOrderId,
 				kt.Rid)
 		}
 	}
 
 	// update generate step record, skip err, continue generate devices
-	if err := record.UpdateGenerateStep(order.SubOrderId, order.TotalNum, nil); err != nil {
+	if err := record.UpdateGenerateStep(kt, order.SubOrderId, order.TotalNum, nil); err != nil {
 		logs.Errorf("failed to update generate step, err: %v, subOrderId: %s, rid: %s", err, order.SubOrderId, kt.Rid)
 	}
 
@@ -315,17 +318,13 @@ func (r *applyRecoverer) recoverGenerateHandling(kt *kit.Kit, order *types.Apply
 }
 
 // updateGenerateRecord 更新生成记录以触发generate监听器
-func (r *applyRecoverer) updateGenerateRecord(kt *kit.Kit, generateId uint64, status types.GenerateStepStatus) error {
-	filter := &mapstr.MapStr{
-		"generate_id": generateId,
+func (r *applyRecoverer) updateGenerateRecord(kt *kit.Kit, generateID string, status types.GenerateStepStatus) error {
+	filter := tools.ExpressionAnd(tools.RuleEqual("generate_id", generateID))
+	update := &cvmapplyproto.ZiyanCvmGenerateRecordUpdateReq{
+		Status: cvt.ValToPtr(status),
 	}
-	now := time.Now()
-	doc := mapstr.MapStr{
-		"status":    status,
-		"update_at": now,
-	}
-	if err := model.Operation().GenerateRecord().UpdateGenerateRecord(kt.Ctx, filter, &doc); err != nil {
-		logs.Errorf("failed to update generate record, err: %v, generateId: %d, rid: %s", err, generateId, kt.Rid)
+	if err := model.Operation().GenerateRecord().UpdateGenerateRecord(kt, filter, update); err != nil {
+		logs.Errorf("failed to update generate record, err: %v, generateID: %s, rid: %s", err, generateID, kt.Rid)
 		return err
 	}
 
@@ -333,19 +332,16 @@ func (r *applyRecoverer) updateGenerateRecord(kt *kit.Kit, generateId uint64, st
 }
 
 // updateGenerateRecord updates generate record to trigger generater listener
-func (r *applyRecoverer) updateGenerateSuspend(kt *kit.Kit, generateId uint64, status types.GenerateStepStatus) error {
-	filter := &mapstr.MapStr{
-		"generate_id": generateId,
+func (r *applyRecoverer) updateGenerateSuspend(kt *kit.Kit, generateID string, status types.GenerateStepStatus) error {
+	filter := tools.ExpressionAnd(tools.RuleEqual("generate_id", generateID))
+	update := &cvmapplyproto.ZiyanCvmGenerateRecordUpdateReq{
+		Status: cvt.ValToPtr(status),
+		Message: cvt.ValToPtr("generate failed, unknown if generate interface was called, task_id not obtained, " +
+			"check machines"),
 	}
-	now := time.Now()
-	doc := mapstr.MapStr{
-		"update_at": now,
-		"status":    status,
-		"message":   "generate failed, unknown if generate interface was called, task_id not obtained, check machines",
-	}
-	if err := model.Operation().GenerateRecord().UpdateGenerateRecord(kt.Ctx, filter, &doc); err != nil {
+	if err := model.Operation().GenerateRecord().UpdateGenerateRecord(kt, filter, update); err != nil {
 		logs.Errorf("failed to update generateRecord, unknown if generate interface was called, task_id not obtained,"+
-			"err: %v, generateId: %d, rid: %s", err, generateId, kt.Rid)
+			"err: %v, generateID: %s, rid: %s", err, generateID, kt.Rid)
 		return err
 	}
 
@@ -353,7 +349,7 @@ func (r *applyRecoverer) updateGenerateSuspend(kt *kit.Kit, generateId uint64, s
 }
 
 // dealGenerateFailed 生产失败时处理生产步骤、生产记录及订单状态
-func (r *applyRecoverer) dealGenerateFailed(kt *kit.Kit, order *types.ApplyOrder, generateId uint64, msg string) error {
+func (r *applyRecoverer) dealGenerateFailed(kt *kit.Kit, order *types.ApplyOrder, generateId string, msg string) error {
 	if err := r.updateGenerateFailedStep(kt, order, msg); err != nil {
 		logs.Errorf("failed to update generate failed step, err: %v, subOrderId: %s, rid: %s", err, order.SubOrderId,
 			kt.Rid)
@@ -376,18 +372,17 @@ func (r *applyRecoverer) dealGenerateFailed(kt *kit.Kit, order *types.ApplyOrder
 
 func (r *applyRecoverer) updateGenerateFailedStep(kt *kit.Kit, order *types.ApplyOrder, msg string) error {
 	now := time.Now()
-	filter := &mapstr.MapStr{
-		"suborder_id": order.SubOrderId,
-		"step_name":   types.StepNameGenerate,
-	}
-	doc := &mapstr.MapStr{
-		"status":    types.StepStatusFailed,
-		"message":   msg,
-		"update_at": now,
-		"end_at":    now,
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", order.SubOrderId),
+		tools.RuleEqual("step_name", types.StepNameGenerate),
+	)
+	update := &cvmapplyproto.ZiyanCvmApplyStepUpdateReq{
+		Status:  cvt.ValToPtr(types.StepStatusFailed),
+		Message: msg,
+		EndAt:   now.Format(constant.DateTimeLayout),
 	}
 
-	if err := model.Operation().ApplyStep().UpdateApplyStep(kt.Ctx, filter, doc); err != nil {
+	if err := model.Operation().ApplyStep().UpdateApplyStep(kt, filter, update); err != nil {
 		logs.Errorf("failed to update apply generate step status to apply status failed, err: %v, suborderId: %s, "+
 			"rid: %s", err, order.SubOrderId, kt.Rid)
 		return err
@@ -397,11 +392,8 @@ func (r *applyRecoverer) updateGenerateFailedStep(kt *kit.Kit, order *types.Appl
 }
 
 func (r *applyRecoverer) getDeviceByOrder(kt *kit.Kit, subOrderId string) ([]*types.DeviceInfo, error) {
-
-	filter := &mapstr.MapStr{
-		"suborder_id": subOrderId,
-	}
-	devices, err := model.Operation().DeviceInfo().GetDeviceInfo(kt.Ctx, filter)
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", subOrderId))
+	devices, err := model.Operation().DeviceInfo().GetDeviceInfo(kt, filter)
 	if err != nil {
 		logs.Errorf("failed to get device by subOrderId, subOrderId: %s, err: %v, rid: %s", subOrderId, err, kt.Rid)
 		return nil, err

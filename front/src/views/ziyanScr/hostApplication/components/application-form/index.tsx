@@ -488,6 +488,9 @@ export default defineComponent({
       if (spec.zones === null && spec.zone === 'cvm_separate_campus') {
         spec.zones = ['all'];
       }
+      if (!Array.isArray(spec.zones) || !spec.zones.length) {
+        spec.zones = spec.zone ? [spec.zone] : [];
+      }
       // 兼容旧单据数据
       if (!data_disk) {
         return disk_type ? { ...spec, data_disk: [{ disk_type, disk_size, disk_num: 1 }] } : { ...spec, data_disk: [] };
@@ -920,9 +923,10 @@ export default defineComponent({
         bk_biz_id: +computedBiz.value,
         specs: cloudTableData.value.map((item) => ({
           region: item.spec.region,
-          zones: item.spec.zones,
+          // eslint-disable-next-line no-nested-ternary
+          zones: Array.isArray(item.spec.zones) ? item.spec.zones : item.spec.zone ? [item.spec.zone] : [],
           device_type: item.spec.device_type,
-          replicas: item.spec.replicas,
+          replicas: Number(item.replicas ?? item.spec.replicas ?? 0),
         })),
       });
     };

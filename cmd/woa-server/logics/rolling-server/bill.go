@@ -52,16 +52,7 @@ func (l *logics) syncBillsPeriodically() {
 	nextRun := time.Date(now.Year(), now.Month(), now.Day(), 1, 0, 0, 0, now.Location())
 	if now.After(nextRun) {
 		// 如果现在已经过了1点，再计算一次当天的罚金，防止刚好在1点的时候被重启了;最后计算明天的1点的时间
-		kt := core.NewBackendKit()
-		req := &rollingserver.RollingBillSyncReq{
-			BkBizID: constant.SyncAllBiz,
-			Year:    now.Year(),
-			Month:   int(now.Month()),
-			Day:     now.Day(),
-		}
-		if err := l.SyncBills(kt, req); err != nil {
-			logs.Errorf("sync all biz rolling bill failed, err: %v, req: %v, rid: %s", err, *req, kt.Rid)
-		}
+		l.syncAllBizBillsByDate(now)
 
 		nextRun = nextRun.Add(24 * time.Hour)
 	}
@@ -70,17 +61,8 @@ func (l *logics) syncBillsPeriodically() {
 	time.Sleep(time.Until(nextRun))
 
 	for {
-		kt := core.NewBackendKit()
 		now = time.Now()
-		req := &rollingserver.RollingBillSyncReq{
-			BkBizID: constant.SyncAllBiz,
-			Year:    now.Year(),
-			Month:   int(now.Month()),
-			Day:     now.Day(),
-		}
-		if err := l.SyncBills(kt, req); err != nil {
-			logs.Errorf("sync all biz rolling bill failed, err: %v, req: %v, rid: %s", err, *req, kt.Rid)
-		}
+		l.syncAllBizBillsByDate(now)
 
 		// 计算下一个 1 点
 		nextRun = nextRun.Add(24 * time.Hour)
@@ -90,6 +72,26 @@ func (l *logics) syncBillsPeriodically() {
 		if nextRun.After(now) {
 			time.Sleep(time.Until(nextRun)) // 等待直到下一个1点
 		}
+	}
+}
+
+func (l *logics) syncAllBizBillsByDate(now time.Time) {
+	// 只有 master 节点才执行
+	if !l.sd.IsMaster() {
+		logs.V(5).Infof("current node is not master, skip syncBills at: %v", now)
+		return
+	}
+
+	kt := core.NewBackendKit()
+	req := &rollingserver.RollingBillSyncReq{
+		BkBizID: constant.SyncAllBiz,
+		Year:    now.Year(),
+		Month:   int(now.Month()),
+		Day:     now.Day(),
+	}
+
+	if err := l.SyncBills(kt, req); err != nil {
+		logs.Errorf("sync all biz rolling bill failed, err: %v, req: %v, rid: %s", err, *req, kt.Rid)
 	}
 }
 

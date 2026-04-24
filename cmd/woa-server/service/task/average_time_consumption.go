@@ -104,13 +104,23 @@ func (s *service) GetPercentileTimeConsumptionOverview(cts *rest.Contexts) (any,
 		logs.Errorf("no permission to apply biz hosts statistics, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, err
 	}
+	startTime, err := input.GetStartTime()
+	if err != nil {
+		logs.Errorf("parse start time failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+	endTime, err := input.GetEndTime()
+	if err != nil {
+		logs.Errorf("parse end time failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
 
-	rst, err := s.logics.Operation().GetPercentileTimeConsumptionOverview(cts.Kit, input)
+	rst, err := s.logics.Operation().GetPercentileTimeConsumptionOverview(cts.Kit, startTime, endTime)
 	if err != nil {
 		logs.Errorf("failed to get percentile time consumption overview, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, err
 	}
-	return types.PercentileTimeConsumptionOverviewResp{Details: rst}, nil
+	return rst, nil
 }
 
 // GetPercentileTimeConsumptionCompare get percentile time consumption compare
@@ -134,7 +144,7 @@ func (s *service) GetPercentileTimeConsumptionCompare(cts *rest.Contexts) (any, 
 		return nil, err
 	}
 
-	rst, err := s.logics.Operation().GetPercentileTimeConsumptionCompare(cts.Kit, input)
+	rst, err := s.logics.Operation().GetPercentileTimeConsumptionCompare(cts.Kit, input.CurrentDate, input.CompareDate)
 	if err != nil {
 		logs.Errorf("failed to get percentile time consumption compare, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, err

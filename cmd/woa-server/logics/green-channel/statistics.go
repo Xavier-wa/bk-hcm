@@ -22,17 +22,43 @@ package greenchannel
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	model "hcm/cmd/woa-server/model/task"
 	gctypes "hcm/cmd/woa-server/types/green-channel"
-	"hcm/pkg"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/runtime/filter"
 	"hcm/pkg/tools/times"
 )
+
+// buildSuborderFilter 构建子单过滤条件：created_at在日期范围内，且require_type为小额绿通。
+func buildSuborderFilter(dateRange gctypes.DateRange, bkBizIDs []int64) (*filter.Expression, error) {
+	rules := []filter.RuleFactory{
+		&filter.AtomRule{
+			Field: "created_at",
+			Op:    filter.GreaterThanEqual.Factory(),
+			Value: dateRange.Start.GetTime().Format(constant.TimeStdFormat),
+		},
+		&filter.AtomRule{
+			Field: "created_at",
+			Op:    filter.LessThanEqual.Factory(),
+			Value: dateRange.End.GetTime().Format(constant.TimeStdFormat),
+		},
+		tools.RuleEqual("require_type", enumor.RequireTypeGreenChannel),
+	}
+
+	if len(bkBizIDs) != 0 {
+		rules = append(rules, tools.RuleIn("bk_biz_id", bkBizIDs))
+	}
+
+	return tools.And(rules...)
+}
 
 // GetCpuCoreSummary get cpu core summary.
 func (l *logics) GetCpuCoreSummary(kt *kit.Kit, req *gctypes.CpuCoreSummaryReq) (*gctypes.CpuCoreSummaryResp, error) {
@@ -41,38 +67,25 @@ func (l *logics) GetCpuCoreSummary(kt *kit.Kit, req *gctypes.CpuCoreSummaryReq) 
 		return nil, err
 	}
 
-	filter := map[string]interface{}{
-		"create_at": map[string]interface{}{
-			"$gte": req.DateRange.Start.GetTime(),
-			"$lte": req.DateRange.End.GetTime(),
-		},
-		"require_type": enumor.RequireTypeGreenChannel,
-	}
-	if len(req.BkBizIDs) != 0 {
-		filter["bk_biz_id"] = map[string]interface{}{
-			"$in": req.BkBizIDs,
-		}
-	}
-
-	pipeline := []map[string]interface{}{
-		{pkg.BKDBMatch: filter},
-		{pkg.BKDBGroup: map[string]interface{}{
-			"_id":   nil,
-			"count": map[string]interface{}{pkg.BKDBSum: "$delivered_core"}},
-		},
-	}
-
-	aggRst := make([]gctypes.AggregateCount, 0)
-	if err := model.Operation().ApplyOrder().AggregateAll(kt.Ctx, pipeline, &aggRst); err != nil {
-		logs.Errorf("failed to get apply order cpu core summary, err: %v, req: %v, rid: %s", err, pipeline, kt.Rid)
+	filterExpr, err := buildSuborderFilter(req.DateRange, req.BkBizIDs)
+	if err != nil {
+		logs.Errorf("failed to build suborder filter, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
-	var count uint64
-	if len(aggRst) != 0 {
-		count = aggRst[0].Count
+
+	items, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt, filterExpr, nil)
+	if err != nil {
+		logs.Errorf("failed to list suborders for cpu core summary, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
 	}
 
-	return &gctypes.CpuCoreSummaryResp{SumDeliveredCore: count}, nil
+	// 汇总所有子单的 delivered_core
+	var sumDeliveredCore uint64
+	for _, item := range items {
+		sumDeliveredCore += uint64(item.DeliveredCore)
+	}
+
+	return &gctypes.CpuCoreSummaryResp{SumDeliveredCore: sumDeliveredCore}, nil
 }
 
 // ListStatisticalRecord list statistical record.
@@ -83,78 +96,89 @@ func (l *logics) ListStatisticalRecord(kt *kit.Kit, req *gctypes.StatisticalReco
 		logs.Errorf("failed to validate request, err: %v, req: %+v, rid: %s", err, *req, kt.Rid)
 		return nil, err
 	}
-	filter := map[string]interface{}{
-		"create_at": map[string]interface{}{
-			"$gte": req.DateRange.Start.GetTime(),
-			"$lte": req.DateRange.End.GetTime(),
-		},
-		"require_type": enumor.RequireTypeGreenChannel,
-	}
-	if len(req.BkBizIDs) != 0 {
-		filter["bk_biz_id"] = map[string]interface{}{
-			"$in": req.BkBizIDs,
-		}
-	}
 
-	if req.Page.Count {
-		pipeline := []map[string]interface{}{
-			{pkg.BKDBMatch: filter},
-			{pkg.BKDBGroup: map[string]interface{}{"_id": "$bk_biz_id"}},
-			{pkg.BKDBCount: "count"},
-		}
-		aggRst := make([]gctypes.AggregateCount, 0)
-		if err := model.Operation().ApplyOrder().AggregateAll(kt.Ctx, pipeline, &aggRst); err != nil {
-			logs.Errorf("failed to get statistical record count, err: %v, req: %v, rid: %s", err, pipeline, kt.Rid)
-			return nil, err
-		}
-		var count uint64
-		if len(aggRst) != 0 {
-			count = aggRst[0].Count
-		}
-		return &gctypes.StatisticalRecordResp{Count: count}, nil
-	}
-
-	var sumDeliveredCore, sumAppliedCore, orderCount = "sum_delivered_core", "sum_applied_core", "order_count"
-	pipeline := []map[string]interface{}{
-		{pkg.BKDBMatch: filter},
-		{pkg.BKDBGroup: map[string]interface{}{
-			"_id":              "$bk_biz_id",
-			"unique_order_ids": map[string]interface{}{pkg.BKDBAddToSet: "$order_id"},
-			sumDeliveredCore:   map[string]interface{}{pkg.BKDBSum: "$delivered_core"},
-			sumAppliedCore:     map[string]interface{}{pkg.BKDBSum: "$applied_core"},
-		}},
-		{pkg.BKDBProject: map[string]interface{}{
-			"_id":            0,
-			"bk_biz_id":      "$_id",
-			orderCount:       map[string]interface{}{pkg.BKDBSize: "$unique_order_ids"},
-			sumDeliveredCore: 1,
-			sumAppliedCore:   1,
-		}},
-		{pkg.BKDBSkip: req.Page.Start},
-		{pkg.BKDBLimit: req.Page.Limit},
-	}
-	if req.Page.Sort != "" {
-		sort := make(map[string]interface{})
-		split := strings.Split(req.Page.Sort, ",")
-		for _, field := range split {
-			switch field {
-			case orderCount:
-				sort[orderCount] = pkg.BKDBAsc
-			case sumAppliedCore:
-				sort[sumAppliedCore] = pkg.BKDBAsc
-			case sumDeliveredCore:
-				sort[sumDeliveredCore] = pkg.BKDBAsc
-			}
-		}
-		pipeline = append(pipeline, map[string]interface{}{pkg.BKDBSort: sort})
-	}
-	aggRst := make([]gctypes.StatisticalRecordItem, 0)
-	if err := model.Operation().ApplyOrder().AggregateAll(kt.Ctx, pipeline, &aggRst); err != nil {
-		logs.Errorf("failed to get statistical record details, err: %v, req: %v, rid: %s", err, pipeline, kt.Rid)
+	filterExpr, err := buildSuborderFilter(req.DateRange, req.BkBizIDs)
+	if err != nil {
+		logs.Errorf("failed to build suborder filter, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
 
-	return &gctypes.StatisticalRecordResp{Details: aggRst}, nil
+	items, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt, filterExpr, nil)
+	if err != nil {
+		logs.Errorf("failed to list suborders for statistical record, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	// 按 bk_biz_id 聚合
+	type bizAgg struct {
+		sumDeliveredCore uint64
+		sumAppliedCore   uint64
+		uniqueOrderIDs   map[uint64]struct{}
+	}
+	bizMap := make(map[int64]*bizAgg)
+	for _, item := range items {
+		agg, ok := bizMap[item.BkBizId]
+		if !ok {
+			agg = &bizAgg{uniqueOrderIDs: make(map[uint64]struct{})}
+			bizMap[item.BkBizId] = agg
+		}
+		agg.sumDeliveredCore += uint64(item.DeliveredCore)
+		agg.sumAppliedCore += uint64(item.AppliedCore)
+		agg.uniqueOrderIDs[item.OrderId] = struct{}{}
+	}
+
+	// 如果是 count 请求，返回去重后的 biz 数量
+	if req.Page.Count {
+		return &gctypes.StatisticalRecordResp{Count: uint64(len(bizMap))}, nil
+	}
+
+	// 转换为结果列表
+	details := make([]gctypes.StatisticalRecordItem, 0, len(bizMap))
+	for bizID, agg := range bizMap {
+		details = append(details, gctypes.StatisticalRecordItem{
+			BizID:            bizID,
+			OrderCount:       uint64(len(agg.uniqueOrderIDs)),
+			SumDeliveredCore: agg.sumDeliveredCore,
+			SumAppliedCore:   agg.sumAppliedCore,
+		})
+	}
+
+	// 排序
+	if req.Page.Sort != "" {
+		sortFields := strings.Split(req.Page.Sort, ",")
+		sort.Slice(details, func(i, j int) bool {
+			for _, field := range sortFields {
+				switch field {
+				case "order_count":
+					if details[i].OrderCount != details[j].OrderCount {
+						return details[i].OrderCount < details[j].OrderCount
+					}
+				case "sum_applied_core":
+					if details[i].SumAppliedCore != details[j].SumAppliedCore {
+						return details[i].SumAppliedCore < details[j].SumAppliedCore
+					}
+				case "sum_delivered_core":
+					if details[i].SumDeliveredCore != details[j].SumDeliveredCore {
+						return details[i].SumDeliveredCore < details[j].SumDeliveredCore
+					}
+				}
+			}
+			return false
+		})
+	}
+
+	// 分页
+	start := int(req.Page.Start)
+	limit := int(req.Page.Limit)
+	if start >= len(details) {
+		return &gctypes.StatisticalRecordResp{Details: []gctypes.StatisticalRecordItem{}}, nil
+	}
+	end := start + limit
+	if end > len(details) {
+		end = len(details)
+	}
+
+	return &gctypes.StatisticalRecordResp{Details: details[start:end]}, nil
 }
 
 // CanApplyHost check if can apply host

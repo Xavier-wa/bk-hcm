@@ -14,46 +14,60 @@
 package apply
 
 import (
-	"context"
 	"errors"
+	"sync"
 	"time"
 
-	"hcm/cmd/woa-server/model/task"
-	"hcm/cmd/woa-server/storage/dal"
-	"hcm/cmd/woa-server/storage/stream"
-	"hcm/cmd/woa-server/storage/stream/types"
-	recovertask "hcm/cmd/woa-server/types/task"
 	tasktype "hcm/cmd/woa-server/types/task"
-	"hcm/pkg"
-	"hcm/pkg/criteria/mapstr"
+	"hcm/pkg/api/core"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	ziyan "hcm/pkg/client/data-service/tcloud-ziyan"
+	"hcm/pkg/criteria/constant"
+	"hcm/pkg/dal/dao/tools"
+	"hcm/pkg/kit"
 	"hcm/pkg/logs"
-	"hcm/pkg/tools/metadata"
-
-	"github.com/tidwall/gjson"
+	"hcm/pkg/runtime/filter"
+	cvt "hcm/pkg/tools/converter"
 	"k8s.io/client-go/util/workqueue"
+)
+
+const (
+	// defaultPollInterval default polling interval
+	defaultPollInterval = 5 * time.Second
 )
 
 // Interface apply informer interface
 type Interface interface {
 	// Pop gets head of apply info queue
 	Pop() (string, error)
+	// Stop stops apply informer watch loop.
+	Stop()
 }
 
 // applyInformer apply informer which list and watch database and cache apply order info
 type applyInformer struct {
-	key     Key
-	watchDB dal.DB
-	event   stream.LoopInterface
-	queue   workqueue.RateLimitingInterface
+	client       *ziyan.Client
+	queue        workqueue.RateLimitingInterface
+	pollInterval time.Duration
+	lastPollTime time.Time
+	wg           sync.WaitGroup
+	mu           sync.Mutex
+	stopCh       chan struct{}
+	stopOnce     sync.Once
 }
 
 // New creates an apply informer
-func New(loopWatch stream.LoopInterface, watchDB dal.DB) (*applyInformer, error) {
+func New(client *ziyan.Client) (*applyInformer, error) {
+	if client == nil {
+		return nil, errors.New("ziyan data-service client is nil")
+	}
+
 	applyInformer := &applyInformer{
-		key:     KeyApply,
-		watchDB: watchDB,
-		event:   loopWatch,
-		queue:   workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "apply"),
+		queue:        workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "apply"),
+		stopCh:       make(chan struct{}),
+		client:       client,
+		pollInterval: defaultPollInterval,
+		lastPollTime: time.Now(),
 	}
 
 	if err := applyInformer.Run(); err != nil {
@@ -66,7 +80,25 @@ func New(loopWatch stream.LoopInterface, watchDB dal.DB) (*applyInformer, error)
 
 // Run starts apply informer
 func (a *applyInformer) Run() error {
-	return a.listAndWatchApplyOrder()
+	// list and watch apply subOrders on startup
+	if err := a.listAndWatchApplySubOrder(); err != nil {
+		return err
+	}
+
+	// start polling goroutine
+	a.wg.Add(1)
+	go a.pollLoop()
+
+	return nil
+}
+
+// Stop stops the apply informer
+func (a *applyInformer) Stop() {
+	a.stopOnce.Do(func() {
+		close(a.stopCh)
+		a.queue.ShutDown()
+		a.wg.Wait()
+	})
 }
 
 // Pop gets head of apply info queue
@@ -81,7 +113,7 @@ func (a *applyInformer) Pop() (string, error) {
 	id, ok := obj.(string)
 	if !ok {
 		a.queue.Forget(obj)
-		logs.Warnf("Expected string in queue but got %#v", obj)
+		logs.Warnf("expected string in queue but got %#v", obj)
 		return "", errors.New("got non-string from queue")
 	}
 
@@ -90,100 +122,137 @@ func (a *applyInformer) Pop() (string, error) {
 	return id, nil
 }
 
-// listAndWatchApplyOrder list and watch database and cache apply order into queue
-func (a *applyInformer) listAndWatchApplyOrder() error {
-	// list apply order
-	applyOrders, err := a.listApplyOrder()
+// pollLoop continuously polls for apply suborder changes
+func (a *applyInformer) pollLoop() {
+	defer a.wg.Done()
+
+	ticker := time.NewTicker(a.pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-a.stopCh:
+			logs.Infof("apply suborder informer polling stopped")
+			return
+		case <-ticker.C:
+			if err := a.pollApplySubOrders(); err != nil {
+				logs.Errorf("failed to poll apply suborders, err: %v", err)
+			}
+		}
+	}
+}
+
+// listAndWatchApplySubOrder lists and watch apply subOrders and adds them to queue
+func (a *applyInformer) listAndWatchApplySubOrder() error {
+	subOrderIDs, err := a.listApplySubOrders()
 	if err != nil {
 		return err
 	}
 
-	for _, order := range applyOrders {
-		a.queue.Add(order)
-	}
-	// watch apply order
-	handler := newApplyTokenHandler(a.key, a.watchDB)
-	startTime := &types.TimeStamp{Sec: uint32(time.Now().Unix())}
-
-	loopOpts := &types.LoopOneOptions{
-		LoopOptions: types.LoopOptions{
-			Name: "apply_info",
-			WatchOpt: &types.WatchOptions{
-				Options: types.Options{
-					EventStruct:     new(map[string]interface{}),
-					Collection:      pkg.BKTableNameApplyOrder,
-					StartAfterToken: nil,
-					StartAtTime:     startTime,
-					// TODO: add failure callback
-					WatchFatalErrorCallback: nil,
-				},
-			},
-			TokenHandler: handler,
-			RetryOptions: &types.RetryOptions{
-				MaxRetryCount: 4,
-				RetryDuration: 500 * time.Millisecond,
-			},
-		},
-		EventHandler: &types.OneHandler{
-			DoAdd:    a.onUpsert,
-			DoUpdate: a.onUpsert,
-			DoDelete: a.onDelete,
-		},
+	for _, id := range subOrderIDs {
+		a.queue.Add(id)
 	}
 
-	return a.event.WithOne(loopOpts)
+	logs.Infof("apply informer initialized with %d subOrders", len(subOrderIDs))
+	return nil
 }
 
-// listApplyOrder gets apply order list from database
-func (a *applyInformer) listApplyOrder() ([]string, error) {
-	restartTime := time.Now()
-	expireTime := restartTime.AddDate(0, 0, recovertask.ExpireDays)
-	filter := map[string]interface{}{
-		"status": &mapstr.MapStr{
-			pkg.BKDBIN: []string{string(tasktype.ApplyStatusWaitForMatch), string(tasktype.ApplyStatusMatchedSome)},
-		},
-		"create_at": mapstr.MapStr{
-			"$gte": expireTime,
-			"$lt":  restartTime,
-		},
-	}
+// listApplySubOrders gets apply order list from MySQL
+func (a *applyInformer) listApplySubOrders() ([]string, error) {
+	kt := core.NewBackendKit()
 
-	page := metadata.BasePage{
-		Limit: pkg.BKNoLimit,
-	}
+	// build filter: status in (wait_for_match, matched_some) and created_at within expiration window
+	now := time.Now()
+	expireTime := now.AddDate(0, 0, tasktype.ExpireDays)
 
-	orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(context.Background(), page, filter)
+	filterExpr, err := tools.And(
+		tools.RuleIn("status", []string{
+			string(tasktype.ApplyStatusWaitForMatch),
+			string(tasktype.ApplyStatusMatchedSome),
+		}),
+		tools.RuleGreaterThanEqual("created_at", expireTime.Format(constant.TimeStdFormat)),
+		tools.RuleLessThan("created_at", now.Format(constant.TimeStdFormat)),
+	)
 	if err != nil {
-		logs.Errorf("failed to list apply order by filter: %+v, err: %v", filter, err)
+		logs.Errorf("failed to build filter expression, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
 
-	orderIds := make([]string, 0)
-	for _, order := range orders {
-		orderIds = append(orderIds, order.SubOrderId)
-	}
-
-	return orderIds, nil
+	return a.queryApplySubOrders(kt, filterExpr)
 }
 
-// onUpsert set or update apply order cache
-func (a *applyInformer) onUpsert(e *types.Event) bool {
-	logs.V(5).Infof("received apply order event, op: %s, doc: %s, rid: %s", e.OperationType, e.DocBytes, e.ID())
+// pollApplySubOrders polls for apply suborder changes since last poll time
+func (a *applyInformer) pollApplySubOrders() error {
+	kt := core.NewBackendKit()
 
-	// TODO: suborder_id as const
-	id := gjson.GetBytes(e.DocBytes, "suborder_id").String()
-	if len(id) <= 0 {
-		logs.Errorf("received invalid apply event, skip, op: %s, doc: %s, rid: %s", e.OperationType, e.DocBytes, e.ID())
-		return false
+	a.mu.Lock()
+	lastPoll := a.lastPollTime
+	a.mu.Unlock()
+
+	// capture current poll upper bound and query with half-open time window: [lastPoll, pollStart)
+	pollStart := time.Now()
+	filterExpr, err := tools.And(
+		tools.RuleIn("status", []string{
+			string(tasktype.ApplyStatusWaitForMatch),
+			string(tasktype.ApplyStatusMatchedSome),
+		}),
+		tools.RuleGreaterThanEqual("updated_at", lastPoll.Format(constant.TimeStdFormat)),
+		tools.RuleLessThan("updated_at", pollStart.Format(constant.TimeStdFormat)),
+	)
+	if err != nil {
+		logs.Errorf("failed to build poll filter expression, err: %v, rid: %s", err, kt.Rid)
+		return err
 	}
 
-	a.queue.Add(id)
+	subOrderIDs, err := a.queryApplySubOrders(kt, filterExpr)
+	if err != nil {
+		return err
+	}
 
-	return false
+	for _, id := range subOrderIDs {
+		a.queue.Add(id)
+	}
+
+	// advance cursor only after successful processing to avoid skipping updates when query fails.
+	a.mu.Lock()
+	a.lastPollTime = pollStart
+	a.mu.Unlock()
+
+	if len(subOrderIDs) > 0 {
+		logs.V(5).Infof("apply informer polled %d orders, rid: %s", len(subOrderIDs), kt.Rid)
+	}
+
+	return nil
 }
 
-// onDelete delete apply order cache
-func (a *applyInformer) onDelete(e *types.Event) bool {
-	// TODO: add exception log
-	return false
+// queryApplySubOrders queries apply suborders from data-service
+func (a *applyInformer) queryApplySubOrders(kt *kit.Kit, filterExpr *filter.Expression) ([]string, error) {
+	subOrderIDs := make([]string, 0)
+
+	req := &cvmapplyproto.ZiyanCvmApplySuborderListReq{
+		Filter: filterExpr,
+		Page:   core.NewDefaultBasePage(),
+		Fields: []string{"suborder_id"},
+	}
+
+	for {
+		resp, err := a.client.ZiyanCvmApplySuborder.List(kt.Ctx, kt.Header(), req)
+		if err != nil {
+			logs.Errorf("failed to list apply suborders, err: %v, req: %+v, rid: %s", err, cvt.PtrToVal(req), kt.Rid)
+			return nil, err
+		}
+
+		for _, order := range resp.Details {
+			if order.SuborderID != "" {
+				subOrderIDs = append(subOrderIDs, order.SuborderID)
+			}
+		}
+
+		if len(resp.Details) < int(req.Page.Limit) {
+			break
+		}
+		req.Page.Start += uint32(req.Page.Limit)
+	}
+
+	return subOrderIDs, nil
 }

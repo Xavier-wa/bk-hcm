@@ -25,30 +25,26 @@ import (
 
 	model "hcm/cmd/woa-server/model/task"
 	types "hcm/cmd/woa-server/types/task"
-	"hcm/pkg"
-	"hcm/pkg/criteria/mapstr"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	"hcm/pkg/criteria/constant"
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/thirdparty/api-gateway/sopsapi"
-	"hcm/pkg/tools/metadata"
+	cvt "hcm/pkg/tools/converter"
 )
 
 // getTickets get apply ticket with stage and create_at between recoverTime and expireTime
 func (r *applyRecoverer) getRunningTickets(kt *kit.Kit, recoverTime time.Time,
 	expireTime time.Time, stage types.TicketStage) (order []*types.ApplyTicket, err error) {
-	filter := mapstr.MapStr{
-		"stage": stage,
-		"create_at": mapstr.MapStr{
-			"$gte": expireTime,
-			"$lt":  recoverTime,
-		},
-	}
-	page := metadata.BasePage{
-		Start: 0,
-		Limit: pkg.BKNoLimit,
-	}
 
-	tickets, err := model.Operation().ApplyTicket().FindManyApplyTicket(kt.Ctx, page, filter)
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("stage", stage),
+		tools.RuleGreaterThanEqual("created_at", expireTime.Format(constant.TimeStdFormat)),
+		tools.RuleLessThan("created_at", recoverTime.Format(constant.TimeStdFormat)),
+	)
+
+	tickets, err := model.Operation().ApplyTicket().FindManyApplyTicket(kt, filter, nil)
 	if err != nil {
 		logs.Errorf("failed to get apply ticket with RUNNING stage, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
@@ -59,19 +55,13 @@ func (r *applyRecoverer) getRunningTickets(kt *kit.Kit, recoverTime time.Time,
 // getAuditTickets 获取状态为TicketStageAudit订单
 func (r *applyRecoverer) getAuditTickets(kt *kit.Kit, recoverTime time.Time,
 	expireTime time.Time, stage types.TicketStage) ([]*types.ApplyTicket, error) {
-	filter := mapstr.MapStr{
-		"stage": stage,
-		"create_at": mapstr.MapStr{
-			"$gte": expireTime,
-			"$lt":  recoverTime,
-		},
-	}
-	page := metadata.BasePage{
-		Start: 0,
-		Limit: pkg.BKNoLimit,
-	}
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("stage", stage),
+		tools.RuleGreaterThanEqual("created_at", expireTime.Format(constant.TimeStdFormat)),
+		tools.RuleLessThan("created_at", recoverTime.Format(constant.TimeStdFormat)),
+	)
 
-	auditTickets, err := model.Operation().ApplyTicket().FindManyApplyTicket(kt.Ctx, page, filter)
+	auditTickets, err := model.Operation().ApplyTicket().FindManyApplyTicket(kt, filter, nil)
 	if err != nil {
 		logs.Errorf("failed to get apply ticket with AUDIT stage, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
@@ -81,11 +71,11 @@ func (r *applyRecoverer) getAuditTickets(kt *kit.Kit, recoverTime time.Time,
 
 // getOrderStep get step by suborderId and stepName
 func (r *applyRecoverer) getOrderStep(kt *kit.Kit, stepName string, suborderId string) (*types.ApplyStep, error) {
-	filter := mapstr.MapStr{
-		"suborder_id": suborderId,
-		"step_name":   stepName,
-	}
-	step, err := model.Operation().ApplyStep().GetApplyStep(kt.Ctx, &filter)
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", suborderId),
+		tools.RuleEqual("step_name", stepName),
+	)
+	step, err := model.Operation().ApplyStep().GetApplyStep(kt, filter)
 	if err != nil {
 		logs.Errorf("failed to get step: %s, err: %v, subOrderId: %s, rid: %s", stepName, err, suborderId, kt.Rid)
 		return nil, err
@@ -96,15 +86,8 @@ func (r *applyRecoverer) getOrderStep(kt *kit.Kit, stepName string, suborderId s
 
 // getSuborders 根据order获得子单
 func (r *applyRecoverer) getSuborders(kt *kit.Kit, orderId uint64) ([]*types.ApplyOrder, error) {
-	filter := map[string]interface{}{
-		"order_id": orderId,
-	}
-	page := metadata.BasePage{
-		Limit: pkg.BKNoLimit,
-		Start: 0,
-	}
-
-	orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt.Ctx, page, filter)
+	filter := tools.ExpressionAnd(tools.RuleEqual("order_id", orderId))
+	orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt, filter, nil)
 	if err != nil {
 		logs.Errorf("failed to list apply order by orderId, err: %v, orderId: %d, rid: %s", err, orderId, kt.Rid)
 		return nil, err
@@ -139,20 +122,18 @@ func (r *applyRecoverer) getHostBizID(kt *kit.Kit, ip string) (int64, error) {
 }
 
 // getDeviceByIp 利用ip获得设备信息
-func (r *applyRecoverer) getDeviceByIp(kt *kit.Kit, orderId string, ip string) (*types.DeviceInfo, error) {
-	filter := &mapstr.MapStr{
-		"suborder_id": orderId,
-		"ip":          ip,
-	}
+func (r *applyRecoverer) getDeviceByIp(kt *kit.Kit, subOrderID string, ip string) (*types.DeviceInfo, error) {
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", subOrderID), tools.RuleEqual("ip", ip))
 
-	devices, err := model.Operation().DeviceInfo().GetDeviceInfo(kt.Ctx, filter)
+	devices, err := model.Operation().DeviceInfo().GetDeviceInfo(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to get device by ip, err: %v, ip: %s, rid: %s, subOrderId: %s", err, ip, kt.Rid, orderId)
+		logs.Errorf("failed to get device by ip, err: %v, ip: %s, subOrderId: %s, rid: %s",
+			err, ip, subOrderID, kt.Rid)
 		return nil, err
 	}
 	if len(devices) != 1 {
-		logs.Errorf("get too many or few devices by ip, ip: %s, subOrderId: %s, rid: %s", ip, orderId, kt.Rid)
-		return nil, fmt.Errorf("get too many or few devices by ip, ip: %s, subOrderId: %s", ip, orderId)
+		logs.Errorf("get too many or few devices by ip, ip: %s, subOrderId: %s, rid: %s", ip, subOrderID, kt.Rid)
+		return nil, fmt.Errorf("get too many or few devices by ip, ip: %s, subOrderId: %s", ip, subOrderID)
 	}
 
 	return devices[0], nil
@@ -173,19 +154,17 @@ func (r *applyRecoverer) getInitTask(kt *kit.Kit, bkBizId int64, orderId string,
 
 // RecoverStartStep recover apply order step with start info
 func (r *applyRecoverer) recoverStartStep(kt *kit.Kit, suborderId string, stepName string) error {
-	filter := mapstr.MapStr{
-		"suborder_id": suborderId,
-		"step_name":   stepName,
-		"status":      types.StepStatusHandling,
-	}
-	now := time.Now()
-	doc := mapstr.MapStr{
-		"status":    types.StepStatusInit,
-		"message":   "initing",
-		"update_at": now,
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", suborderId),
+		tools.RuleEqual("step_name", stepName),
+		tools.RuleEqual("status", types.StepStatusHandling),
+	)
+	update := &cvmapplyproto.ZiyanCvmApplyStepUpdateReq{
+		Status:  cvt.ValToPtr(types.StepStatusInit),
+		Message: "initing",
 	}
 
-	if err := model.Operation().ApplyStep().UpdateApplyStep(kt.Ctx, &filter, &doc); err != nil {
+	if err := model.Operation().ApplyStep().UpdateApplyStep(kt, filter, update); err != nil {
 		logs.Errorf("failed to recover start order, err: %v, subOrderId: %s, stepName: %s, rid: %s", err, suborderId,
 			stepName, kt.Rid)
 		return err

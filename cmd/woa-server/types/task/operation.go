@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"hcm/pkg"
-	"hcm/pkg/api/core"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
@@ -159,9 +158,9 @@ type ApplyStat struct {
 // AverageTimeConsumptionReq request for average time consumption overview
 type AverageTimeConsumptionReq struct {
 	// Date format: YYYY-MM-DD, e.g., 2025-01-01
-	StartTime string `json:"start_time" bson:"start_time"`
+	StartTime string `json:"start_time"`
 	// Date format: YYYY-MM-DD, e.g., 2025-01-31
-	EndTime string `json:"end_time" bson:"end_time"`
+	EndTime string `json:"end_time"`
 }
 
 // Validate whether AverageTimeConsumptionReq is valid
@@ -204,8 +203,8 @@ func (req *AverageTimeConsumptionReq) GetEndTime() (time.Time, error) {
 
 // AverageTimeConsumptionItem one month aggregated metrics for average time consumption
 type AverageTimeConsumptionItem struct {
-	YearMonth        string  `json:"year_month" bson:"year_month"`
-	AvgDurationHours float64 `json:"avg_duration_hours" bson:"avg_duration_hours"`
+	YearMonth        string  `json:"year_month"`
+	AvgDurationHours float64 `json:"avg_duration_hours"`
 }
 
 // AverageTimeConsumptionOverviewResp wraps overview list under details
@@ -216,9 +215,9 @@ type AverageTimeConsumptionOverviewResp struct {
 // AverageTimeConsumptionCompareReq request for average time consumption compare
 type AverageTimeConsumptionCompareReq struct {
 	// YearMonth format: YYYY-MM, e.g., 2025-10 for October 2025
-	CurrentDate string `json:"current_date" bson:"current_date"`
+	CurrentDate string `json:"current_date"`
 	// YearMonth format: YYYY-MM, e.g., 2025-11 for November 2025
-	CompareDate string `json:"compare_date" bson:"compare_date"`
+	CompareDate string `json:"compare_date"`
 }
 
 // Validate whether AverageTimeConsumptionCompareReq is valid
@@ -259,10 +258,10 @@ func (req *AverageTimeConsumptionCompareReq) GetCompareRange() (start time.Time,
 
 // AverageTimeConsumptionCompareItem one month aggregated metrics by biz for average time consumption compare
 type AverageTimeConsumptionCompareItem struct {
-	BkBizID          int64   `json:"bk_biz_id" bson:"bk_biz_id"`
-	YearMonth        string  `json:"year_month" bson:"year_month"`
-	DoneOrders       int64   `json:"done_orders" bson:"done_orders"`
-	AvgDurationHours float64 `json:"avg_duration_hours" bson:"avg_duration_hours"`
+	BkBizID          int64   `json:"bk_biz_id"`
+	YearMonth        string  `json:"year_month"`
+	DoneOrders       int64   `json:"done_orders"`
+	AvgDurationHours float64 `json:"avg_duration_hours"`
 }
 
 // AverageTimeConsumptionCompareRst wraps compare result with current and compare arrays
@@ -274,9 +273,9 @@ type AverageTimeConsumptionCompareRst struct {
 // OrderTimeCostReq request for order time cost overview
 type OrderTimeCostReq struct {
 	// Date format: YYYY-MM-DD, e.g., 2025-01-01
-	StartTime string `json:"start_time" bson:"start_time"`
+	StartTime string `json:"start_time"`
 	// Date format: YYYY-MM-DD, e.g., 2025-01-31
-	EndTime string `json:"end_time" bson:"end_time"`
+	EndTime string `json:"end_time"`
 }
 
 // Validate whether OrderTimeCostReq is valid
@@ -313,21 +312,21 @@ func (req *OrderTimeCostReq) GetEndTime() (time.Time, error) {
 
 // OrderTimeCostItem one month aggregated metrics for order time cost
 type OrderTimeCostItem struct {
-	YearMonth        string  `json:"year_month" bson:"year_month"`
-	AvgDurationHours float64 `json:"avg_duration_hours" bson:"avg_duration_hours"`
+	YearMonth        string  `json:"year_month" db:"yearmonth"`
+	AvgDurationHours float64 `json:"avg_duration_hours" db:"avg_duration_hours"`
 }
 
 // OrderTimeCostOverviewResp wraps overview list under details
 type OrderTimeCostOverviewResp struct {
-	Details []OrderTimeCostItem `json:"details"`
+	Details []*OrderTimeCostItem `json:"details"`
 }
 
 // OrderTimeCostCompareReq request for order time cost compare
 type OrderTimeCostCompareReq struct {
 	// YearMonth format: YYYY-MM, e.g., 2025-10 for October 2025
-	CurrentDate string `json:"current_date" bson:"current_date"`
+	CurrentDate string `json:"current_date"`
 	// YearMonth format: YYYY-MM, e.g., 2025-11 for November 2025
-	CompareDate string `json:"compare_date" bson:"compare_date"`
+	CompareDate string `json:"compare_date"`
 }
 
 // Validate whether OrderTimeCostCompareReq is valid
@@ -369,24 +368,24 @@ func (req *OrderTimeCostCompareReq) GetCompareRange() (start time.Time, end time
 
 // OrderTimeCostCompareItem one month aggregated metrics by biz for order time cost compare
 type OrderTimeCostCompareItem struct {
-	BkBizID          int64   `json:"bk_biz_id" bson:"bk_biz_id"`
-	YearMonth        string  `json:"year_month" bson:"year_month"`
-	DoneOrders       int64   `json:"done_orders" bson:"done_orders"`
-	AvgDurationHours float64 `json:"avg_duration_hours" bson:"avg_duration_hours"`
+	BkBizID          int64   `json:"bk_biz_id" db:"bk_biz_id"`
+	YearMonth        string  `json:"year_month" db:"yearmonth"`
+	DoneOrders       int64   `json:"done_orders" db:"done_orders"`
+	AvgDurationHours float64 `json:"avg_duration_hours" db:"avg_duration_hours"`
 }
 
 // OrderTimeCostCompareRst wraps compare result with current and compare arrays
 type OrderTimeCostCompareRst struct {
-	Current []OrderTimeCostCompareItem `json:"current"`
-	Compare []OrderTimeCostCompareItem `json:"compare"`
+	Current []*OrderTimeCostCompareItem `json:"current"`
+	Compare []*OrderTimeCostCompareItem `json:"compare"`
 }
 
 // ProductionStageTimeCostReq request for production stage time cost overview
 type ProductionStageTimeCostReq struct {
 	// Date format: YYYY-MM-DD, e.g., 2025-01-01
-	StartTime string `json:"start_time" bson:"start_time"`
+	StartTime string `json:"start_time"`
 	// Date format: YYYY-MM-DD, e.g., 2025-01-31
-	EndTime string `json:"end_time" bson:"end_time"`
+	EndTime string `json:"end_time"`
 }
 
 // Validate whether ProductionStageTimeCostReq is valid
@@ -422,23 +421,12 @@ func (req *ProductionStageTimeCostReq) GetEndTime() (time.Time, error) {
 	return time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, time.UTC), nil
 }
 
-// ProductionStageTimeCostItem one month aggregated metrics for production stage time cost
-type ProductionStageTimeCostItem struct {
-	YearMonth        string  `json:"year_month" bson:"year_month"`
-	AvgDurationHours float64 `json:"avg_duration_hours" bson:"avg_duration_hours"`
-}
-
-// ProductionStageTimeCostOverviewResp wraps overview list under details
-type ProductionStageTimeCostOverviewResp struct {
-	Details []ProductionStageTimeCostItem `json:"details"`
-}
-
 // ProductionStageTimeCostCompareReq request for production stage time cost compare
 type ProductionStageTimeCostCompareReq struct {
 	// YearMonth format: YYYY-MM, e.g., 2025-10 for October 2025
-	CurrentDate string `json:"current_date" bson:"current_date"`
+	CurrentDate string `json:"current_date"`
 	// YearMonth format: YYYY-MM, e.g., 2025-11 for November 2025
-	CompareDate string `json:"compare_date" bson:"compare_date"`
+	CompareDate string `json:"compare_date"`
 }
 
 // Validate whether ProductionStageTimeCostCompareReq is valid
@@ -478,26 +466,12 @@ func (req *ProductionStageTimeCostCompareReq) GetCompareRange() (start time.Time
 	return start, end, nil
 }
 
-// ProductionStageTimeCostBizItem one month aggregated metrics by biz for production stage time cost compare
-type ProductionStageTimeCostBizItem struct {
-	BkBizID          int64   `json:"bk_biz_id" bson:"bk_biz_id"`
-	YearMonth        string  `json:"year_month" bson:"year_month"`
-	DoneOrders       int64   `json:"done_orders" bson:"done_orders"`
-	AvgDurationHours float64 `json:"avg_duration_hours" bson:"avg_duration_hours"`
-}
-
-// ProductionStageTimeCostCompareRst wraps compare result with current and compare arrays
-type ProductionStageTimeCostCompareRst struct {
-	Current []ProductionStageTimeCostBizItem `json:"current"`
-	Compare []ProductionStageTimeCostBizItem `json:"compare"`
-}
-
 // PercentileTimeConsumptionReq request for percentile time consumption overview
 type PercentileTimeConsumptionReq struct {
 	// Date format: YYYY-MM-DD, e.g., 2025-01-01
-	StartTime string `json:"start_time" bson:"start_time"`
+	StartTime string `json:"start_time"`
 	// Date format: YYYY-MM-DD, e.g., 2025-01-31
-	EndTime string `json:"end_time" bson:"end_time"`
+	EndTime string `json:"end_time"`
 }
 
 // Validate whether PercentileTimeConsumptionReq is valid
@@ -533,25 +507,12 @@ func (req *PercentileTimeConsumptionReq) GetEndTime() (time.Time, error) {
 	return time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, time.UTC), nil
 }
 
-// PercentileTimeConsumptionItem one month aggregated metrics for percentile time consumption
-type PercentileTimeConsumptionItem struct {
-	YearMonth string  `json:"year_month" bson:"year_month"`
-	P90Hours  float64 `json:"p90_hours" bson:"p90_hours"`
-	P95Hours  float64 `json:"p95_hours" bson:"p95_hours"`
-	P99Hours  float64 `json:"p99_hours" bson:"p99_hours"`
-}
-
-// PercentileTimeConsumptionOverviewResp wraps overview list under details
-type PercentileTimeConsumptionOverviewResp struct {
-	Details []PercentileTimeConsumptionItem `json:"details"`
-}
-
 // PercentileTimeConsumptionCompareReq request for percentile time consumption compare
 type PercentileTimeConsumptionCompareReq struct {
 	// YearMonth format: YYYY-MM, e.g., 2025-10 for October 2025
-	CurrentDate string `json:"current_date" bson:"current_date"`
+	CurrentDate string `json:"current_date"`
 	// YearMonth format: YYYY-MM, e.g., 2025-11 for November 2025
-	CompareDate string `json:"compare_date" bson:"compare_date"`
+	CompareDate string `json:"compare_date"`
 }
 
 // Validate whether PercentileTimeConsumptionCompareReq is valid
@@ -589,22 +550,6 @@ func (req *PercentileTimeConsumptionCompareReq) GetCompareRange() (start time.Ti
 	nextMonth := time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, time.UTC)
 	end = nextMonth.Add(-time.Nanosecond)
 	return start, end, nil
-}
-
-// PercentileTimeConsumptionCompareItem one month aggregated metrics by biz for percentile time consumption compare
-type PercentileTimeConsumptionCompareItem struct {
-	BkBizID    int64   `json:"bk_biz_id" bson:"bk_biz_id"`
-	YearMonth  string  `json:"year_month" bson:"year_month"`
-	DoneOrders int64   `json:"done_orders" bson:"done_orders"`
-	P90Hours   float64 `json:"p90_hours" bson:"p90_hours"`
-	P95Hours   float64 `json:"p95_hours" bson:"p95_hours"`
-	P99Hours   float64 `json:"p99_hours" bson:"p99_hours"`
-}
-
-// PercentileTimeConsumptionCompareRst wraps compare result with current and compare arrays
-type PercentileTimeConsumptionCompareRst struct {
-	Current []PercentileTimeConsumptionCompareItem `json:"current"`
-	Compare []PercentileTimeConsumptionCompareItem `json:"compare"`
 }
 
 // DeliveryRateStatisticsReq request for delivery rate statistics
@@ -851,23 +796,3 @@ func (req *GetApplyBizTopStatReq) ParseAndValidate() (time.Time, time.Time, erro
 
 	return start, end, nil
 }
-
-// ApplyBizHostsStatisticsItem 申请主机数-业务统计单项
-type ApplyBizHostsStatisticsItem struct {
-	BkBizID    int64 `json:"bk_biz_id" bson:"bk_biz_id"`
-	HostCount  uint  `json:"host_count" bson:"host_count"`
-	OrderCount int   `json:"order_count" bson:"order_count"`
-}
-
-// ApplyBizHostsStatisticsResult 申请主机数TOP10的业务统计结果
-type ApplyBizHostsStatisticsResult = core.ListResultT[ApplyBizHostsStatisticsItem]
-
-// ApplyBizCpuCoresStatisticsItem 申请核心数-业务统计单项
-type ApplyBizCpuCoresStatisticsItem struct {
-	BkBizID            int64 `json:"bk_biz_id" bson:"bk_biz_id"`
-	DeliveredCoreCount uint  `json:"delivered_core_count" bson:"delivered_core_count"`
-	OrderCount         int   `json:"order_count" bson:"order_count"`
-}
-
-// ApplyBizCpuCoresStatisticsResult 申请核心数TOP10的业务统计结果
-type ApplyBizCpuCoresStatisticsResult = core.ListResultT[ApplyBizCpuCoresStatisticsItem]

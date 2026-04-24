@@ -23,6 +23,7 @@ POST /api/v1/woa/task/findmany/apply
 | page         | object	      | 否  | 分页信息                                                                                           |
 | get_product  | bool         | 否  | 是否获取CVM生产数据                                                                                    |
 | source       | string array | 否  | 枚举类型，"business"（业务单据）、"purchase_to_resource_pool"(资源池采购)，不传时默认值为所有类型的单据                        |
+| product_type | string array | 否  | 生产类型，"business"（业务生产）、"admin"（管理员生产），不传时默认值为"business"          |
 
 #### page
 
@@ -31,7 +32,7 @@ POST /api/v1/woa/task/findmany/apply
 | start | int  | 否  | 记录开始位置，start 起始值为0 |
 | limit | int  | 是  | 每页限制条数，最大200       |
 
-说明：默认按create_at降序排序
+说明：默认按created_at降序排序
 
 ### 调用示例
 
@@ -58,7 +59,8 @@ POST /api/v1/woa/task/findmany/apply
     "limit": 20
   },
   "get_product": false,
-  "source": ["business"]
+  "source": ["business"],
+  "product_type": ["business"]
 }
 ```
 

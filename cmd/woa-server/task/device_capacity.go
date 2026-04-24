@@ -35,6 +35,7 @@ import (
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/serviced"
 	"hcm/pkg/tools/slice"
 
 	"golang.org/x/sync/errgroup"
@@ -51,13 +52,15 @@ type deviceCapacityRelInfo struct {
 type DeviceCapacityTask struct {
 	clientSet    *client.ClientSet
 	configLogics configlogic.Logics
+	sd           serviced.State
 }
 
 // NewDeviceCapacityTask create a new device capacity task.
-func NewDeviceCapacityTask(clientSet *client.ClientSet, configLogics configlogic.Logics) (croncore.Task, error) {
+func NewDeviceCapacityTask(clientSet *client.ClientSet, configLogics configlogic.Logics, sd serviced.State) (croncore.Task, error) {
 	return &DeviceCapacityTask{
 		clientSet:    clientSet,
 		configLogics: configLogics,
+		sd:           sd,
 	}, nil
 }
 
@@ -73,6 +76,14 @@ func (d *DeviceCapacityTask) Next() (time.Time, error) {
 
 // Do execute the task.
 func (d *DeviceCapacityTask) Do(kt *kit.Kit) error {
+	// 检查是否为 master 节点，只有 master 节点才执行定时任务
+	if d.sd == nil || !d.sd.IsMaster() {
+		logs.V(5).Infof("current node is not master, skip device capacity sync, rid: %s", kt.Rid)
+		return nil
+	}
+
+	logs.Infof("master node executing device capacity sync task, rid: %s", kt.Rid)
+
 	// 1. 根据其他资源的情况获取需求类型，地域、可用区、机型
 	relInfoFromRes, err := d.getRelInfoFromRes(kt)
 	if err != nil {

@@ -18,32 +18,10 @@ import (
 	"hcm/cmd/woa-server/storage/driver/mongodb"
 	types "hcm/cmd/woa-server/types/cvm"
 	"hcm/pkg"
-	"hcm/pkg/criteria/mapstr"
 	"hcm/pkg/tools/metadata"
 )
 
 type applyOrder struct {
-}
-
-// NextSequence returns next apply order sequence id from db
-func (a *applyOrder) NextSequence(ctx context.Context) (uint64, error) {
-	return mongodb.Client().NextSequence(ctx, pkg.BKTableNameCvmApplyOrder)
-}
-
-// CreateApplyOrder creates apply order in db
-func (a *applyOrder) CreateApplyOrder(ctx context.Context, inst *types.ApplyOrder) error {
-	return mongodb.Client().Table(pkg.BKTableNameCvmApplyOrder).Insert(ctx, inst)
-}
-
-// GetApplyOrder gets apply order by filter from db
-func (a *applyOrder) GetApplyOrder(ctx context.Context, filter *mapstr.MapStr) (*types.ApplyOrder, error) {
-	inst := new(types.ApplyOrder)
-
-	if err := mongodb.Client().Table(pkg.BKTableNameCvmApplyOrder).Find(filter).One(ctx, inst); err != nil {
-		return nil, err
-	}
-
-	return inst, nil
 }
 
 // CountApplyOrder gets apply order count by filter from db
@@ -75,14 +53,4 @@ func (a *applyOrder) FindManyApplyOrder(ctx context.Context, page metadata.BaseP
 	}
 
 	return insts, nil
-}
-
-// UpdateApplyOrder updates apply order by filter and doc in db
-func (a *applyOrder) UpdateApplyOrder(ctx context.Context, filter *mapstr.MapStr, doc *mapstr.MapStr) error {
-	return mongodb.Client().Table(pkg.BKTableNameCvmApplyOrder).Update(ctx, filter, doc)
-}
-
-// DeleteApplyOrder deletes apply order from db
-func (a *applyOrder) DeleteApplyOrder() {
-	// TODO
 }

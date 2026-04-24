@@ -31,7 +31,7 @@ import (
 	model "hcm/cmd/woa-server/model/task"
 	"hcm/cmd/woa-server/types/dissolve"
 	"hcm/pkg/api/core"
-	"hcm/pkg/condition"
+	"hcm/pkg/client"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/dal/dao/types"
@@ -41,7 +41,6 @@ import (
 	"hcm/pkg/thirdparty/es"
 	cvt "hcm/pkg/tools/converter"
 	"hcm/pkg/tools/maps"
-	"hcm/pkg/tools/metadata"
 	"hcm/pkg/tools/slice"
 )
 
@@ -62,12 +61,13 @@ type logics struct {
 	esCli          *es.EsCli
 	originDate     string
 	blacklist      string
+	cliSet         *client.ClientSet
 }
 
 // New create resource dissolve table logics.
 func New(recycledModule logicsmodule.RecycledModule, recycledHost logicshost.RecycledHost,
 	dissolveConfig dissolveconfig.Config, configLogics config.Logics, cmdbCli cmdb.Client, esCli *es.EsCli,
-	originDate string, blacklist string) Table {
+	originDate string, blacklist string, cliSet *client.ClientSet) Table {
 
 	return &logics{
 		recycledHost:   recycledHost,
@@ -78,6 +78,7 @@ func New(recycledModule logicsmodule.RecycledModule, recycledHost logicshost.Rec
 		esCli:          esCli,
 		originDate:     originDate,
 		blacklist:      blacklist,
+		cliSet:         cliSet,
 	}
 }
 
@@ -705,15 +706,15 @@ func (l *logics) listBizDeliveredCpuCore(kt *kit.Kit, bizIDs []int64) (map[int64
 	// 2. 查询从统计时间开始，申请的机房裁撤类型的主机
 	bizIDDeviceTypeHostCountMap := make(map[int64]map[string]int64)
 	deviceTypeMap := make(map[string]struct{})
-	page := metadata.BasePage{Start: 0, Limit: int(core.DefaultMaxPageLimit)}
-	filter := map[string]interface{}{
-		"bk_biz_id":    map[string]interface{}{condition.BKDBIN: bizIDs},
-		"require_type": enumor.RequireTypeDissolve,
-		"is_delivered": true,
-		"create_at":    map[string]interface{}{condition.BKDBGTE: time},
-	}
+	page := core.NewDefaultBasePage()
+	filter := tools.ExpressionAnd(
+		tools.RuleIn("bk_biz_id", bizIDs),
+		tools.RuleEqual("require_type", enumor.RequireTypeDissolve),
+		tools.RuleEqual("is_delivered", true),
+		tools.RuleGreaterThanEqual("created_at", time),
+	)
 	for {
-		hosts, err := model.Operation().DeviceInfo().FindManyDeviceInfo(kt.Ctx, page, filter)
+		hosts, err := model.Operation().DeviceInfo().FindManyDeviceInfo(kt, filter, page)
 		if err != nil {
 			logs.Errorf("list device info failed, err: %v, filter: %+v, rid: %s", err, filter, kt.Rid)
 			return nil, err
@@ -733,7 +734,7 @@ func (l *logics) listBizDeliveredCpuCore(kt *kit.Kit, bizIDs []int64) (map[int64
 		if len(hosts) < int(core.DefaultMaxPageLimit) {
 			break
 		}
-		page.Start += int(core.DefaultMaxPageLimit)
+		page.Start += uint32(core.DefaultMaxPageLimit)
 	}
 
 	// 3. 查询机型对应的核心数

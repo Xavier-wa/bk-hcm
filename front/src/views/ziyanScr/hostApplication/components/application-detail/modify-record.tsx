@@ -62,9 +62,9 @@ export default defineComponent({
       },
       {
         label: '操作时间',
-        field: 'create_at',
+        field: 'created_at',
         render: ({ row }: any) => {
-          return <span>{timeFormatter(row.create_at)}</span>;
+          return <span>{timeFormatter(row.created_at)}</span>;
         },
       },
     ];
@@ -123,7 +123,11 @@ export default defineComponent({
     const fetchRecord = async () => {
       const res = await http.post(
         `${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/${getBusinessApiPath()}task/find/apply/record/modify`,
-        { suborder_id: [props.showObj.suborderId], status: isBusinessPage ? [1] : undefined },
+        {
+          suborder_id: [props.showObj.suborderId],
+          status: isBusinessPage ? [1] : undefined,
+          page: { start: 0, limit: 500, count: false, sort: 'created_at', order: 'DESC' },
+        },
       );
       const list = res.data?.info || [];
       list.forEach((item: any) => {

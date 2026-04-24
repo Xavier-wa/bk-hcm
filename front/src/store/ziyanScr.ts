@@ -18,7 +18,6 @@ import type {
   IApplyOrderItem,
   ICloudInstanceConfigItem,
 } from '@/typings/ziyanScr';
-import { transferSimpleConditions } from '@/utils/scr/simple-query-builder';
 import { useWhereAmI } from '@/hooks/useWhereAmI';
 import rollRequest from '@blueking/roll-request';
 import { VendorEnum } from '@/common/constant';
@@ -31,7 +30,7 @@ export const useZiyanScrStore = defineStore('ziyanScr', () => {
   const listVpc = (region: any) => {
     return http.post(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/mov/cvm/manage/describevpcs`, { region });
   };
-  const listSubnet = ({ region, zone, vpcId }) => {
+  const listSubnet = ({ region, zone, vpcId }: { region: string; zone: string; vpcId: string }) => {
     return http.post(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/mov/cvm/manage/describesubnets`, { region, zone, vpcId });
   };
 
@@ -113,12 +112,17 @@ export const useZiyanScrStore = defineStore('ziyanScr', () => {
     return http.post(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/pool/create/launch/task`, data);
   };
 
+  const buildStatusFilter = (status: any) => ({
+    op: 'and',
+    rules: status || status === 0 ? [{ field: 'status', op: 'eq', value: status }] : [],
+  });
+
   // 资源生产详情
   const getProductionDetails = (subOrderId: any, page: any, status: any) =>
     http.post(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/${getBusinessApiPath()}task/find/apply/record/generate`, {
       suborder_id: subOrderId,
       page,
-      filter: status || status === 0 ? transferSimpleConditions(['AND', ['status', '=', status]]) : undefined,
+      filter: buildStatusFilter(status),
     });
 
   // 资源初始化详情
@@ -126,7 +130,7 @@ export const useZiyanScrStore = defineStore('ziyanScr', () => {
     http.post(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/${getBusinessApiPath()}task/find/apply/record/init`, {
       suborder_id: subOrderId,
       page,
-      filter: status || status === 0 ? transferSimpleConditions(['AND', ['status', '=', status]]) : undefined,
+      filter: buildStatusFilter(status),
     });
 
   // 资源初始化详情全部ip
@@ -138,19 +142,20 @@ export const useZiyanScrStore = defineStore('ziyanScr', () => {
       `/api/v1/woa/${getBusinessApiPath()}task/find/apply/record/init`,
       {
         suborder_id: subOrderId,
-        filter: status || status === 0 ? transferSimpleConditions(['AND', ['status', '=', status]]) : undefined,
+        filter: buildStatusFilter(status),
       },
       { limit: 500, countGetter: (res) => res.data.count, listGetter: (res) => res.data.info },
     );
     return list.map((item) => item.ip).join('\n');
   };
 
-  // 本地盘性能压测
+  /** @deprecated 本地盘性能压测，已废弃不再使用 */
   const getDiskCheckDetails = (subOrderId: any, page: any, status: any) =>
     http.post(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/task/find/apply/record/disk_check`, {
       suborder_id: subOrderId,
       page,
-      filter: status || status === 0 ? transferSimpleConditions(['AND', ['status', '=', status]]) : undefined,
+      filter:
+        status || status === 0 ? { op: 'and', rules: [{ field: 'status', op: 'equal', value: status }] } : undefined,
     });
 
   // 资源交付详情
@@ -158,7 +163,7 @@ export const useZiyanScrStore = defineStore('ziyanScr', () => {
     http.post(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/${getBusinessApiPath()}task/find/apply/record/deliver`, {
       suborder_id: subOrderId,
       page,
-      filter: status || status === 0 ? transferSimpleConditions(['AND', ['status', '=', status]]) : undefined,
+      filter: buildStatusFilter(status),
     });
 
   // 获取资源申请CRP单据审核信息：docs/api-docs/web-server/docs/biz/scr/get_ticket_crp_audit_by_suborderid.md

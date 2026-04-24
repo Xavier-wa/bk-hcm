@@ -72,7 +72,7 @@ func New(dao dao.Set, cmdbCli cmdb.Client, esCli *esCli.EsCli, thirdCli *thirdpa
 	}
 
 	table := dissolvetable.New(recycledModule, recycledHost, dissolveConfig, configLogics, cmdbCli, esCli, originDate,
-		blacklist)
+		blacklist, cliSet)
 	return &logics{
 		recycledModule: recycledModule,
 		recycledHost:   recycledHost,

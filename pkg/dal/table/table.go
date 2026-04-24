@@ -299,6 +299,23 @@ const (
 
 	// PermissionPolicyLibraryTable is permission_policy_library table's name.
 	PermissionPolicyLibraryTable Name = "permission_policy_library"
+
+	// ZiyanCvmApplyOrderTable 自研云CVM申请单主单表
+	ZiyanCvmApplyOrderTable = "ziyan_cvm_apply_order"
+	// ZiyanCvmApplySuborderTable 自研云CVM申请子单表
+	ZiyanCvmApplySuborderTable = "ziyan_cvm_apply_suborder"
+	// ZiyanCvmApplyStepTable 自研云CVM申请单步骤记录表
+	ZiyanCvmApplyStepTable = "ziyan_cvm_apply_step"
+	// ZiyanCvmGenerateRecordTable 自研云CVM申请单生产任务记录表
+	ZiyanCvmGenerateRecordTable = "ziyan_cvm_generate_record"
+	// ZiyanCvmApplyInitTaskTable 自研云CVM申请单初始化任务记录表
+	ZiyanCvmApplyInitTaskTable = "ziyan_cvm_apply_init_task"
+	// ZiyanCvmDeviceInfoTable 自研云CVM设备交付记录表
+	ZiyanCvmDeviceInfoTable = "ziyan_cvm_device_info"
+	// ZiyanCvmDeliverRecordTable 自研云CVM设备交付记录表
+	ZiyanCvmDeliverRecordTable = "ziyan_cvm_deliver_record"
+	// ZiyanCvmModifyRecordTable 自研云CVM变更记录表
+	ZiyanCvmModifyRecordTable = "ziyan_cvm_modify_record"
 )
 
 // Validate whether the table name is valid or not.
@@ -460,6 +477,15 @@ var TableMap = map[Name]TableConfig{
 
 	PermissionPolicyLibraryTable: {EnableTenant: true},
 	DeviceCapacityTable: {},
+
+	ZiyanCvmApplyOrderTable:     {},
+	ZiyanCvmApplySuborderTable:  {},
+	ZiyanCvmApplyStepTable:      {},
+	ZiyanCvmGenerateRecordTable: {},
+	ZiyanCvmApplyInitTaskTable:  {},
+	ZiyanCvmDeviceInfoTable:     {},
+	ZiyanCvmDeliverRecordTable:  {},
+	ZiyanCvmModifyRecordTable:   {},
 }
 
 // Register 注册表名

@@ -155,12 +155,10 @@ export default defineComponent({
     const getDeliveredHostField = (row: any, fieldKey: any) => {
       const params = {
         filter: {
-          condition: 'AND',
-          rules: [
-            { field: 'suborder_id', operator: 'equal', value: row.suborder_id },
-            { field: 'bk_biz_id', operator: 'in', value: [row.bk_biz_id] },
-          ],
+          op: 'and',
+          rules: [{ field: 'suborder_id', op: 'eq', value: row.suborder_id }],
         },
+        page: { start: 0, limit: 500, count: false },
       };
       return getDeliveredDevices(params).then((res: any) => {
         const value = res?.data?.info?.map((item: any) => item[fieldKey]) || [];
@@ -511,12 +509,18 @@ export default defineComponent({
       },
       requestOption: {
         dataPath: 'data.info',
+        sortOption: {
+          sort: 'created_at',
+          order: 'DESC',
+          legacy: false,
+        },
         immediate: false,
       },
       scrConfig: () => {
         return {
           url: `/api/v1/woa/${getBusinessApiPath()}task/findmany/apply`,
           payload: transformFlatCondition(condition.value, searchFields),
+          pageEnableCountKey: 'count',
         };
       },
     });
@@ -525,7 +529,7 @@ export default defineComponent({
     const searchValues = ref<Record<string, any>>({});
 
     const getSearchCompProps = (field: ModelProperty) => {
-      if (field.id === 'create_at') {
+      if (field.id === 'created_at') {
         return {
           type: 'daterange',
           format: 'yyyy-MM-dd',
@@ -566,7 +570,7 @@ export default defineComponent({
       () => route.query,
       async (query) => {
         condition.value = searchQs.get(query, {
-          create_at: getDateRange('last30d', true),
+          created_at: getDateRange('last30d', true),
           bk_username: [userStore.username],
         });
 

@@ -75,6 +75,14 @@ import (
 	sync "hcm/cmd/data-service/service/cloud/sync"
 	"hcm/cmd/data-service/service/cloud/zone"
 	"hcm/cmd/data-service/service/cos"
+	"hcm/cmd/data-service/service/cvm-apply/cvm-apply-init-task"
+	"hcm/cmd/data-service/service/cvm-apply/cvm-apply-order"
+	"hcm/cmd/data-service/service/cvm-apply/cvm-apply-step"
+	"hcm/cmd/data-service/service/cvm-apply/cvm-apply-suborder"
+	"hcm/cmd/data-service/service/cvm-apply/cvm-deliver-record"
+	"hcm/cmd/data-service/service/cvm-apply/cvm-device-info"
+	"hcm/cmd/data-service/service/cvm-apply/cvm-generate-record"
+	"hcm/cmd/data-service/service/cvm-apply/cvm-modify-record"
 	devicecapacity "hcm/cmd/data-service/service/device-capacity"
 	globalconfig "hcm/cmd/data-service/service/global-config"
 	"hcm/cmd/data-service/service/meta"
@@ -321,6 +329,15 @@ func (s *Service) apiSet() *restful.Container {
 	resusagebizrel.InitService(capability)
 	permissionpolicylibrary.InitService(capability)
 	devicecapacity.InitService(capability)
+
+	cvmapplyorder.InitService(capability)
+	cvmapplysuborder.InitService(capability)
+	cvmapplystep.InitService(capability)
+	cvmgeneraterecord.InitService(capability)
+	cvmapplyinittask.InitService(capability)
+	cvmdeviceinfo.InitService(capability)
+	cvmdeliverrecord.InitService(capability)
+	cvmmodifyrecord.InitService(capability)
 
 	return restful.NewContainer().Add(capability.WebService)
 }

@@ -53,9 +53,15 @@ func (l *logics) createBaseQuotaConfigPeriodically(loc *time.Location) {
 		kt := rootKit.NewSubKit()
 		nextMonthFirstDay := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
 
-		quotaMonth := rstypes.QuotaMonth(fmt.Sprintf("%04d-%02d", nextMonthFirstDay.Year(), nextMonthFirstDay.Month()))
-		if _, err := l.CreateBizQuotaConfigsForAllBiz(kt, quotaMonth); err != nil {
-			logs.Errorf("create base quota configs for all biz failed, err: %v, rid: %s", err, kt.Rid)
+		// 只有 master 节点才执行
+		if !l.sd.IsMaster() {
+			logs.V(5).Infof("current node is not master, skip createBaseQuotaConfig at: %v", now)
+		} else {
+			quotaMonth := rstypes.QuotaMonth(fmt.Sprintf("%04d-%02d",
+				nextMonthFirstDay.Year(), nextMonthFirstDay.Month()))
+			if _, err := l.CreateBizQuotaConfigsForAllBiz(kt, quotaMonth); err != nil {
+				logs.Errorf("create base quota configs for all biz failed, err: %v, rid: %s", err, kt.Rid)
+			}
 		}
 
 		// 计算下个月1号0点的时间

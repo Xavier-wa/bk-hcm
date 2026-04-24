@@ -36,6 +36,14 @@ type Client struct {
 	Cvm           *CvmClient
 	DeviceType    *DeviceTypeClient
 	Dissolve      *DissolveClient
+	ZiyanCvmApplyOrder      *ZiyanCvmApplyOrderClient
+	ZiyanCvmApplySuborder   *ZiyanCvmApplySuborderClient
+	ZiyanCvmApplyStep       *ZiyanCvmApplyStepClient
+	ZiyanCvmGenerateRecord  *ZiyanCvmGenerateRecordClient
+	ZiyanCvmApplyInitTask   *ZiyanCvmApplyInitTaskClient
+	ZiyanCvmDeviceInfo      *ZiyanCvmDeviceInfoClient
+	ZiyanCvmDeliverRecord   *ZiyanCvmDeliverRecordClient
+	ZiyanCvmModifyRecord    *ZiyanCvmModifyRecordClient
 }
 
 type restClient struct {
@@ -56,5 +64,13 @@ func NewClient(client rest.ClientInterface) *Client {
 		Cvm:           NewCloudCvmClient(client),
 		DeviceType:    NewDeviceTypeClient(client),
 		Dissolve:      NewDissolveClient(client),
+		ZiyanCvmApplyOrder:      NewZiyanCvmApplyOrderClient(client),
+		ZiyanCvmApplySuborder:   NewZiyanCvmApplySuborderClient(client),
+		ZiyanCvmApplyStep:       NewZiyanCvmApplyStepClient(client),
+		ZiyanCvmGenerateRecord:  NewZiyanCvmGenerateRecordClient(client),
+		ZiyanCvmApplyInitTask:   NewZiyanCvmApplyInitTaskClient(client),
+		ZiyanCvmDeviceInfo:      NewZiyanCvmDeviceInfoClient(client),
+		ZiyanCvmDeliverRecord:   NewZiyanCvmDeliverRecordClient(client),
+		ZiyanCvmModifyRecord:    NewZiyanCvmModifyRecordClient(client),
 	}
 }
