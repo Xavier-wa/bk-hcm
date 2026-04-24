@@ -31,6 +31,12 @@ type MigrationRequest struct {
 	// 表配置名称
 	TableName string `json:"table_name" validate:"required"`
 
+	// 执行方向，默认 forward（mongodb -> mysql）
+	Direction MigrationDirection `json:"direction,omitempty"`
+
+	// 任务ID（用于日志追踪与多次执行排障）
+	TaskID string `json:"task_id,omitempty"`
+
 	// 通用过滤条件
 	Filter MigrationFilter `json:"filter"`
 
@@ -92,6 +98,16 @@ const (
 	MigrationModeUpdateOnly MigrationMode = "update_only"
 	// MigrationModeSync 同步（创建+更新）
 	MigrationModeSync MigrationMode = "sync"
+)
+
+// MigrationDirection 迁移方向
+type MigrationDirection string
+
+const (
+	// MigrationDirectionForward 正向同步：mongodb -> mysql
+	MigrationDirectionForward MigrationDirection = "forward"
+	// MigrationDirectionReverse 反向同步：mysql -> mongodb
+	MigrationDirectionReverse MigrationDirection = "reverse"
 )
 
 // MigrationResult 迁移结果

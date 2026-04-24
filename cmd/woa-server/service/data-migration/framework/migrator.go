@@ -29,8 +29,10 @@ import (
 	"hcm/cmd/woa-server/service/data-migration/converters"
 	"hcm/cmd/woa-server/storage/dal"
 	"hcm/pkg/client/data-service/tcloud-ziyan"
+	"hcm/pkg/condition"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/runtime/filter"
 	cvt "hcm/pkg/tools/converter"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -49,6 +51,7 @@ type APIRouter interface {
 	BatchCallUpdateAPI(kt *kit.Kit, tableName string, dataList []interface{}) error
 	BatchCallListAPI(kt *kit.Kit, tableName string, pkFields []string, pkValues []interface{}) (
 		[]interface{}, error)
+	BatchCallListByFilterAPI(kt *kit.Kit, tableName string, filterExpr *filter.Expression) ([]interface{}, error)
 }
 
 // NewMigrationEngine 创建迁移引擎
@@ -63,6 +66,9 @@ func NewMigrationEngine(mongo dal.DB, dataClient *ziyan.Client, apiRouter APIRou
 // Migrate 执行迁移
 func (e *MigrationEngine) Migrate(kt *kit.Kit, req *MigrationRequest) (*MigrationResult, error) {
 	startTime := time.Now()
+	direction := resolveDirection(req.Direction)
+	taskID := resolveTaskID(req, startTime)
+	req.TaskID = taskID
 
 	// 1. 获取配置
 	cfg, err := config.Get(req.TableName)
@@ -77,8 +83,9 @@ func (e *MigrationEngine) Migrate(kt *kit.Kit, req *MigrationRequest) (*Migratio
 	}
 	defer cleanup()
 
-	logs.Infof("[MigrationEngine:Migrate] Start migration for table: %s (mode: %s), visited path: %v, cfg: %+v, "+
-		"rid: %s", cfg.Name, req.Mode, req.getVisitedPath(), cvt.PtrToVal(cfg), kt.Rid)
+	logs.Infof("[MigrationEngine:Migrate] start migration for table: %s (mode: %s, direction: %s, task_id: %s), "+
+		"visited path: %v, cfg: %+v, rid: %s", cfg.Name, req.Mode, direction, taskID, req.getVisitedPath(),
+		cvt.PtrToVal(cfg), kt.Rid)
 
 	// 3. 获取转换器
 	converter, err := converters.Get(cfg.ConverterName)
@@ -87,15 +94,15 @@ func (e *MigrationEngine) Migrate(kt *kit.Kit, req *MigrationRequest) (*Migratio
 	}
 
 	// 4. 查询源数据
-	sourceData, err := e.querySourceData(kt, cfg, req.Filter, converter)
+	sourceData, err := e.querySourceDataByDirection(kt, cfg, req, converter)
 	if err != nil {
-		logs.Errorf("[MigrationEngine:Migrate] Failed to query source data, table: %s, err: %v, rid: %s",
-			req.TableName, err, kt.Rid)
+		logs.Errorf("[MigrationEngine:Migrate] query source data failed, table: %s, direction: %s, task_id: %s, "+
+			"err: %v, rid: %s", req.TableName, direction, taskID, err, kt.Rid)
 		return nil, fmt.Errorf("query source data failed, table: %s, err: %w", req.TableName, err)
 	}
 
-	logs.Infof("[MigrationEngine:Migrate] Found %d records from MongoDB table: %s, rid: %s",
-		len(sourceData), cfg.SourceTable, kt.Rid)
+	logs.Infof("[MigrationEngine:Migrate] found %d records, source_table: %s, direction: %s, task_id: %s, rid: %s",
+		len(sourceData), e.getSourceTableByDirection(cfg, direction), direction, taskID, kt.Rid)
 
 	result := &MigrationResult{
 		Total:     len(sourceData),
@@ -114,7 +121,7 @@ func (e *MigrationEngine) Migrate(kt *kit.Kit, req *MigrationRequest) (*Migratio
 	result = e.processBatchesConcurrently(kt, batches, cfg, converter, req, concurrency)
 
 	// 6. 处理依赖表（级联迁移）
-	if req.IncludeDependencies && len(cfg.Dependencies) > 0 {
+	if direction == MigrationDirectionForward && req.IncludeDependencies && len(cfg.Dependencies) > 0 {
 		logs.Infof("[MigrationEngine:Migrate] Processing %d dependencies, table: %s, rid: %s",
 			len(cfg.Dependencies), req.TableName, kt.Rid)
 		depResult := e.migrateDependencies(kt, cfg, sourceData, req)
@@ -124,11 +131,25 @@ func (e *MigrationEngine) Migrate(kt *kit.Kit, req *MigrationRequest) (*Migratio
 	result.EndTime = time.Now()
 	result.Duration = result.EndTime.Sub(result.StartTime)
 
-	logs.Infof("[MigrationEngine:Migrate] Migration completed, table: %s, total:%d, created:%d, updated:%d, "+
-		"skipped:%d, failed:%d, duration:%.3fs, rid: %s", req.TableName, result.Total, result.Created, result.Updated,
-		result.Skipped, result.Failed, result.Duration.Seconds(), kt.Rid)
+	logs.Infof("[MigrationEngine:Migrate] migration completed, table: %s, direction: %s, task_id: %s, total:%d, "+
+		"created:%d, updated:%d, skipped:%d, failed:%d, duration:%.3fs, rid: %s", req.TableName, direction, taskID,
+		result.Total, result.Created, result.Updated, result.Skipped, result.Failed, result.Duration.Seconds(), kt.Rid)
 
 	return result, nil
+}
+
+func resolveDirection(direction MigrationDirection) MigrationDirection {
+	if len(direction) == 0 {
+		return MigrationDirectionForward
+	}
+	return direction
+}
+
+func resolveTaskID(req *MigrationRequest, startTime time.Time) string {
+	if len(req.TaskID) > 0 {
+		return req.TaskID
+	}
+	return fmt.Sprintf("%s-%d", req.TableName, startTime.UnixNano())
 }
 
 // checkCircularDependency 循环依赖检测，返回清理函数
@@ -231,6 +252,45 @@ func (e *MigrationEngine) querySourceData(kt *kit.Kit, cfg *config.TableMigratio
 	return allResults, nil
 }
 
+// querySourceDataByDirection 按方向查询源数据
+func (e *MigrationEngine) querySourceDataByDirection(kt *kit.Kit, cfg *config.TableMigrationConfig,
+	req *MigrationRequest, converter converters.DataConverter) ([]interface{}, error) {
+
+	direction := resolveDirection(req.Direction)
+	if direction == MigrationDirectionReverse {
+		return e.querySourceDataFromMySQL(kt, cfg, req.Filter)
+	}
+	return e.querySourceData(kt, cfg, req.Filter, converter)
+}
+
+// querySourceDataFromMySQL 查询MySQL源数据（反向同步）
+func (e *MigrationEngine) querySourceDataFromMySQL(kt *kit.Kit, cfg *config.TableMigrationConfig,
+	filterCondition MigrationFilter) ([]interface{}, error) {
+
+	filterExpr, err := e.buildMySQLFilter(filterCondition)
+	if err != nil {
+		return nil, fmt.Errorf("build mysql filter failed: %w", err)
+	}
+
+	result, err := e.apiRouter.BatchCallListByFilterAPI(kt, cfg.TargetTable, filterExpr)
+	if err != nil {
+		return nil, fmt.Errorf("list mysql data failed: %w", err)
+	}
+
+	logs.Infof("[MigrationEngine:querySourceDataFromMySQL] list mysql data success, table: %s, count: %d, rid: %s",
+		cfg.TargetTable, len(result), kt.Rid)
+	return result, nil
+}
+
+func (e *MigrationEngine) getSourceTableByDirection(cfg *config.TableMigrationConfig,
+	direction MigrationDirection) string {
+
+	if direction == MigrationDirectionReverse {
+		return cfg.TargetTable
+	}
+	return cfg.SourceTable
+}
+
 // buildMongoFilter 构建MongoDB查询条件
 func (e *MigrationEngine) buildMongoFilter(filter MigrationFilter) bson.M {
 	mongoFilter := bson.M{}
@@ -262,6 +322,80 @@ func (e *MigrationEngine) buildMongoFilter(filter MigrationFilter) bson.M {
 	}
 
 	return mongoFilter
+}
+
+// buildMySQLFilter 构建MySQL过滤条件
+func (e *MigrationEngine) buildMySQLFilter(filterCondition MigrationFilter) (*filter.Expression, error) {
+	rules := make([]filter.RuleFactory, 0)
+
+	if filterCondition.TimeRange != nil {
+		if filterCondition.TimeRange.StartTime != nil {
+			rules = append(rules, &filter.AtomRule{
+				Field: filterCondition.TimeRange.Field,
+				Op:    filter.GreaterThanEqual.Factory(),
+				Value: *filterCondition.TimeRange.StartTime,
+			})
+		}
+		if filterCondition.TimeRange.EndTime != nil {
+			rules = append(rules, &filter.AtomRule{
+				Field: filterCondition.TimeRange.Field,
+				Op:    filter.LessThanEqual.Factory(),
+				Value: *filterCondition.TimeRange.EndTime,
+			})
+		}
+	}
+
+	for field, value := range filterCondition.Fields {
+		fieldRules, err := e.buildFieldFilterRules(field, value)
+		if err != nil {
+			return nil, err
+		}
+		rules = append(rules, fieldRules...)
+	}
+
+	if len(rules) == 0 {
+		return nil, nil
+	}
+	return &filter.Expression{Op: filter.And, Rules: rules}, nil
+}
+
+func (e *MigrationEngine) buildFieldFilterRules(field string, value interface{}) ([]filter.RuleFactory, error) {
+	if opMap, ok := value.(map[string]interface{}); ok {
+		rules := make([]filter.RuleFactory, 0, len(opMap))
+		for op, opValue := range opMap {
+			switch op {
+			case condition.BKDBGTE:
+				rules = append(rules, &filter.AtomRule{
+					Field: field, Op: filter.GreaterThanEqual.Factory(), Value: opValue,
+				})
+			case condition.BKDBLTE:
+				rules = append(rules, &filter.AtomRule{
+					Field: field, Op: filter.LessThanEqual.Factory(), Value: opValue,
+				})
+			case condition.BKDBGT:
+				rules = append(rules, &filter.AtomRule{Field: field, Op: filter.GreaterThan.Factory(), Value: opValue})
+			case condition.BKDBLT:
+				rules = append(rules, &filter.AtomRule{Field: field, Op: filter.LessThan.Factory(), Value: opValue})
+			case condition.BKDBNE:
+				rules = append(rules, &filter.AtomRule{Field: field, Op: filter.NotEqual.Factory(), Value: opValue})
+			case condition.BKDBIN:
+				rules = append(rules, &filter.AtomRule{Field: field, Op: filter.In.Factory(), Value: opValue})
+			default:
+				return nil, fmt.Errorf("unsupported filter operator %s for field %s", op, field)
+			}
+		}
+		return rules, nil
+	}
+
+	if reflect.TypeOf(value) != nil && reflect.TypeOf(value).Kind() == reflect.Slice {
+		return []filter.RuleFactory{
+			&filter.AtomRule{Field: field, Op: filter.In.Factory(), Value: value},
+		}, nil
+	}
+
+	return []filter.RuleFactory{
+		&filter.AtomRule{Field: field, Op: filter.Equal.Factory(), Value: value},
+	}, nil
 }
 
 // processBatch 处理一批数据
@@ -307,6 +441,163 @@ func (e *MigrationEngine) processBatch(kt *kit.Kit, batch []interface{}, cfg *co
 	result.Success = result.Created + result.Updated + result.Skipped
 
 	return result
+}
+
+// processReverseBatch 处理一批反向同步数据（mysql -> mongodb）
+func (e *MigrationEngine) processReverseBatch(kt *kit.Kit, batch []interface{}, cfg *config.TableMigrationConfig,
+	converter converters.DataConverter, req *MigrationRequest) *MigrationResult {
+
+	result := &MigrationResult{Errors: make([]*ErrorDetail, 0)}
+	for _, sourceItem := range batch {
+		e.processSingleReverseItem(kt, sourceItem, cfg, converter, req, result)
+	}
+
+	result.Success = result.Created + result.Updated + result.Skipped
+	logs.Infof("[MigrationEngine:processReverseBatch] batch processed, table: %s, task_id: %s, created:%d, "+
+		"updated:%d, skipped:%d, failed:%d, rid: %s", cfg.SourceTable, req.TaskID, result.Created, result.Updated,
+		result.Skipped, result.Failed, kt.Rid)
+	return result
+}
+
+func (e *MigrationEngine) processSingleReverseItem(kt *kit.Kit, sourceItem interface{},
+	cfg *config.TableMigrationConfig, converter converters.DataConverter, req *MigrationRequest,
+	result *MigrationResult) {
+
+	pk, err := converter.ExtractPrimaryKey(sourceItem)
+	if err != nil {
+		e.appendReverseError(kt, result, cfg.SourceTable, "extract_pk", err, nil)
+		return
+	}
+
+	exists, shouldSkip := e.checkReverseItemState(kt, sourceItem, cfg, converter, req, result, pk)
+	if shouldSkip {
+		return
+	}
+
+	mongoDoc, err := e.buildMongoDocFromMySQL(cfg, sourceItem)
+	if err != nil {
+		e.appendReverseError(kt, result, cfg.SourceTable, "convert_to_mongo", err, pk)
+		return
+	}
+
+	if req.DryRun {
+		e.increaseReverseResult(result, exists)
+		return
+	}
+
+	pkFilter := e.buildMongoPKFilter(pk, cfg)
+	if err = e.mongo.Table(cfg.SourceTable).Upsert(kt.Ctx, pkFilter, mongoDoc); err != nil {
+		e.appendReverseError(kt, result, cfg.SourceTable, "upsert_mongo", err, pk)
+		return
+	}
+
+	e.increaseReverseResult(result, exists)
+}
+
+func (e *MigrationEngine) checkReverseItemState(kt *kit.Kit, sourceItem interface{}, cfg *config.TableMigrationConfig,
+	converter converters.DataConverter, req *MigrationRequest, result *MigrationResult,
+	pk interface{}) (bool, bool) {
+
+	existingItem, exists, err := e.queryExistingMongoByPrimaryKey(kt, cfg, converter, pk)
+	if err != nil {
+		e.appendReverseError(kt, result, cfg.SourceTable, "query_existing", err, pk)
+		return false, true
+	}
+
+	if exists {
+		if req.Mode == MigrationModeCreateOnly {
+			result.Skipped++
+			return true, true
+		}
+
+		isEqual, _ := converter.CompareData(existingItem, sourceItem, cfg.CompareFields)
+		if isEqual {
+			result.Skipped++
+			return true, true
+		}
+		return true, false
+	}
+
+	if req.Mode == MigrationModeUpdateOnly {
+		result.Skipped++
+		return false, true
+	}
+	return false, false
+}
+
+func (e *MigrationEngine) appendReverseError(kt *kit.Kit, result *MigrationResult, tableName, action string,
+	err error, pk interface{}) {
+
+	if action == "extract_pk" {
+		logs.Errorf("[MigrationEngine:processReverseBatch] extract primary key failed, err: %v, rid: %s", err, kt.Rid)
+	} else {
+		logs.Errorf("[MigrationEngine:processReverseBatch] %s failed, pk: %v, err: %v, rid: %s",
+			action, pk, err, kt.Rid)
+	}
+
+	result.Failed++
+	errorDetail := &ErrorDetail{Table: tableName, Action: action, Error: err.Error()}
+	if pk != nil {
+		errorDetail.PrimaryKey = pk
+	}
+	result.Errors = append(result.Errors, errorDetail)
+}
+
+func (e *MigrationEngine) increaseReverseResult(result *MigrationResult, exists bool) {
+	if exists {
+		result.Updated++
+		return
+	}
+	result.Created++
+}
+
+func (e *MigrationEngine) queryExistingMongoByPrimaryKey(kt *kit.Kit, cfg *config.TableMigrationConfig,
+	converter converters.DataConverter, pk interface{}) (interface{}, bool, error) {
+	filterCondition := e.buildMongoPKFilter(pk, cfg)
+	itemPtr, err := newSourceDataItem(converter)
+	if err != nil {
+		return nil, false, err
+	}
+
+	err = e.mongo.Table(cfg.SourceTable).Find(filterCondition).One(kt.Ctx, itemPtr)
+	if err != nil {
+		if e.mongo.IsNotFoundError(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+
+	return itemPtr, true, nil
+}
+
+func (e *MigrationEngine) buildMongoPKFilter(pk interface{}, cfg *config.TableMigrationConfig) bson.M {
+	conditions := make(bson.M)
+	if pkMap, ok := pk.(map[string]interface{}); ok {
+		for _, field := range cfg.GetSourcePrimaryKeys() {
+			conditions[field] = pkMap[field]
+		}
+		return conditions
+	}
+
+	pkFields := cfg.GetSourcePrimaryKeys()
+	if len(pkFields) > 0 {
+		conditions[pkFields[0]] = pk
+	}
+	return conditions
+}
+
+func newSourceDataItem(converter converters.DataConverter) (interface{}, error) {
+	slicePtr := converter.NewSourceDataSlice()
+	sliceType := reflect.TypeOf(slicePtr)
+	if sliceType.Kind() != reflect.Ptr || sliceType.Elem().Kind() != reflect.Slice {
+		return nil, fmt.Errorf("invalid NewSourceDataSlice type: %T", slicePtr)
+	}
+
+	elemType := sliceType.Elem().Elem()
+	if elemType.Kind() == reflect.Ptr {
+		return reflect.New(elemType.Elem()).Interface(), nil
+	}
+	return reflect.New(elemType).Interface(), nil
 }
 
 // extractPrimaryKeys 提取所有主键
@@ -529,16 +820,22 @@ func (e *MigrationEngine) processBatchesConcurrently(kt *kit.Kit, batches [][]in
 			defer wg.Done()
 
 			for task := range taskChan {
-				logs.Infof("[MigrationEngine:processBatchesConcurrently] Worker-%d processing batch %d/%d "+
-					"(size: %d), rid: %s", workerID, task.index+1, len(batches), len(task.batch), kt.Rid)
+				logs.Infof("[MigrationEngine:processBatchesConcurrently] worker-%d processing batch %d/%d "+
+					"(size: %d, task_id: %s), rid: %s", workerID, task.index+1, len(batches), len(task.batch),
+					req.TaskID, kt.Rid)
 
 				// 处理批次
-				batchResult := e.processBatch(kt, task.batch, cfg, converter, req)
+				var batchResult *MigrationResult
+				if resolveDirection(req.Direction) == MigrationDirectionReverse {
+					batchResult = e.processReverseBatch(kt, task.batch, cfg, converter, req)
+				} else {
+					batchResult = e.processBatch(kt, task.batch, cfg, converter, req)
+				}
 				batchResult.BatchIndex = task.index + 1
 				resultChan <- batchResult
 
-				logs.Infof("[MigrationEngine:processBatchesConcurrently] Worker-%d completed batch %d/%d, rid: %s",
-					workerID, task.index+1, len(batches), kt.Rid)
+				logs.Infof("[MigrationEngine:processBatchesConcurrently] worker-%d completed batch %d/%d "+
+					"(task_id: %s), rid: %s", workerID, task.index+1, len(batches), req.TaskID, kt.Rid)
 			}
 		}(i)
 	}

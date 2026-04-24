@@ -196,6 +196,13 @@ func (r *ClientAPIRouter) BatchCallListAPI(kt *kit.Kit, tableName string, pkFiel
 	return results, nil
 }
 
+// BatchCallListByFilterAPI 按过滤条件查询目标表数据（用于反向同步）
+func (r *ClientAPIRouter) BatchCallListByFilterAPI(kt *kit.Kit, tableName string, filterExpr *filter.Expression) (
+	[]interface{}, error) {
+
+	return r.callListAPIByFilter(kt, tableName, filterExpr)
+}
+
 // callListAPIOneBatch 调用查询API（单批，支持单字段和复合主键）
 func (r *ClientAPIRouter) callListAPIOneBatch(kt *kit.Kit, tableName string, pkFields []string, pkValues []interface{}) (
 	[]interface{}, error) {
@@ -209,6 +216,13 @@ func (r *ClientAPIRouter) callListAPIOneBatch(kt *kit.Kit, tableName string, pkF
 		// 复合主键，使用 OR 组合的多个 AND 条件
 		filterExpr = r.buildCompositeKeyFilter(pkFields, pkValues)
 	}
+
+	return r.callListAPIByFilter(kt, tableName, filterExpr)
+}
+
+// callListAPIByFilter 按过滤条件调用查询API
+func (r *ClientAPIRouter) callListAPIByFilter(kt *kit.Kit, tableName string, filterExpr *filter.Expression) (
+	[]interface{}, error) {
 
 	switch tableName {
 	case table.ZiyanCvmApplyOrderTable:
