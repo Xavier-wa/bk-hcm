@@ -891,20 +891,37 @@ type AgentSessionSummary struct {
 
 func (s *AgentSessionSummary) trySetDefault() {}
 
-// AgentMemoryStorage defines MySQL settings for AGUI long-term memory persistence.
+// AgentMemoryStorage defines settings for AGUI long-term memory persistence.
+// Backend controls which storage engine to use:
+//   - "mysql"     – MySQL-backed storage, requires DSN.
+//   - "sqlitevec" – SQLite + sqlite-vec (vector search), requires DBPath and Embedding config.
+//   - ""          – (default) falls back to "mysql" when DSN is set, otherwise disabled.
 type AgentMemoryStorage struct {
-	// DSN is the MySQL connection string. Leave empty to disable memory persistence.
+	// Backend selects the memory storage engine: "mysql" or "sqlitevec".
+	// When empty, auto-detected from other fields (DSN → mysql, DBPath → sqlitevec).
+	Backend string `yaml:"backend"`
+	// DSN is the MySQL connection string (backend=mysql). Leave empty to disable MySQL memory.
 	DSN string `yaml:"dsn"`
+	// DBPath is the SQLite database file path (backend=sqlitevec).
+	// Example: "/data/agent-server/memories.db"
+	DBPath string `yaml:"dbPath"`
 	// TableName is the table name for storing memories. Default: "memories".
 	TableName string `yaml:"tableName"`
 	// SkipDBInit skips automatic table creation. Set true if tables are managed externally.
 	SkipDBInit bool `yaml:"skipDBInit"`
 	// Limit is the maximum number of memory entries per user. Default: 100.
 	Limit int `yaml:"limit"`
+	// MaxSearchResults limits the number of results returned by vector search (Top-K).
+	// Default: 10 (framework default). 0 means use framework default.
+	MaxSearchResults int `yaml:"maxSearchResults"`
+	// PreloadLimit sets the number of most-recent memories to inject into the system
+	// prompt at the start of each conversation turn. Default: 20. 0 disables preloading.
+	PreloadLimit int `yaml:"preloadLimit"`
+	// Embedding configures the embedding model for vector-based memory (backend=sqlitevec).
+	Embedding AgentEmbeddingConfig `yaml:"embedding"`
 	// AutoExtract enables automatic LLM-based memory extraction after each Run.
 	// When true, the agent calls an LLM after every conversation turn to identify
 	// memorable facts and persist them to the memories table.
-	// Requires DSN to be configured.
 	AutoExtract bool `yaml:"autoExtract"`
 	// AutoExtractMessages triggers extraction only when the number of new messages
 	// exceeds this value. 0 means no message-count gate (always consider extracting).
@@ -928,6 +945,20 @@ type AgentMemoryStorage struct {
 
 func (s *AgentMemoryStorage) trySetDefault() {
 	s.ExtractPrompt = loadPromptFile(s.ExtractPromptFile)
+}
+
+// ResolveMemoryBackend determines which backend to use based on explicit config or auto-detection.
+func (s *AgentMemoryStorage) ResolveMemoryBackend() string {
+	if b := strings.TrimSpace(strings.ToLower(s.Backend)); b != "" {
+		return b
+	}
+	if strings.TrimSpace(s.DBPath) != "" {
+		return "sqlitevec"
+	}
+	if strings.TrimSpace(s.DSN) != "" {
+		return "mysql"
+	}
+	return ""
 }
 
 // AgentEmbeddingConfig configures the embedding model used by vector-based memory backends.
@@ -982,6 +1013,9 @@ type AgentMCPToolSet struct {
 	Filter *AgentMCPFilter `yaml:"filter"`
 	// Reconnect configures automatic session reconnection on failure.
 	Reconnect *AgentMCPReconnect `yaml:"reconnect"`
+	// RequireConfirm when true requires the user to explicitly send "确认"
+	// before any tool in this MCP toolset is actually executed.
+	RequireConfirm bool `yaml:"requireConfirm"`
 }
 
 // AgentSkillsConfig configures the AGUI agent's skill repository.

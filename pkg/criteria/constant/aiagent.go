@@ -52,8 +52,6 @@ const (
 	// summary is enabled; older runs are represented by the summary only.
 	DefaultMaxHistoryRuns = 10
 
-	// DefaultPreloadMemoryLimit loads the most recent N memories into the system prompt.
-	DefaultPreloadMemoryLimit = 20
 	// DefaultLLMRequestBodyLogLimit is the limit of the LLM request body log.
 	DefaultLLMRequestBodyLogLimit = 16 * 1024
 )

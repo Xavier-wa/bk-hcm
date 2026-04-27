@@ -213,12 +213,17 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 		// Cancel endpoint: clients POST {threadId} to abort an in-progress run.
 		agui.WithCancelEnabled(true),
 		agui.WithCancelPath(constant.AGUICancelPath),
+		// Increase post-run finalization timeout to allow events to be persisted
+		// even when the request is canceled. This helps prevent incomplete event
+		// sequences (e.g., TEXT_MESSAGE_CONTENT without TEXT_MESSAGE_START).
+		agui.WithPostRunFinalizationTimeout(20 * time.Second),
 		agui.WithAGUIRunnerOptions(
 			aguirunner.WithUserIDResolver(resolveAGUIUserID),
 			aguirunner.WithRunOptionResolver(
 				makeRunOptionResolver(svcCfg.AllowedModelNames(), s.runTime.DynamicToolFilter())),
 			// Auto-cancel the LLM call when the SSE connection drops (client disconnects).
-			aguirunner.WithCancelOnContextDoneEnabled(true),
+			// NOTE: When ctx ends, the request stops immediately, so recorded conversation events may be incomplete.
+			// aguirunner.WithCancelOnContextDoneEnabled(true),
 		),
 	}
 
@@ -232,7 +237,11 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 	if sessionSvc != nil {
 		aguiOpts = append(aguiOpts,
 			agui.WithSessionService(sessionSvc),
+			// 开启会话历史消息快照
 			agui.WithMessagesSnapshotEnabled(true),
+			// 开启会话消息快照续传
+			agui.WithMessagesSnapshotFollowEnabled(true),
+			agui.WithFlushInterval(50*time.Millisecond),
 			agui.WithMessagesSnapshotPath(constant.AGUIHistoryPath),
 		)
 	}

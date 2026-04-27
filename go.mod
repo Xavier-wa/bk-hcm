@@ -75,11 +75,13 @@ require (
 require (
 	git.woa.com/trpc-go/trpc-agent-go v1.7.0
 	github.com/mattn/go-sqlite3 v1.14.32
+	github.com/ncruces/go-sqlite3 v0.32.0
 	github.com/openai/openai-go v1.12.0
 	trpc.group/trpc-go/trpc-a2a-go v0.2.5
 	trpc.group/trpc-go/trpc-agent-go v1.7.0
 	trpc.group/trpc-go/trpc-agent-go/graph/checkpoint/redis v1.7.0
 	trpc.group/trpc-go/trpc-agent-go/memory/mysql v1.7.0
+	trpc.group/trpc-go/trpc-agent-go/memory/sqlitevec v1.7.0
 	trpc.group/trpc-go/trpc-agent-go/server/agui v1.7.0
 	trpc.group/trpc-go/trpc-agent-go/session/mysql v1.7.0
 	trpc.group/trpc-go/trpc-mcp-go v0.0.12
@@ -166,6 +168,7 @@ require (
 	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/ag-ui-protocol/ag-ui/sdks/community/go v0.0.0-20260305114736-115a967b66a9 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
+	github.com/asg017/sqlite-vec-go-bindings v0.1.6 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.9.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/creack/pty v1.1.24 // indirect
@@ -191,6 +194,7 @@ require (
 	github.com/lestrrat-go/option v1.0.1 // indirect
 	github.com/lestrrat-go/strftime v1.0.6 // indirect
 	github.com/mozillazg/go-httpheader v0.2.1 // indirect
+	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/panjf2000/ants/v2 v2.10.0 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
 	github.com/r3labs/sse/v2 v2.10.0 // indirect
@@ -200,6 +204,7 @@ require (
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
+	github.com/tetratelabs/wazero v1.11.0 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.52.0 // indirect
@@ -260,7 +265,7 @@ require (
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sync v0.18.0
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/tools v0.38.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
@@ -278,3 +283,8 @@ replace github.com/go-sql-driver/mysql => github.com/go-sql-driver/mysql v1.7.1
 
 // 自研云需要修改sdk，支持差异化参数
 replace github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/clb => ./pkg/thirdparty/tencentcloud/clb
+
+// sqlite-vec-go-bindings v0.1.6 内嵌的 WASM 二进制与 ncruces/go-sqlite3 v0.32.0 不兼容
+// （宿主函数接口变更）。降级到 v0.20.3 恢复兼容，该版本默认启用 WASM threads 并导出所需宿主函数。
+// 参见 https://github.com/asg017/sqlite-vec-go-bindings/issues/4
+replace github.com/ncruces/go-sqlite3 => github.com/ncruces/go-sqlite3 v0.20.3

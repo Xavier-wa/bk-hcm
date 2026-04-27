@@ -24,6 +24,7 @@ package logics
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"net/http"
@@ -37,6 +38,7 @@ import (
 	"hcm/pkg/logs"
 	cvt "hcm/pkg/tools/converter"
 
+	_ "github.com/ncruces/go-sqlite3/driver" // import sqlite3 driver, used by memory/sqlitevec
 	openaiopt "github.com/openai/openai-go/option"
 	"github.com/tidwall/gjson"
 	"trpc.group/trpc-go/trpc-agent-go/agent"
@@ -45,6 +47,7 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/memory"
 	"trpc.group/trpc-go/trpc-agent-go/memory/extractor"
 	memmysql "trpc.group/trpc-go/trpc-agent-go/memory/mysql"
+	memsqlitevec "trpc.group/trpc-go/trpc-agent-go/memory/sqlitevec"
 	"trpc.group/trpc-go/trpc-agent-go/model"
 	"trpc.group/trpc-go/trpc-agent-go/model/openai"
 	"trpc.group/trpc-go/trpc-agent-go/runner"
@@ -115,7 +118,14 @@ func New() (*Runtime, error) {
 	}
 
 	// Share the default model with the session summarizer (both need the same LLM endpoint).
-	sessionSvc, memorySvc, err := buildStorageServices(defaultMdl)
+	// The aidev gateway config is also passed so the embedding client can reuse
+	// the same endpoint and BK auth middleware.
+	aidevGW, err := resolveProviderConfig(constant.DefaultProviderName, providers)
+	if err != nil {
+		return nil, fmt.Errorf("resolve default provider: %w, provider name: %s", err,
+			constant.DefaultProviderName)
+	}
+	sessionSvc, memorySvc, err := buildStorageServices(defaultMdl, aidevGW)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +139,7 @@ func New() (*Runtime, error) {
 	var dynFilter tool.FilterFunc
 	if d := toolsCfg.DynamicToolLoading; d != nil && d.Enabled {
 		var err error
-		dynFilter, err = buildDynamicToolFilter(d, mcpToolSets, providers)
+		dynFilter, err = buildDynamicToolFilter(d, mcpToolSets, aidevGW)
 		if err != nil {
 			closeMCPToolSets(mcpToolSets)
 			return nil, err
@@ -179,13 +189,9 @@ func resolveAllowedModels(aguiCfg cc.AgentAGUI) []string {
 // buildDynamicToolFilter builds the dynamic tool filter from the given config.
 // It performs per-invocation BM25/keyword retrieval so the LLM only sees relevant MCP tools.
 func buildDynamicToolFilter(cfg *cc.AgentDynamicToolLoadingConfig, mcpToolSets []tool.ToolSet,
-	providers map[string]*cc.AgentModelProvider) (tool.FilterFunc, error) {
+	embeddingProvider *cc.AgentModelProvider) (tool.FilterFunc, error) {
 
-	aidevGW, err := resolveProviderConfig(constant.DefaultProviderName, providers)
-	if err != nil {
-		return nil, fmt.Errorf("resolve default provider: %w, provider name: %s", err, constant.DefaultProviderName)
-	}
-	idx := buildToolIndex(cfg, aidevGW)
+	idx := buildToolIndex(cfg, embeddingProvider)
 	lazy := &lazyToolIndex{
 		mcpToolSets:        mcpToolSets,
 		toolTags:           cfg.ToolTags,
@@ -199,11 +205,11 @@ func buildDynamicToolFilter(cfg *cc.AgentDynamicToolLoadingConfig, mcpToolSets [
 	return makeDynamicToolFilter(lazy), nil
 }
 
-// buildStorageServices creates MySQL-backed session and memory services when DSNs are
-// configured, returning nil for each service when its DSN is empty.
-// mdl is used by the session summarizer when summary is enabled; it may be nil
-// (in which case summary is silently disabled even if configured).
-func buildStorageServices(mdl model.Model) (session.Service, memory.Service, error) {
+// buildStorageServices creates session and memory services from the given config,
+// returning nil for each service when its backend is not configured.
+// mdl is used by the session summarizer and memory extractor; it may be nil
+// (in which case summary/extraction is silently disabled even if configured).
+func buildStorageServices(mdl model.Model, aidevGW *cc.AgentModelProvider) (session.Service, memory.Service, error) {
 	cfg := cc.AgentServer().Storage
 
 	var sessionSvc session.Service
@@ -229,37 +235,159 @@ func buildStorageServices(mdl model.Model) (session.Service, memory.Service, err
 		logs.Infof("AGUI session backend: inmemory (no DSN configured)")
 	}
 
-	var memorySvc memory.Service
-	if dsn := strings.TrimSpace(cfg.Memory.DSN); dsn != "" {
-		opts := []memmysql.ServiceOpt{memmysql.WithMySQLClientDSN(dsn)}
-		if cfg.Memory.SkipDBInit {
-			opts = append(opts, memmysql.WithSkipDBInit(true))
+	memorySvc, err := buildMemoryService(cfg.Memory, mdl, aidevGW)
+	if err != nil {
+		if sessionSvc != nil {
+			_ = sessionSvc.Close()
 		}
-		if name := strings.TrimSpace(cfg.Memory.TableName); name != "" {
-			opts = append(opts, memmysql.WithTableName(name))
-		}
-		if cfg.Memory.Limit > 0 {
-			opts = append(opts, memmysql.WithMemoryLimit(cfg.Memory.Limit))
-		}
-		if cfg.Memory.AutoExtract && mdl != nil {
-			opts = append(opts, memmysql.WithExtractor(buildMemoryExtractor(cfg.Memory, mdl)))
-			logs.Infof("AGUI memory auto-extract: enabled (policy=%q, messages=%d, interval=%s)",
-				cfg.Memory.AutoExtractPolicy, cfg.Memory.AutoExtractMessages, cfg.Memory.AutoExtractInterval)
-		}
-		svc, err := memmysql.NewService(opts...)
-		if err != nil {
-			if sessionSvc != nil {
-				_ = sessionSvc.Close()
-			}
-			return nil, nil, fmt.Errorf("create AGUI memory service: %w", err)
-		}
-		memorySvc = svc
-		logs.Infof("AGUI memory backend: mysql (table=%q)", cfg.Memory.TableName)
-	} else {
-		logs.Infof("AGUI memory backend: disabled (no DSN configured)")
+		return nil, nil, err
+	}
+
+	if memorySvc != nil {
+		memorySvc = newLoggingMemoryService(memorySvc)
 	}
 
 	return sessionSvc, memorySvc, nil
+}
+
+// buildMemoryService constructs the appropriate memory.Service based on the resolved backend.
+func buildMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model, aidevGW *cc.AgentModelProvider) (
+	memory.Service, error) {
+
+	backend := cfg.ResolveMemoryBackend()
+
+	switch backend {
+	case "mysql":
+		return buildMySQLMemoryService(cfg, mdl)
+	case "sqlitevec":
+		return buildSQLiteVecMemoryService(cfg, mdl, aidevGW)
+	case "":
+		logs.Infof("AGUI memory backend: disabled (no backend configured)")
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unsupported memory backend: %q", backend)
+	}
+}
+
+// buildMySQLMemoryService constructs a MySQL-backed memory service.
+func buildMySQLMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model) (memory.Service, error) {
+	dsn := strings.TrimSpace(cfg.DSN)
+	if dsn == "" {
+		return nil, fmt.Errorf("memory backend=mysql requires DSN")
+	}
+	opts := []memmysql.ServiceOpt{memmysql.WithMySQLClientDSN(dsn)}
+	if cfg.SkipDBInit {
+		opts = append(opts, memmysql.WithSkipDBInit(true))
+	}
+	if name := strings.TrimSpace(cfg.TableName); name != "" {
+		opts = append(opts, memmysql.WithTableName(name))
+	}
+	if cfg.Limit > 0 {
+		opts = append(opts, memmysql.WithMemoryLimit(cfg.Limit))
+	}
+	if cfg.MaxSearchResults > 0 {
+		opts = append(opts, memmysql.WithMaxResults(cfg.MaxSearchResults))
+	}
+	if cfg.AutoExtract && mdl != nil {
+		opts = append(opts, memmysql.WithExtractor(buildMemoryExtractor(cfg, mdl)))
+		logs.Infof("AGUI memory auto-extract: enabled (policy=%q, messages=%d, interval=%s)",
+			cfg.AutoExtractPolicy, cfg.AutoExtractMessages, cfg.AutoExtractInterval)
+	}
+	svc, err := memmysql.NewService(opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create AGUI memory service (mysql): %w", err)
+	}
+	logs.Infof("AGUI memory backend: mysql (table=%q)", cfg.TableName)
+	return svc, nil
+}
+
+// buildSQLiteVecMemoryService constructs a SQLite+sqlite-vec backed memory service.
+// The embedding client shares the aidev gateway's base URL and BK auth middleware,
+// so only model name and dimensions need to be specified in the memory config.
+//
+// Full request URL: {gatewayCfg.BaseURL}/embeddings
+// (path suffix appended by the OpenAI Go SDK automatically)
+func buildSQLiteVecMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model, aidevGW *cc.AgentModelProvider) (
+	memory.Service, error) {
+
+	dbPath := strings.TrimSpace(cfg.DBPath)
+	if dbPath == "" {
+		return nil, fmt.Errorf("memory backend=sqlitevec requires dbPath")
+	}
+	if strings.TrimSpace(aidevGW.BaseURL) == "" {
+		return nil, fmt.Errorf("memory backend=sqlitevec requires aidev baseURL (embedding shares the LLM gateway)")
+	}
+
+	embedCfg := cfg.Embedding
+	var embedOpts []openaiembed.Option
+	embedOpts = append(embedOpts, openaiembed.WithBaseURL(aidevGW.BaseURL))
+	if aidevGW.APIKey != "" {
+		embedOpts = append(embedOpts, openaiembed.WithAPIKey(aidevGW.APIKey))
+	}
+	if aidevGW.AppCode != "" || aidevGW.AppSecret != "" {
+		appCode := aidevGW.AppCode
+		appSecret := aidevGW.AppSecret
+		defaultUser := aidevGW.User
+		defaultTicket := aidevGW.BkTicket
+		embedOpts = append(embedOpts, openaiembed.WithRequestOptions(
+			openaiopt.WithMiddleware(func(r *http.Request, next openaiopt.MiddlewareNext) (*http.Response, error) {
+				username := BKUsernameFromContext(r.Context())
+				if username == "" {
+					username = defaultUser
+				}
+				ticket := BKTicketFromContext(r.Context())
+				if ticket == "" {
+					ticket = defaultTicket
+				}
+				r.Header.Set(constant.BKGWAuthKey, bkapiAuthHeaderValue(appCode, appSecret, username, ticket))
+				return next(r)
+			}),
+		))
+	}
+	if embedCfg.Model != "" {
+		embedOpts = append(embedOpts, openaiembed.WithModel(embedCfg.Model))
+	}
+	if embedCfg.Dimensions > 0 {
+		embedOpts = append(embedOpts, openaiembed.WithDimensions(embedCfg.Dimensions))
+	}
+	emb := openaiembed.New(embedOpts...)
+
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite database %q: %w", dbPath, err)
+	}
+
+	var svcOpts []memsqlitevec.ServiceOpt
+	svcOpts = append(svcOpts, memsqlitevec.WithEmbedder(emb))
+	if name := strings.TrimSpace(cfg.TableName); name != "" {
+		svcOpts = append(svcOpts, memsqlitevec.WithTableName(name))
+	}
+	if cfg.SkipDBInit {
+		svcOpts = append(svcOpts, memsqlitevec.WithSkipDBInit(true))
+	}
+	if cfg.Limit > 0 {
+		svcOpts = append(svcOpts, memsqlitevec.WithMemoryLimit(cfg.Limit))
+	}
+	if cfg.MaxSearchResults > 0 {
+		svcOpts = append(svcOpts, memsqlitevec.WithMaxResults(cfg.MaxSearchResults))
+	}
+	if embedCfg.Dimensions > 0 {
+		svcOpts = append(svcOpts, memsqlitevec.WithIndexDimension(embedCfg.Dimensions))
+	}
+	if cfg.AutoExtract && mdl != nil {
+		svcOpts = append(svcOpts, memsqlitevec.WithExtractor(buildMemoryExtractor(cfg, mdl)))
+		logs.Infof("AGUI memory auto-extract: enabled (policy=%q, messages=%d, interval=%s)",
+			cfg.AutoExtractPolicy, cfg.AutoExtractMessages, cfg.AutoExtractInterval)
+	}
+
+	svc, err := memsqlitevec.NewService(db, svcOpts...)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("create AGUI memory service (sqlitevec): %w", err)
+	}
+	logs.Infof("AGUI memory backend: sqlitevec (db=%q, table=%q, model=%q, dimension=%d, gateway=%q)",
+		dbPath, cfg.TableName, embedCfg.Model, emb.GetDimensions(), aidevGW.BaseURL)
+	return svc, nil
 }
 
 // buildEmbeddingClient constructs an OpenAI-compatible embedder from gateway and embedding configs.
@@ -369,6 +497,13 @@ func buildMemoryExtractor(cfg cc.AgentMemoryStorage, mdl model.Model) extractor.
 		opts = append(opts, extractor.WithPrompt(cfg.ExtractPrompt))
 		logs.Infof("AGUI memory extract prompt: custom (%d bytes)", len(cfg.ExtractPrompt))
 	}
+
+	// Inject model logger into extractor so that AfterModel callbacks fire for
+	// LLM calls made by the background memory extraction worker (which bypasses
+	// the Agent-level callback pipeline).
+	modelCb := makeModelLogger()
+	opts = append(opts, extractor.WithModelCallbacks(modelCb))
+
 	return extractor.NewExtractor(mdl, opts...)
 }
 
@@ -446,6 +581,9 @@ func resolveProviderConfig(providerName string, providers map[string]*cc.AgentMo
 
 // buildModelWithConfig creates a single OpenAI-compatible model instance
 // using the given gateway config.
+//
+// Full request URL: {gatewayCfg.BaseURL}/chat/completions
+// (path suffix appended by the OpenAI Go SDK automatically)
 func buildModelWithConfig(modelName string, gatewayCfg *cc.AgentModelProvider) model.Model {
 	opts := buildOpenAIOptions(gatewayCfg)
 	opts = append(opts, openai.WithEnableTokenTailoring(true))
@@ -520,7 +658,7 @@ func newAgentWithModel(defaultMdl model.Model, modelsMap map[string]model.Model,
 		llmagent.WithTimezone("Asia/Shanghai"),
 		llmagent.WithAddSessionSummary(true),
 		llmagent.WithMaxHistoryRuns(constant.DefaultMaxHistoryRuns),
-		llmagent.WithPreloadMemory(constant.DefaultPreloadMemoryLimit),
+		llmagent.WithPreloadMemory(cc.AgentServer().Storage.Memory.PreloadLimit),
 	}
 	if systemPrompt != "" {
 		opts = append(opts, llmagent.WithGlobalInstruction(systemPrompt))
@@ -536,6 +674,13 @@ func newAgentWithModel(defaultMdl model.Model, modelsMap map[string]model.Model,
 	}
 	if skillRepo != nil {
 		opts = append(opts, llmagent.WithSkills(skillRepo))
+		opts = append(opts, llmagent.WithSkillLoadMode(llmagent.SkillLoadModeSession))
+		// NOTE: skill_run 幻觉严重，使用仅知识注入模式，避免模型编造 script 执行;
+		//  该模式下不支持在 skill 中引入 command / script
+		opts = append(opts, llmagent.WithSkillToolProfile(llmagent.SkillToolProfileKnowledgeOnly))
+		// TODO 增加 prompt cache 命中率，不再把 skill 注入到 system prompt，而是单独提供 tool result;
+		//  启用该模式需改造 tool result 的压缩功能
+		// opts = append(opts, llmagent.WithSkillsLoadedContentInToolResults(true))
 	}
 	if len(toolSets) > 0 {
 		opts = append(opts, llmagent.WithToolSets(toolSets))
@@ -544,7 +689,9 @@ func newAgentWithModel(defaultMdl model.Model, modelsMap map[string]model.Model,
 		}
 	}
 
-	opts = append(opts, llmagent.WithToolCallbacks(makeToolLogger()))
+	toolCb := makeToolLogger()
+	toolCb.BeforeTool = append(toolCb.BeforeTool, makeParamFixCallbacks())
+	opts = append(opts, llmagent.WithToolCallbacks(toolCb))
 
 	modelCb := makeModelLogger()
 	modelCb.BeforeModel = append(modelCb.BeforeModel, makeHistoricalToolResultFilter())
@@ -578,9 +725,15 @@ func buildMCPToolSets() ([]tool.ToolSet, error) {
 			closeMCPToolSets(sets)
 			return nil, fmt.Errorf("toolset %q: %w", cfg.Name, err)
 		}
+		if cfg.RequireConfirm {
+			ts = newConfirmToolSet(ts)
+			logs.Infof("AGUI MCP toolset registered: name=%q type=%q transport=%q serverUrl=%q requireConfirm=true",
+				cfg.Name, cfg.Type, cfg.Transport, cfg.ServerURL)
+		} else {
+			logs.Infof("AGUI MCP toolset registered: name=%q type=%q transport=%q serverUrl=%q",
+				cfg.Name, cfg.Type, cfg.Transport, cfg.ServerURL)
+		}
 		sets = append(sets, ts)
-		logs.Infof("AGUI MCP toolset registered: name=%q type=%q transport=%q serverUrl=%q",
-			cfg.Name, cfg.Type, cfg.Transport, cfg.ServerURL)
 	}
 	return sets, nil
 }
