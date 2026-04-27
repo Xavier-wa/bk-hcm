@@ -54,7 +54,9 @@ export default defineComponent({
       if (formModel.vendor === VendorEnum.ZIYAN) {
         if (!isOpenVal) {
           // 自研云内网下支持多可用区
-          zones = formModel.zones as string[];
+          // resetParams可能会将zones重置为''导致接口报错，加上容错处理，空的话设置为空数组，单个值的话转成数组
+          // eslint-disable-next-line
+          zones = formModel.zones ? (Array.isArray(formModel.zones) ? formModel.zones : [formModel.zones]) : [];
           tgwGroupName = undefined;
           vipIsp = undefined;
         } else {
