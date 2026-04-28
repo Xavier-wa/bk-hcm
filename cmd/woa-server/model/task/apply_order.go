@@ -325,6 +325,14 @@ func (a *applyOrder) UpdateApplyOrder(kt *kit.Kit, filterExpr *filter.Expression
 	}
 
 	if len(updateReqs) == 0 {
+		filterExprJSON, err := json.Marshal(filterExpr)
+		if err != nil {
+			logs.Errorf("update apply order no records to update, marshal filterExpr failed, err: %+v, rid: %s",
+				err, kt.Rid)
+			return err
+		}
+		logs.Warnf("update apply order no records to update, filterExprJSON: %s, updateData: %v, rid: %s",
+			filterExprJSON, cvt.PtrToVal(updateData), kt.Rid)
 		return nil
 	}
 

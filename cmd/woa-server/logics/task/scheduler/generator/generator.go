@@ -143,7 +143,8 @@ func (g *Generator) GenerateCVM(kt *kit.Kit, order *types.ApplyOrder) error {
 		return nil
 	}
 
-	logs.Infof("apply order %s existing device number: %d, rid: %s", order.SubOrderId, existCount, kt.Rid)
+	logs.Infof("apply order %s existing device number: %d, stage: %s, status: %s, rid: %s",
+		order.SubOrderId, existCount, order.Stage, order.Status, kt.Rid)
 
 	// 获取该申请单的可用区
 	orderZones, err := g.getApplyOrderMultiZones(kt, order)
@@ -363,7 +364,7 @@ func (g *Generator) generateCvmAcrossCampus(kt *kit.Kit, order *types.ApplyOrder
 				maxCount))
 		}
 
-		logs.Infof("generateCVMSeparate campus loop, subOrderID: %s, maxCount: %d, createdTotalCount: %d, "+
+		logs.Infof("generateCVMSeparate campus loop, subOrderID: %s, maxCount: %.0f, createdTotalCount: %d, "+
 			"zoneCapacity: %+v, zoneCreatedCount: %v, zoneInfo: %s, availZonesNum: %d, replicas: %d, rid: %s",
 			order.SubOrderId, maxCount, createdTotalCount, zoneCapacity, zoneCreatedCount, zone,
 			len(orderZones), replicas, kt.Rid)

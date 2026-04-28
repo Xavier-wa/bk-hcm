@@ -25,6 +25,7 @@ import (
 	types "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/api/core"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
@@ -213,12 +214,25 @@ func (d *Dispatcher) lockApplyOrder(kt *kit.Kit, order *types.ApplyOrder) error 
 		tools.RuleNotEqual("status", types.ApplyStatusMatching),
 	)
 
+	// 校验该查询条件是否存在子单数据
+	applyOrder, err := model.Operation().ApplyOrder().GetApplyOrder(kt, filter)
+	if err != nil {
+		logs.Errorf("failed to query apply order, id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
+		return err
+	}
+
+	if applyOrder == nil || len(applyOrder.SubOrderId) == 0 {
+		logs.Warnf("failed to lock apply order, apply order not found, subOrderID: %s, stage: %s, status: %s",
+			order.SubOrderId, order.Stage, order.Status)
+		return errf.Newf(errf.InvalidParameter, "failed to lock apply order, apply order not found, subOrderID: %s",
+			order.SubOrderId)
+	}
+
 	update := &cvmapplyproto.ZiyanCvmApplySuborderUpdateReq{
 		Status:    types.ApplyStatusMatching,
 		RetryTime: cvt.ValToPtr(order.RetryTime + 1),
 	}
-
-	if err := model.Operation().ApplyOrder().UpdateApplyOrder(kt, filter, update); err != nil {
+	if err = model.Operation().ApplyOrder().UpdateApplyOrder(kt, filter, update); err != nil {
 		logs.Errorf("failed to lock apply order, id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return err
 	}

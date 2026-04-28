@@ -897,6 +897,7 @@ func (s *service) GetApplyStatus(cts *rest.Contexts) (any, error) {
 
 	input := &types.GetApplyParam{
 		OrderID: []uint64{uint64(orderId)},
+		Page:    core.NewDefaultBasePage(),
 	}
 
 	rst, err := s.logics.Scheduler().GetApplyOrder(cts.Kit, input)

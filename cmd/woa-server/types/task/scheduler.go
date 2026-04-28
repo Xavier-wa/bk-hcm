@@ -1167,7 +1167,7 @@ func (param *GetApplyParam) appendBaseRules(rules []*filter.AtomRule) []*filter.
 
 // appendTicketStageRules appends ticket stage filter rules (for ticket query)
 func (param *GetApplyParam) appendTicketStageRules(rules []*filter.AtomRule) []*filter.AtomRule {
-	// get UNCOMMIT and AUDIT tickets only
+	// ApplyTicket is the main order table, query only valid ticket stages.
 	ticketStageList := make([]TicketStage, 0)
 	if util.InArray(TicketStageUncommit, param.Stage) || len(param.Stage) == 0 {
 		ticketStageList = append(ticketStageList, TicketStageUncommit)
@@ -1178,10 +1178,31 @@ func (param *GetApplyParam) appendTicketStageRules(rules []*filter.AtomRule) []*
 	if util.InArray(TicketStageTerminate, param.Stage) || len(param.Stage) == 0 {
 		ticketStageList = append(ticketStageList, TicketStageTerminate)
 	}
-	if len(param.Stage) > 0 {
-		ticketStageList = append(ticketStageList, param.Stage...)
+	if util.InArray(TicketStageRunning, param.Stage) {
+		ticketStageList = append(ticketStageList, TicketStageRunning)
+	}
+	if len(ticketStageList) == 0 {
+		return rules
 	}
 	return append(rules, tools.RuleIn("stage", ticketStageList))
+}
+
+// ShouldQueryTicketList indicates whether ticket table should be queried in order list API.
+func (param *GetApplyParam) ShouldQueryTicketList() bool {
+	if param.OnlyQuerySubOrderList() {
+		return false
+	}
+
+	if len(param.Stage) == 0 {
+		return true
+	}
+
+	for _, stage := range param.Stage {
+		if stage.ShouldQueryTicketList() {
+			return true
+		}
+	}
+	return false
 }
 
 // appendOrderRules appends order filter rules (for order query)

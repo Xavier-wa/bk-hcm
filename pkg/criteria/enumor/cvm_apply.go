@@ -53,6 +53,11 @@ func (t TicketStage) Validate() error {
 	return nil
 }
 
+// ShouldQueryTicketList 是否查询主单列表的条件
+func (t TicketStage) ShouldQueryTicketList() bool {
+	return t == TicketStageUncommit || t == TicketStageAudit || t == TicketStageTerminate || t == TicketStageRunning
+}
+
 // ApplyStatus 申请状态
 type ApplyStatus string
 

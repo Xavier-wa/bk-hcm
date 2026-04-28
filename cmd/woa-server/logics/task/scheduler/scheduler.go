@@ -48,8 +48,8 @@ import (
 	"hcm/pkg/adaptor/types/cvm"
 	"hcm/pkg/api/core"
 	protocloud "hcm/pkg/api/data-service/cloud"
-	dissolveproto "hcm/pkg/api/data-service/dissolve"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	dissolveproto "hcm/pkg/api/data-service/dissolve"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
@@ -1448,7 +1448,7 @@ func (s *scheduler) GetApplyOrder(kt *kit.Kit, param *types.GetApplyParam) (*typ
 	var tickets []*types.ApplyTicket
 	var err error
 	page := &core.BasePage{Count: param.Page.Count, Sort: param.Page.Sort, Order: param.Page.Order}
-	if !param.OnlyQuerySubOrderList() {
+	if param.ShouldQueryTicketList() {
 		tickets, err = model.Operation().ApplyTicket().FindManyApplyTicket(kt, ticketFilter, page)
 		if err != nil {
 			logs.Errorf("get apply ticket failed, err: %v, rid: %s", err, kt.Rid)
@@ -1461,6 +1461,8 @@ func (s *scheduler) GetApplyOrder(kt *kit.Kit, param *types.GetApplyParam) (*typ
 		logs.Errorf("get apply order failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
+
+	tickets = s.filterRunningTicketsBySubOrderStage(param, tickets, orders)
 	mergedOrders := s.mergeApplyTicketOrder(kt, tickets, orders, param.GetProduct)
 	total := len(mergedOrders)
 
@@ -1491,6 +1493,33 @@ func (s *scheduler) GetApplyOrder(kt *kit.Kit, param *types.GetApplyParam) (*typ
 	return rst, nil
 }
 
+func (s *scheduler) filterRunningTicketsBySubOrderStage(param *types.GetApplyParam,
+	tickets []*types.ApplyTicket, orders []*types.ApplyOrder) []*types.ApplyTicket {
+
+	if len(tickets) == 0 || !util.InArray(types.TicketStageRunning, param.Stage) {
+		return tickets
+	}
+
+	runningOrderIDSet := make(map[uint64]struct{}, len(orders))
+	for _, order := range orders {
+		if order.Stage == types.TicketStageRunning {
+			runningOrderIDSet[order.OrderId] = struct{}{}
+		}
+	}
+
+	filtered := make([]*types.ApplyTicket, 0, len(tickets))
+	for _, ticket := range tickets {
+		if ticket.Stage == types.TicketStageRunning {
+			if _, exists := runningOrderIDSet[ticket.OrderId]; !exists {
+				continue
+			}
+		}
+		filtered = append(filtered, ticket)
+	}
+
+	return filtered
+}
+
 func (s *scheduler) mergeApplyTicketOrder(kt *kit.Kit, tickets []*types.ApplyTicket,
 	orders []*types.ApplyOrder, getProduct bool) []*types.UnifyOrder {
 
@@ -1499,7 +1528,18 @@ func (s *scheduler) mergeApplyTicketOrder(kt *kit.Kit, tickets []*types.ApplyTic
 	unifyTickets := s.ticketToUnifyOrder(tickets)
 	unifyOrders := s.orderToUnifyOrder(kt, orders, getProduct)
 
-	mergeOrders = append(mergeOrders, unifyTickets...)
+	// 合并前去重，避免同一 order_id 同时出现主单与子单
+	orderIDSet := make(map[uint64]struct{}, len(unifyOrders))
+	for _, order := range unifyOrders {
+		orderIDSet[order.OrderId] = struct{}{}
+	}
+
+	for _, ticket := range unifyTickets {
+		if _, exists := orderIDSet[ticket.OrderId]; exists {
+			continue
+		}
+		mergeOrders = append(mergeOrders, ticket)
+	}
 	mergeOrders = append(mergeOrders, unifyOrders...)
 
 	sort.Sort(sort.Reverse(mergeOrders))
