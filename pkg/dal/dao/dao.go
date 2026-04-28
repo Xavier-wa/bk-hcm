@@ -139,6 +139,7 @@ type Set interface {
 	RootAccountBillConfig() bill.RootAccountBillConfig
 	AccountBillExchangeRate() bill.AccountBillExchangeRate
 	AccountBillSyncRecord() bill.AccountBillSyncRecord
+	AccountBillRegionCityRel() bill.AccountBillRegionCityRel
 	AsyncFlow() daoasync.AsyncFlow
 	AsyncFlowTask() daoasync.AsyncFlowTask
 	UserCollection() daouser.Interface
@@ -742,6 +743,14 @@ func (s *set) AccountBillExchangeRate() bill.AccountBillExchangeRate {
 // AccountBillSyncRecord return bill.AccountBillSyncRecord dao
 func (s *set) AccountBillSyncRecord() bill.AccountBillSyncRecord {
 	return &bill.AccountBillSyncRecordDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+	}
+}
+
+// AccountBillRegionCityRel returns account bill region city rel dao.
+func (s *set) AccountBillRegionCityRel() bill.AccountBillRegionCityRel {
+	return &bill.AccountBillRegionCityRelDao{
 		Orm:   s.orm,
 		IDGen: s.idGen,
 	}

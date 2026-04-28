@@ -38,6 +38,7 @@ import (
 	"hcm/cmd/data-service/service/bill/billexchangerate"
 	"hcm/cmd/data-service/service/bill/billitem"
 	"hcm/cmd/data-service/service/bill/billmonthtask"
+	"hcm/cmd/data-service/service/bill/billregioncityrel"
 	"hcm/cmd/data-service/service/bill/billsummarydaily"
 	"hcm/cmd/data-service/service/bill/billsummarymain"
 	"hcm/cmd/data-service/service/bill/billsummaryroot"
@@ -84,6 +85,7 @@ import (
 	"hcm/cmd/data-service/service/cvm-apply/cvm-generate-record"
 	"hcm/cmd/data-service/service/cvm-apply/cvm-modify-record"
 	devicecapacity "hcm/cmd/data-service/service/device-capacity"
+	dissolverecyclehost "hcm/cmd/data-service/service/dissolve/recycle-host"
 	globalconfig "hcm/cmd/data-service/service/global-config"
 	"hcm/cmd/data-service/service/meta"
 	orgtopo "hcm/cmd/data-service/service/org-topo"
@@ -96,7 +98,6 @@ import (
 	rollingfinedetail "hcm/cmd/data-service/service/rolling-server/rolling-fine-detail"
 	"hcm/cmd/data-service/service/rolling-server/rolling-returned"
 	"hcm/cmd/data-service/service/task"
-	dissolverecyclehost "hcm/cmd/data-service/service/dissolve/recycle-host"
 	tcloudziyanpmdevicetype "hcm/cmd/data-service/service/tcloud-ziyan-pm-device-type"
 	"hcm/cmd/data-service/service/tenant"
 	"hcm/cmd/data-service/service/user"
@@ -306,6 +307,7 @@ func (s *Service) apiSet() *restful.Container {
 
 	billexchangerate.InitService(capability)
 	billsyncrecord.InitService(capability)
+	billregioncityrel.InitService(capability)
 	globalconfig.InitService(capability)
 
 	resourceplan.InitService(capability)

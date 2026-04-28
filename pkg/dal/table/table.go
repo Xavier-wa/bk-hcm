@@ -255,6 +255,8 @@ const (
 	AccountBillExchangeRateTable = "account_bill_exchange_rate"
 	// AccountBillSyncRecordTable 账单同步记录
 	AccountBillSyncRecordTable = "account_bill_sync_record"
+	// AccountBillRegionCityRelTable 账单地域-城市映射表
+	AccountBillRegionCityRelTable = "account_bill_region_city_rel"
 
 	// RecycleModuleInfo 裁撤模块表
 	RecycleModuleInfo = "recycle_module_info"
@@ -414,6 +416,7 @@ var TableMap = map[Name]TableConfig{
 	RootAccountBillConfigTable:      {EnableTenant: true},
 	AccountBillExchangeRateTable:    {EnableTenant: true},
 	AccountBillSyncRecordTable:      {EnableTenant: true},
+	AccountBillRegionCityRelTable:   {},
 	LoadBalancerTable:               {EnableTenant: true},
 	SecurityGroupCommonRelTable:     {},
 	LoadBalancerListenerTable:       {},
@@ -476,7 +479,7 @@ var TableMap = map[Name]TableConfig{
 	ResUsageBizRelTable: {},
 
 	PermissionPolicyLibraryTable: {EnableTenant: true},
-	DeviceCapacityTable: {},
+	DeviceCapacityTable:          {},
 
 	ZiyanCvmApplyOrderTable:     {},
 	ZiyanCvmApplySuborderTable:  {},

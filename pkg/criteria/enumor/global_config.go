@@ -48,6 +48,8 @@ const (
 	GlobalConfigTypeBillAIDeduct GlobalConfigType = "bill_ai_deduct"
 	// GlobalConfigTypeSpringResPool 春保资源池相关配置
 	GlobalConfigTypeSpringResPool GlobalConfigType = "spring_res_pool"
+	// GlobalConfigTypeAccountBill 账单相关配置
+	GlobalConfigTypeAccountBill GlobalConfigType = "account_bill"
 )
 
 // GlobalConfigResDissolveKey resource dissolve global config key
@@ -116,3 +118,13 @@ const (
 func GetBizSpringResPoolChargeTypeKey(bizID int64) string {
 	return string(GlobalConfigKeySpringResPoolChargeTypeBizPrefix) + strconv.FormatInt(bizID, 10)
 }
+
+// GlobalConfigKeyAccountBill account bill global config key
+type GlobalConfigKeyAccountBill string
+
+const (
+	// GlobalConfigKeyAwsGpuInstanceTypes AWS GPU 机型列表配置key（JSON 数组字符串）
+	GlobalConfigKeyAwsGpuInstanceTypes GlobalConfigKeyAccountBill = "aws_gpu_instance_types"
+	// GlobalConfigKeyHuaweiGpuInstancePrefixes 华为 GPU 实例规格前缀列表配置key（JSON 数组字符串）
+	GlobalConfigKeyHuaweiGpuInstancePrefixes GlobalConfigKeyAccountBill = "huawei_gpu_instance_prefixes"
+)

@@ -97,6 +97,18 @@ func (act SyncAction) doSyncAwsBillItem(kt *kit.Kit,
 		return nil
 	}
 
+	regionCityMap, err := loadRegionCityMap(kt, syncOpt.Vendor)
+	if err != nil {
+		logs.Errorf("load region city map failed, err: %v, vendor: %s, rid: %s", err, syncOpt.Vendor, kt.Rid)
+		return fmt.Errorf("load region city map failed, err: %v", err)
+	}
+
+	awsGpuSet, err := loadAwsGpuInstanceTypes(kt)
+	if err != nil {
+		logs.Errorf("load aws gpu instance types failed, err: %v, vendor: %s, rid: %s", err, syncOpt.Vendor, kt.Rid)
+		return fmt.Errorf("load aws gpu instance types failed, err: %v", err)
+	}
+
 	// 清理特定的obs数据，此处防止之前有可能插入事务失败导致的脏数据
 	setIndex := fmt.Sprintf("%s-%s-%d-%d-%d-%d",
 		syncOpt.Vendor, syncOpt.MainAccountID, syncOpt.BillYear, syncOpt.BillMonth, start, limit)
@@ -119,7 +131,7 @@ func (act SyncAction) doSyncAwsBillItem(kt *kit.Kit,
 	}
 
 	// 进行插入
-	finalItems, err := act.convertAwsBill(kt, syncOpt, result, setIndex, mainAccount)
+	finalItems, err := act.convertAwsBill(kt, syncOpt, result, setIndex, mainAccount, regionCityMap, awsGpuSet)
 	if err != nil {
 		logs.Warnf("convert obs aws bill failed, err %s, rid: %s", err.Error(), kt.Rid)
 		return err
@@ -140,8 +152,8 @@ func (act SyncAction) doSyncAwsBillItem(kt *kit.Kit,
 }
 
 func (act SyncAction) convertAwsBill(kt *kit.Kit, syncOpt *SyncOption, result *databill.AwsBillItemListResult,
-	setIndex string, mainAccount *asproto.MainAccountGetResult[accountsetcore.AwsMainAccountExtension]) (
-	[]*tableobs.OBSBillItemAws, error) {
+	setIndex string, mainAccount *asproto.MainAccountGetResult[accountsetcore.AwsMainAccountExtension],
+	regionCityMap map[string]int32, awsGpuSet map[string]struct{}) ([]*tableobs.OBSBillItemAws, error) {
 
 	yearM := syncOpt.BillYear*100 + syncOpt.BillMonth
 	item := result.Details[0]
@@ -160,13 +172,17 @@ func (act SyncAction) convertAwsBill(kt *kit.Kit, syncOpt *SyncOption, result *d
 
 	// OBS 要求数据格式 1 国内 2 国际
 	var regionCode = int32(2)
-	if mainAccount.Site == enumor.MainAccountChinaSite {
+	isChina := mainAccount.Site == enumor.MainAccountChinaSite
+	if isChina {
 		regionCode = 1
 	}
 
 	var retList = make([]*tableobs.OBSBillItemAws, 0, len(result.Details))
 	for _, item := range result.Details {
 		record := item.Extension
+
+		cityID := lookupCityID(kt, regionCityMap, record.ProductRegion, isChina)
+		isGPU := isAwsGPU(record.LineItemProductCode, record.ProductInstanceType, item.HcProductName, awsGpuSet)
 
 		newItem := &tableobs.OBSBillItemAws{
 			SetIndex:      setIndex,
@@ -185,6 +201,8 @@ func (act SyncAction) convertAwsBill(kt *kit.Kit, syncOpt *SyncOption, result *d
 			Memo: "ieg上报",
 			// OBS 要求，OBS外币金额写入line_item_unblended_cost字段中
 			LineItemUnblendedCost: item.Cost.String(),
+			CityId:                cityID,
+			ResClassId:            enumor.GetOBSResClassID(syncOpt.Vendor, isGPU),
 
 			BillPayerAccountID:                     record.BillPayerAccountId,
 			LineItemUsageAccountID:                 record.LineItemUsageAccountId,

@@ -84,6 +84,8 @@ var OBSBillItemHuaweiColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "total_count", NamedC: "total_count", Type: enumor.Numeric},
 	{Column: "rate", NamedC: "rate", Type: enumor.Numeric},
 	{Column: "real_cost", NamedC: "real_cost", Type: enumor.Numeric},
+	{Column: "CityId", NamedC: "CityId", Type: enumor.Numeric},
+	{Column: "ResClassId", NamedC: "ResClassId", Type: enumor.Numeric},
 }
 
 // OBSBillItemHuawei huawei bill item
@@ -139,6 +141,8 @@ type OBSBillItemHuawei struct {
 	TotalCount                int32          `db:"total_count" json:"total_count"`
 	Rate                      float64        `db:"rate" json:"rate"`
 	RealCost                  *types.Decimal `db:"real_cost"  json:"real_cost"`
+	CityId                    int32          `db:"CityId" json:"CityId"`
+	ResClassId                int32          `db:"ResClassId" json:"ResClassId"`
 }
 
 // TableName 返回月度汇总账单表名

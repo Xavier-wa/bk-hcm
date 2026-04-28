@@ -84,6 +84,8 @@ var OBSBillItemAwsColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "discount_private_rate_discount", NamedC: "discount_private_rate_discount", Type: enumor.String},
 	{Column: "discount_edp_discount", NamedC: "discount_edp_discount", Type: enumor.String},
 	{Column: "memo", NamedC: "memo", Type: enumor.String},
+	{Column: "CityId", NamedC: "CityId", Type: enumor.Numeric},
+	{Column: "ResClassId", NamedC: "ResClassId", Type: enumor.Numeric},
 }
 
 // OBSBillItemAws aws bill item
@@ -136,6 +138,8 @@ type OBSBillItemAws struct {
 	DiscountPrivateRateDiscount            string         `json:"discount_private_rate_discount" db:"discount_private_rate_discount"`
 	DiscountEDPDiscount                    string         `json:"discount_edp_discount" db:"discount_edp_discount"`
 	Memo                                   string         `json:"memo" db:"memo"`
+	CityId                                 int32          `json:"CityId" db:"CityId"`
+	ResClassId                             int32          `json:"ResClassId" db:"ResClassId"`
 }
 
 // TableName 返回月度汇总账单表名

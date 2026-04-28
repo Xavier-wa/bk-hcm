@@ -93,6 +93,12 @@ type ListAccountBillSyncRecordDetails struct {
 	Details []tablebill.AccountBillSyncRecord `json:"details,omitempty"`
 }
 
+// ListAccountBillRegionCityRelDetails list account bill region city rel details
+type ListAccountBillRegionCityRelDetails struct {
+	Count   uint64                               `json:"count,omitempty"`
+	Details []tablebill.AccountBillRegionCityRel `json:"details,omitempty"`
+}
+
 // ItemCommonOpt  bill item table partition parameters
 type ItemCommonOpt struct {
 	Vendor enumor.Vendor `json:"vendor" validate:"required"`

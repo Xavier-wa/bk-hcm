@@ -309,10 +309,23 @@ const (
 	BillItemAIFlagGemini BillItemAIFlag = "gemini"
 	// BillItemAIFlagClaude claude
 	BillItemAIFlagClaude BillItemAIFlag = "claude"
+	// BillItemAIFlagKimi kimi
+	BillItemAIFlagKimi BillItemAIFlag = "kimi"
+	// BillItemAIFlagJina jina
+	BillItemAIFlagJina BillItemAIFlag = "jina"
+	// BillItemAIFlagVeo veo
+	BillItemAIFlagVeo BillItemAIFlag = "veo"
+	// BillItemAIFlagImgen imagen
+	BillItemAIFlagImgen BillItemAIFlag = "imagen"
+	// BillItemAIFlagLyria lyria
+	BillItemAIFlagLyria BillItemAIFlag = "lyria"
 )
 
 func getAIBillItemAIFlag() []string {
-	return []string{string(BillItemAIFlagGemini), string(BillItemAIFlagClaude)}
+	return []string{
+		string(BillItemAIFlagGemini), string(BillItemAIFlagClaude), string(BillItemAIFlagKimi),
+		string(BillItemAIFlagJina), string(BillItemAIFlagVeo), string(BillItemAIFlagImgen), string(BillItemAIFlagLyria),
+	}
 }
 
 // IsAIBillItem 判断账单项是否为AI账单
@@ -320,4 +333,45 @@ func IsAIBillItem(str string) bool {
 	// 将字符串转换为小写以便忽略大小写
 	lowerStr := strings.ToLower(str)
 	return aiBillItemRegexp.MatchString(lowerStr)
+}
+
+// OBSResClassID OBS 资源分类 ID
+type OBSResClassID int32
+
+const (
+	// OBSResClassIDAwsCPU AWS CPU 资源分类 ID
+	OBSResClassIDAwsCPU OBSResClassID = 451
+	// OBSResClassIDAwsGPU AWS GPU 资源分类 ID
+	OBSResClassIDAwsGPU OBSResClassID = 6311
+	// OBSResClassIDGcpCPU GCP CPU 资源分类 ID
+	OBSResClassIDGcpCPU OBSResClassID = 601
+	// OBSResClassIDGcpGPU GCP GPU 资源分类 ID
+	OBSResClassIDGcpGPU OBSResClassID = 6312
+	// OBSResClassIDHuaweiCPU 华为 CPU 资源分类 ID
+	OBSResClassIDHuaweiCPU OBSResClassID = 1244
+	// OBSResClassIDHuaweiGPU 华为 GPU 资源分类 ID
+	OBSResClassIDHuaweiGPU OBSResClassID = 6315
+)
+
+// GetOBSResClassID returns the OBS resource class ID for the given vendor and GPU flag.
+func GetOBSResClassID(vendor Vendor, isGPU bool) int32 {
+	switch vendor {
+	case Aws:
+		if isGPU {
+			return int32(OBSResClassIDAwsGPU)
+		}
+		return int32(OBSResClassIDAwsCPU)
+	case Gcp:
+		if isGPU {
+			return int32(OBSResClassIDGcpGPU)
+		}
+		return int32(OBSResClassIDGcpCPU)
+	case HuaWei:
+		if isGPU {
+			return int32(OBSResClassIDHuaweiGPU)
+		}
+		return int32(OBSResClassIDHuaweiCPU)
+	default:
+		return 0
+	}
 }

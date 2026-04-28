@@ -509,6 +509,36 @@ func (b *BillClient) ListBillSyncRecord(kt *kit.Kit, req *billproto.BillSyncReco
 		b.client, rest.POST, kt, req, "/bills/sync_records/list")
 }
 
+// --- account bill region city rel ---
+
+// BatchCreateBillRegionCityRel creates account bill region city rel records.
+func (b *BillClient) BatchCreateBillRegionCityRel(kt *kit.Kit, req *billproto.BatchBillRegionCityRelCreateReq) (
+	*core.BatchCreateResult, error) {
+
+	return common.Request[billproto.BatchBillRegionCityRelCreateReq, core.BatchCreateResult](
+		b.client, rest.POST, kt, req, "/bills/region_city_rels/batch_create")
+}
+
+// BatchDeleteBillRegionCityRel deletes account bill region city rel records.
+func (b *BillClient) BatchDeleteBillRegionCityRel(kt *kit.Kit, req *dataservice.BatchDeleteReq) error {
+	return common.RequestNoResp[dataservice.BatchDeleteReq](
+		b.client, rest.DELETE, kt, req, "/bills/region_city_rels")
+}
+
+// UpdateBillRegionCityRel updates an account bill region city rel record.
+func (b *BillClient) UpdateBillRegionCityRel(kt *kit.Kit, req *billproto.BillRegionCityRelUpdateReq) error {
+	return common.RequestNoResp[billproto.BillRegionCityRelUpdateReq](
+		b.client, rest.PUT, kt, req, "/bills/region_city_rels")
+}
+
+// ListBillRegionCityRel lists account bill region city rel records.
+func (b *BillClient) ListBillRegionCityRel(kt *kit.Kit, req *billproto.BillRegionCityRelListReq) (
+	*billproto.BillRegionCityRelListResult, error) {
+
+	return common.Request[billproto.BillRegionCityRelListReq, billproto.BillRegionCityRelListResult](
+		b.client, rest.POST, kt, req, "/bills/region_city_rels/list")
+}
+
 // SumBillItemCost sum bill item
 func (b *BillClient) SumBillItemCost(kt *kit.Kit, req *billproto.BillItemSumReq) (
 	*billproto.BillItemSumResult, error) {

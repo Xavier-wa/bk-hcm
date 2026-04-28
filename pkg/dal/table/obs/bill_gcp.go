@@ -66,6 +66,8 @@ var OBSBillItemGcpColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "RealCost", NamedC: "RealCost", Type: enumor.Numeric},
 	{Column: "ReturnCost", NamedC: "ReturnCost", Type: enumor.Numeric},
 	{Column: "DispatchProjectId", NamedC: "DispatchProjectId", Type: enumor.String},
+	{Column: "CityId", NamedC: "CityId", Type: enumor.Numeric},
+	{Column: "ResClassId", NamedC: "ResClassId", Type: enumor.Numeric},
 }
 
 // OBSBillItemGcp huawei bill item
@@ -103,6 +105,8 @@ type OBSBillItemGcp struct {
 	RealCost               float64 `db:"RealCost"  json:"RealCost"`
 	ReturnCost             float64 `db:"ReturnCost" json:"ReturnCost"`
 	DispatchProjectId      string  `db:"DispatchProjectId" json:"DispatchProjectId"`
+	CityId                 int32   `db:"CityId" json:"CityId"`
+	ResClassId             int32   `db:"ResClassId" json:"ResClassId"`
 }
 
 // TableName 返回月度汇总账单表名
