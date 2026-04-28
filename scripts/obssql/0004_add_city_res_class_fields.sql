@@ -18,7 +18,7 @@
  */
 
 /*
- SQLVER=9999,HCMVER=v9.9.9
+ SQLVER=0004,HCMVER=v1.8.11.8
 
  Notes:
  obs_aws_bills、obs_huawei_bills、obs_gcp_bills 新增 CityId 和 ResClassId 字段
@@ -38,7 +38,7 @@ ALTER TABLE `obs_gcp_bills`
     ADD COLUMN `ResClassId` int(11) NOT NULL DEFAULT 0;
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`,
-       '9999'   as `sql_ver`;
+SELECT 'v1.8.11.8' as `hcm_ver`,
+       '0004'   as `sql_ver`;
 
 COMMIT;

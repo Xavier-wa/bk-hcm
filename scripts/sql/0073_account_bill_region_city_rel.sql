@@ -18,7 +18,7 @@
  */
 
 /*
- SQLVER=9999,HCMVER=v9.9.9
+ SQLVER=0073,HCMVER=v1.8.11.8
 
  Notes:
  新增 account_bill_region_city_rel 地域-城市映射表
@@ -44,7 +44,7 @@ insert into id_generator(`resource`, `max_id`)
 values ('account_bill_region_city_rel', '0');
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`,
-       '9999'   as `sql_ver`;
+SELECT 'v1.8.11.8' as `hcm_ver`,
+       '0073'   as `sql_ver`;
 
 COMMIT;
