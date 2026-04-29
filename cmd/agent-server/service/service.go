@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"hcm/cmd/agent-server/logics"
+	authlogic "hcm/cmd/agent-server/logics/auth"
 	"hcm/cmd/agent-server/service/capability"
 	"hcm/cmd/agent-server/service/memory"
 	"hcm/cmd/agent-server/service/session"
@@ -413,10 +414,10 @@ func bkapiContextMiddleware(next http.Handler) http.Handler {
 
 		ctx := r.Context()
 		if username := r.Header.Get(constant.UserKey); username != "" {
-			ctx = logics.WithBKUsername(ctx, username)
+			ctx = authlogic.WithBKUsername(ctx, username)
 		}
 		if ticket := r.Header.Get(constant.BKTicket); ticket != "" {
-			ctx = logics.WithBKTicket(ctx, ticket)
+			ctx = authlogic.WithBKTicket(ctx, ticket)
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -453,7 +454,7 @@ func agentAuthMiddleware(authorizer auth.Authorizer) func(http.Handler) http.Han
 // the request context (populated by bkapiContextMiddleware from X-Bkapi-User-Name).
 // Falls back to "anonymous" only when the header is absent (e.g. unauthenticated dev calls).
 func resolveAGUIUserID(ctx context.Context, _ *adapter.RunAgentInput) (string, error) {
-	if v := logics.BKUsernameFromContext(ctx); v != "" {
+	if v := authlogic.BKUsernameFromContext(ctx); v != "" {
 		return v, nil
 	}
 	return "anonymous", nil

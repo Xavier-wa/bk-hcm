@@ -17,7 +17,7 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package logics
+package tool
 
 import (
 	"context"
@@ -41,24 +41,24 @@ import (
 
 // ToolMeta holds structured metadata extracted from a single MCP tool.
 type ToolMeta struct {
-	Name        string
-	Description string
-	Parameters  []ParamMeta
-	Tags        []string
-	SearchText  string // pre-built full-text for indexing
+	Name        string      // tool name
+	Description string      // tool description
+	Parameters  []ParamMeta // input parameters
+	Tags        []string    // tags for categorization
+	SearchText  string      // pre-built full-text for indexing
 }
 
 // ParamMeta describes one tool input parameter.
 type ParamMeta struct {
-	Name     string
-	Type     string
-	Required bool
+	Name     string // parameter name
+	Type     string // parameter type
+	Required bool   // whether the parameter is required
 }
 
 // ToolMatch is a scored search result.
 type ToolMatch struct {
-	Name  string
-	Score float64
+	Name  string  // tool name
+	Score float64 // match score
 }
 
 // extractToolMeta builds a ToolMeta from a tool.Tool declaration.
@@ -179,7 +179,9 @@ func isCJK(r rune) bool {
 
 // ToolIndex is the common interface for keyword / BM25 / embedding tool search indexes.
 type ToolIndex interface {
+	// Build loads tool metadata into the index.
 	Build(ctx context.Context, tools []ToolMeta) error
+	// Search queries the index and returns scored matches.
 	Search(ctx context.Context, query string, topN int, scoreThreshold float64) []ToolMatch
 }
 

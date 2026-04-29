@@ -17,11 +17,13 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package logics
+// Package logger ...
+package logger
 
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,18 +33,77 @@ import (
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
 
+	"trpc.group/trpc-go/trpc-agent-go/tool"
 	trpcmcp "trpc.group/trpc-go/trpc-mcp-go"
 )
 
-// mcpHTTPRespLoggingHandler wraps trpcmcp.HTTPReqHandler to log response bodies for
-// HTTP status >= 400. trpc-mcp-go streamable transport returns errors without attaching
-// the response body; this wrapper reads the body before the SDK discards it.
+// ToolLoggerCallback 记录 tool 调用的过程日志
+func ToolLoggerCallback() *tool.Callbacks {
+	const maxResultLog = 1024
+
+	truncate := func(s string) string {
+		if len(s) <= maxResultLog {
+			return s
+		}
+		return s[:maxResultLog] + "...(truncated)"
+	}
+
+	resultStr := func(result any) string {
+		if result == nil {
+			return "<nil>"
+		}
+		switch v := result.(type) {
+		case string:
+			return truncate(v)
+		case []byte:
+			return truncate(string(v))
+		default:
+			b, err := json.Marshal(v)
+			if err != nil {
+				return truncate(fmt.Sprintf("%v", v))
+			}
+			return truncate(string(b))
+		}
+	}
+
+	cb := tool.NewCallbacks()
+	cb.RegisterBeforeTool(func(
+		ctx context.Context,
+		args *tool.BeforeToolArgs,
+	) (*tool.BeforeToolResult, error) {
+		if args == nil {
+			return nil, nil
+		}
+		logs.Infof("[tool] >> %s called: args=%s", args.ToolName, string(args.Arguments))
+		return nil, nil
+	})
+	cb.RegisterAfterTool(func(
+		ctx context.Context,
+		args *tool.AfterToolArgs,
+	) (*tool.AfterToolResult, error) {
+		if args == nil {
+			return nil, nil
+		}
+		if args.Error != nil {
+			logs.Errorf("[tool] << %s failed: args=%s err=%v", args.ToolName, string(args.Arguments), args.Error)
+		} else {
+			logs.Infof("[tool] << %s succeeded: args=%s result=%s", args.ToolName, string(args.Arguments),
+				resultStr(args.Result))
+		}
+		return nil, nil
+	})
+	return cb
+}
+
+// mcpHTTPRespLoggingHandler wraps trpcmcp.HTTPReqHandler
+// 记录 tool 调用的底层 HTTP 细节
 type mcpHTTPRespLoggingHandler struct {
 	inner       trpcmcp.HTTPReqHandler
 	toolsetName string
 }
 
-func newMCPHTTPLoggingHandler(inner trpcmcp.HTTPReqHandler, toolsetName string) trpcmcp.HTTPReqHandler {
+// NewMCPHTTPLoggingHandler wraps an HTTP request handler to log MCP HTTP errors.
+func NewMCPHTTPLoggingHandler(inner trpcmcp.HTTPReqHandler, toolsetName string) trpcmcp.HTTPReqHandler {
 	if inner == nil {
 		inner = trpcmcp.NewDefaultHTTPReqHandler()
 	}

@@ -17,7 +17,8 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package logics
+// Package auth ...
+package auth
 
 import (
 	"context"
@@ -50,16 +51,8 @@ func BKTicketFromContext(ctx context.Context) string {
 	return v
 }
 
-// bkapiAuthHeaderValue builds the JSON value for the X-Bkapi-Authorization header.
-func bkapiAuthHeaderValue(appCode, appSecret, username, ticket string) string {
-	return fmt.Sprintf(
-		`{"bk_app_code":"%s","bk_app_secret":"%s","bk_username":"%s","bk_ticket":"%s"}`,
-		appCode, appSecret, username, ticket,
-	)
-}
-
-// bkapiMCPAuthHeaderValue builds the X-Bkapi-Authorization header value for MCP requests.
-func bkapiMCPAuthHeaderValue(appCode, appSecret, username, ticket string) string {
+// BKApiAuthHeaderValue builds the JSON value for the X-Bkapi-Authorization header.
+func BKApiAuthHeaderValue(appCode, appSecret, username, ticket string) string {
 	return fmt.Sprintf(
 		`{"bk_app_code":"%s","bk_app_secret":"%s","bk_username":"%s","bk_ticket":"%s"}`,
 		appCode, appSecret, username, ticket,

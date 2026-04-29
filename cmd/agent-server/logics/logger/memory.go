@@ -17,7 +17,7 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package logics
+package logger
 
 import (
 	"context"
@@ -42,7 +42,8 @@ type loggingMemoryService struct {
 	inner memory.Service
 }
 
-func newLoggingMemoryService(inner memory.Service) *loggingMemoryService {
+// NewLoggingMemoryService wraps a memory.Service with structured logging.
+func NewLoggingMemoryService(inner memory.Service) memory.Service {
 	return &loggingMemoryService{inner: inner}
 }
 

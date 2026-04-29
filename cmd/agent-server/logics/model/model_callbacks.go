@@ -17,7 +17,7 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package logics
+package model
 
 import (
 	"context"
@@ -33,14 +33,14 @@ import (
 // assistant message; deleting the message would cause an API validation error.
 const historicalToolResultPlaceholder = "[historical result omitted]"
 
-// makeHistoricalToolResultFilter returns a BeforeModelCallbackStructured that trims
+// MakeHistoricalToolResultFilter returns a BeforeModelCallbackStructured that trims
 // token usage by replacing the content of tool-result messages that belong to
 // historical turns with a short placeholder.
 //
 // "Historical" is defined as every message that appears before the last role:"user"
 // message in the request. Tool results within the current turn (after the last user
 // message) are always preserved in full so the model can act on them.
-func makeHistoricalToolResultFilter() model.BeforeModelCallbackStructured {
+func MakeHistoricalToolResultFilter() model.BeforeModelCallbackStructured {
 	return func(ctx context.Context, args *model.BeforeModelArgs) (*model.BeforeModelResult, error) {
 		if args == nil || args.Request == nil {
 			return nil, nil

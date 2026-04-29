@@ -17,7 +17,7 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package logics
+package tool
 
 import (
 	"context"
@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 
+	"hcm/cmd/agent-server/logics/embedding"
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
@@ -40,7 +41,8 @@ import (
 // lazyToolIndex — sync.Once lazy-built index over MCP ToolSets
 // ---------------------------------------------------------------------------
 
-type lazyToolIndex struct {
+// LazyToolIndex is a lazy-built index over MCP ToolSets.
+type LazyToolIndex struct {
 	mcpToolSets        []tool.ToolSet
 	toolTags           map[string][]string
 	scoreThreshold     float64
@@ -53,8 +55,22 @@ type lazyToolIndex struct {
 	buildOK      bool
 }
 
+// NewLazyToolIndex creates a new LazyToolIndex.
+func NewLazyToolIndex(toolset *MCPToolSet, cfg *cc.AgentDynamicToolLoadingConfig,
+	embedProvider *cc.AgentModelProvider) *LazyToolIndex {
+
+	return &LazyToolIndex{
+		mcpToolSets:        toolset.TS,
+		toolTags:           cfg.ToolTags,
+		scoreThreshold:     cfg.ScoreThreshold,
+		topN:               cfg.TopN,
+		queryContextWindow: cfg.QueryContextWindow,
+		index:              buildToolIndex(cfg, embedProvider),
+	}
+}
+
 // ensureBuild constructs the index on first call. Thread-safe via sync.Once.
-func (l *lazyToolIndex) ensureBuild(ctx context.Context) {
+func (l *LazyToolIndex) ensureBuild(ctx context.Context) {
 	l.once.Do(func() {
 		var metas []ToolMeta
 		l.mcpToolNames = make(map[string]bool)
@@ -119,9 +135,9 @@ type filterCacheEntry struct {
 	whitelist map[string]bool
 }
 
-// makeDynamicToolFilter constructs the ToolFilter function that performs
+// MakeDynamicToolFilter constructs the ToolFilter function that performs
 // per-invocation tool retrieval and caching.
-func makeDynamicToolFilter(lazy *lazyToolIndex) tool.FilterFunc {
+func MakeDynamicToolFilter(lazy *LazyToolIndex) tool.FilterFunc {
 	return func(ctx context.Context, t tool.Tool) bool {
 		toolName := t.Declaration().Name
 
@@ -303,7 +319,7 @@ func buildToolIndex(cfg *cc.AgentDynamicToolLoadingConfig, provider *cc.AgentMod
 	case "keyword":
 		return &KeywordIndex{}
 	case "embedding":
-		emb := buildEmbeddingClient(provider, &cfg.Embedding)
+		emb := embedding.BuildEmbeddingClient(provider, &cfg.Embedding)
 		return NewEmbeddingIndex(emb)
 	default:
 		return &BM25Index{}

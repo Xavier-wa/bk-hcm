@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/logs"
 )
@@ -1088,6 +1089,16 @@ func (s *AgentToolsConfig) trySetDefault() {
 	s.DynamicToolLoading.trySetDefault()
 }
 
+// NeedToRefreshToolSetsOnRun bkaidev 类型 MCP 需要用户的 token 进行鉴权，因此无法在启动时加载工具集，需要在每次运行时刷新。
+func (s AgentToolsConfig) NeedToRefreshToolSetsOnRun() bool {
+	for _, cfg := range s.MCPToolSets {
+		if strings.EqualFold(strings.TrimSpace(cfg.Type), constant.MCPTypeBKAIDev) {
+			return true
+		}
+	}
+	return false
+}
+
 // AgentPromptConfig configures the prompt files loaded into the AGUI agent.
 // Both fields accept absolute paths or paths relative to the process working directory.
 type AgentPromptConfig struct {
@@ -1237,6 +1248,16 @@ func (a *AgentAGUI) trySetDefault() {
 
 // AllowedModelNames returns the plain model name list (for backward-compatible call sites).
 func (a AgentAGUI) AllowedModelNames() []string {
+	// if no allowed models configured, use default allowed models
+	if len(a.AllowedModels) == 0 {
+		defaults := enumor.DefaultAllowedAIModels
+		allowedModels := make([]string, len(defaults))
+		for i, m := range defaults {
+			allowedModels[i] = string(m)
+		}
+		return allowedModels
+	}
+
 	names := make([]string, len(a.AllowedModels))
 	for i, m := range a.AllowedModels {
 		names[i] = m.Name
@@ -1314,7 +1335,7 @@ func (s AgentServerSetting) TenantEnable() bool {
 
 // GetProviders returns a map of provider name → provider config.
 func (s AgentServerSetting) GetProviders() map[string]*AgentModelProvider {
-	m := make(map[string]*AgentModelProvider, 1+len(s.Providers))
+	m := make(map[string]*AgentModelProvider)
 
 	// Explicit providers.
 	for _, p := range s.Providers {
@@ -1327,4 +1348,16 @@ func (s AgentServerSetting) GetProviders() map[string]*AgentModelProvider {
 		}
 	}
 	return m
+}
+
+// GetProvider returns the provider config by name.
+func (s AgentServerSetting) GetProvider(providerName string) (*AgentModelProvider, error) {
+	if providerName == "" {
+		return nil, fmt.Errorf("provider name is empty")
+	}
+
+	if cfg, ok := s.GetProviders()[providerName]; ok {
+		return cfg, nil
+	}
+	return nil, fmt.Errorf("provider %q not found", providerName)
 }

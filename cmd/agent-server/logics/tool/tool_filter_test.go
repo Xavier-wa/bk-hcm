@@ -17,7 +17,7 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package logics
+package tool
 
 import (
 	"context"
@@ -69,9 +69,9 @@ func ctxWithInvocation(msg model.Message) context.Context {
 	return ctx
 }
 
-func buildTestLazy(toolSets []tool.ToolSet, tags map[string][]string, topN int) *lazyToolIndex {
+func buildTestLazy(toolSets []tool.ToolSet, tags map[string][]string, topN int) *LazyToolIndex {
 	idx := &BM25Index{}
-	return &lazyToolIndex{
+	return &LazyToolIndex{
 		mcpToolSets:    toolSets,
 		toolTags:       tags,
 		scoreThreshold: 0,
@@ -86,7 +86,7 @@ func buildTestLazy(toolSets []tool.ToolSet, tags map[string][]string, topN int) 
 
 func TestDynamicToolFilter_NoInvocation_PassAll(t *testing.T) {
 	lazy := buildTestLazy(nil, nil, 8)
-	filter := makeDynamicToolFilter(lazy)
+	filter := MakeDynamicToolFilter(lazy)
 
 	mt := newSimpleMockTool("some_mcp_tool", "test")
 	assert.True(t, filter(context.Background(), mt), "should pass all when no invocation in context")
@@ -100,7 +100,7 @@ func TestDynamicToolFilter_EmptyMessage_PassAll(t *testing.T) {
 		},
 	}
 	lazy := buildTestLazy([]tool.ToolSet{ts}, nil, 8)
-	filter := makeDynamicToolFilter(lazy)
+	filter := MakeDynamicToolFilter(lazy)
 
 	ctx := ctxWithInvocation(model.Message{})
 	assert.True(t, filter(ctx, newSimpleMockTool("mcp_tool_a", "do something")),
@@ -110,7 +110,7 @@ func TestDynamicToolFilter_EmptyMessage_PassAll(t *testing.T) {
 func TestDynamicToolFilter_BuildFailed_PassAll(t *testing.T) {
 	// All toolsets fail → buildOK stays false → degradation
 	lazy := buildTestLazy([]tool.ToolSet{&panicToolSet{name: "broken"}}, nil, 8)
-	filter := makeDynamicToolFilter(lazy)
+	filter := MakeDynamicToolFilter(lazy)
 
 	ctx := ctxWithInvocation(model.Message{Content: "hello"})
 	assert.True(t, filter(ctx, newSimpleMockTool("broken_something", "test")),
@@ -118,7 +118,7 @@ func TestDynamicToolFilter_BuildFailed_PassAll(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 6.4 makeDynamicToolFilter — search hit / miss scenarios
+// 6.4 MakeDynamicToolFilter — search hit / miss scenarios
 // ---------------------------------------------------------------------------
 
 func TestDynamicToolFilter_SearchHit(t *testing.T) {
@@ -130,7 +130,7 @@ func TestDynamicToolFilter_SearchHit(t *testing.T) {
 		},
 	}
 	lazy := buildTestLazy([]tool.ToolSet{ts}, nil, 8)
-	filter := makeDynamicToolFilter(lazy)
+	filter := MakeDynamicToolFilter(lazy)
 
 	ctx := ctxWithInvocation(model.Message{Content: "list cloud virtual machines"})
 
@@ -147,7 +147,7 @@ func TestDynamicToolFilter_SearchNoMatch_MCPToolBlocked(t *testing.T) {
 		},
 	}
 	lazy := buildTestLazy([]tool.ToolSet{ts}, nil, 8)
-	filter := makeDynamicToolFilter(lazy)
+	filter := MakeDynamicToolFilter(lazy)
 
 	ctx := ctxWithInvocation(model.Message{Content: "today weather forecast"})
 	assert.False(t, filter(ctx, newSimpleMockTool("hcm_list_cvm", "list cloud virtual machines")),
@@ -166,7 +166,7 @@ func TestDynamicToolFilter_SkillToolAlwaysPass(t *testing.T) {
 		},
 	}
 	lazy := buildTestLazy([]tool.ToolSet{ts}, nil, 8)
-	filter := makeDynamicToolFilter(lazy)
+	filter := MakeDynamicToolFilter(lazy)
 
 	ctx := ctxWithInvocation(model.Message{Content: "today weather"})
 
@@ -189,7 +189,7 @@ func TestDynamicToolFilter_CacheHit(t *testing.T) {
 		},
 	}
 	lazy := buildTestLazy([]tool.ToolSet{ts}, nil, 8)
-	filter := makeDynamicToolFilter(lazy)
+	filter := MakeDynamicToolFilter(lazy)
 
 	ctx := ctxWithInvocation(model.Message{Content: "list cloud virtual machines"})
 

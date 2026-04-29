@@ -17,7 +17,7 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package logics
+package tool
 
 import (
 	"context"
@@ -28,10 +28,10 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/tool"
 )
 
-// makeParamFixCallbacks creates tool callbacks that fix common parameter issues
+// MakeParamFixCallbacks creates tool callbacks that fix common parameter issues
 // before they are sent to MCP tools. Currently handles:
 // 1. Converting string-ified JSON objects back to actual JSON objects for path_param and body_param
-func makeParamFixCallbacks() tool.BeforeToolCallbackStructured {
+func MakeParamFixCallbacks() tool.BeforeToolCallbackStructured {
 	return func(ctx context.Context, args *tool.BeforeToolArgs) (*tool.BeforeToolResult, error) {
 		if args == nil || len(args.Arguments) == 0 {
 			return nil, nil

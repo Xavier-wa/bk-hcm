@@ -17,7 +17,7 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package logics
+package tool
 
 import (
 	"context"
@@ -209,10 +209,14 @@ func TestTokenize_Empty(t *testing.T) {
 
 func sampleToolMetas() []ToolMeta {
 	return []ToolMeta{
-		{Name: "list_cvm", Description: "list cloud virtual machines", Tags: []string{"CVM", "云服务器"}, SearchText: "list_cvm list cloud virtual machines CVM 云服务器"},
-		{Name: "create_disk", Description: "create CBS disk", Tags: []string{"CBS", "磁盘"}, SearchText: "create_disk create CBS disk CBS 磁盘"},
-		{Name: "get_vpc", Description: "get VPC details", Tags: []string{"VPC", "网络"}, SearchText: "get_vpc get VPC details VPC 网络"},
-		{Name: "resize_cvm", Description: "resize cloud virtual machine", Tags: []string{"CVM"}, SearchText: "resize_cvm resize cloud virtual machine CVM"},
+		{Name: "list_cvm", Description: "list cloud virtual machines", Tags: []string{"CVM", "云服务器"},
+			SearchText: "list_cvm list cloud virtual machines CVM 云服务器"},
+		{Name: "create_disk", Description: "create CBS disk", Tags: []string{"CBS", "磁盘"},
+			SearchText: "create_disk create CBS disk CBS 磁盘"},
+		{Name: "get_vpc", Description: "get VPC details", Tags: []string{"VPC", "网络"},
+			SearchText: "get_vpc get VPC details VPC 网络"},
+		{Name: "resize_cvm", Description: "resize cloud virtual machine", Tags: []string{"CVM"},
+			SearchText: "resize_cvm resize cloud virtual machine CVM"},
 	}
 }
 
