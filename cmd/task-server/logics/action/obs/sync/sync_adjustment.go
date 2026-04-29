@@ -181,8 +181,10 @@ func (act SyncAdjustmentAction) convertHuawei(kt *kit.Kit, adjItems []*bill.Adju
 		// -- convert --
 		// OBS 要求数据，决定汇率
 		var accountType = "HW国际区"
+		cityID := constant.OBSDefaultCityIDOverseas
 		if mainAccount.Site == enumor.MainAccountChinaSite {
 			accountType = "国内账单"
+			cityID = constant.OBSDefaultCityIDChina
 		}
 		fetchTime := time.Now()
 
@@ -192,6 +194,11 @@ func (act SyncAdjustmentAction) convertHuawei(kt *kit.Kit, adjItems []*bill.Adju
 			return err
 		}
 
+		// 调账默认为GPU
+		isGPU := true
+		if adj.ResClass == enumor.BillAdjustmentResClassCPU {
+			isGPU = false
+		}
 		obsItem := &tableobs.OBSBillItemHuawei{
 			SetIndex:      adjustmentSetIndex,
 			Vendor:        string(adj.Vendor),
@@ -211,6 +218,8 @@ func (act SyncAdjustmentAction) convertHuawei(kt *kit.Kit, adjItems []*bill.Adju
 
 			ProductName:  adj.Memo,
 			ResourceName: adj.Memo,
+			CityId:       cityID,
+			ResClassId:   enumor.GetOBSResClassID(adj.Vendor, isGPU),
 		}
 		obsItems[i] = obsItem
 	}
@@ -261,8 +270,10 @@ func (act SyncAdjustmentAction) convertAws(kt *kit.Kit, adjItems []*bill.Adjustm
 		// -- convert --
 		// OBS 要求数据格式 1 国内 2 国际
 		var regionCode = int32(2)
+		cityID := constant.OBSDefaultCityIDOverseas
 		if mainAccount.Site == enumor.MainAccountChinaSite {
 			regionCode = 1
+			cityID = constant.OBSDefaultCityIDChina
 		}
 
 		// 调账金额(需要处理调增、调减)
@@ -271,6 +282,11 @@ func (act SyncAdjustmentAction) convertAws(kt *kit.Kit, adjItems []*bill.Adjustm
 			return err
 		}
 
+		// 调账默认为GPU
+		isGPU := true
+		if adj.ResClass == enumor.BillAdjustmentResClassCPU {
+			isGPU = false
+		}
 		obsItem := &tableobs.OBSBillItemAws{
 			SetIndex:      adjustmentSetIndex,
 			Vendor:        string(adj.Vendor),
@@ -295,6 +311,8 @@ func (act SyncAdjustmentAction) convertAws(kt *kit.Kit, adjItems []*bill.Adjustm
 			LineItemCurrencyCode:        string(adj.Currency),
 			BillPayerAccountID:          rootInfo.CloudID,
 			LineItemLineItemDescription: adj.Memo,
+			CityId:                      cityID,
+			ResClassId:                  enumor.GetOBSResClassID(adj.Vendor, isGPU),
 		}
 		obsItems[i] = obsItem
 	}
@@ -346,6 +364,15 @@ func (act SyncAdjustmentAction) convertGcp(kt *kit.Kit, adjItems []*bill.Adjustm
 
 		// -- convert --
 
+		cityID := constant.OBSDefaultCityIDOverseas
+		if mainAccount.Site == enumor.MainAccountChinaSite {
+			cityID = constant.OBSDefaultCityIDChina
+		}
+		// 调账默认为GPU
+		isGPU := true
+		if adj.ResClass == enumor.BillAdjustmentResClassCPU {
+			isGPU = false
+		}
 		obsItem := &tableobs.OBSBillItemGcp{
 			SetIndex:      adjustmentSetIndex,
 			Vendor:        string(adj.Vendor),
@@ -369,6 +396,8 @@ func (act SyncAdjustmentAction) convertGcp(kt *kit.Kit, adjItems []*bill.Adjustm
 			ProjectId:          mainAccount.CloudID,
 
 			SkuDescription: adj.Memo,
+			CityId:         cityID,
+			ResClassId:     enumor.GetOBSResClassID(adj.Vendor, isGPU),
 		}
 		obsItems[i] = obsItem
 	}
