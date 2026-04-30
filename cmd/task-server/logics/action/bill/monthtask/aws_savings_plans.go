@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 
 	actbill "hcm/cmd/task-server/logics/action/bill/common"
 	actcli "hcm/cmd/task-server/logics/action/cli"
@@ -74,8 +73,8 @@ func (a AwsSavingsPlanMonthTask) Pull(kt *kit.Kit, opt *MonthTaskActionOption, i
 
 	hcCli := actbill.GetHCServiceByAwsSite(rootInfo.Site)
 
-	// 拉取 sp 分账金额
-	spReq := &hcbill.AwsRootSpUsageTotalReq{
+	// 按产品/实例类型分组查询 SP 已覆盖用量
+	spReq := &hcbill.AwsRootSpCoveredUsageByTypeReq{
 		RootAccountID: opt.RootAccountID,
 		SpArnPrefix:   a.spArnPrefix,
 		Year:          uint(opt.BillYear),
@@ -84,36 +83,45 @@ func (a AwsSavingsPlanMonthTask) Pull(kt *kit.Kit, opt *MonthTaskActionOption, i
 		EndDay:        uint(lastDay),
 	}
 
-	spUsage, err := hcCli.Aws.Bill.GetRootAccountSpTotalUsage(kt, spReq)
+	spResult, err := hcCli.Aws.Bill.GetRootAccountSpCoveredUsageByType(kt, spReq)
 	if err != nil {
-		logs.Errorf("get root account sp usage failed, err: %v, rid: %s", err, kt.Rid)
+		logs.Errorf("get root account sp covered usage by type failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, false, err
-	}
-	extension := map[string]string{
-		"line_item_product_code":       constant.AwsSavingsPlansCostCodeReverse,
-		"product_product_name":         constant.AwsSavingsPlansCostCodeReverse,
-		"pricing_unit":                 "Account",
-		"line_item_currency_code":      string(enumor.CurrencyUSD),
-		"line_item_net_unblended_cost": spUsage.SPNetCost.Neg().String(),
-		"line_item_usage_amount":       strconv.FormatUint(spUsage.AccountCount, 10),
-	}
-	extBytes, err := json.Marshal(extension)
-	if err != nil {
-		logs.Errorf("marshal sp usage failed, err: %v, rid: %s", err, kt.Rid)
-		return nil, false, err
-	}
-	spUsageReverseItem := bill.RawBillItem{
-		Region:        "any",
-		HcProductCode: constant.AwsSavingsPlansCostCodeReverse,
-		HcProductName: constant.AwsSavingsPlansCostCodeReverse,
-		BillCurrency:  enumor.CurrencyUSD,
-		BillCost:      spUsage.SPNetCost.Neg(),
-		ResAmount:     decimal.NewFromUint64(spUsage.AccountCount),
-		ResAmountUnit: "Account",
-		Extension:     types.JsonField(extBytes),
 	}
 
-	itemList = []bill.RawBillItem{spUsageReverseItem}
+	spItems := spResult.Details
+	itemList = make([]bill.RawBillItem, 0, len(spItems))
+	for _, spItem := range spItems {
+		extension := map[string]string{
+			"line_item_product_code":  spItem.LineItemProductCode,
+			"product_product_name":    spItem.ProductProductName,
+			"product_instance_type":   spItem.ProductInstanceType,
+			"line_item_currency_code": string(enumor.CurrencyUSD),
+		}
+		if spItem.LineItemCurrencyCode != "" {
+			extension["line_item_currency_code"] = spItem.LineItemCurrencyCode
+		}
+		extBytes, err := json.Marshal(extension)
+		if err != nil {
+			logs.Errorf("marshal sp covered usage item failed, err: %v, rid: %s", err, kt.Rid)
+			return nil, false, err
+		}
+		billCost := decimal.Zero
+		if spItem.SpNetCost != nil {
+			billCost = spItem.SpNetCost.Neg()
+		}
+		rawItem := bill.RawBillItem{
+			Region:        "any",
+			HcProductCode: constant.AwsSavingsPlansCostCodeReverse,
+			HcProductName: constant.AwsSavingsPlansCostCodeReverse,
+			BillCurrency:  enumor.CurrencyCode(extension["line_item_currency_code"]),
+			BillCost:      billCost,
+			ResAmountUnit: "Account",
+			Extension:     types.JsonField(extBytes),
+		}
+		itemList = append(itemList, rawItem)
+	}
+
 	return itemList, true, nil
 }
 
@@ -184,36 +192,45 @@ func (a AwsSavingsPlanMonthTask) splitSpReverseExpense(kt *kit.Kit, opt *MonthTa
 	}
 	summary := summaryResp.Details[0]
 
-	batchSum := decimal.Zero
-	for _, item := range rawItemList {
-		batchSum = batchSum.Add(item.BillCost)
-	}
+	billItems := make([]bill.BillItemCreateReq[json.RawMessage], 0, len(rawItemList))
+	for _, rawItem := range rawItemList {
+		// 从 rawItem Extension 中解析真实的 product_code 和 instance_type
+		var rawExt map[string]string
+		if err := json.Unmarshal([]byte(rawItem.Extension), &rawExt); err != nil {
+			logs.Errorf("fail to unmarshal raw item extension for sp split, err: %v, rid: %s", err, kt.Rid)
+			return nil, err
+		}
+		productCode := rawExt["line_item_product_code"]
+		productName := rawExt["product_product_name"]
+		instanceType := rawExt["product_instance_type"]
 
-	extJson, err := convAwsBillItemExtension(constant.AwsSavingsPlansCostCodeReverse, opt,
-		summary.RootAccountCloudID, summary.RootAccountCloudID, summary.Currency, batchSum)
-	if err != nil {
-		logs.Errorf("fail to convert common expense extension for aws month task split step, err: %v, opt: %#v, rid: %s",
-			err, opt, kt.Rid)
-		return nil, err
-	}
+		extJson, err := convAwsBillItemExtension(productName, productCode, opt,
+			summary.RootAccountCloudID, summary.RootAccountCloudID, summary.Currency, rawItem.BillCost,
+			instanceType)
+		if err != nil {
+			logs.Errorf("fail to convert sp reverse expense extension for aws month task split step, "+
+				"err: %v, opt: %#v, rid: %s", err, opt, kt.Rid)
+			return nil, err
+		}
 
-	item := bill.BillItemCreateReq[json.RawMessage]{
-		RootAccountID: opt.RootAccountID,
-		MainAccountID: summary.MainAccountID,
-		Vendor:        enumor.Aws,
-		ProductID:     summary.ProductID,
-		BkBizID:       summary.BkBizID,
-		BillYear:      opt.BillYear,
-		BillMonth:     opt.BillMonth,
-		BillDay:       enumor.MonthTaskSpecialBillDay,
-		VersionID:     summary.CurrentVersion,
-		Currency:      summary.Currency,
-		Cost:          batchSum,
-		HcProductCode: constant.AwsSavingsPlansCostCodeReverse,
-		HcProductName: constant.AwsSavingsPlansCostCodeReverse,
-		Extension:     cvt.ValToPtr[json.RawMessage](extJson),
+		billItems = append(billItems, bill.BillItemCreateReq[json.RawMessage]{
+			RootAccountID: opt.RootAccountID,
+			MainAccountID: summary.MainAccountID,
+			Vendor:        enumor.Aws,
+			ProductID:     summary.ProductID,
+			BkBizID:       summary.BkBizID,
+			BillYear:      opt.BillYear,
+			BillMonth:     opt.BillMonth,
+			BillDay:       enumor.MonthTaskSpecialBillDay,
+			VersionID:     summary.CurrentVersion,
+			Currency:      summary.Currency,
+			Cost:          rawItem.BillCost,
+			HcProductCode: constant.AwsSavingsPlansCostCodeReverse,
+			HcProductName: constant.AwsSavingsPlansCostCodeReverse,
+			Extension:     cvt.ValToPtr[json.RawMessage](extJson),
+		})
 	}
-	return []bill.BillItemCreateReq[json.RawMessage]{item}, nil
+	return billItems, nil
 }
 
 // GetHcProductCodes hc product code ranges

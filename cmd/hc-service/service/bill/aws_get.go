@@ -407,3 +407,68 @@ func (b bill) AwsListRootBillItems(cts *rest.Contexts) (any, error) {
 		Details: resp,
 	}, nil
 }
+
+// AwsListRootSpCoveredUsageByType 查询 SP 已覆盖用量按产品类型分组的结果
+func (b bill) AwsListRootSpCoveredUsageByType(cts *rest.Contexts) (any, error) {
+	req := new(hcbill.AwsRootSpCoveredUsageByTypeReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+	if err := req.Validate(); err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	rootAccount, err := b.cs.DataService().Global.RootAccount.GetBasicInfo(cts.Kit, req.RootAccountID)
+	if err != nil {
+		logs.Errorf("fail to find root account for sp covered usage by type, err: %+v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	billInfo, err := getRootAccountBillConfigInfo[billcore.AwsBillConfigExtension](
+		cts.Kit, req.RootAccountID, b.cs.DataService())
+	if err != nil {
+		logs.Errorf("failed to get aws root account bill config for sp covered usage, root account: %s, "+
+			"err: %+v, rid: %s", req.RootAccountID, err, cts.Kit.Rid)
+		return nil, err
+	}
+	if billInfo == nil {
+		return nil, errf.Newf(errf.RecordNotFound, "bill config for root_account_id: %s is not found",
+			req.RootAccountID)
+	}
+
+	cli, err := b.ad.AwsRoot(cts.Kit, req.RootAccountID)
+	if err != nil {
+		logs.Errorf("aws request adaptor client err for sp covered usage, req: %+v, err: %+v, rid: %s",
+			req, err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	opt := &typesBill.AwsRootSpCoveredUsageByTypeOpt{
+		PayerCloudID: rootAccount.CloudID,
+		SpArnPrefix:  req.SpArnPrefix,
+		Year:         req.Year,
+		Month:        req.Month,
+		StartDay:     req.StartDay,
+		EndDay:       req.EndDay,
+	}
+	items, err := cli.GetRootSpCoveredUsageByType(cts.Kit, billInfo, opt)
+	if err != nil {
+		logs.Errorf("fail to get root sp covered usage by type for aws, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	result := make([]hcbill.AwsSpCoveredUsageByTypeItem, 0, len(items))
+	for _, item := range items {
+		result = append(result, hcbill.AwsSpCoveredUsageByTypeItem{
+			LineItemProductCode:  item.LineItemProductCode,
+			ProductInstanceType:  item.ProductInstanceType,
+			ProductProductName:   item.ProductProductName,
+			LineItemCurrencyCode: item.LineItemCurrencyCode,
+			SpNetCost:            item.SpNetCost,
+		})
+	}
+	return &core.ListResultT[hcbill.AwsSpCoveredUsageByTypeItem]{
+		Count:   uint64(len(result)),
+		Details: result,
+	}, nil
+}

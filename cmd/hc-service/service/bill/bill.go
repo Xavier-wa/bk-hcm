@@ -69,6 +69,8 @@ func InitBillService(cap *capability.Capability) {
 	h.Add("AwsListRootOutsideMonthBill", "GET",
 		"/vendors/aws/root_account_bills/list_outside_month_bills", v.AwsListRootOutsideMonthBill)
 	h.Add("AwsListRootBillItems", "POST", "/vendors/aws/root_account_bills/list_items", v.AwsListRootBillItems)
+	h.Add("AwsListRootSpCoveredUsageByType", "POST",
+		"/vendors/aws/root_account_bills/sp_covered_usage_by_type", v.AwsListRootSpCoveredUsageByType)
 
 	h.Load(cap.WebService)
 }

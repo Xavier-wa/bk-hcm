@@ -127,8 +127,9 @@ func getDecimal(dict map[string]string, key string) (*decimal.Decimal, error) {
 	return &d, nil
 }
 
-func convAwsBillItemExtension(productName string, opt *MonthTaskActionOption, rootAccountCloudID string,
-	mainAccountCloudID string, currencyCode enumor.CurrencyCode, cost decimal.Decimal) ([]byte, error) {
+func convAwsBillItemExtension(productName string, productCode string, opt *MonthTaskActionOption,
+	rootAccountCloudID string, mainAccountCloudID string, currencyCode enumor.CurrencyCode, cost decimal.Decimal,
+	productInstanceType string) ([]byte, error) {
 
 	ext := billcore.AwsRawBillItem{
 		Year:                     fmt.Sprintf("%4d", opt.BillYear),
@@ -137,9 +138,10 @@ func convAwsBillItemExtension(productName string, opt *MonthTaskActionOption, ro
 		LineItemUsageAccountId:   mainAccountCloudID,
 		LineItemCurrencyCode:     string(currencyCode),
 		LineItemNetUnblendedCost: cost.String(),
-		LineItemProductCode:      productName,
+		LineItemProductCode:      productCode,
 		ProductProductName:       productName,
 		PricingCurrency:          string(currencyCode),
+		ProductInstanceType:      productInstanceType,
 	}
 	return json.Marshal(ext)
 }

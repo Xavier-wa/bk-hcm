@@ -109,3 +109,31 @@ type AwsRootBillItemsListReq struct {
 func (r *AwsRootBillItemsListReq) Validate() error {
 	return validator.Validate.Struct(r)
 }
+
+// AwsRootSpCoveredUsageByTypeReq defines the request for querying SP covered usage grouped by product type.
+type AwsRootSpCoveredUsageByTypeReq struct {
+	// 根账号id
+	RootAccountID string `json:"root_account_id" validate:"required"`
+	// SP ARN 前缀，为空则不筛选
+	SpArnPrefix string `json:"sp_arn_prefix" validate:"omitempty"`
+	Year        uint   `json:"year" validate:"required"`
+	Month       uint   `json:"month" validate:"required,min=1,max=12"`
+	// 起始日
+	StartDay uint `json:"start_day" validate:"required,min=1,max=31"`
+	// 截止日
+	EndDay uint `json:"end_day" validate:"required,min=1,max=31"`
+}
+
+// Validate AwsRootSpCoveredUsageByTypeReq.
+func (r *AwsRootSpCoveredUsageByTypeReq) Validate() error {
+	return validator.Validate.Struct(r)
+}
+
+// AwsSpCoveredUsageByTypeItem defines a single SP covered usage item grouped by product type.
+type AwsSpCoveredUsageByTypeItem struct {
+	LineItemProductCode  string           `json:"line_item_product_code"`
+	ProductInstanceType  string           `json:"product_instance_type"`
+	ProductProductName   string           `json:"product_product_name"`
+	LineItemCurrencyCode string           `json:"line_item_currency_code"`
+	SpNetCost            *decimal.Decimal `json:"sp_net_cost"`
+}

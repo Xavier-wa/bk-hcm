@@ -163,8 +163,8 @@ func (a AwsSupportMonthTask) splitCommonExpense(kt *kit.Kit, opt *MonthTaskActio
 	for _, summary := range summaryList {
 		mainAccount := mainAccountMap[summary.MainAccountID]
 		cost := batchSum.Mul(summary.CurrentMonthCost).Div(summaryTotal)
-		extJson, err := convAwsBillItemExtension(constant.BillCommonExpenseName, opt, summary.RootAccountCloudID,
-			mainAccount.CloudID, summary.Currency, cost)
+		extJson, err := convAwsBillItemExtension(constant.BillCommonExpenseName, constant.BillCommonExpenseName,
+			opt, summary.RootAccountCloudID, mainAccount.CloudID, summary.Currency, cost, "")
 		if err != nil {
 			logs.Errorf("fail to marshal aws common expense extension to json, err: %v, rid: %s", err, kt.Rid)
 			return nil, err
@@ -179,7 +179,8 @@ func (a AwsSupportMonthTask) splitCommonExpense(kt *kit.Kit, opt *MonthTaskActio
 		// 此处冲平根账号支出
 		reverseCost := cost.Neg()
 		reverseExtJson, err := convAwsBillItemExtension(constant.BillCommonExpenseReverseName,
-			opt, summary.RootAccountCloudID, mainAccount.CloudID, summary.Currency, reverseCost)
+			constant.BillCommonExpenseReverseName, opt, summary.RootAccountCloudID, mainAccount.CloudID,
+			summary.Currency, reverseCost, "")
 		if err != nil {
 			logs.Errorf("fail to marshal aws common expense reverse extension to json, err: %v, rid: %s", err, kt.Rid)
 			return nil, err

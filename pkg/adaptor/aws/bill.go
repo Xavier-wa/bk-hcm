@@ -880,6 +880,17 @@ const (
 			FROM %s.%s  
 			WHERE line_item_line_item_type = 'SavingsPlanCoveredUsage'
 	`
+
+	// AwsSPCoveredUsageByTypeSQL queries SP covered usage grouped by product type.
+	AwsSPCoveredUsageByTypeSQL = `SELECT
+		line_item_product_code,
+		product_instance_type,
+		product_product_name,
+		line_item_currency_code,
+		SUM(savings_plan_net_savings_plan_effective_cost) AS sp_net_cost
+		FROM %s.%s
+		WHERE line_item_line_item_type = 'SavingsPlanCoveredUsage'
+	`
 )
 
 // GetRootSpTotalUsage get sp total usage for root account
@@ -944,6 +955,58 @@ func (a *Aws) GetRootSpTotalUsage(kt *kit.Kit, billInfo *billcore.AwsRootBillCon
 	ret.SpNetCost = converter.ValToPtr(spNetCost)
 
 	return ret, nil
+}
+
+// GetRootSpCoveredUsageByType queries SP covered usage
+// grouped by (product_code, instance_type, product_name, currency).
+func (a *Aws) GetRootSpCoveredUsageByType(kt *kit.Kit, billInfo *billcore.AwsRootBillConfig,
+	opt *typesBill.AwsRootSpCoveredUsageByTypeOpt) ([]typesBill.AwsSpCoveredUsageByType, error) {
+
+	if billInfo == nil {
+		return nil, errf.Newf(errf.RecordNotFound, "bill info is required")
+	}
+	if opt == nil {
+		return nil, errf.Newf(errf.RecordNotFound, "opt for get sp covered usage by type is required")
+	}
+	if err := opt.Validate(); err != nil {
+		return nil, err
+	}
+
+	sql := fmt.Sprintf(AwsSPCoveredUsageByTypeSQL, billInfo.CloudDatabaseName, billInfo.CloudTableName)
+	sql += fmt.Sprintf(" AND bill_payer_account_id = '%s'", opt.PayerCloudID)
+	sql += fmt.Sprintf(" AND year = '%d'", opt.Year)
+	sql += fmt.Sprintf(" AND month = '%d'", opt.Month)
+	sql += fmt.Sprintf(" AND date(line_item_usage_start_date) >= date '%d-%02d-%02d' ",
+		opt.Year, opt.Month, opt.StartDay)
+	sql += fmt.Sprintf(" AND date(line_item_usage_start_date) <= date '%d-%02d-%02d' ",
+		opt.Year, opt.Month, opt.EndDay)
+	if len(opt.SpArnPrefix) > 0 {
+		sql += fmt.Sprintf(" AND savings_plan_savings_plan_a_r_n LIKE '%s%%'", opt.SpArnPrefix)
+	}
+	sql += ` GROUP BY line_item_product_code, product_instance_type, product_product_name, line_item_currency_code`
+
+	cloudList, err := a.GetRootAccountAwsAthenaQuery(kt, sql, billInfo)
+	if err != nil {
+		logs.Errorf("fail to call aws athena query for get sp covered usage by type, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	result := make([]typesBill.AwsSpCoveredUsageByType, 0, len(cloudList))
+	for _, row := range cloudList {
+		spNetCost, err := decimal.NewFromString(row["sp_net_cost"])
+		if err != nil {
+			logs.Errorf("fail to parse sp net cost from covered usage row, err: %v, rid: %s", err, kt.Rid)
+			return nil, err
+		}
+		result = append(result, typesBill.AwsSpCoveredUsageByType{
+			LineItemProductCode:  row["line_item_product_code"],
+			ProductInstanceType:  row["product_instance_type"],
+			ProductProductName:   row["product_product_name"],
+			LineItemCurrencyCode: row["line_item_currency_code"],
+			SpNetCost:            converter.ValToPtr(spNetCost),
+		})
+	}
+	return result, nil
 }
 
 // AwsListRootOutsideMonthBill get bill list outside given bill month for main account
