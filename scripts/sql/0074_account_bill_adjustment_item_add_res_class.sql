@@ -18,7 +18,7 @@
  */
 
 /*
- SQLVER=9999,HCMVER=v9.9.9
+ SQLVER=0074,HCMVER=v1.8.11.9
 
  Notes:
  账单调整明细表新增资源类别字段
@@ -30,8 +30,8 @@ ALTER TABLE `account_bill_adjustment_item`
     ADD COLUMN `res_class` varchar(32) NOT NULL DEFAULT '' COMMENT '调账资源类别' AFTER `type`;
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`,
-       '9999'   as `sql_ver`;
+SELECT 'v1.8.11.9' as `hcm_ver`,
+       '0074'   as `sql_ver`;
 
 COMMIT;
 
