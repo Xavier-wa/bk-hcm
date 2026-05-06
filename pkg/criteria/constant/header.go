@@ -48,6 +48,9 @@ const (
 	BKGWAuthKey = "X-Bkapi-Authorization"
 	// ContentTypeKey is content type header key.
 	ContentTypeKey = "Content-Type"
+
+	// BKTicket is blueking ticket header key.
+	BKTicket = "X-Bk-Ticket"
 )
 
 const (

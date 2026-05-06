@@ -1,0 +1,285 @@
+# 服务监听与注册配置（对齐 cc.Network）
+# bindIP 必须填写本机实际 IP（不能是 0.0.0.0），供 web-server 服务发现使用
+network:
+  bindIP:
+  port: 8080
+  tls:
+    insecureSkipVerify:
+    certFile:
+    keyFile:
+    caFile:
+    password:
+
+# 服务注册配置（etcd，对齐 cc.Service）
+service:
+  etcd:
+    # endpoints is a list of etcd URLs.
+    endpoints:
+      - 127.0.0.1:2379
+    # dialTimeoutMS is the timeout milliseconds for failing to establish a connection.
+    dialTimeoutMS:
+    # username is a user's name for authentication.
+    username:
+    # password is a password for authentication.
+    password:
+    tls:
+      insecureSkipVerify:
+      certFile:
+      keyFile:
+      caFile:
+      password:
+
+# 日志配置（对齐 cc.LogOption）
+log:
+  logDir: "${TRPC_CLAW_STATE_DIR}/logs"
+  maxPerFileSizeMB: 10  # MB
+  maxFileNum: 10        # 最多保留文件数
+  toStdErr: false
+  alsoToStdErr: true    # 同时输出到 stdout 方便开发调试
+  verbosity: 0
+
+# AGUI 持久化存储配置。
+# session：聊天历史持久化到 MySQL（不配置 DSN 则使用内存存储，重启丢失）。
+# memory：长期记忆存储，支持两种后端：
+#   - mysql：基于 gse 关键词匹配（需 MySQL DSN）
+#   - sqlitevec：基于向量语义搜索（推荐，需 SQLite 文件路径 + Embedding 模型配置）
+#   留空或不配置则 memory 功能禁用。
+storage:
+  session:
+    dsn: "user:password@tcp(host:3306)/dbname?charset=utf8mb4&parseTime=true"
+    tablePrefix: "aiagent_"   # 可选，所有 session 表名的前缀
+    # skipDBInit: false      # false=启动时自动建表；true=表由外部管理，跳过建表
+    summary:
+      enabled: true         # true=开启 LLM 自动摘要（需配置 aidev 中的 LLM 模型）
+      policy: "any"          # 触发策略：any=满足任一阈值即触发；all=所有阈值均满足才触发
+      # eventThreshold: 20     # 未摘要的事件数超过该值时触发（0=不使用此条件）
+      tokenThreshold: 4000   # 未摘要内容的估算 token 数超过该值时触发（0=不使用此条件）
+      # idleThreshold: "30m"   # 会话空闲超过该时长后触发，如 "30m"、"1h"（空=不使用此条件）
+      maxWords: 200          # 生成摘要的最大字数上限（0=不限制）
+  # ── 长期记忆（memory）──
+  # backend 支持 "mysql" 和 "sqlitevec"，不填则根据 dsn/dbPath 自动推断。
+  # sqlitevec 使用向量语义搜索，解决了 mysql 后端 gse 关键词匹配的以下问题：
+  #   1. gse 词典加载依赖编译环境路径，部署环境缺失字典文件
+  #   2. 关键词匹配语义理解弱，导致记忆召回不准确
+  # 注意：sqlitevec 需要 CGO_ENABLED=0 构建（使用内置 WASM SQLite 引擎，无需系统依赖）。
+  # Embedding API 复用上方 aidev 段的 endpoints 地址和 BK 鉴权，
+  # OpenAI SDK 自动拼接后缀：LLM → /chat/completions，Embedding → /embeddings。
+  memory:
+    backend: "sqlitevec"                      # "mysql" | "sqlitevec"（留空自动推断）
+    dbPath: "/data/agent-server/memories.db"  # SQLite 文件路径（sqlitevec 必填）
+    # dsn: ""                                 # MySQL DSN（backend=mysql 时使用）
+    tableName: "aiagent_memories"             # 记忆表名，默认 "memories"
+    limit: 100                                # 每用户最多保留的记忆条数
+    maxSearchResults: 10                      # 向量搜索 Top-K 返回条数（默认 10）
+    preloadLimit: 5                           # 每轮对话注入 system prompt 的最近记忆数（0=禁用预加载）
+    embedding:                                # 向量模型配置（sqlitevec 必填，API 地址复用 aidev）
+      model: "hunyuan-embedding"              # Embedding 模型名称（须为 aidev 网关支持的模型）
+      dimensions: 1536                        # 向量维度（须与模型输出一致）
+    autoExtract: true                         # 每轮对话后自动提取记忆
+    autoExtractPolicy: "any"                  # 触发策略：any=任一条件满足；all=全部满足
+    autoExtractMessages: 10                   # 新消息数阈值（0=不使用此条件）
+    # autoExtractInterval: "30m"              # 距上次提取的时间间隔阈值（空=不使用）
+    extractPromptFile: "cmd/agent-server/etc/prompts/memory_extract_prompt.md"  # 自定义提取 prompt
+  # ── MySQL 后端示例（供参考）──
+  # memory:
+  #   backend: "mysql"
+  #   dsn: "user:password@tcp(host:3306)/dbname?charset=utf8mb4&parseTime=true"
+  #   tableName: "aiagent_memories"
+  #   limit: 100
+  #   autoExtract: true
+  #   autoExtractPolicy: "any"
+  #   autoExtractMessages: 100
+  #   extractPromptFile: "cmd/agent-server/etc/prompts/memory_extract_prompt.md"
+
+# aidev 配置兼容 OpenAI API 协议的蓝鲸 AI 网关。
+aidev:
+  # Endpoints is a seed list of host:port addresses of aidev nodes.
+  endpoints:
+    - https://path/to/apigw/test
+  # AppCode is the BlueKing app code of irisbot to request aidev.
+  appCode: aidev-iris
+  # AppSecret is the BlueKing app secret of irisbot to request aidev.
+  appSecret: xxxxx
+  # User is the BlueKing user of irisbot to request aidev.
+  user:
+  # BkTicket is the BlueKing access ticket of irisbot to request aidev.
+  bkTicket:
+  # defines tls related options.
+  tls:
+    # server should be accessed without verifying the TLS certificate.
+    insecureSkipVerify:
+    # server requires TLS client certificate authentication.
+    certFile:
+    # server requires TLS client certificate authentication.
+    keyFile:
+    # trusted root certificates for server.
+    caFile:
+    # the password to decrypt the certificate.
+    password:
+
+# LLM 提供方配置。
+# 目前支持两种类型：
+# - bkapigw：蓝鲸 API 网关
+# - openai：OpenAI 兼容的 LLM endpoint
+# 此处可配置其他 OpenAI 兼容的 LLM endpoint（如 DeepSeek、OpenAI 等），
+# 模型通过 allowedModels[].provider 字段关联到对应的 provider。
+providers:
+  - name: aidev
+    type: bkapigw
+    endpoints:
+      - https://path/to/apigw/test
+    # AppCode is the BlueKing app code of irisbot to request aidev.
+    appCode: aidev-iris
+    # AppSecret is the BlueKing app secret of irisbot to request aidev.
+    appSecret: xxxxx
+    # User is the BlueKing user of irisbot to request aidev.
+    user:
+    # BkTicket is the BlueKing access ticket of irisbot to request aidev.
+    bkTicket:
+    # defines tls related options.
+    tls:
+      # server should be accessed without verifying the TLS certificate.
+      insecureSkipVerify:
+      # server requires TLS client certificate authentication.
+      certFile:
+      # server requires TLS client certificate authentication.
+      keyFile:
+      # trusted root certificates for server.
+      caFile:
+      # the password to decrypt the certificate.
+      password:
+  #  - name: deepseek
+  #    type: openai
+  #    baseURL: "https://api.deepseek.com"
+  #    apiKey: "sk-your-deepseek-api-key"
+  #  - name: openai
+  #    type: openai
+  #    baseURL: "https://api.openai.com/v1"
+  #    apiKey: "sk-your-openai-api-key"
+
+
+# AG-UI 协议配置。
+# appName：会话数据在存储后端的命名空间，建议设置。
+# allowedModels：允许使用的 AI 模型列表，留空则使用平台默认列表
+#   （见 pkg/criteria/enumor/ai_model.go DefaultAllowedAIModels）。
+#
+# AG-UI 端点说明（--enable-agui 开启后生效）：
+#   POST /api/v1/agent/agui        主聊天接口（SSE 流式返回 AG-UI 协议事件）
+#   POST /api/v1/agent/cancel      取消正在进行的 Run（请求体传 sessionCode，由中间件解析为 threadId）
+#                                   200=成功取消；404=该 sessionCode 对应会话无正在运行的 Run
+#   POST /api/v1/agent/history     历史消息回放（配置 storage.session.dsn 后自动开启）
+# 注：客户端断开 SSE 连接时，服务端会自动取消对应的 LLM 调用。
+agui:
+  enable: true
+  path: "/api/v1/agent/agui"
+  defaultModel: "gpt-4o"
+  appName: hcm-agent
+  stream: true       # true=流式输出，每个 token 单独推送一个 TEXT_MESSAGE_CONTENT SSE 事件（逐字打字机效果）
+
+  # prompt 配置 Agent 的系统提示词和任务指令，均从文件加载。
+  # 支持绝对路径或相对路径（相对于进程工作目录，通常为项目根目录）。
+  # 文件内容支持 {user:xxx} 占位符（从 user_states 注入用户级状态变量）。
+  prompt:
+    # systemPromptFile：GlobalInstruction，强制置顶。适合写固定的身份定义和安全约束。
+    systemPromptFile: "cmd/agent-server/etc/prompts/system_prompt.md"
+    # instructionFile：Instruction，追加在请求末尾。适合写任务说明和动态占位符。
+    instructionFile: "cmd/agent-server/etc/prompts/instruction.md"
+
+  # allowedModels 配置允许使用的模型及其上下文窗口大小（tokens）。
+  # contextWindow 用于框架的 Token Tailoring（自动裁剪超长对话），
+  # 设为 0 则使用框架内置查表值（私有模型未收录时默认 8192）。
+  # allowedModels 配置允许使用的模型及其上下文窗口大小（tokens）。
+  # provider 指定模型使用哪个 LLM 提供方（对应 providers[].name）。
+  allowedModels: []
+  #   - name: deepseek-v3
+  #     contextWindow: 131072
+  #   - name: dsv32-thinking
+  #     contextWindow: 131072
+  #   - name: dsv32
+  #     contextWindow: 131072
+  #   - name: deepseek-r1
+  #     contextWindow: 131072
+  #   - name: hunyuan2-thinking
+  #     contextWindow: 196608
+  #   - name: hunyuan-turbo
+  #     contextWindow: 32768
+  #   - name: gptoss-120b
+  #     contextWindow: 128000
+  #   - name: qwen3
+  #     contextWindow: 128000
+  #   - name: qwen3-nothinking
+  #     contextWindow: 128000
+
+# AGUI Agent 工具配置。
+# 在此配置的 MCP toolset 和 skill 将直接注入到 AGUI agent 的工具链中。
+tools:
+  # bkAIDev 提供 BK 应用凭证，供 type 为 "bkaidev" 的 MCP toolset 使用。
+  # 当 MCP 条目设置 type: "bkaidev" 时，服务器会在每次 MCP 请求中自动注入
+  # X-Bkapi-Authorization 头，其中 bk_ticket 来自请求 Cookie 中的 bk_ticket 字段。
+  bkAIDev:
+    appCode: ""      # BK 应用编码（bk_app_code）
+    appSecret: ""    # BK 应用密钥（bk_app_secret）
+
+  # MCP toolset 列表，支持 stdio / sse / streamable_http 三种传输方式。
+  # 每个条目对应一个独立的 MCP server。
+  mcp:
+    - name: "my-mcp"             # toolset 唯一标识（用于冲突解决）
+      type: ""                   # 可选类型：留空=普通；bkaidev=自动注入 BK 鉴权头
+      transport: "streamable_http"  # 传输方式：stdio | sse | streamable_http
+      serverUrl: "http://localhost:3000/mcp"   # MCP server URL（sse/streamable_http 必填）
+      timeout: "30s"             # 每次请求超时，留空表示不限制
+      # requireConfirm 为 true 时，该 toolset 下所有工具调用前
+      # 需要用户在上一条消息中明确输入"确认"才会实际执行
+      requireConfirm: false
+      # headers 用于 HTTP 鉴权（鉴权字段稍后补充）
+      # headers:
+      #   Authorization: "Bearer your-token"
+      # filter 限制暴露给 agent 的工具范围
+      # filter:
+      #   mode: "include"        # include=白名单；exclude=黑名单
+      #   names:
+      #     - "tool_a"
+      #     - "tool_b"
+      # reconnect 配置 session 自动重连
+      # reconnect:
+      #   enabled: true
+      #   maxAttempts: 3
+      # requireConfirm 为 true 时，该 toolset 下所有工具调用前
+      # 需要用户在上一条消息中明确输入"确认"才会实际执行
+      # requireConfirm: true
+  #   - name: "local-mcp"
+  #     transport: "stdio"
+  #     command: "/usr/local/bin/my-mcp-server"
+  #     args:
+  #       - "--flag"
+  #       - "value"
+
+  # 动态工具加载：基于索引，每条用户消息仅向 LLM 暴露最相关的 Top-N 个 MCP 工具。
+  # 启用后，ToolFilter 会在每次 Run 中检索匹配工具，减少 token 消耗并提升推理质量。
+  # enabled: false 时不注入 ToolFilter，MCP 工具全量暴露（默认行为）。
+  dynamicToolLoading:
+    enabled: true
+    # 检索策略：
+    #   keyword  — 关键词子串匹配（最快，适合工具名精确匹配）
+    #   bm25     — BM25 全文检索（默认，平衡速度与召回率）
+    #   embedding — 向量余弦相似度（语义最强，需要 aidev 网关可访问）
+    #              使用 embedding 策略时需同时配置下方 embedding 字段，
+    #              Build 阶段会并发调用 aidev 网关 /embeddings 接口生成工具向量。
+    strategy: "embedding"
+    topN: 10                   # 返回 Top-N 最相关工具
+    queryContextWindow: 5      # 查询上下文窗口：拼接最近 N 条用户消息作为检索 query
+    scoreThreshold: 0.3        # 相对分数阈值 (0.0~1.0)，0=不启用
+    # embedding 字段仅在 strategy: "embedding" 时生效。
+    # model / dimensions 留空则使用 SDK 默认值（text-embedding-3-small，1536 维）。
+    embedding:
+      model: "hunyuan-embedding"
+      dimensions: 1536
+    # toolTags:                  # 工具标签（key 为 MCP 原始工具名，value 为额外检索关键词）
+    #   list_cvms: ["CVM", "云服务器", "主机"]
+    #   query_bill: ["账单", "费用", "计费"]
+
+  # skill 仓库配置。指向包含 SKILL.md 文件的目录，每个子目录为一个 skill。
+  skills:
+    root: "./skills"             # 主 skill 目录
+    # extraDirs:                   # 可选额外目录（优先级低于 root）
+    #   - "/opt/hcm/skills"

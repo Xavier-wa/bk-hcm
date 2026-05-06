@@ -1,6 +1,6 @@
 module hcm
 
-go 1.24.0
+go 1.24.4
 
 toolchain go1.24.9
 
@@ -9,8 +9,8 @@ require (
 	cloud.google.com/go/bigquery v1.59.1
 	cloud.google.com/go/iam v1.1.7
 	git.woa.com/nops/ngate/ngate-sdk/ngate-go v0.0.0-20230505013247-70e8ab006353
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.9.1
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.2.2
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.2.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/consumption/armconsumption v1.1.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2 v2.1.0
@@ -26,8 +26,7 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-playground/validator/v10 v10.20.0
 	github.com/go-redis/redis/v7 v7.4.1
-	// go-sql-driver/mysql v1.8.1 may casuse error: connection.go:49: unexpected EOF
-	github.com/go-sql-driver/mysql v1.7.1
+	github.com/go-sql-driver/mysql v1.9.3
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/golang/protobuf v1.5.4
@@ -46,7 +45,7 @@ require (
 	github.com/shopspring/decimal v1.4.0
 	github.com/smartystreets/goconvey v1.8.1
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.11.1
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/billing v1.0.1096
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam v1.0.1096
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cbs v1.0.1096
@@ -58,19 +57,34 @@ require (
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/ssl v1.0.1096
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tag v1.0.1096
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/vpc v1.0.1096
-	github.com/tencentyun/cos-go-sdk-v5 v0.7.48
-	github.com/tencentyun/qcloud-cos-sts-sdk v0.0.0-20241118064430-63a76784514f
+	github.com/tencentyun/cos-go-sdk-v5 v0.7.69
+	github.com/tencentyun/qcloud-cos-sts-sdk v0.0.0-20250515025012-e0eec8a5d123
 	github.com/tidwall/gjson v1.14.4
 	github.com/xuri/excelize/v2 v2.8.1
 	go.etcd.io/etcd/api/v3 v3.5.13
 	go.etcd.io/etcd/client/v3 v3.5.13
-	go.uber.org/atomic v1.10.0
+	go.uber.org/atomic v1.11.0
 	go.uber.org/mock v0.2.0
 	go.uber.org/ratelimit v0.3.1
-	golang.org/x/time v0.5.0
+	golang.org/x/time v0.9.0
 	google.golang.org/api v0.172.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/client-go v0.29.5
+)
+
+require (
+	git.woa.com/trpc-go/trpc-agent-go v1.7.0
+	github.com/mattn/go-sqlite3 v1.14.32
+	github.com/ncruces/go-sqlite3 v0.32.0
+	github.com/openai/openai-go v1.12.0
+	trpc.group/trpc-go/trpc-a2a-go v0.2.5
+	trpc.group/trpc-go/trpc-agent-go v1.7.0
+	trpc.group/trpc-go/trpc-agent-go/graph/checkpoint/redis v1.7.0
+	trpc.group/trpc-go/trpc-agent-go/memory/mysql v1.7.0
+	trpc.group/trpc-go/trpc-agent-go/memory/sqlitevec v1.7.0
+	trpc.group/trpc-go/trpc-agent-go/server/agui v1.7.0
+	trpc.group/trpc-go/trpc-agent-go/session/mysql v1.7.0
+	trpc.group/trpc-go/trpc-mcp-go v0.0.12
 )
 
 require (
@@ -94,7 +108,7 @@ require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
-	github.com/go-logr/logr v1.4.1 // indirect
+	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
@@ -103,7 +117,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/joyt/godate v0.0.0-20150226210126-7151572574a7 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
-	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/mailru/easyjson v0.9.1 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/microsoft/kiota-abstractions-go v1.6.0 // indirect
 	github.com/microsoft/kiota-authentication-azure-go v1.0.2 // indirect
@@ -128,12 +142,12 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.49.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect
-	go.opentelemetry.io/otel v1.24.0 // indirect
-	go.opentelemetry.io/otel/metric v1.24.0 // indirect
-	go.opentelemetry.io/otel/trace v1.24.0 // indirect
+	go.opentelemetry.io/otel v1.29.0 // indirect
+	go.opentelemetry.io/otel/metric v1.29.0 // indirect
+	go.opentelemetry.io/otel/trace v1.29.0 // indirect
 	golang.org/x/arch v0.8.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240415180920-8c6c420018be // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240415180920-8c6c420018be // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240822170219-fc7c04adadcd // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240822170219-fc7c04adadcd // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	k8s.io/apimachinery v0.29.5 // indirect
 	k8s.io/klog/v2 v2.110.1 // indirect
@@ -141,32 +155,92 @@ require (
 )
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/internal v1.5.2 // indirect
+	git.code.oa.com/trpc-go/trpc-go v0.19.3 // indirect
+	git.code.oa.com/trpc-go/trpc-metrics-runtime v0.5.22 // indirect
+	git.code.oa.com/trpc-go/trpc-utils v0.2.2 // indirect
+	git.woa.com/jce/jce v1.2.0 // indirect
+	git.woa.com/trpc-go/go_reuseport v1.7.0 // indirect
+	git.woa.com/trpc-go/tnet v0.1.2 // indirect
+	git.woa.com/trpc-go/trpc-mcp-go v0.0.13 // indirect
+	git.woa.com/trpc/trpc-robust/go-sdk v0.0.1 // indirect
+	git.woa.com/trpc/trpc-robust/proto/pb/go/trpc-robust v0.0.0-20240820014626-322181997537 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
+	github.com/BurntSushi/toml v0.3.1 // indirect
+	github.com/ag-ui-protocol/ag-ui/sdks/community/go v0.0.0-20260305114736-115a967b66a9 // indirect
+	github.com/andybalholm/brotli v1.1.0 // indirect
+	github.com/asg017/sqlite-vec-go-bindings v0.1.6 // indirect
+	github.com/bmatcuk/doublestar/v4 v4.9.1 // indirect
+	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
+	github.com/creack/pty v1.1.24 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+	github.com/getkin/kin-openapi v0.124.0 // indirect
+	github.com/go-ego/gse v1.0.0 // indirect
+	github.com/go-openapi/jsonpointer v0.21.0 // indirect
+	github.com/go-openapi/swag v0.23.0 // indirect
+	github.com/go-playground/form/v4 v4.2.1 // indirect
+	github.com/golang-jwt/jwt/v5 v5.2.3 // indirect
+	github.com/golang/mock v1.6.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0 // indirect
+	github.com/hashicorp/errwrap v1.1.0 // indirect
+	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/invopop/yaml v0.2.0 // indirect
+	github.com/jinzhu/copier v0.4.0 // indirect
+	github.com/lestrrat-go/blackmagic v1.0.2 // indirect
+	github.com/lestrrat-go/httpcc v1.0.1 // indirect
+	github.com/lestrrat-go/httprc v1.0.6 // indirect
+	github.com/lestrrat-go/iter v1.0.2 // indirect
+	github.com/lestrrat-go/jwx/v2 v2.1.4 // indirect
+	github.com/lestrrat-go/option v1.0.1 // indirect
+	github.com/lestrrat-go/strftime v1.0.6 // indirect
 	github.com/mozillazg/go-httpheader v0.2.1 // indirect
+	github.com/ncruces/julianday v1.0.0 // indirect
+	github.com/panjf2000/ants/v2 v2.10.0 // indirect
+	github.com/perimeterx/marshmallow v1.1.5 // indirect
+	github.com/r3labs/sse/v2 v2.10.0 // indirect
+	github.com/redis/go-redis/v9 v9.16.0 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.3 // indirect
+	github.com/segmentio/asm v1.2.0 // indirect
+	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/spf13/cast v1.6.0 // indirect
+	github.com/tetratelabs/wazero v1.11.0 // indirect
+	github.com/tidwall/sjson v1.2.5 // indirect
+	github.com/valyala/bytebufferpool v1.0.0 // indirect
+	github.com/valyala/fasthttp v1.52.0 // indirect
+	github.com/vcaesar/cedar v0.20.2 // indirect
 	github.com/xuri/efp v0.0.0-20231025114914-d1ff6096ae53 // indirect
 	github.com/xuri/nfp v0.0.0-20230919160717-d98342af3f05 // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.29.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.29.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.29.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.29.0 // indirect
+	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
+	go.uber.org/automaxprocs v1.5.4-0.20240213192314-8553d3bb2149 // indirect
 	golang.org/x/telemetry v0.0.0-20251008203120-078029d740a8 // indirect
+	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
+	trpc.group/trpc-go/trpc-agent-go/storage/mysql v0.5.0 // indirect
+	trpc.group/trpc-go/trpc-agent-go/storage/redis v0.6.0 // indirect
 )
 
 require (
-	github.com/AzureAD/microsoft-authentication-library-for-go v0.9.0 // indirect
+	github.com/AzureAD/microsoft-authentication-library-for-go v1.2.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/goccy/go-json v0.10.2
+	github.com/goccy/go-json v0.10.3
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
-	github.com/google/flatbuffers v23.5.26+incompatible // indirect
+	github.com/google/flatbuffers v24.3.25+incompatible // indirect
 	github.com/google/s2a-go v0.1.7 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
 	github.com/googleapis/gax-go/v2 v2.12.3 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/compress v1.17.0 // indirect
+	github.com/klauspost/compress v1.17.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
@@ -184,25 +258,33 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.13 // indirect
 	go.mongodb.org/mongo-driver v1.11.2
 	go.opencensus.io v0.24.0 // indirect
-	go.uber.org/multierr v1.9.0 // indirect
-	go.uber.org/zap v1.24.0 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
+	go.uber.org/zap v1.27.1
 	golang.org/x/crypto v0.45.0 // indirect; indirectd
 	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
 	golang.org/x/sync v0.18.0
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/tools v0.38.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/genproto v0.0.0-20240227224415-6ceb2ff114de // indirect
-	google.golang.org/grpc v1.63.2
-	google.golang.org/protobuf v1.34.1
+	google.golang.org/grpc v1.67.0-dev
+	google.golang.org/protobuf v1.35.0
 	gopkg.in/ini.v1 v1.67.0 // indirect
 )
 
 // add unicode character namedquery support
 replace github.com/jmoiron/sqlx v1.3.5 => github.com/chenjr15/sqlx v0.0.0-20241121072647-0e820a7ed576
 
+// go-sql-driver/mysql v1.8.1 may casuse error: connection.go:49: unexpected EOF
+replace github.com/go-sql-driver/mysql => github.com/go-sql-driver/mysql v1.7.1
+
 // 自研云需要修改sdk，支持差异化参数
 replace github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/clb => ./pkg/thirdparty/tencentcloud/clb
+
+// sqlite-vec-go-bindings v0.1.6 内嵌的 WASM 二进制与 ncruces/go-sqlite3 v0.32.0 不兼容
+// （宿主函数接口变更）。降级到 v0.20.3 恢复兼容，该版本默认启用 WASM threads 并导出所需宿主函数。
+// 参见 https://github.com/asg017/sqlite-vec-go-bindings/issues/4
+replace github.com/ncruces/go-sqlite3 => github.com/ncruces/go-sqlite3 v0.20.3

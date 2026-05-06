@@ -318,6 +318,9 @@ const (
 	ZiyanCvmDeliverRecordTable = "ziyan_cvm_deliver_record"
 	// ZiyanCvmModifyRecordTable 自研云CVM变更记录表
 	ZiyanCvmModifyRecordTable = "ziyan_cvm_modify_record"
+
+	// AiagentSessionTable is aiagent_session table's name.
+	AiagentSessionTable Name = "aiagent_session"
 )
 
 // Validate whether the table name is valid or not.
@@ -489,6 +492,8 @@ var TableMap = map[Name]TableConfig{
 	ZiyanCvmDeviceInfoTable:     {},
 	ZiyanCvmDeliverRecordTable:  {},
 	ZiyanCvmModifyRecordTable:   {},
+
+	AiagentSessionTable: {},
 }
 
 // Register 注册表名
