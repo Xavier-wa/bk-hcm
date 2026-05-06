@@ -10,6 +10,7 @@ import type { IApplyOrderItem } from '@/typings/ziyanScr';
 import type { IDemandVerification } from '@/typings/plan';
 import { MENU_SERVICE_HOST_APPLICATION, MENU_BUSINESS_TICKET_MANAGEMENT } from '@/constants/menu-symbol';
 import { RequirementType } from '@/store/config/requirement';
+import { onePageParams } from '@/utils/search';
 
 // TODO: 这些翻译项，后续都要通过display组件进行优化
 import { getDiskTypesName, getImageName } from '@/views/ziyanScr/cvm-produce/component/property-display/transform';
@@ -58,6 +59,7 @@ const getDetails = async () => {
     bk_biz_id: [businessId.value],
     suborder_id: [suborderId.value],
     get_product: true,
+    page: onePageParams(),
   });
   // suborder_id请求回来的只会是一个单据数据
   [details.value] = list;

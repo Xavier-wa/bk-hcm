@@ -53,7 +53,7 @@ var (
 // createCVM starts a cvm creating task
 func (g *Generator) createCVM(kt *kit.Kit, cvm *types.CVM, order *types.ApplyOrder) (string, error) {
 	// construct cvm launch request
-	createReq := g.getCreateCvmReq(cvm)
+	createReq := g.getCreateCvmReq(cvm, order)
 
 	// 增加日志记录
 	jsonReq, err := json.Marshal(createReq)
@@ -124,10 +124,17 @@ func (g *Generator) createCVM(kt *kit.Kit, cvm *types.CVM, order *types.ApplyOrd
 	return resp.Result.OrderId, nil
 }
 
-func (g *Generator) getCreateCvmReq(cvm *types.CVM) *cvmapi.OrderCreateReq {
+func (g *Generator) getCreateCvmReq(cvm *types.CVM, subOrder *types.ApplyOrder) *cvmapi.OrderCreateReq {
 	deptName := cvmapi.CvmLaunchDeptName
 	if cvm.VirtualDeptName != "" {
 		deptName = cvm.VirtualDeptName
+	}
+	// CVM生产-需要指定资源池
+	var business3Id = cvmapi.CvmLaunchBiz3Id
+	var business3Name = cvmapi.CvmLaunchBiz3Name
+	if subOrder.ProductType == enumor.ProductTypeAdmin {
+		business3Id = cvmapi.CvmProductLaunchBiz3Id
+		business3Name = cvmapi.CvmProductLaunchBiz3Name
 	}
 	createReq := &cvmapi.OrderCreateReq{
 		ReqMeta: cvmapi.ReqMeta{
@@ -143,8 +150,8 @@ func (g *Generator) getCreateCvmReq(cvm *types.CVM) *cvmapi.OrderCreateReq {
 			Business1Name: cvmapi.CvmLaunchBiz1Name,
 			Business2Id:   cvmapi.CvmLaunchBiz2Id,
 			Business2Name: cvmapi.CvmLaunchBiz2Name,
-			Business3Id:   cvmapi.CvmLaunchBiz3Id,
-			Business3Name: cvmapi.CvmLaunchBiz3Name,
+			Business3Id:   business3Id,
+			Business3Name: business3Name,
 			ProjectId:     int(cvm.BkProductID),
 			Image:         &cvmapi.Image{ImageId: cvm.ImageId, ImageName: cvm.ImageName},
 			InstanceType:  cvm.InstanceType,

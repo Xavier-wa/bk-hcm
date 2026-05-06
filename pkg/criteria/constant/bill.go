@@ -154,3 +154,17 @@ func AddBillItemAIPrefix(name string) string {
 func TrimBillItemAIPrefix(name string) string {
 	return strings.TrimPrefix(name, BillItemAIPrefix)
 }
+
+const (
+	// OBSDefaultCityIDChina 国内账号 OBS 默认城市 ID
+	OBSDefaultCityIDChina = int32(300001)
+	// OBSDefaultCityIDOverseas 国际账号 OBS 默认城市 ID
+	OBSDefaultCityIDOverseas = int32(300002)
+)
+
+const (
+	// AmazonSageMaker Amazon SageMaker
+	AmazonSageMaker = "AmazonSageMaker"
+	// GcpCalendarMode gcp calendar mode
+	GcpCalendarMode = "calendar mode"
+)

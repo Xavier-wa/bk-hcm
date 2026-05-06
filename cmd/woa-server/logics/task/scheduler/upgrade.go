@@ -20,24 +20,22 @@
 package scheduler
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"time"
 
+	"go.mongodb.org/mongo-driver/mongo"
 	"hcm/cmd/woa-server/logics/task/scheduler/record"
 	"hcm/cmd/woa-server/model/task"
 	types "hcm/cmd/woa-server/types/task"
-	"hcm/pkg"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
-	"hcm/pkg/criteria/mapstr"
 	"hcm/pkg/dal"
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/tools/maps"
-	"hcm/pkg/tools/metadata"
-
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // CreateUpgradeTicketANDOrder creates upgrade cvm ticket and suborder
@@ -65,7 +63,7 @@ func (s *scheduler) CreateUpgradeTicketANDOrder(kt *kit.Kit, param *types.ApplyR
 
 		param.OrderId = applyOrderRst.OrderId
 		// update apply ticket to running
-		if err = s.updateTicketState(sessionKit, param.OrderId, types.TicketStageRunning); err != nil {
+		if err = s.UpdateTicketState(sessionKit, param.OrderId, types.TicketStageRunning); err != nil {
 			logs.Errorf("failed to update apply ticket, orderId: %d, err: %v, rid: %s", param.OrderId, err, kt.Rid)
 			return err
 		}
@@ -114,18 +112,14 @@ func (s *scheduler) CreateUpgradeTicketANDOrder(kt *kit.Kit, param *types.ApplyR
 	return rst, nil
 }
 
-func (s *scheduler) updateTicketState(kt *kit.Kit, orderId uint64, stage types.TicketStage) error {
-	filter := mapstr.MapStr{
-		"order_id": orderId,
+func (s *scheduler) UpdateTicketState(kt *kit.Kit, orderId uint64, stage types.TicketStage) error {
+	filter := tools.ExpressionAnd(tools.RuleEqual("order_id", orderId))
+	update := &cvmapplyproto.ZiyanCvmApplyOrderUpdateReq{
+		Stage: stage,
 	}
 
-	update := mapstr.MapStr{
-		"stage":     stage,
-		"update_at": time.Now(),
-	}
-
-	if err := model.Operation().ApplyTicket().UpdateApplyTicket(kt.Ctx, &filter, update); err != nil {
-		logs.Errorf("failed to update apply ticket, err: %v, rid: %s", err, kt.Rid)
+	if err := model.Operation().ApplyTicket().UpdateApplyTicket(kt, filter, update); err != nil {
+		logs.Errorf("failed to update apply ticket, err: %v, orderID: %d, rid: %s", err, orderId, kt.Rid)
 		return err
 	}
 
@@ -134,15 +128,8 @@ func (s *scheduler) updateTicketState(kt *kit.Kit, orderId uint64, stage types.T
 
 // GetSuborders 根据order获得子单
 func (s *scheduler) GetSuborders(kt *kit.Kit, orderID uint64) ([]*types.ApplyOrder, error) {
-	filter := map[string]interface{}{
-		"order_id": orderID,
-	}
-	page := metadata.BasePage{
-		Limit: pkg.BKNoLimit,
-		Start: 0,
-	}
-
-	orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt.Ctx, page, filter)
+	filter := tools.ExpressionAnd(tools.RuleEqual("order_id", orderID))
+	orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt, filter, nil)
 	if err != nil {
 		logs.Errorf("failed to list apply order by orderId, err: %v, orderID: %d, rid: %s", err, orderID, kt.Rid)
 		return nil, err
@@ -205,6 +192,7 @@ func (s *scheduler) createSubOrdersToMatching(kt *kit.Kit, orderID uint64, param
 			RequireType:       param.RequireType,
 			ExpectTime:        param.ExpectTime,
 			ResourceType:      suborder.ResourceType,
+			ProductType:       enumor.ProductTypeBusiness,
 			Spec:              suborder.Spec,
 			UpgradeCVMList:    suborder.UpgradeCVMList,
 			AntiAffinityLevel: suborder.AntiAffinityLevel,
@@ -224,15 +212,16 @@ func (s *scheduler) createSubOrdersToMatching(kt *kit.Kit, orderID uint64, param
 			CreateAt:          now,
 			UpdateAt:          now,
 		}
-		logs.V(4).Infof("suborder data: %+v", subOrder)
+		logs.V(4).Infof("create suborder to matching data, bkBizID: %d, subOrder: %+v, rid: %s",
+			param.BkBizId, subOrder, kt.Rid)
 
-		if err := model.Operation().ApplyOrder().CreateApplyOrder(kt.Ctx, subOrder); err != nil {
+		if err := model.Operation().ApplyOrder().CreateApplyOrder(kt, subOrder); err != nil {
 			logs.Errorf("failed to create upgrade order, err: %v, rid: %s", err, kt.Rid)
 			return nil, err
 		}
 
 		// init all step record
-		if err := s.initUpgradeCVMSteps(kt, subOrder.SubOrderId, subOrder.TotalNum); err != nil {
+		if err := s.InitUpgradeCVMSteps(kt, subOrder.SubOrderId, subOrder.TotalNum); err != nil {
 			logs.Errorf("failed to init upgrade step record, err: %v, rid: %s", err, kt.Rid)
 			return nil, err
 		}
@@ -243,18 +232,18 @@ func (s *scheduler) createSubOrdersToMatching(kt *kit.Kit, orderID uint64, param
 	return suborders, nil
 }
 
-// initUpgradeCVMSteps init upgrade cvm order all steps
-func (s *scheduler) initUpgradeCVMSteps(kt *kit.Kit, suborderId string, total uint) error {
+// InitUpgradeCVMSteps init upgrade cvm order all steps
+func (s *scheduler) InitUpgradeCVMSteps(kt *kit.Kit, suborderId string, total uint) error {
 	// init commit step
 	stepID := 1
-	if err := record.CreateCommitStep(kt.Ctx, suborderId, total, stepID); err != nil {
+	if err := record.CreateCommitStep(kt, suborderId, total, stepID); err != nil {
 		logs.Errorf("order %s failed to create commit step, err: %v, rid: %s", suborderId, err, kt.Rid)
 		return err
 	}
 
 	// init generate step
 	stepID++
-	if err := record.CreateGenerateStep(kt.Ctx, suborderId, total, stepID); err != nil {
+	if err := record.CreateGenerateStep(kt, suborderId, total, stepID); err != nil {
 		logs.Errorf("order %s failed to create generate step, err: %v, rid: %s", suborderId, err, kt.Rid)
 		return err
 	}
@@ -266,17 +255,14 @@ func (s *scheduler) initUpgradeCVMSteps(kt *kit.Kit, suborderId string, total ui
 func (s *scheduler) updateApplyOrderStatus(kt *kit.Kit, order *types.ApplyOrder, stage types.TicketStage,
 	status types.ApplyStatus) error {
 
-	filter := &mapstr.MapStr{
-		"suborder_id": order.SubOrderId,
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", order.SubOrderId))
+
+	update := &cvmapplyproto.ZiyanCvmApplySuborderUpdateReq{
+		Stage:  stage,
+		Status: status,
 	}
 
-	doc := &mapstr.MapStr{
-		"stage":     stage,
-		"status":    status,
-		"update_at": time.Now(),
-	}
-
-	if err := model.Operation().ApplyOrder().UpdateApplyOrder(context.Background(), filter, doc); err != nil {
+	if err := model.Operation().ApplyOrder().UpdateApplyOrder(kt, filter, update); err != nil {
 		logs.Errorf("failed to update apply order status, id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return err
 	}

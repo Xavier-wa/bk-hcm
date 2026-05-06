@@ -13,7 +13,6 @@ POST /api/v1/woa/cvm/findmany/apply/order
 | 参数名称         | 参数类型         | 必选 | 描述                                               |
 |--------------|--------------|----|--------------------------------------------------|
 | order_id	    | int array    | 否  | 资源申请单号，数量最大20                                    |
-| task_id      | string array | 否  | 生产任务ID，数量最大20                                    |
 | bk_username  | string array | 否  | 提单人，数量最大20                                       |
 | require_type | int array	   | 否	 | 需求类型。1: 常规项目; 2: 春节保障; 3: 机房裁撤; 6: 滚服项目; 7: 小额绿通 |
 | status       | int array	   | 否	 | 单据状态。-1: 初始状态, 0: 成功, 1: 执行中, 其他: 失败             |
@@ -24,18 +23,19 @@ POST /api/v1/woa/cvm/findmany/apply/order
 | page         | object	      | 是  | 分页信息                                             |
 
 #### page
-
-| 参数名称         | 参数类型 | 必选 | 描述                 |
-|--------------|------|----|--------------------|
-| start        | int  | 否  | 记录开始位置，start 起始值为0 |
-| limit        | int  | 是  | 每页限制条数，最大200       |
-| enable_count | bool | 是  | 本次请求是否为获取数量还是详情的标记 |
+| 参数名称  | 参数类型   | 必选 | 描述                                                                                                                                                  |
+|-------|--------|----|-----------------------------------------------------------------------------------------------------------------------------------------------------|
+| count | bool   | 否  | 是否返回总记录条数。 如果为true，查询结果返回总记录条数 count，但查询结果详情数据 details 为空数组，此时 start 和 limit 参数将无效，且必需设置为0。如果为false，则根据 start 和 limit 参数，返回查询结果详情数据，但总记录条数 count 为0 |
+| start | int    | 否  | 记录开始位置，start 起始值为0                                                                                                                                  |
+| limit | int    | 否  | 每页限制条数，最大500，不能为0                                                                                                                                   |
+| sort  | string | 否  | 排序字段，返回数据将按该字段进行排序                                                                                                                                  |
+| order | string | 否  | 排序顺序（枚举值：ASC、DESC）                                                                                                                                  |
 
 **注意：**
 
-- enable_count 如果此标记为true，表示此次请求是获取数量。此时其余字段必须为初始化值，start为0,limit为:0。
+- count 如果此标记为true，表示此次请求是获取数量。此时其余字段必须为初始化值，start为0,limit为:0。
 
-- 默认按create_at降序排序
+- 默认按created_at降序排序
 
 ### 调用示例
 
@@ -48,9 +48,6 @@ POST /api/v1/woa/cvm/findmany/apply/order
   ],
   "bk_username": [
     "xxx"
-  ],
-  "task_id": [
-    "YT000001"
   ],
   "require_type": [
     1
@@ -69,7 +66,7 @@ POST /api/v1/woa/cvm/findmany/apply/order
   "page": {
     "start": 0,
     "limit": 20,
-    "enable_count": false
+    "count": false
   }
 }
 ```
@@ -94,18 +91,18 @@ POST /api/v1/woa/cvm/findmany/apply/order
         "spec": {
           "device_type": "S3.6XLARGE64",
           "image": "Tencent Linux Release 1.2 (tkernel2)",
-          "network": "TENTHOUSAND",
+          "network_type": "TENTHOUSAND",
           "region": "ap-shanghai",
           "zone": "ap-shanghai-2",
           "system_disk": {
             "disk_type": "CLOUD_PREMIUM",
             "disk_size": 100,
-            "disk_num": 1,
+            "disk_num": 1
           },
           "data_disk": [{
             "disk_type": "CLOUD_PREMIUM",
             "disk_size": 100,
-            "disk_num": 1,
+            "disk_num": 1
           }]
         },
         "task_id": "YT000001",
@@ -146,23 +143,23 @@ POST /api/v1/woa/cvm/findmany/apply/order
 
 #### data.info
 
-| 参数名称         | 参数类型         | 描述                                   |
-|--------------|--------------|--------------------------------------|
-| order_id     | int          | 资源申请单号                               |
-| bk_username  | string       | 提单人                                  |
+| 参数名称       | 参数类型         | 描述                                   |
+|------------|--------------|--------------------------------------|
+| order_id   | int          | 资源申请单号                               |
+| bk_username | string       | 提单人                                  |
 | require_type | int	         | 需求类型。1: 常规项目; 2: 春节保障; 3: 机房裁撤       |
-| remark	      | string	      | 备注                                   |
-| spec	        | object	      | 资源需求明细                               |
-| task_id      | string       | 生产任务ID                               |
-| task_link	   | string       | 生产任务详情链接                             |
-| status	      | int          | 单据状态。-1: 初始状态, 0: 成功, 1: 执行中, 其他: 失败 |
-| message	     | string       | 生产记录状态信息                             |
-| total_num	   | int          | 资源需求总数                               |
-| success_num  | int          | 已交付的资源数量                             |
-| pending_num  | int          | 待匹配的资源数量                             |
+| remark	    | string	      | 备注                                   |
+| spec	      | object	      | 资源需求明细                               |
+| task_id    | string       | 生产任务ID                               |
+| task_link	 | string       | 生产任务详情链接                             |
+| status	    | int          | 单据状态。-1:默认 0:成功 1:执行中 2:失败 |
+| message	   | string       | 生产记录状态信息，从最新的生产记录中获取         |
+| total_num	 | int          | 资源需求总数                               |
+| success_num | int          | 已交付的资源数量                             |
+| pending_num | int          | 待匹配的资源数量                             |
 | success_list | string array | 成功生产资源的IP列表                          |
-| create_at	   | timestamp    | 步骤开始时间                               |
-| update_at	   | timestamp    | 步骤结束时间                               |
+| create_at	 | timestamp    | 步骤开始时间                               |
+| update_at	 | timestamp    | 步骤结束时间                               |
 
 #### spec for QCLOUDCVM
 

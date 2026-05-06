@@ -256,10 +256,11 @@ func (d *DeviceCapacityDao) ListWithDeviceInfo(kt *kit.Kit, opt *types.ListOptio
 
 	// Select fields from both tables
 	// dc: device_capacity table, dt: device_type table
-	sql := fmt.Sprintf(`SELECT dc.require_type, dc.region, dc.zone, dc.capacity, dc.device_type, dt.device_family,
-       dt.memory, dt.cpu_core, dt.core_type, dt.device_type_class FROM %s AS dc LEFT JOIN %s AS dt ON dc.device_type = 
-           dt.device_type AND dc.region = dt.region AND dc.zone = dt.zone %s %s`, table.DeviceCapacityTable,
-		table.DeviceTypeTable, whereExpr, pageExpr)
+	sql := fmt.Sprintf(`SELECT dc.require_type, dc.region, dc.zone, dc.capacity, dc.device_type, 
+       IFNULL(dt.device_family,'') AS device_family,IFNULL(dt.memory,0) AS memory, IFNULL(dt.cpu_core,0) AS cpu_core, 
+       IFNULL(dt.core_type,'') AS core_type, IFNULL(dt.device_type_class,'') AS device_type_class FROM %s AS dc 
+       LEFT JOIN %s AS dt ON dc.device_type = dt.device_type AND dc.region = dt.region AND dc.zone = dt.zone %s %s`,
+		table.DeviceCapacityTable, table.DeviceTypeTable, whereExpr, pageExpr)
 
 	details := make([]devicecapacitytype.CapacityWithDeviceInfo, 0)
 	if err = d.orm.Do().Select(kt.Ctx, &details, sql, whereValue); err != nil {

@@ -59,34 +59,44 @@ func (c *Controller) generatePenaltyBase(ctx context.Context) {
 	nextMonday := times.GetNextMondayOfWeek(now)
 	nextRunTime := time.Date(nextMonday.Year(), nextMonday.Month(), nextMonday.Day(),
 		0, 0, 0, 0, nextMonday.Location())
+	var (
+		kt                  *kit.Kit
+		days12After         time.Time
+		yearMonthWeek12After dtime.DemandYearMonthWeek
+		err                 error
+	)
 
 	// 判断上周的罚金基数是否已经生成，没有需要先补上周的
-	kt := core.NewBackendKit()
-	days12After := now.AddDate(0, 0, 12*7)
-	yearMonthWeek12After, err := c.demandTime.GetDemandYearMonthWeek(kt, days12After)
-	if err != nil {
-		logs.Errorf("%s: failed to get year month week, err: %v, demand_date: %s, rid: %s",
-			constant.DemandPenaltyBaseGenerateFailed, err, days12After.String(), kt.Rid)
-	}
-
-	exists, err := c.isPenaltyBaseExists(kt, yearMonthWeek12After.Year, yearMonthWeek12After.YearWeek)
-	if err != nil {
-		logs.Errorf("%s: failed to check penalty base exists, err: %v, year: %d, week: %d, rid: %s",
-			constant.DemandPenaltyBaseGenerateFailed, err, yearMonthWeek12After.Year, yearMonthWeek12After.YearWeek,
-			kt.Rid)
-	}
-
-	if err == nil && !exists {
-		// 补上周的罚金基数
-		thisMonday := times.GetMondayOfWeek(now)
-		ticketEnd := time.Date(thisMonday.Year(), thisMonday.Month(), thisMonday.Day(), 0, 0, 0, 0,
-			thisMonday.Location())
-
-		err := c.CreatePenaltyBaseFromTicket(kt, []int64{}, ticketEnd,
-			c.demandTime.GetDemandDateRangeInWeek(kt, days12After), yearMonthWeek12After)
+	if !c.sd.IsMaster() {
+		logs.V(5).Infof("current node is not master, skip initial generatePenaltyBase")
+	} else {
+		kt = core.NewBackendKit()
+		days12After = now.AddDate(0, 0, 12*7)
+		yearMonthWeek12After, err = c.demandTime.GetDemandYearMonthWeek(kt, days12After)
 		if err != nil {
-			logs.Errorf("%s: failed to create penalty base from ticket, err: %v, year_month_week: %+v, rid: %s",
-				constant.DemandPenaltyBaseGenerateFailed, err, yearMonthWeek12After, kt.Rid)
+			logs.Errorf("%s: failed to get year month week, err: %v, demand_date: %s, rid: %s",
+				constant.DemandPenaltyBaseGenerateFailed, err, days12After.String(), kt.Rid)
+		}
+
+		exists, err := c.isPenaltyBaseExists(kt, yearMonthWeek12After.Year, yearMonthWeek12After.YearWeek)
+		if err != nil {
+			logs.Errorf("%s: failed to check penalty base exists, err: %v, year: %d, week: %d, rid: %s",
+				constant.DemandPenaltyBaseGenerateFailed, err, yearMonthWeek12After.Year, yearMonthWeek12After.YearWeek,
+				kt.Rid)
+		}
+
+		if err == nil && !exists {
+			// 补上周的罚金基数
+			thisMonday := times.GetMondayOfWeek(now)
+			ticketEnd := time.Date(thisMonday.Year(), thisMonday.Month(), thisMonday.Day(), 0, 0, 0, 0,
+				thisMonday.Location())
+
+			err := c.CreatePenaltyBaseFromTicket(kt, []int64{}, ticketEnd,
+				c.demandTime.GetDemandDateRangeInWeek(kt, days12After), yearMonthWeek12After)
+			if err != nil {
+				logs.Errorf("%s: failed to create penalty base from ticket, err: %v, year_month_week: %+v, rid: %s",
+					constant.DemandPenaltyBaseGenerateFailed, err, yearMonthWeek12After, kt.Rid)
+			}
 		}
 	}
 
@@ -99,6 +109,12 @@ func (c *Controller) generatePenaltyBase(ctx context.Context) {
 
 		// 等待到下一个检查时间
 		time.Sleep(time.Until(nextRunTime))
+
+		if !c.sd.IsMaster() {
+			logs.V(5).Infof("current node is not master, skip generatePenaltyBase at: %v", nextRunTime)
+			nextRunTime = nextRunTime.AddDate(0, 0, 7)
+			continue
+		}
 
 		kt = core.NewBackendKit()
 		days12After = nextRunTime.AddDate(0, 0, 12*7)
@@ -133,13 +149,21 @@ func (c *Controller) calcAndReportPenaltyRatioToCRP(ctx context.Context, loc *ti
 	if now.After(nextRunTime) {
 		nextRunTime = nextRunTime.Add(time.Hour * 24)
 	}
+	var (
+		kt  *kit.Kit
+		err error
+	)
 
 	// 首次启动直接推送一次本月的罚金分摊比例
-	kt := core.NewBackendKit()
-	err := c.CalcPenaltyRatioAndPush(kt, now)
-	if err != nil {
-		logs.Errorf("%s: failed to calc and push penalty ratio to crp, err: %v, time: %s, rid: %s",
-			constant.DemandPenaltyRatioReportFailed, err, now.Format(constant.DateTimeLayout), kt.Rid)
+	if !c.sd.IsMaster() {
+		logs.V(5).Infof("current node is not master, skip initial calcAndReportPenaltyRatioToCRP")
+	} else {
+		kt = core.NewBackendKit()
+		err = c.CalcPenaltyRatioAndPush(kt, now)
+		if err != nil {
+			logs.Errorf("%s: failed to calc and push penalty ratio to crp, err: %v, time: %s, rid: %s",
+				constant.DemandPenaltyRatioReportFailed, err, now.Format(constant.DateTimeLayout), kt.Rid)
+		}
 	}
 
 	for {
@@ -152,6 +176,12 @@ func (c *Controller) calcAndReportPenaltyRatioToCRP(ctx context.Context, loc *ti
 		logs.Infof("push penalty ratio to crp, next run time: %v", nextRunTime)
 		// 等待到下一个检查时间
 		time.Sleep(time.Until(nextRunTime))
+
+		if !c.sd.IsMaster() {
+			logs.V(5).Infof("current node is not master, skip calcAndReportPenaltyRatioToCRP at: %v", nextRunTime)
+			nextRunTime = nextRunTime.Add(time.Hour * 24)
+			continue
+		}
 
 		// CRP每月1号凌晨出上个月的账单，且每次推送都会覆盖上次推送的内容
 		// 我们只需要在最后7天饱和式推送
@@ -194,6 +224,12 @@ func (c *Controller) pushExpireNotificationsRegular(ctx context.Context, loc *ti
 
 		// 等待到下一个检查时间
 		time.Sleep(time.Until(nextRunTime))
+
+		if !c.sd.IsMaster() {
+			logs.V(5).Infof("current node is not master, skip pushExpireNotifications at: %v", nextRunTime)
+			nextRunTime = nextRunTime.Add(time.Hour * 24)
+			continue
+		}
 
 		kt := core.NewBackendKit()
 		// 只有每个自然月或预测月的第一天，或剩余14天/7天/5/3/2/1天时需要推送

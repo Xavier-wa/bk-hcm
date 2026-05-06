@@ -13,27 +13,25 @@
 package record
 
 import (
-	"context"
 	"time"
 
 	"hcm/cmd/woa-server/model/task"
 	types "hcm/cmd/woa-server/types/task"
+	"hcm/pkg/api/core"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/criteria/constant"
-	"hcm/pkg/criteria/mapstr"
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
-	"hcm/pkg/tools/metadata"
+	cvt "hcm/pkg/tools/converter"
 )
 
 // CreateInitRecord create resource apply init record
-func CreateInitRecord(suborderId, ip string) error {
-	filter := map[string]interface{}{
-		"suborder_id": suborderId,
-		"ip":          ip,
-	}
-	cnt, err := model.Operation().InitRecord().CountInitRecord(context.Background(), filter)
+func CreateInitRecord(kt *kit.Kit, suborderId, ip string) error {
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", suborderId), tools.RuleEqual("ip", ip))
+	cnt, err := model.Operation().InitRecord().CountInitRecord(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to create init record, err: %v", err)
+		logs.Errorf("failed to count init record, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 	if cnt > 0 {
@@ -53,8 +51,8 @@ func CreateInitRecord(suborderId, ip string) error {
 		StartAt:    now,
 		EndAt:      now,
 	}
-	if err := model.Operation().InitRecord().CreateInitRecord(context.Background(), record); err != nil {
-		logs.Errorf("failed to create init record, err: %v", err)
+	if err = model.Operation().InitRecord().CreateInitRecord(kt, record); err != nil {
+		logs.Errorf("failed to create init record, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
@@ -62,63 +60,26 @@ func CreateInitRecord(suborderId, ip string) error {
 }
 
 // UpdateInitRecord update resource apply init record
-func UpdateInitRecord(suborderId, ip, taskId, taskUrl, message string, status types.InitStepStatus) error {
-	filter := mapstr.MapStr{
-		"suborder_id": suborderId,
-		"ip":          ip,
-	}
+func UpdateInitRecord(kt *kit.Kit, suborderId, ip, taskId, taskUrl, message string,
+	status types.InitStepStatus) error {
+
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", suborderId), tools.RuleEqual("ip", ip))
 
 	now := time.Now()
-	doc := mapstr.MapStr{
-		"status":    status,
-		"message":   message,
-		"update_at": now,
-		"end_at":    now,
+	update := &cvmapplyproto.ZiyanCvmApplyInitTaskUpdateReq{
+		Status:  cvt.ValToPtr(status),
+		Message: message,
+		EndAt:   now.Format(constant.DateTimeLayout),
 	}
 
 	if taskId != "" {
-		doc["task_id"] = taskId
-		doc["task_link"] = taskUrl
+		update.TaskID = taskId
+		update.TaskLink = taskUrl
 	}
 
-	if err := model.Operation().InitRecord().UpdateInitRecord(context.Background(), &filter, &doc); err != nil {
-		logs.Errorf("failed to update init record, err: %v", err)
-		return err
-	}
-
-	return nil
-}
-
-// CreateDiskCheckRecord create resource apply disk check record
-func CreateDiskCheckRecord(suborderId, ip string) error {
-	filter := map[string]interface{}{
-		"suborder_id": suborderId,
-		"ip":          ip,
-	}
-	cnt, err := model.Operation().DiskCheckRecord().CountDiskCheckRecord(context.Background(), filter)
-	if err != nil {
-		logs.Errorf("failed to create disk check record, err: %v", err)
-		return err
-	}
-	if cnt > 0 {
-		return nil
-	}
-
-	now := time.Now()
-	record := &types.DiskCheckRecord{
-		SubOrderId: suborderId,
-		Ip:         ip,
-		TaskId:     "",
-		TaskLink:   "",
-		Status:     types.DiskCheckStatusHandling,
-		Message:    "handling",
-		CreateAt:   now,
-		UpdateAt:   now,
-		StartAt:    now,
-		EndAt:      now,
-	}
-	if err := model.Operation().DiskCheckRecord().CreateDiskCheckRecord(context.Background(), record); err != nil {
-		logs.Errorf("failed to create disk check record, err: %v", err)
+	if err := model.Operation().InitRecord().UpdateInitRecord(kt, filter, update); err != nil {
+		logs.Errorf("failed to update init record, suborderId: %s, err: %v, status: %d, ip: %s, rid: %s",
+			suborderId, err, status, ip, kt.Rid)
 		return err
 	}
 
@@ -126,14 +87,11 @@ func CreateDiskCheckRecord(suborderId, ip string) error {
 }
 
 // CreateDeliverRecord create resource apply deliver record
-func CreateDeliverRecord(info *types.DeviceInfo) error {
-	filter := map[string]interface{}{
-		"suborder_id": info.SubOrderId,
-		"ip":          info.Ip,
-	}
-	cnt, err := model.Operation().DeliverRecord().CountDeliverRecord(context.Background(), filter)
+func CreateDeliverRecord(kt *kit.Kit, info *types.DeviceInfo) error {
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", info.SubOrderId), tools.RuleEqual("ip", info.Ip))
+	cnt, err := model.Operation().DeliverRecord().CountDeliverRecord(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to create deliver record, subOrderID: %s, err: %v", info.SubOrderId, err)
+		logs.Errorf("failed to count deliver record, subOrderID: %s, err: %v, rid: %s", info.SubOrderId, err, kt.Rid)
 		return err
 	}
 	if cnt > 0 {
@@ -157,8 +115,8 @@ func CreateDeliverRecord(info *types.DeviceInfo) error {
 		UpdateAt:         now,
 		StartAt:          now,
 	}
-	if err = model.Operation().DeliverRecord().CreateDeliverRecord(context.Background(), record); err != nil {
-		logs.Errorf("failed to create deliver record, subOrderID: %s, err: %v", info.SubOrderId, err)
+	if err = model.Operation().DeliverRecord().CreateDeliverRecord(kt, record); err != nil {
+		logs.Errorf("failed to create deliver record, subOrderID: %s, err: %v, rid: %s", info.SubOrderId, err, kt.Rid)
 		return err
 	}
 
@@ -166,22 +124,20 @@ func CreateDeliverRecord(info *types.DeviceInfo) error {
 }
 
 // UpdateDeliverRecord update resource apply deliver record
-func UpdateDeliverRecord(info *types.DeviceInfo, message string, status types.DeliverStepStatus) error {
-	filter := mapstr.MapStr{
-		"suborder_id": info.SubOrderId,
-		"ip":          info.Ip,
-	}
+func UpdateDeliverRecord(kt *kit.Kit, info *types.DeviceInfo, message string,
+	status types.DeliverStepStatus) error {
+
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", info.SubOrderId), tools.RuleEqual("ip", info.Ip))
 
 	now := time.Now()
-	doc := mapstr.MapStr{
-		"status":    status,
-		"message":   message,
-		"update_at": now,
-		"end_at":    now,
+	update := &cvmapplyproto.ZiyanCvmDeliverRecordUpdateReq{
+		Status:  cvt.ValToPtr(status),
+		Message: message,
+		EndAt:   now.Format(constant.DateTimeLayout),
 	}
 
-	if err := model.Operation().DeliverRecord().UpdateDeliverRecord(context.Background(), &filter, &doc); err != nil {
-		logs.Errorf("failed to update deliver record, err: %v", err)
+	if err := model.Operation().DeliverRecord().UpdateDeliverRecord(kt, filter, update); err != nil {
+		logs.Errorf("failed to update deliver record, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
@@ -189,16 +145,18 @@ func UpdateDeliverRecord(info *types.DeviceInfo, message string, status types.De
 }
 
 // GetDeliverRecord get resource apply deliver record
-func GetDeliverRecord(kt *kit.Kit, subOrderId string, ip string, assetId string) (*types.DeliverRecord, error) {
-	filter := mapstr.MapStr{
-		"suborder_id": subOrderId,
-		"ip":          ip,
-		"asset_id":    assetId,
-	}
+func GetDeliverRecord(kt *kit.Kit, subOrderId string, ip string, assetId string) (
+	*types.DeliverRecord, error) {
 
-	record, err := model.Operation().DeliverRecord().GetDeliverRecord(kt.Ctx, &filter)
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", subOrderId),
+		tools.RuleEqual("ip", ip),
+		tools.RuleEqual("asset_id", assetId),
+	)
+
+	record, err := model.Operation().DeliverRecord().GetDeliverRecord(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to get deliver record, ip: %s, err: %v, rid: %s", ip, err, kt.Rid)
+		logs.Errorf("failed to get deliver record, ip: %s, assetId: %s, err: %v, rid: %s", ip, assetId, err, kt.Rid)
 		return nil, err
 	}
 
@@ -208,17 +166,15 @@ func GetDeliverRecord(kt *kit.Kit, subOrderId string, ip string, assetId string)
 // GetInitRecords get init records
 func GetInitRecords(kt *kit.Kit, subOrderId string) ([]*types.InitRecord, error) {
 	records := make([]*types.InitRecord, 0)
-	startIndex := 0
-	filter := mapstr.MapStr{
-		"suborder_id": subOrderId,
-	}
+	startIndex := uint32(0)
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", subOrderId))
 	for {
-		page := metadata.BasePage{
+		page := &core.BasePage{
 			Start: startIndex,
 			Limit: constant.BatchOperationMaxLimit,
 		}
 
-		record, err := model.Operation().InitRecord().FindManyInitRecord(kt.Ctx, page, filter)
+		record, err := model.Operation().InitRecord().FindManyInitRecord(kt, filter, page)
 		if err != nil {
 			logs.Errorf("failed to get init record, err: %v, subOrderId: %s, rid: %s", err, subOrderId, kt.Rid)
 			return nil, err
@@ -234,13 +190,11 @@ func GetInitRecords(kt *kit.Kit, subOrderId string) ([]*types.InitRecord, error)
 }
 
 // GetInitRecord get init record by ip
-func GetInitRecord(kt *kit.Kit, subOrderId string, ip string) (*types.InitRecord, error) {
-	filter := mapstr.MapStr{
-		"suborder_id": subOrderId,
-		"ip":          ip,
-	}
+func GetInitRecord(kt *kit.Kit, subOrderId string, ip string) (
+	*types.InitRecord, error) {
 
-	record, err := model.Operation().InitRecord().GetInitRecord(kt.Ctx, &filter)
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", subOrderId), tools.RuleEqual("ip", ip))
+	record, err := model.Operation().InitRecord().GetInitRecord(kt, filter)
 	if err != nil {
 		logs.Errorf("failed to get init record, err: %v, rid: %s", err, kt.Rid)
 		return nil, err

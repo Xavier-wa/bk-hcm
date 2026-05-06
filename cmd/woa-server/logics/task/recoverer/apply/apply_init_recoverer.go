@@ -45,13 +45,13 @@ func (r *applyRecoverer) recoverInitStep(kt *kit.Kit, order *types.ApplyOrder) e
 	successCount, failedCount := 0, 0
 	for _, generateRecord := range generateRecords {
 		if generateRecord.Status != types.GenerateStatusSuccess {
-			logs.Warnf("generate record status is not success, can not init, subOrderId: %s, generateId: %d, rid: %s",
+			logs.Warnf("generate record status is not success, can not init, subOrderId: %s, generateId: %s, rid: %s",
 				order.SubOrderId, generateRecord.GenerateId, kt.Rid)
 			continue
 		}
 		if err = r.recoverInitOrder(kt, generateRecord, order); err != nil {
 			// 忽略某个生产单机器的初始化失败，继续执行其余机器初始化操作
-			logs.Errorf("failed to recover apply init order, err: %v, subOrderId: %s, generateId: %d, rid: %s", err,
+			logs.Errorf("failed to recover apply init order, err: %v, subOrderId: %s, generateId: %s, rid: %s", err,
 				order.SubOrderId, generateRecord.GenerateId, kt.Rid)
 			failedCount++
 			continue
@@ -84,7 +84,7 @@ func (r *applyRecoverer) recoverInitingRecord(kt *kit.Kit, subOrderId string, ip
 	}
 
 	if initRecord == nil {
-		err = r.schedulerIf.ProcessInitStep(device)
+		err = r.schedulerIf.ProcessInitStep(kt, device)
 		if err != nil {
 			logs.Errorf("failed to init device by ip: %s, subOrderId: %s, err: %v, rid: %s", ip, subOrderId, err,
 				kt.Rid)
@@ -102,7 +102,7 @@ func (r *applyRecoverer) recoverInitingRecord(kt *kit.Kit, subOrderId string, ip
 		}
 
 		if len(sopsTasks) == 0 {
-			err = r.schedulerIf.ProcessInitStep(device)
+			err = r.schedulerIf.ProcessInitStep(kt, device)
 			if err != nil {
 				logs.Errorf("failed to init device, subOrderId: %s, ip: %s, err: %v, rid: %s", subOrderId, ip, err,
 					kt.Rid)
@@ -120,7 +120,7 @@ func (r *applyRecoverer) recoverInitingRecord(kt *kit.Kit, subOrderId string, ip
 		return device, nil
 
 	case types.InitStatusHandling:
-		if err = r.schedulerIf.CheckSopsUpdate(bizId, device, initRecord.TaskLink, initRecord.TaskId); err != nil {
+		if err = r.schedulerIf.CheckSopsUpdate(kt, bizId, device, initRecord.TaskLink, initRecord.TaskId); err != nil {
 			logs.Errorf("failed to check sops update, subOrderId: %s, err: %v, rid: %s", subOrderId, err, kt.Rid)
 			return nil, err
 		}
@@ -169,7 +169,7 @@ func (r *applyRecoverer) getSopsResult(kt *kit.Kit, sopsTasks []*sopsapi.GetTask
 		}
 		taskId := strconv.FormatUint(sopsTask.ID, 10)
 		taskUrl := taskDetail.Data.TaskUrl
-		if err = r.schedulerIf.CheckSopsUpdate(bizId, device, taskUrl, taskId); err != nil {
+		if err = r.schedulerIf.CheckSopsUpdate(kt, bizId, device, taskUrl, taskId); err != nil {
 			logs.Errorf("failed to check sops update, subOrderId: %s, err: %v, rid: %s", device.SubOrderId, err, kt.Rid)
 			continue
 		}
@@ -196,7 +196,7 @@ func (r *applyRecoverer) recoverInitOrder(kt *kit.Kit, generateRecord *types.Gen
 	// 更新update_time，触发监听器
 	if len(initRecords) == 0 {
 		if err = r.updateGenerateRecord(kt, generateRecord.GenerateId, types.GenerateStatusSuccess); err != nil {
-			logs.Errorf("failed to update generate record, err: %v, generateId: %d, subOrderId: %s, rid: %s", err,
+			logs.Errorf("failed to update generate record, err: %v, generateId: %s, subOrderId: %s, rid: %s", err,
 				generateRecord.GenerateId, generateRecord.SubOrderId, kt.Rid)
 			return err
 		}
@@ -225,7 +225,7 @@ func (r *applyRecoverer) recoverInitOrder(kt *kit.Kit, generateRecord *types.Gen
 	wg.Wait()
 
 	// update init step
-	if err := record.UpdateInitStep(order.SubOrderId, order.TotalNum); err != nil {
+	if err = record.UpdateInitStep(kt, order.SubOrderId, order.TotalNum); err != nil {
 		logs.Errorf("failed to update init step, err: %v, subOrderId: %s, rid: %s", err, order.SubOrderId, kt.Rid)
 		return err
 	}
@@ -246,7 +246,7 @@ func (r *applyRecoverer) deliverDevices(kt *kit.Kit, order *types.ApplyOrder,
 
 	var err error
 	if order.EnableDiskCheck {
-		observeDevices, err = r.schedulerIf.RunDiskCheck(order, observeDevices)
+		observeDevices, err = r.schedulerIf.RunDiskCheck(kt, order, observeDevices)
 		if err != nil {
 			logs.Errorf("failed to run disk check task, err: %v, subOrderId: %s, rid: %s", err, order.SubOrderId,
 				kt.Rid)

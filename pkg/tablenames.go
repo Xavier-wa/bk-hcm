@@ -41,9 +41,6 @@ const (
 	// BKTableNameInitRecord the table name of device init record
 	BKTableNameInitRecord = "cr_InitRecord"
 
-	// BKTableNameDiskCheckRecord the table name of device disk check record
-	BKTableNameDiskCheckRecord = "cr_DiskCheckRecord"
-
 	// BKTableNameDeliverRecord the table name of device deliver record
 	BKTableNameDeliverRecord = "cr_DeliverRecord"
 

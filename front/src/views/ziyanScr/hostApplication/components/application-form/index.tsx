@@ -1,4 +1,4 @@
-import { defineComponent, onMounted, ref, watch, nextTick, computed, reactive, useTemplateRef } from 'vue';
+import { defineComponent, onMounted, ref, watch, nextTick, computed, useTemplateRef } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import './index.scss';
 import classes from './style.module.scss';
@@ -172,10 +172,6 @@ export default defineComponent({
     const IDCPMIndex = ref(-1);
     const QCLOUDCVMIndex = ref(-1);
     const resourceFormRef = ref();
-    const dropdownMenuShowState = reactive({
-      idc: false,
-      cvm: false,
-    });
     const { columns: CloudHostcolumns, generateColumnsSettings } = useColumns('CloudHost');
     let cloudHostSetting = generateColumnsSettings(CloudHostcolumns);
     const { columns: PhysicalMachinecolumns } = useColumns('PhysicalMachine');
@@ -231,24 +227,16 @@ export default defineComponent({
               克隆
             </Button>
             <Dropdown
-              trigger='manual'
-              isShow={IDCPMIndex.value === index && dropdownMenuShowState.idc}
+              trigger='click'
               popoverOptions={{
                 renderType: 'shown',
-                onAfterHidden: () => {
-                  IDCPMIndex.value = -1;
-                  dropdownMenuShowState.idc = false;
-                },
-                forceClickoutside: true,
+                clickContentAutoHide: true,
+                onAfterShow: () => (IDCPMIndex.value = index),
+                onAfterHidden: () => (IDCPMIndex.value = -1),
               }}>
               {{
                 default: () => (
-                  <div
-                    class={`more-action${IDCPMIndex.value === index ? ' current-operate-row' : ''}`}
-                    onClick={() => {
-                      IDCPMIndex.value = index;
-                      dropdownMenuShowState.idc = true;
-                    }}>
+                  <div class={`more-action${IDCPMIndex.value === index ? ' current-operate-row' : ''}`}>
                     <i class='hcm-icon bkhcm-icon-more-fill' />
                   </div>
                 ),
@@ -258,16 +246,10 @@ export default defineComponent({
                       key='retry'
                       onClick={() => {
                         modifylist(row, index, 'IDCPM');
-                        dropdownMenuShowState.idc = false;
                       }}>
                       修改
                     </DropdownItem>
-                    <DropdownItem
-                      key='stop'
-                      onClick={() => {
-                        deletelist(index, 'IDCPM');
-                        dropdownMenuShowState.idc = false;
-                      }}>
+                    <DropdownItem key='stop' onClick={() => deletelist(index, 'IDCPM')}>
                       删除
                     </DropdownItem>
                   </DropdownMenu>
@@ -289,24 +271,16 @@ export default defineComponent({
               克隆
             </Button>
             <Dropdown
-              trigger='manual'
-              isShow={QCLOUDCVMIndex.value === index && dropdownMenuShowState.cvm}
+              trigger='click'
               popoverOptions={{
                 renderType: 'shown',
-                onAfterHidden: () => {
-                  QCLOUDCVMIndex.value = -1;
-                  dropdownMenuShowState.cvm = false;
-                },
-                forceClickoutside: true,
+                clickContentAutoHide: true,
+                onAfterShow: () => (QCLOUDCVMIndex.value = index),
+                onAfterHidden: () => (QCLOUDCVMIndex.value = -1),
               }}>
               {{
                 default: () => (
-                  <div
-                    class={`more-action${QCLOUDCVMIndex.value === index ? ' current-operate-row' : ''}`}
-                    onClick={() => {
-                      QCLOUDCVMIndex.value = index;
-                      dropdownMenuShowState.cvm = true;
-                    }}>
+                  <div class={`more-action${QCLOUDCVMIndex.value === index ? ' current-operate-row' : ''}`}>
                     <i class='hcm-icon bkhcm-icon-more-fill' />
                   </div>
                 ),
@@ -316,7 +290,6 @@ export default defineComponent({
                       key='retry'
                       onClick={() => {
                         modifylist(row, index, 'QCLOUDCVM');
-                        dropdownMenuShowState.cvm = false;
                       }}>
                       修改
                     </DropdownItem>
@@ -324,7 +297,6 @@ export default defineComponent({
                       key='stop'
                       onClick={() => {
                         deletelist(index, 'QCLOUDCVM');
-                        dropdownMenuShowState.cvm = false;
                       }}>
                       删除
                     </DropdownItem>
@@ -516,6 +488,9 @@ export default defineComponent({
       if (spec.zones === null && spec.zone === 'cvm_separate_campus') {
         spec.zones = ['all'];
       }
+      if (!Array.isArray(spec.zones) || !spec.zones.length) {
+        spec.zones = spec.zone ? [spec.zone] : [];
+      }
       // 兼容旧单据数据
       if (!data_disk) {
         return disk_type ? { ...spec, data_disk: [{ disk_type, disk_size, disk_num: 1 }] } : { ...spec, data_disk: [] };
@@ -639,7 +614,7 @@ export default defineComponent({
         subnet: '', //  子网
         replicas: 1,
         anti_affinity_level: 'ANTI_NONE',
-        image_id: 'img-fjxtfi0n', // 镜像
+        image_id: '', // 镜像
         system_disk: { disk_type: '', disk_size: 0, disk_num: 1 },
         data_disk: [],
         network_type: 'TENTHOUSAND',
@@ -948,9 +923,10 @@ export default defineComponent({
         bk_biz_id: +computedBiz.value,
         specs: cloudTableData.value.map((item) => ({
           region: item.spec.region,
-          zones: item.spec.zones,
+          // eslint-disable-next-line no-nested-ternary
+          zones: Array.isArray(item.spec.zones) ? item.spec.zones : item.spec.zone ? [item.spec.zone] : [],
           device_type: item.spec.device_type,
-          replicas: item.spec.replicas,
+          replicas: Number(item.replicas ?? item.spec.replicas ?? 0),
         })),
       });
     };
@@ -1460,6 +1436,7 @@ export default defineComponent({
                       form-type='vertical'>
                       <bk-form-item label='主机类型' required property='resourceType'>
                         <bk-select
+                          filterable
                           class={'selection-box'}
                           v-model={resourceForm.value.resourceType}
                           onChange={onResourceTypeChange}
@@ -1677,14 +1654,17 @@ export default defineComponent({
                               <div class={'raidText'}> {pmForm.value.spec.raid_type || '-'}</div>
                             </bk-form-item>
                             <bk-form-item label='操作系统' required property='os_type'>
-                              <bk-select class={'commonCard-form-select'} v-model={pmForm.value.spec.os_type}>
+                              <bk-select
+                                class={'commonCard-form-select'}
+                                v-model={pmForm.value.spec.os_type}
+                                filterable>
                                 {pmForm.value.options.osTypes.map((osType) => (
                                   <bk-option key={osType} value={osType} label={osType}></bk-option>
                                 ))}
                               </bk-select>
                             </bk-form-item>
                             <bk-form-item label='运营商'>
-                              <bk-select class={'commonCard-form-select'} v-model={pmForm.value.spec.isp}>
+                              <bk-select class={'commonCard-form-select'} v-model={pmForm.value.spec.isp} filterable>
                                 <bk-option key='无' value='' label='无'></bk-option>
                                 {pmForm.value.options.isps.map((isp) => (
                                   <bk-option key={isp} value={isp} label={isp}></bk-option>

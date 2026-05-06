@@ -14,7 +14,6 @@
 package generator
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 
@@ -32,35 +31,34 @@ const (
 )
 
 // launchRecallHost launch recall pool host
-func (g *Generator) launchRecallHost(kt *kit.Kit, order *types.ApplyOrder, recall *types.MatchPoolSpec) (uint64,
+func (g *Generator) launchRecallHost(kt *kit.Kit, order *types.ApplyOrder, recall *types.MatchPoolSpec) (string,
 	error) {
 	// 1. init generate record
-	generateId, err := g.initGenerateRecord(kt.Ctx, order.ResourceType, order.SubOrderId, uint(recall.Replicas), false)
+	generateId, err := g.initGenerateRecord(kt, order.ResourceType, order.SubOrderId, uint(recall.Replicas), false)
 	if err != nil {
-		logs.Errorf("failed to init generate record, order id: %s, err: %v", order.SubOrderId,
-			err)
-		return 0, fmt.Errorf("failed to init generate record, order id: %s, err: %v", order.SubOrderId, err)
+		logs.Errorf("failed to init generate record, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
+		return "", fmt.Errorf("failed to init generate record, order id: %s, err: %v", order.SubOrderId, err)
 	}
 
 	// 2. create and check recall order
 	taskID, err := g.createAndCheckRecallOrder(kt, order, recall, generateId)
 	if err != nil {
-		logs.Errorf("failed to create and check recall order, order id: %s, err: %v", order.SubOrderId, err)
+		logs.Errorf("failed to create and check recall order, order id: %s, err: %v, rid: %s",
+			order.SubOrderId, err, kt.Rid)
 		return generateId, err
 	}
 
 	// 3. get pool recalled instances
 	hosts, err := g.listRecalledInstance(kt, taskID)
 	if err != nil {
-		logs.Errorf("failed to list recalled hosts, order id: %s, recall order id: %s, err: %v", order.SubOrderId,
-			taskID, err)
+		logs.Errorf("failed to list recalled hosts, order id: %s, recall order id: %s, err: %v, rid: %s",
+			order.SubOrderId, taskID, err, kt.Rid)
 
 		// update generate record status to Done
-		if errRecord := g.UpdateGenerateRecord(context.Background(), order.ResourceType, generateId,
-			types.GenerateStatusFailed, err.Error(),
-			"", nil); errRecord != nil {
-			logs.Errorf("failed to update generate record, order id: %s, recall order id: %s, err: %v",
-				order.SubOrderId, taskID, errRecord)
+		if errRecord := g.UpdateGenerateRecord(kt, order, generateId,
+			types.GenerateStatusFailed, err.Error(), "", nil); errRecord != nil {
+			logs.Errorf("failed to update generate record, order id: %s, recall order id: %s, err: %v, rid: %s",
+				order.SubOrderId, taskID, errRecord, kt.Rid)
 			return generateId, fmt.Errorf("failed to update generate record, order id: %s, recall order id: %d,"+
 				"err: %v", order.SubOrderId, taskID, errRecord)
 		}
@@ -84,17 +82,16 @@ func (g *Generator) launchRecallHost(kt *kit.Kit, order *types.ApplyOrder, recal
 	}
 
 	// 4. save recalled instances info
-	if err := g.createGeneratedDevices(kt, order, generateId, deviceList); err != nil {
-		logs.Errorf("failed to update generated device, order id: %s, err: %v", order.SubOrderId, err)
+	if err = g.createGeneratedDevices(kt, order, generateId, deviceList); err != nil {
+		logs.Errorf("failed to update generated device, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return generateId, fmt.Errorf("failed to update generated device, order id: %s, err: %v", order.SubOrderId, err)
 	}
 
 	// 5. update generate record status to success
-	if err := g.UpdateGenerateRecord(context.Background(), order.ResourceType, generateId, types.GenerateStatusSuccess,
-		"success", "",
-		successIps); err != nil {
-		logs.Errorf("failed to update generate record, order id: %s, recall order id: %d, err: %v", order.SubOrderId,
-			taskID, err)
+	if err = g.UpdateGenerateRecord(kt, order, generateId, types.GenerateStatusSuccess,
+		"success", "", successIps); err != nil {
+		logs.Errorf("failed to update generate record, order id: %s, recall order id: %d, err: %v, rid: %s",
+			order.SubOrderId, taskID, err, kt.Rid)
 		return generateId, fmt.Errorf("failed to update generate record, order id: %s, recall order id: %d, err: %v",
 			order.SubOrderId, taskID, err)
 	}
@@ -104,7 +101,7 @@ func (g *Generator) launchRecallHost(kt *kit.Kit, order *types.ApplyOrder, recal
 
 // createAndCheckRecallOrder create and check pool recall order
 func (g *Generator) createAndCheckRecallOrder(kt *kit.Kit, order *types.ApplyOrder, recall *types.MatchPoolSpec,
-	generateId uint64) (uint64, error) {
+	generateID string) (uint64, error) {
 
 	// 1. launch create recall order request
 	req := &pooltypes.CreateRecallOrderReq{
@@ -120,19 +117,21 @@ func (g *Generator) createAndCheckRecallOrder(kt *kit.Kit, order *types.ApplyOrd
 
 	recallOrderID, err := recallOrderResp.Int64("id")
 	if err != nil {
-		logs.Errorf("failed to create recall order parse int, recallOrderResp: %+v, err: %v", recallOrderResp, err)
+		logs.Errorf("failed to create recall order parse int, recallOrderResp: %+v, err: %v, rid: %s",
+			recallOrderResp, err, kt.Rid)
 		return 0, err
 	}
 
+	recallApplyOrder := &types.ApplyOrder{SubOrderId: order.SubOrderId, ResourceType: types.ResourceTypePool}
 	taskID := uint64(recallOrderID)
 	if err != nil {
-		logs.Errorf("failed to create recall order, order id: %s, err: %v", order.SubOrderId, err)
+		logs.Errorf("failed to create recall order, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 
 		// update generate record status to failed
-		if errRecord := g.UpdateGenerateRecord(context.Background(), types.ResourceTypePool, generateId,
-			types.GenerateStatusFailed,
-			err.Error(), "", nil); errRecord != nil {
-			logs.Errorf("failed to update generate record, order id: %s, err: %v", order.SubOrderId, errRecord)
+		if errRecord := g.UpdateGenerateRecord(kt, recallApplyOrder, generateID,
+			types.GenerateStatusFailed, err.Error(), "", nil); errRecord != nil {
+			logs.Errorf("failed to update generate record, order id: %s, err: %v, rid: %s",
+				order.SubOrderId, errRecord, kt.Rid)
 			return taskID, fmt.Errorf("failed to update generate record, order id: %s, err: %v", order.SubOrderId,
 				errRecord)
 		}
@@ -141,24 +140,22 @@ func (g *Generator) createAndCheckRecallOrder(kt *kit.Kit, order *types.ApplyOrd
 	}
 
 	// 2. update generate record status to query
-	if err := g.UpdateGenerateRecord(context.Background(), types.ResourceTypePool, generateId,
-		types.GenerateStatusHandling, "handling",
+	if err = g.UpdateGenerateRecord(kt, recallApplyOrder, generateID, types.GenerateStatusHandling, "handling",
 		strconv.Itoa(int(taskID)), nil); err != nil {
-		logs.Errorf("failed to update generate record, order id: %s, err: %v", order.SubOrderId, err)
+		logs.Errorf("failed to update generate record, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return taskID, fmt.Errorf("failed to update generate record, order id: %s, err: %v", order.SubOrderId, err)
 	}
 
 	// 3. check recall order result
 	if err = g.checkRecallOrder(taskID); err != nil {
-		logs.Errorf("failed to check recall order, order id: %s, recall order id: %s, err: %v", order.SubOrderId,
-			taskID, err)
+		logs.Errorf("failed to check recall order, order id: %s, recall order id: %s, err: %v, rid: %s",
+			order.SubOrderId, taskID, err, kt.Rid)
 
 		// update generate record status to Done
-		if errRecord := g.UpdateGenerateRecord(context.Background(), order.ResourceType, generateId,
-			types.GenerateStatusFailed, err.Error(),
-			"", nil); errRecord != nil {
-			logs.Errorf("failed to check recall order, order id: %s, task id: %s, err: %v", order.SubOrderId, taskID,
-				errRecord)
+		if errRecord := g.UpdateGenerateRecord(kt, order, generateID,
+			types.GenerateStatusFailed, err.Error(), "", nil); errRecord != nil {
+			logs.Errorf("failed to check recall order, order id: %s, task id: %s, err: %v, rid: %s",
+				order.SubOrderId, taskID, errRecord, kt.Rid)
 			return taskID, fmt.Errorf("failed to check recall order, order id: %s, recall order id: %d, err: %v",
 				order.SubOrderId, taskID, errRecord)
 		}

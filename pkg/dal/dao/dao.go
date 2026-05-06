@@ -59,6 +59,7 @@ import (
 	daosubaccount "hcm/pkg/dal/dao/cloud/sub-account"
 	daosync "hcm/pkg/dal/dao/cloud/sync"
 	"hcm/pkg/dal/dao/cloud/zone"
+	cvmapply "hcm/pkg/dal/dao/cvm-apply"
 	daoapplystat "hcm/pkg/dal/dao/cvm-apply-order-statistics-config"
 	devicecapacity "hcm/pkg/dal/dao/device-capacity"
 	"hcm/pkg/dal/dao/dissolve/host"
@@ -85,6 +86,7 @@ import (
 
 // Set defines all the DAO to be operated.
 type Set interface {
+	GetOrm() orm.Interface // 获取ORM实例（用于特殊场景，如数据迁移）
 	Audit() audit.Interface
 	Auth() auth.Auth
 	Account() cloud.Account
@@ -138,6 +140,7 @@ type Set interface {
 	RootAccountBillConfig() bill.RootAccountBillConfig
 	AccountBillExchangeRate() bill.AccountBillExchangeRate
 	AccountBillSyncRecord() bill.AccountBillSyncRecord
+	AccountBillRegionCityRel() bill.AccountBillRegionCityRel
 	AsyncFlow() daoasync.AsyncFlow
 	AsyncFlowTask() daoasync.AsyncFlowTask
 	UserCollection() daouser.Interface
@@ -203,6 +206,15 @@ type Set interface {
 	Tenant() tenant.Tenant
 	DeviceCapacity() devicecapacity.DeviceCapacity
 	PermissionPolicyLibrary() permissionpolicylibrary.PermissionPolicyLibrary
+
+	ZiyanCvmApplyOrder() cvmapply.ZiyanCvmApplyOrderInterface
+	ZiyanCvmApplySuborder() cvmapply.ZiyanCvmApplySuborderInterface
+	ZiyanCvmApplyStep() cvmapply.ZiyanCvmApplyStepInterface
+	ZiyanCvmGenerateRecord() cvmapply.ZiyanCvmGenerateRecordInterface
+	ZiyanCvmApplyInitTask() cvmapply.ZiyanCvmApplyInitTaskInterface
+	ZiyanCvmDeviceInfo() cvmapply.ZiyanCvmDeviceInfoInterface
+	ZiyanCvmDeliverRecord() cvmapply.ZiyanCvmDeliverRecordInterface
+	ZiyanCvmModifyRecord() cvmapply.ZiyanCvmModifyRecordInterface
 
 	AiagentSession() daoaiagent.AiagentSession
 
@@ -295,6 +307,11 @@ type set struct {
 	orm   orm.Interface
 	db    *sqlx.DB
 	audit audit.Interface
+}
+
+// GetOrm 获取ORM实例（用于特殊场景，如数据迁移）
+func (s *set) GetOrm() orm.Interface {
+	return s.orm
 }
 
 // EipCvmRel return EipCvmRel dao.
@@ -729,6 +746,14 @@ func (s *set) AccountBillExchangeRate() bill.AccountBillExchangeRate {
 // AccountBillSyncRecord return bill.AccountBillSyncRecord dao
 func (s *set) AccountBillSyncRecord() bill.AccountBillSyncRecord {
 	return &bill.AccountBillSyncRecordDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+	}
+}
+
+// AccountBillRegionCityRel returns account bill region city rel dao.
+func (s *set) AccountBillRegionCityRel() bill.AccountBillRegionCityRel {
+	return &bill.AccountBillRegionCityRelDao{
 		Orm:   s.orm,
 		IDGen: s.idGen,
 	}
@@ -1198,6 +1223,76 @@ func (s *set) PermissionPolicyLibrary() permissionpolicylibrary.PermissionPolicy
 // DeviceCapacity return device capacity dao.
 func (s *set) DeviceCapacity() devicecapacity.DeviceCapacity {
 	return devicecapacity.NewDeviceCapacityDao(s.orm, s.idGen, s.audit)
+}
+
+// ZiyanCvmApplyOrder return ziyan cvm apply order dao.
+func (s *set) ZiyanCvmApplyOrder() cvmapply.ZiyanCvmApplyOrderInterface {
+	return &cvmapply.ZiyanCvmApplyOrderDao{
+		Orm:   s.orm,
+		Audit: s.audit,
+	}
+}
+
+// ZiyanCvmApplySuborder return ziyan cvm apply suborder dao.
+func (s *set) ZiyanCvmApplySuborder() cvmapply.ZiyanCvmApplySuborderInterface {
+	return &cvmapply.ZiyanCvmApplySuborderDao{
+		Orm:   s.orm,
+		Audit: s.audit,
+	}
+}
+
+// ZiyanCvmApplyStep return ziyan cvm apply step dao.
+func (s *set) ZiyanCvmApplyStep() cvmapply.ZiyanCvmApplyStepInterface {
+	return &cvmapply.ZiyanCvmApplyStepDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+		Audit: s.audit,
+	}
+}
+
+// ZiyanCvmGenerateRecord return ziyan cvm generate record dao.
+func (s *set) ZiyanCvmGenerateRecord() cvmapply.ZiyanCvmGenerateRecordInterface {
+	return &cvmapply.ZiyanCvmGenerateRecordDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+		Audit: s.audit,
+	}
+}
+
+// ZiyanCvmApplyInitTask return ziyan cvm apply init task dao.
+func (s *set) ZiyanCvmApplyInitTask() cvmapply.ZiyanCvmApplyInitTaskInterface {
+	return &cvmapply.ZiyanCvmApplyInitTaskDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+		Audit: s.audit,
+	}
+}
+
+// ZiyanCvmDeviceInfo return ziyan cvm device info dao.
+func (s *set) ZiyanCvmDeviceInfo() cvmapply.ZiyanCvmDeviceInfoInterface {
+	return &cvmapply.ZiyanCvmDeviceInfoDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+		Audit: s.audit,
+	}
+}
+
+// ZiyanCvmDeliverRecord return ziyan cvm deliver record dao.
+func (s *set) ZiyanCvmDeliverRecord() cvmapply.ZiyanCvmDeliverRecordInterface {
+	return &cvmapply.ZiyanCvmDeliverRecordDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+		Audit: s.audit,
+	}
+}
+
+// ZiyanCvmModifyRecord return ziyan cvm modify record dao.
+func (s *set) ZiyanCvmModifyRecord() cvmapply.ZiyanCvmModifyRecordInterface {
+	return &cvmapply.ZiyanCvmModifyRecordDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+		Audit: s.audit,
+	}
 }
 
 // AiagentSession return aiagent session dao.

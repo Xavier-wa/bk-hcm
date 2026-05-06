@@ -310,13 +310,12 @@ export default defineComponent({
 
     const getDeliveredHostField = async (suborderId: string) => {
       const params = {
+        bk_biz_ids: [detail.value.bk_biz_id],
         filter: {
-          condition: 'AND',
-          rules: [
-            { field: 'suborder_id', operator: 'equal', value: suborderId },
-            { field: 'bk_biz_id', operator: 'in', value: [detail.value.bk_biz_id] },
-          ],
+          op: 'and',
+          rules: [{ field: 'suborder_id', op: 'eq', value: suborderId }],
         },
+        page: { start: 0, limit: 500, count: false },
       };
       const { data } = await http.post(
         `${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/${getBusinessApiPath()}task/findmany/apply/device`,
@@ -448,8 +447,8 @@ export default defineComponent({
                 { name: '单据 ID', prop: 'order_id' },
                 {
                   name: '创建时间',
-                  prop: 'create_at',
-                  render: () => timeFormatter(detail.value.create_at, 'YYYY-MM-DD'),
+                  prop: 'created_at',
+                  render: () => timeFormatter(detail.value.created_at, 'YYYY-MM-DD'),
                 },
                 { name: '提单人', prop: 'bk_username' },
                 {

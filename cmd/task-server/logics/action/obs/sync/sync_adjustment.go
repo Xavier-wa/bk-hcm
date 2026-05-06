@@ -181,10 +181,24 @@ func (act SyncAdjustmentAction) convertHuawei(kt *kit.Kit, adjItems []*bill.Adju
 		// -- convert --
 		// OBS 要求数据，决定汇率
 		var accountType = "HW国际区"
+		cityID := constant.OBSDefaultCityIDOverseas
 		if mainAccount.Site == enumor.MainAccountChinaSite {
 			accountType = "国内账单"
+			cityID = constant.OBSDefaultCityIDChina
 		}
 		fetchTime := time.Now()
+
+		// 调账金额(需要处理调增、调减)
+		adjCost, err := getAdjustmentCost(kt, adj, enumor.HuaWei)
+		if err != nil {
+			return err
+		}
+
+		// 调账默认为GPU
+		isGPU := true
+		if adj.ResClass == enumor.BillAdjustmentResClassCPU {
+			isGPU = false
+		}
 		obsItem := &tableobs.OBSBillItemHuawei{
 			SetIndex:      adjustmentSetIndex,
 			Vendor:        string(adj.Vendor),
@@ -200,10 +214,12 @@ func (act SyncAdjustmentAction) convertHuawei(kt *kit.Kit, adjItems []*bill.Adju
 			FetchTime:        fetchTime.Format(constant.DateTimeLayout),
 			TotalCount:       1,
 			Rate:             floatRate,
-			RealCost:         &types.Decimal{Decimal: adj.Cost.Mul(cvt.PtrToVal(exchangeRate))},
+			RealCost:         &types.Decimal{Decimal: adjCost.Mul(cvt.PtrToVal(exchangeRate))},
 
 			ProductName:  adj.Memo,
 			ResourceName: adj.Memo,
+			CityId:       cityID,
+			ResClassId:   enumor.GetOBSResClassID(adj.Vendor, isGPU),
 		}
 		obsItems[i] = obsItem
 	}
@@ -254,15 +270,23 @@ func (act SyncAdjustmentAction) convertAws(kt *kit.Kit, adjItems []*bill.Adjustm
 		// -- convert --
 		// OBS 要求数据格式 1 国内 2 国际
 		var regionCode = int32(2)
+		cityID := constant.OBSDefaultCityIDOverseas
 		if mainAccount.Site == enumor.MainAccountChinaSite {
 			regionCode = 1
+			cityID = constant.OBSDefaultCityIDChina
 		}
 
-		adjCost, err := adj.GetCost()
+		// 调账金额(需要处理调增、调减)
+		adjCost, err := getAdjustmentCost(kt, adj, enumor.Aws)
 		if err != nil {
-			return fmt.Errorf("get adjustment item cost failed, err: %+v", err)
+			return err
 		}
 
+		// 调账默认为GPU
+		isGPU := true
+		if adj.ResClass == enumor.BillAdjustmentResClassCPU {
+			isGPU = false
+		}
 		obsItem := &tableobs.OBSBillItemAws{
 			SetIndex:      adjustmentSetIndex,
 			Vendor:        string(adj.Vendor),
@@ -287,6 +311,8 @@ func (act SyncAdjustmentAction) convertAws(kt *kit.Kit, adjItems []*bill.Adjustm
 			LineItemCurrencyCode:        string(adj.Currency),
 			BillPayerAccountID:          rootInfo.CloudID,
 			LineItemLineItemDescription: adj.Memo,
+			CityId:                      cityID,
+			ResClassId:                  enumor.GetOBSResClassID(adj.Vendor, isGPU),
 		}
 		obsItems[i] = obsItem
 	}
@@ -330,8 +356,23 @@ func (act SyncAdjustmentAction) convertGcp(kt *kit.Kit, adjItems []*bill.Adjustm
 		floatRate, _ := exchangeRate.Float64()
 		fetchTime := time.Now()
 
+		// 调账金额(需要处理调增、调减)
+		adjCost, err := getAdjustmentCost(kt, adj, enumor.Gcp)
+		if err != nil {
+			return err
+		}
+
 		// -- convert --
 
+		cityID := constant.OBSDefaultCityIDOverseas
+		if mainAccount.Site == enumor.MainAccountChinaSite {
+			cityID = constant.OBSDefaultCityIDChina
+		}
+		// 调账默认为GPU
+		isGPU := true
+		if adj.ResClass == enumor.BillAdjustmentResClassCPU {
+			isGPU = false
+		}
 		obsItem := &tableobs.OBSBillItemGcp{
 			SetIndex:      adjustmentSetIndex,
 			Vendor:        string(adj.Vendor),
@@ -341,20 +382,22 @@ func (act SyncAdjustmentAction) convertGcp(kt *kit.Kit, adjItems []*bill.Adjustm
 			YearMonth:     int32(yearM),
 			Rate:          floatRate,
 
-			Cost:                   adj.Cost.InexactFloat64(),
+			Cost:                   adjCost.InexactFloat64(),
 			ProductId:              int32(mainAccount.OpProductID),
 			Currency:               string(adj.Currency),
 			CurrencyConversionRate: floatRate,
 			UsageAmount:            1,
 			UsageUnit:              "",
 			FetchTime:              fetchTime.Format(constant.DateTimeLayout),
-			RealCost:               adj.Cost.Mul(cvt.PtrToVal(exchangeRate)).InexactFloat64(),
+			RealCost:               adjCost.Mul(cvt.PtrToVal(exchangeRate)).InexactFloat64(),
 
 			ServiceId:          adjustmentProductCode,
 			ServiceDescription: adjustmentProductName,
 			ProjectId:          mainAccount.CloudID,
 
 			SkuDescription: adj.Memo,
+			CityId:         cityID,
+			ResClassId:     enumor.GetOBSResClassID(adj.Vendor, isGPU),
 		}
 		obsItems[i] = obsItem
 	}
@@ -396,6 +439,12 @@ func (act SyncAdjustmentAction) convertZenlayer(kt *kit.Kit, adjItems []*bill.Ad
 		yearM := adj.BillYear*100 + adj.BillMonth
 		floatRate, _ := exchangeRate.Float64()
 
+		// 调账金额(需要处理调增、调减)
+		adjCost, err := getAdjustmentCost(kt, adj, enumor.Zenlayer)
+		if err != nil {
+			return err
+		}
+
 		// -- convert --
 
 		obsItem := &tableobs.OBSBillItemZenlayer{
@@ -408,11 +457,11 @@ func (act SyncAdjustmentAction) convertZenlayer(kt *kit.Kit, adjItems []*bill.Ad
 			Rate:          floatRate,
 			ProductID:     int32(mainAccount.OpProductID),
 
-			Cost:       &types.Decimal{Decimal: adj.Cost},
+			Cost:       &types.Decimal{Decimal: adjCost},
 			Currency:   string(adj.Currency),
 			Type:       adjustmentProductCode,
 			PayContent: adjustmentProductName,
-			RealCost:   &types.Decimal{Decimal: adj.Cost.Mul(cvt.PtrToVal(exchangeRate))},
+			RealCost:   &types.Decimal{Decimal: adjCost.Mul(cvt.PtrToVal(exchangeRate))},
 		}
 		obsItems[i] = obsItem
 	}
@@ -617,4 +666,15 @@ func (act SyncAdjustmentAction) getCNYExchangeRate(kt *kit.Kit, fromCurrency enu
 	}
 	act.exchangeRateMap[fromCurrency] = rate
 	return rate, err
+}
+
+func getAdjustmentCost(kt *kit.Kit, adj *bill.AdjustmentItem, vendor enumor.Vendor) (decimal.Decimal, error) {
+	adjCost, err := adj.GetCost()
+	if err != nil {
+		logs.Errorf("adjustment cost resolved failed, vendor: %s, type: %s, err: %+v, raw_cost: %s, final_cost: %v, "+
+			"rid: %s", vendor, adj.Type, err, adj.Cost.String(), adjCost, kt.Rid)
+		return decimal.Zero, fmt.Errorf("get %s adjustment item cost failed, err: %+v", vendor, err)
+	}
+
+	return adjCost, nil
 }

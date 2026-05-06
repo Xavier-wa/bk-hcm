@@ -255,6 +255,8 @@ const (
 	AccountBillExchangeRateTable = "account_bill_exchange_rate"
 	// AccountBillSyncRecordTable 账单同步记录
 	AccountBillSyncRecordTable = "account_bill_sync_record"
+	// AccountBillRegionCityRelTable 账单地域-城市映射表
+	AccountBillRegionCityRelTable = "account_bill_region_city_rel"
 
 	// RecycleModuleInfo 裁撤模块表
 	RecycleModuleInfo = "recycle_module_info"
@@ -299,6 +301,23 @@ const (
 
 	// PermissionPolicyLibraryTable is permission_policy_library table's name.
 	PermissionPolicyLibraryTable Name = "permission_policy_library"
+
+	// ZiyanCvmApplyOrderTable 自研云CVM申请单主单表
+	ZiyanCvmApplyOrderTable = "ziyan_cvm_apply_order"
+	// ZiyanCvmApplySuborderTable 自研云CVM申请子单表
+	ZiyanCvmApplySuborderTable = "ziyan_cvm_apply_suborder"
+	// ZiyanCvmApplyStepTable 自研云CVM申请单步骤记录表
+	ZiyanCvmApplyStepTable = "ziyan_cvm_apply_step"
+	// ZiyanCvmGenerateRecordTable 自研云CVM申请单生产任务记录表
+	ZiyanCvmGenerateRecordTable = "ziyan_cvm_generate_record"
+	// ZiyanCvmApplyInitTaskTable 自研云CVM申请单初始化任务记录表
+	ZiyanCvmApplyInitTaskTable = "ziyan_cvm_apply_init_task"
+	// ZiyanCvmDeviceInfoTable 自研云CVM设备交付记录表
+	ZiyanCvmDeviceInfoTable = "ziyan_cvm_device_info"
+	// ZiyanCvmDeliverRecordTable 自研云CVM设备交付记录表
+	ZiyanCvmDeliverRecordTable = "ziyan_cvm_deliver_record"
+	// ZiyanCvmModifyRecordTable 自研云CVM变更记录表
+	ZiyanCvmModifyRecordTable = "ziyan_cvm_modify_record"
 
 	// AiagentSessionTable is aiagent_session table's name.
 	AiagentSessionTable Name = "aiagent_session"
@@ -400,6 +419,7 @@ var TableMap = map[Name]TableConfig{
 	RootAccountBillConfigTable:      {EnableTenant: true},
 	AccountBillExchangeRateTable:    {EnableTenant: true},
 	AccountBillSyncRecordTable:      {EnableTenant: true},
+	AccountBillRegionCityRelTable:   {},
 	LoadBalancerTable:               {EnableTenant: true},
 	SecurityGroupCommonRelTable:     {},
 	LoadBalancerListenerTable:       {},
@@ -462,7 +482,16 @@ var TableMap = map[Name]TableConfig{
 	ResUsageBizRelTable: {},
 
 	PermissionPolicyLibraryTable: {EnableTenant: true},
-	DeviceCapacityTable: {},
+	DeviceCapacityTable:          {},
+
+	ZiyanCvmApplyOrderTable:     {},
+	ZiyanCvmApplySuborderTable:  {},
+	ZiyanCvmApplyStepTable:      {},
+	ZiyanCvmGenerateRecordTable: {},
+	ZiyanCvmApplyInitTaskTable:  {},
+	ZiyanCvmDeviceInfoTable:     {},
+	ZiyanCvmDeliverRecordTable:  {},
+	ZiyanCvmModifyRecordTable:   {},
 
 	AiagentSessionTable: {},
 }

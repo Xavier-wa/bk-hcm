@@ -53,16 +53,37 @@ export default defineComponent({
         {
           message: '请正确填写IPv4 CIDR',
           validator: (value: any) => {
-            const [, , cidr_host1, cidr_host2, cidr_mask] = value.split(/[./]/);
+            const cidr = Array.isArray(value) ? value[0] : value;
+            if (typeof cidr !== 'string') return false;
+
+            const matchResult = cidr.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)\/(\d+)$/);
+            if (!matchResult) return false;
+
+            const octet0 = Number(matchResult[1]);
+            const octet1 = Number(matchResult[2]);
+            const octet2 = Number(matchResult[3]);
+            const octet3 = Number(matchResult[4]);
+            const cidrMask = Number(matchResult[5]);
+            const minMask = Number(subIpv4cidr.value[2]);
+            const parentOctet0 = Number(subIpv4cidr.value[0]);
+            const parentOctet1 = Number(subIpv4cidr.value[1]);
+
             if (
-              isNaN(cidr_host1) ||
-              isNaN(cidr_host2) ||
-              cidr_host1 < 0 ||
-              cidr_host2 < 0 ||
-              cidr_mask < subIpv4cidr.value[2] ||
-              cidr_mask > 31
+              [octet0, octet1, octet2, octet3, cidrMask, minMask, parentOctet0, parentOctet1].some((n) =>
+                Number.isNaN(n),
+              )
             )
               return false;
+            if (octet0 !== parentOctet0 || octet1 !== parentOctet1) return false;
+            if ([octet0, octet1, octet2, octet3].some((n) => n < 0 || n > 255)) return false;
+            if (cidrMask < minMask || cidrMask > 31) return false;
+
+            // 网段地址校验：主机位必须全为0，例如 /13 不能填写 172.16.1.1/13。
+            const ipInt =
+              (((octet0 << 24) >>> 0) | ((octet1 << 16) >>> 0) | ((octet2 << 8) >>> 0) | (octet3 >>> 0)) >>> 0;
+            const hostBits = 32 - cidrMask;
+            const hostMask = hostBits === 0 ? 0 : ((1 << hostBits) - 1) >>> 0;
+            if ((ipInt & hostMask) !== 0) return false;
             return true;
           },
         },
@@ -228,7 +249,11 @@ export default defineComponent({
                   <Input class={'cidr-selector'} placeholder='16' v-model={cidr_host1.value} />.
                   <Input class={'cidr-selector'} placeholder='16' v-model={cidr_host2.value} />
                   <p>/</p>
-                  <Select class={'cidr-selector'} placeholder={`${subIpv4cidr.value[2]}-31`} v-model={cidr_mask.value}>
+                  <Select
+                    class={'cidr-selector'}
+                    placeholder={`${subIpv4cidr.value[2]}-31`}
+                    v-model={cidr_mask.value}
+                    filterable>
                     {new Array(31 - subIpv4cidr.value[2] + 1)
                       .fill(0)
                       .map((_, idx) => idx + +subIpv4cidr.value[2])

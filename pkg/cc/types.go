@@ -42,7 +42,6 @@ import (
 type Recover struct {
 	EnableApplyRecover   bool `yaml:"enableApplyRecover"`   // 开启申请订单恢复服务
 	EnableRecycleRecover bool `yaml:"enableRecycleRecover"` // 开启回收订单恢复服务
-	EnableCvmProdRecover bool `yaml:"enableCvmProdRecover"` // 开启cvm生产恢复服务
 }
 
 // Service defines Setting related runtime.

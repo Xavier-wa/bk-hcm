@@ -64,6 +64,12 @@ func (c *Controller) runConfirmNotice(ctx context.Context, loc *time.Location) {
 		// 等待到下一个检查时间
 		time.Sleep(time.Until(nextRunTime))
 
+		if !c.sd.IsMaster() {
+			logs.V(5).Infof("current node is not master, skip push confirm notice at: %v", nextRunTime)
+			nextRunTime = nextRunTime.Add(time.Hour * 24)
+			continue
+		}
+
 		kt := core.NewBackendKit()
 		// 判断今天是否为通知日（周一、周三、周五）
 		if !isNoticeDay(nextRunTime) {

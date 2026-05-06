@@ -272,7 +272,7 @@ func (r *applyRecoverer) recoverOrders(kt *kit.Kit, order *types.ApplyOrder) err
 	// 特殊处理 GracefulTerminate 状态
 	// 由于 GracefulTerminate 可能出现前序状态均已完毕，无法触发单据更新逻辑，于此处进行单据状态更新
 	if order.Status == types.ApplyStatusGracefulTerminate && order.Stage == types.TicketStageRunning {
-		if err = r.schedulerIf.GetMatcher().UpdateApplyOrderStatus(order); err != nil {
+		if err = r.schedulerIf.GetMatcher().UpdateApplyOrderStatus(kt, order); err != nil {
 			logs.Errorf("failed to update apply order status, subOrderId: %s, err: %v, rid: %s",
 				order.SubOrderId, err, kt.Rid)
 			return err

@@ -53,6 +53,15 @@ func (l *logics) pushReturnNotificationsPeriodically(loc *time.Location) {
 		// 等待到下一个时间
 		time.Sleep(time.Until(nextRunTime))
 
+		// 计算下一个时间（必须在 Master 检查之前更新，避免非 Master 节点重复等待同一时间点）
+		nextRunTime = nextRunTime.Add(7 * time.Hour * 24)
+
+		// 只有 master 节点才执行
+		if !l.sd.IsMaster() {
+			logs.V(5).Infof("current node is not master, skip pushReturnNotifications at: %v", time.Now())
+			continue
+		}
+
 		kt := core.NewBackendKit()
 		start := time.Now()
 		if err := l.PushReturnNotifications(kt, []int64{}, []string{}); err != nil {
@@ -63,9 +72,6 @@ func (l *logics) pushReturnNotificationsPeriodically(loc *time.Location) {
 			logs.Infof("push rolling server return notice success, start time: %v, end time: %v, cost: %v, rid: %s",
 				start, end, end.Sub(start), kt.Rid)
 		}
-
-		// 计算下一个时间
-		nextRunTime = nextRunTime.Add(7 * time.Hour * 24)
 	}
 }
 

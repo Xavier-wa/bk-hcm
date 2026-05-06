@@ -14,65 +14,215 @@
 package model
 
 import (
-	"context"
+	"fmt"
 
-	"hcm/cmd/woa-server/storage/driver/mongodb"
 	types "hcm/cmd/woa-server/types/task"
-	"hcm/pkg"
-	"hcm/pkg/criteria/mapstr"
+	"hcm/pkg/api/core"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	"hcm/pkg/client"
+	"hcm/pkg/criteria/constant"
+	cvmapplytable "hcm/pkg/dal/table/cvm-apply"
+	"hcm/pkg/kit"
+	"hcm/pkg/logs"
+	"hcm/pkg/runtime/filter"
+	cvt "hcm/pkg/tools/converter"
+	"hcm/pkg/tools/times"
 )
 
 type applyStep struct {
-}
-
-// NextSequence returns next apply order step sequence id from db
-func (a *applyStep) NextSequence(ctx context.Context) (uint64, error) {
-	return mongodb.Client().NextSequence(ctx, pkg.BKTableNameApplyStep)
+	apiClientSet *client.ClientSet
 }
 
 // CreateApplyStep creates apply order step info in db
-func (a *applyStep) CreateApplyStep(ctx context.Context, inst *types.ApplyStep) error {
-	return mongodb.Client().Table(pkg.BKTableNameApplyStep).Insert(ctx, inst)
+func (a *applyStep) CreateApplyStep(kt *kit.Kit, inst *types.ApplyStep) error {
+	if a.apiClientSet == nil {
+		return fmt.Errorf("data service client not initialized")
+	}
+
+	req := &cvmapplyproto.BatchCreateZiyanCvmApplyStepReq{
+		ApplySteps: []cvmapplyproto.ZiyanCvmApplyStepCreateReq{
+			{
+				StepID:     inst.StepId,
+				SuborderID: inst.SubOrderId,
+				StepName:   inst.StepName,
+				Status:     inst.Status,
+				Message:    inst.Message,
+				TotalNum:   inst.TotalNum,
+				SuccessNum: inst.SuccessNum,
+				FailedNum:  inst.FailedNum,
+				RunningNum: inst.RunningNum,
+				StartAt:    inst.StartAt.Format(constant.DateTimeLayout),
+				EndAt:      inst.EndAt.Format(constant.DateTimeLayout),
+			},
+		},
+	}
+
+	_, err := a.apiClientSet.DataService().TCloudZiyan.ZiyanCvmApplyStep.BatchCreate(kt.Ctx, kt.Header(), req)
+	if err != nil {
+		logs.Errorf("create apply step failed, err: %v, rid: %s", err, kt.Rid)
+		return err
+	}
+
+	return nil
 }
 
 // GetApplyStep gets apply order step info by filter from db
-func (a *applyStep) GetApplyStep(ctx context.Context, filter *mapstr.MapStr) (*types.ApplyStep, error) {
-	inst := new(types.ApplyStep)
+func (a *applyStep) GetApplyStep(kt *kit.Kit, filterExpr *filter.Expression) (
+	*types.ApplyStep, error) {
 
-	if err := mongodb.Client().Table(pkg.BKTableNameApplyStep).Find(filter).One(ctx, inst); err != nil {
+	if a.apiClientSet == nil {
+		return nil, fmt.Errorf("data service client not initialized")
+	}
+
+	req := &cvmapplyproto.ZiyanCvmApplyStepListReq{
+		Filter: filterExpr,
+		Page:   &core.BasePage{Limit: 1},
+	}
+
+	resp, err := a.apiClientSet.DataService().TCloudZiyan.ZiyanCvmApplyStep.List(kt.Ctx, kt.Header(), req)
+	if err != nil {
 		return nil, err
 	}
 
-	return inst, nil
+	if len(resp.Details) == 0 {
+		return nil, fmt.Errorf("apply step not found")
+	}
+
+	return convertMySQLToApplyStep(resp.Details[0])
 }
 
 // CountApplyStep gets apply step count by filter from db
-func (a *applyStep) CountApplyStep(ctx context.Context, filter map[string]interface{}) (uint64, error) {
-	total, err := mongodb.Client().Table(pkg.BKTableNameApplyStep).Find(filter).Count(ctx)
+func (a *applyStep) CountApplyStep(kt *kit.Kit, filterExpr *filter.Expression) (
+	uint64, error) {
+
+	if a.apiClientSet == nil {
+		return 0, fmt.Errorf("data service client not initialized")
+	}
+
+	req := &cvmapplyproto.ZiyanCvmApplyStepListReq{
+		Filter: filterExpr,
+		Page:   core.NewCountPage(),
+	}
+
+	resp, err := a.apiClientSet.DataService().TCloudZiyan.ZiyanCvmApplyStep.List(kt.Ctx, kt.Header(), req)
 	if err != nil {
 		return 0, err
 	}
 
-	return total, nil
+	return resp.Count, nil
 }
 
 // FindManyApplyStep gets apply order step info list by filter from db
-func (a *applyStep) FindManyApplyStep(ctx context.Context, filter *mapstr.MapStr) ([]*types.ApplyStep, error) {
-	insts := make([]*types.ApplyStep, 0)
+func (a *applyStep) FindManyApplyStep(kt *kit.Kit, filterExpr *filter.Expression) (
+	[]*types.ApplyStep, error) {
 
-	if err := mongodb.Client().Table(pkg.BKTableNameApplyStep).Find(filter).All(ctx, &insts); err != nil {
-		return nil, err
+	if a.apiClientSet == nil {
+		return nil, fmt.Errorf("data service client not initialized")
+	}
+
+	req := &cvmapplyproto.ZiyanCvmApplyStepListReq{
+		Filter: filterExpr,
+		Page:   core.NewDefaultBasePage(),
+	}
+
+	insts := make([]*types.ApplyStep, 0)
+	for {
+		resp, err := a.apiClientSet.DataService().TCloudZiyan.ZiyanCvmApplyStep.List(kt.Ctx, kt.Header(), req)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, mysqlRecord := range resp.Details {
+			step, err := convertMySQLToApplyStep(mysqlRecord)
+			if err != nil {
+				return nil, err
+			}
+			insts = append(insts, step)
+		}
+
+		if len(resp.Details) < int(req.Page.Limit) {
+			break
+		}
+		req.Page.Start += uint32(req.Page.Limit)
 	}
 
 	return insts, nil
 }
 
 // UpdateApplyStep updates apply order step info by filter and doc in db
-func (a *applyStep) UpdateApplyStep(ctx context.Context, filter *mapstr.MapStr, doc *mapstr.MapStr) error {
-	return mongodb.Client().Table(pkg.BKTableNameApplyStep).Update(ctx, filter, doc)
+func (a *applyStep) UpdateApplyStep(kt *kit.Kit, filterExpr *filter.Expression,
+	updateData *cvmapplyproto.ZiyanCvmApplyStepUpdateReq) error {
+
+	if a.apiClientSet == nil {
+		return fmt.Errorf("data service client not initialized")
+	}
+
+	// First, get the records to update
+	listReq := &cvmapplyproto.ZiyanCvmApplyStepListReq{
+		Filter: filterExpr,
+		Page:   core.NewDefaultBasePage(),
+	}
+
+	listResp, err := a.apiClientSet.DataService().TCloudZiyan.ZiyanCvmApplyStep.List(kt.Ctx, kt.Header(), listReq)
+	if err != nil {
+		return err
+	}
+
+	if len(listResp.Details) == 0 {
+		return nil
+	}
+
+	// Batch update
+	updateReqs := make([]cvmapplyproto.ZiyanCvmApplyStepUpdateReq, 0, len(listResp.Details))
+	for _, record := range listResp.Details {
+		updateReq := *updateData
+		updateReq.ID = record.ID
+		updateReqs = append(updateReqs, updateReq)
+	}
+
+	batchReq := &cvmapplyproto.BatchUpdateZiyanCvmApplyStepReq{
+		ApplySteps: updateReqs,
+	}
+
+	return a.apiClientSet.DataService().TCloudZiyan.ZiyanCvmApplyStep.BatchUpdate(kt.Ctx, kt.Header(), batchReq)
 }
 
-// DeleteApplyStep deletes apply order step info from db
-func (a *applyStep) DeleteApplyStep() {
-	// TODO
+// convertMySQLToApplyStep converts MySQL record to types.ApplyStep
+func convertMySQLToApplyStep(mysqlRecord *cvmapplytable.ZiyanCvmApplyStep) (*types.ApplyStep, error) {
+	startAt, err := times.ParseDateTime(constant.TimeStdFormat, mysqlRecord.StartAt)
+	if err != nil {
+		logs.Errorf("parse start at failed, err: %v", err)
+		return nil, err
+	}
+
+	endAt, err := times.ParseDateTime(constant.TimeStdFormat, mysqlRecord.EndAt)
+	if err != nil {
+		logs.Errorf("parse end at failed, err: %v", err)
+		return nil, err
+	}
+
+	createdAt, err := times.ParseTypesTime(mysqlRecord.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse created_at failed: %w", err)
+	}
+	updatedAt, err := times.ParseTypesTime(mysqlRecord.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse updated_at failed: %w", err)
+	}
+
+	return &types.ApplyStep{
+		StepId:     mysqlRecord.StepID,
+		SubOrderId: mysqlRecord.SuborderID,
+		StepName:   mysqlRecord.StepName,
+		Status:     cvt.PtrToVal(mysqlRecord.Status),
+		Message:    mysqlRecord.Message,
+		TotalNum:   cvt.PtrToVal(mysqlRecord.TotalNum),
+		SuccessNum: cvt.PtrToVal(mysqlRecord.SuccessNum),
+		FailedNum:  cvt.PtrToVal(mysqlRecord.FailedNum),
+		RunningNum: cvt.PtrToVal(mysqlRecord.RunningNum),
+		CreateAt:   createdAt,
+		UpdateAt:   updatedAt,
+		StartAt:    startAt,
+		EndAt:      endAt,
+	}, nil
 }

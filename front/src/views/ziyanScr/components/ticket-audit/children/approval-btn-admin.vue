@@ -11,8 +11,9 @@ interface IProps {
   confirmHandler: (formModel: IFormModel) => Promise<any>;
 }
 interface IFormModel {
-  approval: boolean;
+  approval: boolean | null;
   use_transfer_pool: boolean;
+  operate_info: string;
 }
 
 const props = withDefaults(defineProps<IProps>(), {
@@ -30,7 +31,19 @@ const ticketListData = inject<Ref<SubTicketItem>>('ticketListData');
 
 const isShow = ref(false);
 const isConfirmLoading = ref(false);
-const { formModel, resetForm } = useFormModel<IFormModel>({ approval: true, use_transfer_pool: false });
+const { formModel, resetForm } = useFormModel<IFormModel>({
+  approval: null,
+  use_transfer_pool: false,
+  operate_info: '',
+});
+
+// 确定按钮是否可点击：必须选择同意或拒绝
+const isConfirmDisabled = computed(() => formModel.approval === null);
+
+// 切换审批意见时重置 use_transfer_pool
+const handleApprovalChange = () => {
+  formModel.use_transfer_pool = false;
+};
 
 const handleShown = () => {
   emit('shown');
@@ -42,7 +55,12 @@ const handleHidden = () => {
 const handleConfirm = async () => {
   isConfirmLoading.value = true;
   try {
-    await props.confirmHandler(formModel);
+    // 传递普通对象副本，避免 resetForm 后影响已传递的数据
+    await props.confirmHandler({
+      approval: formModel.approval as boolean, // 此时一定已选择
+      use_transfer_pool: formModel.use_transfer_pool,
+      operate_info: formModel.operate_info,
+    });
     isShow.value = false;
     resetForm();
   } catch (error) {
@@ -112,17 +130,28 @@ onMounted(() => {
 
     <bk-form form-type="vertical" :model="formModel">
       <bk-form-item :label="t('审批意见')" property="approval" required>
-        <bk-radio v-model="formModel.approval" :label="true">{{ t('同意') }}</bk-radio>
-        <bk-radio v-model="formModel.approval" :label="false">{{ t('拒绝') }}</bk-radio>
+        <bk-radio-group v-model="formModel.approval" @change="handleApprovalChange">
+          <bk-radio :label="true">{{ t('同意') }}</bk-radio>
+          <bk-radio :label="false">{{ t('拒绝') }}</bk-radio>
+        </bk-radio-group>
+      </bk-form-item>
+      <!-- 使用中转池额度：只在选择"同意"时显示 -->
+      <bk-form-item v-if="formModel.approval === true" property="use_transfer_pool">
+        <bk-checkbox v-model="formModel.use_transfer_pool">{{ t('使用中转池额度') }}</bk-checkbox>
+      </bk-form-item>
+      <bk-form-item :label="t('审批理由')" property="operate_info">
+        <bk-input
+          v-model="formModel.operate_info"
+          type="textarea"
+          :placeholder="t('未输入')"
+          :maxlength="100"
+          :rows="3"
+          :resize="false"
+        />
       </bk-form-item>
     </bk-form>
-
-    <p class="mt-28">
-      <bk-checkbox v-model="formModel.use_transfer_pool">使用中转池额度</bk-checkbox>
-    </p>
-
     <template #footer>
-      <bk-button theme="primary" :loading="isConfirmLoading" @click="handleConfirm">
+      <bk-button theme="primary" :loading="isConfirmLoading" :disabled="isConfirmDisabled" @click="handleConfirm">
         {{ t('确定') }}
       </bk-button>
       <bk-button @click="isShow = false">
@@ -147,6 +176,11 @@ onMounted(() => {
   .bk-button {
     min-width: 88px;
   }
+}
+
+// 审批表单间距调整
+:deep(.bk-form-item) {
+  margin-bottom: 12px;
 }
 
 .info {

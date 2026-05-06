@@ -89,6 +89,33 @@ type AwsSavingsPlansCost struct {
 // AwsSavingsPlansCostListResult ...
 type AwsSavingsPlansCostListResult = apicore.ListResultT[AwsSavingsPlansCost]
 
+// AwsRootSpCoveredUsageByTypeOpt defines options for querying SP covered usage grouped by product type.
+type AwsRootSpCoveredUsageByTypeOpt struct {
+	PayerCloudID string `json:"payer_cloud_id" validate:"required"`
+	SpArnPrefix  string `json:"sp_arn_prefix" validate:"omitempty"`
+	Year         uint   `json:"year" validate:"required"`
+	Month        uint   `json:"month" validate:"required,min=1,max=12"`
+	StartDay     uint   `json:"start_day" validate:"required,min=1,max=31"`
+	EndDay       uint   `json:"end_day" validate:"required,min=1,max=31"`
+}
+
+// Validate AwsRootSpCoveredUsageByTypeOpt.
+func (opt AwsRootSpCoveredUsageByTypeOpt) Validate() error {
+	if strings.ContainsAny(opt.SpArnPrefix, "% ") {
+		return errf.New(errf.InvalidParameter, "sp_arn_prefix can not contain % or space")
+	}
+	return validator.Validate.Struct(opt)
+}
+
+// AwsSpCoveredUsageByType defines a single SP covered usage record grouped by product type.
+type AwsSpCoveredUsageByType struct {
+	LineItemProductCode  string           `json:"line_item_product_code"`
+	ProductInstanceType  string           `json:"product_instance_type"`
+	ProductProductName   string           `json:"product_product_name"`
+	LineItemCurrencyCode string           `json:"line_item_currency_code"`
+	SpNetCost            *decimal.Decimal `json:"sp_net_cost"`
+}
+
 // -------------------------- List --------------------------
 
 // AwsBillListResult defines aws bill list result.

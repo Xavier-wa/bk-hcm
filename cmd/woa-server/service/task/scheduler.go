@@ -14,10 +14,8 @@
 package task
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -33,18 +31,16 @@ import (
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
-	"hcm/pkg/criteria/mapstr"
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/iam/meta"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
+	"hcm/pkg/runtime/filter"
 	"hcm/pkg/thirdparty/api-gateway/itsm"
 	"hcm/pkg/thirdparty/cvmapi"
 	cvt "hcm/pkg/tools/converter"
 	"hcm/pkg/tools/maps"
-	"hcm/pkg/tools/metadata"
-	"hcm/pkg/tools/querybuilder"
 	"hcm/pkg/tools/slice"
 	"hcm/pkg/tools/util"
 )
@@ -213,7 +209,7 @@ func (s *service) GetBizApplyAuditItsm(cts *rest.Contexts) (any, error) {
 	}
 	input.BkBizID = bkBizID
 
-	if err := input.Validate(); err != nil {
+	if err = input.Validate(); err != nil {
 		logs.Errorf("failed to get apply ticket audit info, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(pkg.CCErrCommParamsIsInvalid, err)
 	}
@@ -246,16 +242,18 @@ func (s *service) GetBizApplyAuditCrp(cts *rest.Contexts) (any, error) {
 		return nil, err
 	}
 
-	if err := req.Validate(); err != nil {
+	if err = req.Validate(); err != nil {
 		logs.Errorf("failed to get biz apply ticket crp audit info, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(pkg.CCErrCommParamsIsInvalid, err)
 	}
 
-	recordFilter := make(map[string]interface{})
-	recordFilter["suborder_id"] = req.SuborderId
-	recordFilter["task_id"] = req.CrpTicketId
-	page := metadata.BasePage{Start: 0, Limit: 1}
-	records, err := model.Operation().GenerateRecord().FindManyGenerateRecord(cts.Kit.Ctx, page, recordFilter)
+	// Query generate record from MySQL
+	recordFilter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", req.SuborderId),
+		tools.RuleEqual("task_id", req.CrpTicketId),
+	)
+	page := &core.BasePage{Start: 0, Limit: 1}
+	records, err := model.Operation().GenerateRecord().FindManyGenerateRecord(cts.Kit, recordFilter, page)
 	if err != nil {
 		logs.Errorf("failed to list generate records, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, err
@@ -322,11 +320,13 @@ func (s *service) GetApplyAuditCrp(cts *rest.Contexts) (interface{}, error) {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	recordFilter := make(map[string]interface{})
-	recordFilter["suborder_id"] = req.SuborderId
-	recordFilter["task_id"] = req.CrpTicketId
-	page := metadata.BasePage{Start: 0, Limit: 1}
-	records, err := model.Operation().GenerateRecord().FindManyGenerateRecord(cts.Kit.Ctx, page, recordFilter)
+	// Query generate record from MySQL
+	recordFilter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", req.SuborderId),
+		tools.RuleEqual("task_id", req.CrpTicketId),
+	)
+	page := &core.BasePage{Start: 0, Limit: 1}
+	records, err := model.Operation().GenerateRecord().FindManyGenerateRecord(cts.Kit, recordFilter, page)
 	if err != nil {
 		logs.Errorf("failed to list generate records, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, err
@@ -897,6 +897,7 @@ func (s *service) GetApplyStatus(cts *rest.Contexts) (any, error) {
 
 	input := &types.GetApplyParam{
 		OrderID: []uint64{uint64(orderId)},
+		Page:    core.NewDefaultBasePage(),
 	}
 
 	rst, err := s.logics.Scheduler().GetApplyOrder(cts.Kit, input)
@@ -977,9 +978,8 @@ func (s *service) GetApplyGenerate(cts *rest.Contexts) (any, error) {
 		return nil, err
 	}
 
-	errKey, err := input.Validate()
-	if err != nil {
-		logs.Errorf("failed to get apply generate record, err: %v, errKey: %s, rid: %s", err, errKey, cts.Kit.Rid)
+	if err := input.Validate(); err != nil {
+		logs.Errorf("failed to get apply generate record, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(pkg.CCErrCommParamsIsInvalid, err)
 	}
 
@@ -1022,38 +1022,14 @@ func (s *service) GetApplyInit(cts *rest.Contexts) (any, error) {
 		return nil, err
 	}
 
-	errKey, err := input.Validate()
-	if err != nil {
-		logs.Errorf("failed to get apply init record, err: %v, errKey: %s, rid: %s", err, errKey, cts.Kit.Rid)
+	if err := input.Validate(); err != nil {
+		logs.Errorf("failed to get apply init record, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(pkg.CCErrCommParamsIsInvalid, err)
 	}
 
 	rst, err := s.logics.Scheduler().GetApplyInit(cts.Kit, input)
 	if err != nil {
 		logs.Errorf("failed to get apply init record, err: %v, rid: %s", err, cts.Kit.Rid)
-		return nil, err
-	}
-
-	return rst, nil
-}
-
-// GetApplyDiskCheck gets apply order disk check records
-func (s *service) GetApplyDiskCheck(cts *rest.Contexts) (any, error) {
-	input := new(types.GetApplyInitReq)
-	if err := cts.DecodeInto(input); err != nil {
-		logs.Errorf("failed to get apply disk check record, err: %v, rid: %s", err, cts.Kit.Rid)
-		return nil, err
-	}
-
-	errKey, err := input.Validate()
-	if err != nil {
-		logs.Errorf("failed to get apply disk check record, err: %v, errKey: %s, rid: %s", err, errKey, cts.Kit.Rid)
-		return nil, errf.NewFromErr(pkg.CCErrCommParamsIsInvalid, err)
-	}
-
-	rst, err := s.logics.Scheduler().GetApplyDiskCheck(cts.Kit, input)
-	if err != nil {
-		logs.Errorf("failed to get apply disk check record, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, err
 	}
 
@@ -1090,9 +1066,8 @@ func (s *service) GetApplyDeliver(cts *rest.Contexts) (any, error) {
 		return nil, err
 	}
 
-	errKey, err := input.Validate()
-	if err != nil {
-		logs.Errorf("failed to get apply deliver record, err: %v, errKey: %s, rid: %s", err, errKey, cts.Kit.Rid)
+	if err := input.Validate(); err != nil {
+		logs.Errorf("failed to get apply deliver record, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(pkg.CCErrCommParamsIsInvalid, err)
 	}
 
@@ -1115,40 +1090,50 @@ func (s *service) GetBizApplyDevice(cts *rest.Contexts) (any, error) {
 		return nil, errf.New(errf.InvalidParameter, "biz id is invalid")
 	}
 
+	input := new(types.GetApplyDeviceReq)
+	if err = cts.DecodeInto(input); err != nil {
+		logs.Errorf("failed to get apply device info, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	if err = input.Validate(); err != nil {
+		logs.Errorf("failed to get apply device info, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(pkg.CCErrCommParamsIsInvalid, err)
+	}
+
+	input.BkBizIDs = []int64{bkBizID}
 	bkBizIDMap := make(map[int64]struct{})
 	bkBizIDMap[bkBizID] = struct{}{}
-	return s.getApplyDevice(cts, bkBizIDMap)
+	return s.getApplyDevice(cts.Kit, input, bkBizIDMap)
 }
 
 // GetApplyDevice get apply order delivered devices
 func (s *service) GetApplyDevice(cts *rest.Contexts) (any, error) {
-	return s.getApplyDevice(cts, make(map[int64]struct{}))
-}
-
-// getApplyDevice get apply order delivered devices
-func (s *service) getApplyDevice(cts *rest.Contexts, bkBizIDMap map[int64]struct{}) (any, error) {
 	input := new(types.GetApplyDeviceReq)
 	if err := cts.DecodeInto(input); err != nil {
 		logs.Errorf("failed to get apply device info, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, err
 	}
 
-	errKey, err := input.Validate()
-	if err != nil {
-		logs.Errorf("failed to get apply device info, err: %v, errKey: %s, rid: %s", err, errKey, cts.Kit.Rid)
+	if err := input.Validate(); err != nil {
+		logs.Errorf("failed to get apply device info, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(pkg.CCErrCommParamsIsInvalid, err)
 	}
 
-	// 解析参数里的业务ID，用于鉴权，是必传参数
-	bkBizIDs, err := s.parseInputForBkBizID(cts.Kit, input)
-	if err != nil {
-		logs.Errorf("failed to parse input for bizID, err: %+v, input: %+v, rid: %s", err, input, cts.Kit.Rid)
-		return nil, err
+	if len(input.BkBizIDs) == 0 {
+		return nil, errors.New("bk_biz_ids is required")
 	}
+
+	return s.getApplyDevice(cts.Kit, input, make(map[int64]struct{}))
+}
+
+// getApplyDevice get apply order delivered devices
+func (s *service) getApplyDevice(kt *kit.Kit, input *types.GetApplyDeviceReq,
+	bkBizIDMap map[int64]struct{}) (any, error) {
 
 	// 主机申领-业务粒度
 	authAttrs := make([]meta.ResourceAttribute, 0)
-	for _, bizID := range bkBizIDs {
+	for _, bizID := range input.BkBizIDs {
 		// 如果访问的是业务下的接口，但是查出来的业务不属于当前业务，需要报错或过滤掉
 		if _, ok := bkBizIDMap[bizID]; !ok && len(bkBizIDMap) > 0 {
 			return nil, errf.Newf(errf.InvalidParameter, "bizID:%d where the hostID is located is not in "+
@@ -1159,73 +1144,19 @@ func (s *service) getApplyDevice(cts *rest.Contexts, bkBizIDMap map[int64]struct
 			Basic: &meta.Basic{Type: meta.ZiYanResource, Action: meta.Find}, BizID: bizID,
 		})
 	}
-	err = s.authorizer.AuthorizeWithPerm(cts.Kit, authAttrs...)
+	err := s.authorizer.AuthorizeWithPerm(kt, authAttrs...)
 	if err != nil {
-		logs.Errorf("no permission to get apply device, bizIDs: %v, err: %v, rid: %s", bkBizIDs, err, cts.Kit.Rid)
+		logs.Errorf("no permission to get apply device, bizIDs: %v, err: %v, rid: %s", input.BkBizIDs, err, kt.Rid)
 		return nil, err
 	}
 
-	rst, err := s.logics.Scheduler().GetApplyDevice(cts.Kit, input)
+	rst, err := s.logics.Scheduler().GetApplyDevice(kt, input)
 	if err != nil {
-		logs.Errorf("failed to get apply device info, err: %v, rid: %s", err, cts.Kit.Rid)
+		logs.Errorf("failed to get apply device info, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
 
 	return rst, nil
-}
-
-func (s *service) parseInputForBkBizID(kt *kit.Kit, input *types.GetApplyDeviceReq) ([]int64, error) {
-	filterMap, err := input.GetFilter()
-	if err != nil {
-		logs.Errorf("failed to parse input filter, err: %v, input: %+v, rid: %s", err, input, kt.Rid)
-		return nil, err
-	}
-
-	var bkBizIDs []int64
-	paramMap, ok := filterMap["$and"].([]map[string]interface{})
-	if !ok {
-		return nil, errf.Newf(errf.InvalidParameter, "filter is illegal")
-	}
-
-	for _, paramItem := range paramMap {
-		condMap, ok := paramItem["bk_biz_id"]
-		if !ok {
-			continue
-		}
-		// 如果找到了业务ID，但解析失败则break
-		fieldMap, ok := condMap.(map[string]interface{})
-		if !ok {
-			break
-		}
-		numbers, ok := fieldMap["$in"].([]interface{})
-		if !ok {
-			logs.Errorf("bk_biz_id value is not []interface, fieldMap: %+v, rid: %s", fieldMap, kt.Rid)
-			return nil, errf.Newf(errf.InvalidParameter, "bk_biz_id is illegal")
-		}
-
-		for _, val := range numbers {
-			number, ok := val.(json.Number)
-			if !ok {
-				logs.Errorf("bk_biz_id value is not json.Number, val: %+v, valType: %+v, rid: %s",
-					val, reflect.TypeOf(val), kt.Rid)
-				return nil, errf.Newf(errf.InvalidParameter, "bk_biz_id value is not json.Number")
-			}
-			bkBizID, err := number.Int64()
-			if err != nil {
-				logs.Errorf("bk_biz_id value is not int64, number: %+v, valType: %+v, err: %v, rid: %s",
-					number, reflect.TypeOf(number), err, kt.Rid)
-				return nil, err
-			}
-			bkBizIDs = append(bkBizIDs, bkBizID)
-		}
-		break
-	}
-
-	if len(bkBizIDs) <= 0 {
-		return nil, errf.Newf(errf.InvalidParameter, "bk_biz_id is required")
-	}
-
-	return bkBizIDs, nil
 }
 
 // GetDeliverDeviceByOrder get delivered devices by order id
@@ -1242,32 +1173,33 @@ func (s *service) GetDeliverDeviceByOrder(cts *rest.Contexts) (any, error) {
 		return nil, errf.NewFromErr(pkg.CCErrCommParamsIsInvalid, err)
 	}
 
-	rule := querybuilder.CombinedRule{
-		Condition: querybuilder.ConditionAnd,
-		Rules: []querybuilder.Rule{
-			querybuilder.AtomRule{
-				Field:    "order_id",
-				Operator: querybuilder.OperatorEqual,
-				Value:    input.OrderId,
-			}},
-	}
+	rules := make([]*filter.AtomRule, 0)
+	rules = append(rules, tools.RuleEqual("order_id", input.OrderId))
 	if len(input.SuborderId) > 0 {
-		rule.Rules = append(rule.Rules, querybuilder.AtomRule{
-			Field:    "suborder_id",
-			Operator: querybuilder.OperatorEqual,
-			Value:    input.SuborderId,
-		})
-	}
-	param := &types.GetApplyDeviceReq{
-		Filter: &querybuilder.QueryFilter{
-			Rule: rule,
-		},
+		rules = append(rules, tools.RuleEqual("suborder_id", input.SuborderId))
 	}
 
-	rst, err := s.logics.Scheduler().GetApplyDevice(cts.Kit, param)
-	if err != nil {
-		logs.Errorf("failed to get apply device info, err: %v, rid: %s", err, cts.Kit.Rid)
-		return nil, err
+	param := &types.GetApplyDeviceReq{
+		Filter: tools.ExpressionAnd(rules...),
+		Page:   core.NewDefaultBasePage(),
+	}
+
+	var list []*types.DeviceInfo
+	for {
+		rst, err := s.logics.Scheduler().GetApplyDevice(cts.Kit, param)
+		if err != nil {
+			logs.Errorf("failed to get apply device info, err: %v, rid: %s", err, cts.Kit.Rid)
+			return nil, err
+		}
+		if rst == nil {
+			break
+		}
+
+		list = append(list, rst.Info...)
+		if len(rst.Info) < int(core.DefaultMaxPageLimit) {
+			break
+		}
+		param.Page.Start += uint32(core.DefaultMaxPageLimit)
 	}
 
 	type deviceBriefInfo struct {
@@ -1280,10 +1212,10 @@ func (s *service) GetDeliverDeviceByOrder(cts *rest.Contexts) (any, error) {
 	}
 
 	briefRst := &getDeviceBriefRst{
-		Count: int64(len(rst.Info)),
+		Count: int64(len(list)),
 		Info:  make([]*deviceBriefInfo, 0),
 	}
-	for _, device := range rst.Info {
+	for _, device := range list {
 		briefRst.Info = append(briefRst.Info, &deviceBriefInfo{
 			Ip:      device.Ip,
 			AssetId: device.AssetId,
@@ -1301,15 +1233,13 @@ func (s *service) ExportDeliverDevice(cts *rest.Contexts) (any, error) {
 		return nil, err
 	}
 
-	errKey, err := input.Validate()
-	if err != nil {
-		logs.Errorf("failed to export apply delivered device info, err: %v, errKey: %s, rid: %s",
-			err, errKey, cts.Kit.Rid)
+	if err := input.Validate(); err != nil {
+		logs.Errorf("failed to export apply delivered device info, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(pkg.CCErrCommParamsIsInvalid, err)
 	}
 
 	// 主机申领-业务粒度
-	err = s.authorizer.AuthorizeWithPerm(cts.Kit, meta.ResourceAttribute{
+	err := s.authorizer.AuthorizeWithPerm(cts.Kit, meta.ResourceAttribute{
 		Basic: &meta.Basic{Type: meta.ZiYanResource, Action: meta.Create}, BizID: input.BkBizId,
 	})
 	if err != nil {
@@ -1728,9 +1658,8 @@ func (s *service) GetApplyModify(cts *rest.Contexts) (any, error) {
 		return nil, err
 	}
 
-	errKey, err := input.Validate()
-	if err != nil {
-		logs.Errorf("failed to get apply order modify record, err: %v, errKey: %s, rid: %s", err, errKey, cts.Kit.Rid)
+	if err := input.Validate(); err != nil {
+		logs.Errorf("failed to get apply order modify record, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(pkg.CCErrCommParamsIsInvalid, err)
 	}
 
@@ -1770,23 +1699,19 @@ func (s *service) GetApplyModify(cts *rest.Contexts) (any, error) {
 }
 
 // getApplyOrderBizIds get apply order biz ids
-func (s *service) getApplyOrderBizIds(kit *kit.Kit, suborderIds []string) ([]int64, error) {
-	filter := map[string]interface{}{}
+func (s *service) getApplyOrderBizIds(kt *kit.Kit, suborderIds []string) ([]int64, error) {
+	rules := make([]*filter.AtomRule, 0)
 
 	if len(suborderIds) > 0 {
-		filter["suborder_id"] = mapstr.MapStr{
-			pkg.BKDBIN: suborderIds,
-		}
+		rules = append(rules, tools.RuleIn("suborder_id", suborderIds))
 	}
 
 	bizIds := make([]int64, 0)
-	page := metadata.BasePage{
-		Start: 0,
-		Limit: 500,
-	}
-	insts, err := model.Operation().ApplyOrder().FindManyApplyOrder(kit.Ctx, page, filter)
+	page := core.NewDefaultBasePage()
+	orderFilter := tools.ExpressionAnd(rules...)
+	insts, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt, orderFilter, page)
 	if err != nil {
-		logs.Errorf("failed to get recycle order, err: %v, rid: %s", err, kit.Rid)
+		logs.Errorf("failed to get recycle order, err: %v, rid: %s", err, kt.Rid)
 		return bizIds, err
 	}
 
@@ -1800,45 +1725,43 @@ func (s *service) getApplyOrderBizIds(kit *kit.Kit, suborderIds []string) ([]int
 }
 
 // filterOptFunc list apply orders
-type filterOptFunc func(filter map[string]interface{})
+type filterOptFunc func(rules []*filter.AtomRule) []*filter.AtomRule
 
 // withOrderID filter apply order by order id
 func withOrderID(orderID int64) filterOptFunc {
-	return func(filter map[string]interface{}) {
-		filter["order_id"] = orderID
+	return func(rules []*filter.AtomRule) []*filter.AtomRule {
+		return append(rules, tools.RuleEqual("order_id", orderID))
 	}
 }
 
 // withSuborderIDs filter apply order by suborder ids
 func withSuborderIDs(suborderIDs ...string) filterOptFunc {
-	return func(filter map[string]interface{}) {
+	return func(rules []*filter.AtomRule) []*filter.AtomRule {
 		if len(suborderIDs) == 0 {
-			return
+			return rules
 		}
-
-		filter["suborder_id"] = mapstr.MapStr{
-			pkg.BKDBIN: suborderIDs,
-		}
+		return append(rules, tools.RuleIn("suborder_id", suborderIDs))
 	}
 }
 
 // withBizID filter apply order by biz id
 func withBizID(bizID int64) filterOptFunc {
-	return func(filter map[string]interface{}) {
-		filter["bk_biz_id"] = bizID
+	return func(rules []*filter.AtomRule) []*filter.AtomRule {
+		return append(rules, tools.RuleEqual("bk_biz_id", bizID))
 	}
 }
 
 // listApplyOrders list apply orders
-func (s *service) listApplyOrders(kit *kit.Kit, page metadata.BasePage, filterOptFns ...filterOptFunc) (
+func (s *service) listApplyOrders(kt *kit.Kit, page *core.BasePage, filterOptFns ...filterOptFunc) (
 	[]*types.ApplyOrder, error) {
 
-	filter := map[string]interface{}{}
+	rules := make([]*filter.AtomRule, 0)
 	for _, fn := range filterOptFns {
-		fn(filter)
+		rules = fn(rules)
 	}
 
-	orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kit.Ctx, page, filter)
+	orderFilter := tools.ExpressionAnd(rules...)
+	orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt, orderFilter, page)
 	if err != nil {
 		return nil, err
 	}
@@ -1847,13 +1770,14 @@ func (s *service) listApplyOrders(kit *kit.Kit, page metadata.BasePage, filterOp
 }
 
 // listApplyOrders list apply orders
-func (s *service) listApplyTicket(kit *kit.Kit, filterOptFns ...filterOptFunc) (*types.ApplyTicket, error) {
-	filter := mapstr.MapStr{}
+func (s *service) listApplyTicket(kt *kit.Kit, filterOptFns ...filterOptFunc) (*types.ApplyTicket, error) {
+	rules := make([]*filter.AtomRule, 0)
 	for _, fn := range filterOptFns {
-		fn(filter)
+		rules = fn(rules)
 	}
 
-	ticket, err := model.Operation().ApplyTicket().GetApplyTicket(kit.Ctx, &filter)
+	ticketFilter := tools.ExpressionAnd(rules...)
+	ticket, err := model.Operation().ApplyTicket().GetApplyTicket(kt, ticketFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -2001,7 +1925,7 @@ func (s *service) CancelApplyTicketCrp(cts *rest.Contexts) (interface{}, error) 
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	page := metadata.BasePage{
+	page := &core.BasePage{
 		Start: 0,
 		Limit: 1,
 	}
@@ -2023,7 +1947,7 @@ func (s *service) CancelApplyTicketCrp(cts *rest.Contexts) (interface{}, error) 
 		return nil, err
 	}
 
-	if err := s.logics.Scheduler().CancelApplyTicketCrp(cts.Kit, req); err != nil {
+	if err = s.logics.Scheduler().CancelApplyTicketCrp(cts.Kit, req); err != nil {
 		logs.Errorf("failed to cancel apply ticket crp, err: %v, req: %+v, rid: %s", err, req, cts.Kit.Rid)
 		return nil, err
 	}
@@ -2051,15 +1975,15 @@ func (s *service) CancelBizApplyTicketCrp(cts *rest.Contexts) (interface{}, erro
 	}
 
 	req := new(types.CancelApplyTicketCrpReq)
-	if err := cts.DecodeInto(req); err != nil {
+	if err = cts.DecodeInto(req); err != nil {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	if err := req.Validate(); err != nil {
+	if err = req.Validate(); err != nil {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	if err := s.logics.Scheduler().CancelApplyTicketCrp(cts.Kit, req); err != nil {
+	if err = s.logics.Scheduler().CancelApplyTicketCrp(cts.Kit, req); err != nil {
 		logs.Errorf("failed to cancel apply ticket crp, err: %v, req: %+v, rid: %s", err, req, cts.Kit.Rid)
 		return nil, err
 	}
@@ -2201,24 +2125,24 @@ func (s *service) ListHostApplyItsmTicket(cts *rest.Contexts) (any, error) {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	filter := mapstr.MapStr{
-		"create_at": mapstr.MapStr{"$gte": req.CreateTime},
-		"stage":     types.TicketStageAudit,
-	}
-	page := metadata.BasePage{Start: 0, Limit: pkg.BKMaxInstanceLimit}
+	filter := tools.ExpressionAnd(
+		tools.RuleGreaterThanEqual("created_at", req.CreateTime.Format(constant.TimeStdFormat)),
+		tools.RuleEqual("stage", types.TicketStageAudit),
+	)
+	page := core.NewDefaultBasePage()
 	tickets := make([]*types.ApplyTicket, 0)
 	for {
-		resp, err := model.Operation().ApplyTicket().FindManyApplyTicket(cts.Kit.Ctx, page, filter)
+		resp, err := model.Operation().ApplyTicket().FindManyApplyTicket(cts.Kit, filter, page)
 		if err != nil {
 			logs.Errorf("failed to get apply ticket, err: %v, filter: %v, rid: %s", err, filter, cts.Kit.Rid)
 			return nil, err
 		}
 		tickets = append(tickets, resp...)
 
-		if len(resp) < page.Limit {
+		if len(resp) < int(page.Limit) {
 			break
 		}
-		page.Start += page.Limit
+		page.Start += uint32(page.Limit)
 	}
 	if len(tickets) == 0 {
 		return types.ListHostApplyItsmTicketData{Tickets: make([]types.HostApplyItsmTicket, 0)}, nil
@@ -2312,14 +2236,14 @@ func (s *service) ListHostApplyCrpTicket(cts *rest.Contexts) (any, error) {
 func (s *service) getRunningSubOrderInfo(kt *kit.Kit, createTime *time.Time) (map[string]*types.ApplyOrder,
 	map[string]string, error) {
 
-	subOrderFilter := mapstr.MapStr{
-		"create_at": mapstr.MapStr{"$gte": createTime},
-		"stage":     types.TicketStageRunning,
-	}
-	subOrderPage := metadata.BasePage{Start: 0, Limit: pkg.BKMaxInstanceLimit}
+	subOrderFilter := tools.ExpressionAnd(
+		tools.RuleGreaterThanEqual("created_at", createTime.Format(constant.TimeStdFormat)),
+		tools.RuleEqual("stage", types.TicketStageRunning),
+	)
+	subOrderPage := core.NewDefaultBasePage()
 	subOrderMap := make(map[string]*types.ApplyOrder)
 	for {
-		orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt.Ctx, subOrderPage, subOrderFilter)
+		orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt, subOrderFilter, subOrderPage)
 		if err != nil {
 			logs.Errorf("failed to find apply orders, err: %v, filter: %v, rid: %s", err, subOrderFilter, kt.Rid)
 			return nil, nil, err
@@ -2327,27 +2251,26 @@ func (s *service) getRunningSubOrderInfo(kt *kit.Kit, createTime *time.Time) (ma
 		for _, order := range orders {
 			subOrderMap[order.SubOrderId] = order
 		}
-		if len(orders) < subOrderPage.Limit {
+		if len(orders) < int(subOrderPage.Limit) {
 			break
 		}
-		subOrderPage.Start += subOrderPage.Limit
+		subOrderPage.Start += uint32(subOrderPage.Limit)
 	}
 	if len(subOrderMap) == 0 {
 		return make(map[string]*types.ApplyOrder), make(map[string]string), nil
 	}
 
-	genRecordFilter := mapstr.MapStr{
-		"suborder_id": mapstr.MapStr{"$in": maps.Keys(subOrderMap)},
-		"status":      types.GenerateStatusHandling,
-	}
-	genRecordPage := metadata.BasePage{Start: 0, Limit: pkg.BKMaxInstanceLimit}
+	genRecordFilter := tools.ExpressionAnd(
+		tools.RuleIn("suborder_id", maps.Keys(subOrderMap)),
+		tools.RuleEqual("status", types.GenerateStatusHandling),
+	)
+	genRecordPage := core.NewDefaultBasePage()
 	crpIDSubOrderIDMap := make(map[string]string)
 	for {
-		genRecords, err := model.Operation().GenerateRecord().FindManyGenerateRecord(kt.Ctx, genRecordPage,
-			genRecordFilter)
+		genRecords, err := model.Operation().GenerateRecord().FindManyGenerateRecord(kt, genRecordFilter,
+			genRecordPage)
 		if err != nil {
-			logs.Errorf("failed to find generate records, err: %v, filter: %v, rid: %s", err, genRecordFilter,
-				kt.Rid)
+			logs.Errorf("failed to find generate records, err: %v, filter: %v, rid: %s", err, genRecordFilter, kt.Rid)
 			return nil, nil, err
 		}
 		for _, genRecord := range genRecords {
@@ -2356,10 +2279,10 @@ func (s *service) getRunningSubOrderInfo(kt *kit.Kit, createTime *time.Time) (ma
 			}
 			crpIDSubOrderIDMap[genRecord.TaskId] = genRecord.SubOrderId
 		}
-		if len(genRecords) < genRecordPage.Limit {
+		if len(genRecords) < int(genRecordPage.Limit) {
 			break
 		}
-		genRecordPage.Start += genRecordPage.Limit
+		genRecordPage.Start += uint32(genRecordPage.Limit)
 	}
 
 	return subOrderMap, crpIDSubOrderIDMap, nil

@@ -5,19 +5,23 @@ import { useRoute, useRouter } from 'vue-router';
 import { Button, Message } from 'bkui-vue';
 import { timeFormatter } from '@/common/util';
 import { useTable } from '@/hooks/useResourcePlanTable';
+import useTableSelection from '@/hooks/use-table-selection';
 import { useI18n } from 'vue-i18n';
 import CopyToClipboard from '@/components/copy-to-clipboard/index.vue';
 import { IPageQuery } from '@/typings';
 import Stage from './components/stage.vue';
 import SubTicketDetail from './sub-ticket-detail.vue';
+import BatchApprovalDialog from './components/batch-approval-dialog.vue';
 import { useResSubTicketStore, SubTicketItem, STATUS_ENUM, STAGE_ENUM } from '@/store/ticket/res-sub-ticket';
+import { useUserStore } from '@/store';
 import { GLOBAL_BIZS_KEY } from '@/common/constant';
 import { debounce } from 'lodash';
 import StatusText from './components/status-text.vue';
-import { TicketStatus } from '@/typings/resourcePlan';
+import { TicketStatus, TicketByIdResult } from '@/typings/resourcePlan';
 
 interface Props {
   ticketStatus: TicketStatus; // 主单状态
+  demands?: TicketByIdResult['demands']; // 主单需求列表，用于批量审批
 }
 const props = defineProps<Props>();
 // 补全类型泛型
@@ -28,12 +32,93 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const subTicketStore = useResSubTicketStore();
+const userStore = useUserStore();
 const detailRef = useTemplateRef('detailRef');
+const batchApprovalDialogRef = useTemplateRef('batchApprovalDialogRef');
 const bizId = computed(() => Number(route.query[GLOBAL_BIZS_KEY]));
+
+// 批量审批相关 - 使用 useTableSelection hook
+// 业务视图下不显示批量审批功能
+const isBusinessView = computed(() => !!bizId.value);
+
+const isRowSelectable = ({ row }: { row: SubTicketItem }) => {
+  // 只有在部门审批阶段且状态为审批中的才能选择
+  return row.stage === 'admin_audit' && row.status === 'auditing';
+};
+const {
+  selections: selectedItems,
+  handleSelectChange: handleSelectionChange,
+  handleSelectAll,
+  resetSelections,
+} = useTableSelection({ isRowSelectable });
+
+// 当前用户是否有审批权限（通过查询任意一个符合条件子单的 audit 信息判断）
+const hasApprovalAuth = ref(false);
+
+// 检查当前用户是否有审批权限
+const checkApprovalAuth = async (items: SubTicketItem[]) => {
+  // 筛选符合条件的子单（部门审批 + 审批中）
+  const auditingItems = items.filter((item) => item.stage === 'admin_audit' && item.status === 'auditing');
+  if (auditingItems.length === 0) {
+    hasApprovalAuth.value = false;
+    return;
+  }
+
+  // 取第一条查询审批信息
+  try {
+    const { data } = await subTicketStore.getAudit(auditingItems[0].id, bizId.value);
+    const adminAudit = data?.admin_audit;
+    if (!adminAudit?.current_steps) {
+      hasApprovalAuth.value = false;
+      return;
+    }
+
+    // 检查 current_steps 中是否有当前用户的审批权限
+    const currentUser = userStore.username;
+    hasApprovalAuth.value = adminAudit.current_steps.some(
+      (step) => step.processors_auth && step.processors_auth[currentUser] === true,
+    );
+  } catch {
+    hasApprovalAuth.value = false;
+  }
+};
+
+// 是否显示选择列（当前与批量审批按钮一致，后续可独立扩展）
+const showSelectionColumn = computed(() => {
+  return !isBusinessView.value && hasApprovalAuth.value;
+});
+
+// 是否显示批量审批按钮（业务视图下不显示，且当前用户需要有审批权限）
+const showBatchApprovalBtn = computed(() => {
+  return !isBusinessView.value && hasApprovalAuth.value;
+});
+
+// 批量审批按钮禁用状态
+const batchApprovalBtnDisabled = computed(() => {
+  return selectedItems.value.length === 0;
+});
+
+const handleBatchApproval = () => {
+  batchApprovalDialogRef.value?.open();
+};
+
+const handleBatchApprovalSuccess = () => {
+  resetSelections();
+  // 5秒后刷新数据
+  setTimeout(() => {
+    triggerApi();
+  }, 5000);
+};
 
 // 表格
 const hoverIndex = ref(-1);
-const columns: any[] = [
+// 选择列配置
+const selectionColumn = {
+  type: 'selection',
+  width: 32,
+  minWidth: 32,
+};
+const baseColumns: any[] = [
   {
     label: '子单号',
     field: 'id',
@@ -134,6 +219,15 @@ const columns: any[] = [
     },
   },
 ];
+
+// 根据是否显示选择列决定表格列配置
+const tableColumns = computed(() => {
+  if (showSelectionColumn.value) {
+    return [selectionColumn, ...baseColumns];
+  }
+  return baseColumns;
+});
+
 const getData = (page: IPageQuery) => {
   return subTicketStore.getList(
     {
@@ -147,6 +241,17 @@ const { tableData, pagination, isLoading, handlePageChange, handlePageSizeChange
   useTable(getData);
 pagination.value.limit = 500; // 不分页，设置limit为最大值
 const retryBtnLoading = ref(false);
+
+// 监听列表数据变化，检查审批权限
+watch(
+  tableData,
+  (items) => {
+    if (!isBusinessView.value && items.length > 0) {
+      checkApprovalAuth(items);
+    }
+  },
+  { immediate: true },
+);
 
 // 数据
 const ticketLinkArr = computed(() => {
@@ -260,18 +365,30 @@ defineExpose({
       >
         终止
       </bk-button>
+      <bk-button
+        v-if="showBatchApprovalBtn"
+        theme="primary"
+        :disabled="batchApprovalBtnDisabled"
+        style="margin-left: 21px"
+        @click="handleBatchApproval"
+      >
+        {{ t('批量审批') }}
+      </bk-button>
     </template>
     <bk-loading :loading="isLoading">
       <bk-table
-        :columns="columns"
+        :columns="tableColumns"
         :pagination="null"
         :data="tableData"
+        :is-row-select-enable="isRowSelectable"
         remote-pagination
         @page-limit-change="handlePageSizeChange"
         @page-value-change="handlePageChange"
         @column-sort="handleSort"
         @row-mouse-enter="handleMouseEnter"
         @row-mouse-leave="handleMouseLeave"
+        @select-all="handleSelectAll"
+        @selection-change="handleSelectionChange"
       />
     </bk-loading>
   </Panel>
@@ -280,6 +397,14 @@ defineExpose({
   <bk-dialog v-model:is-show="isShowTerminalDialog" title="终止单据" quick-close @confirm="handleTerminate">
     <div>注意：终止单据会将单据置为结束状态</div>
   </bk-dialog>
+
+  <!-- 批量审批弹窗 -->
+  <BatchApprovalDialog
+    ref="batchApprovalDialogRef"
+    :selected-items="selectedItems"
+    :demands="props.demands"
+    @success="handleBatchApprovalSuccess"
+  />
 </template>
 
 <style lang="scss" scoped>

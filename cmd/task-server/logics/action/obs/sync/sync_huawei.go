@@ -93,6 +93,18 @@ func (act SyncAction) doSyncHuaweiBillItem(kt *kit.Kit,
 		return nil
 	}
 
+	regionCityMap, err := loadRegionCityMap(kt, syncOpt.Vendor)
+	if err != nil {
+		logs.Errorf("load region city map failed, err: %v, vendor: %s, rid: %s", err, syncOpt.Vendor, kt.Rid)
+		return fmt.Errorf("load region city map failed, err: %v", err)
+	}
+
+	hwGpuPrefixes, err := loadHuaweiGpuPrefixes(kt)
+	if err != nil {
+		logs.Errorf("load huawei gpu prefixes failed, err: %v, vendor: %s, rid: %s", err, syncOpt.Vendor, kt.Rid)
+		return fmt.Errorf("load huawei gpu prefixes failed, err: %v", err)
+	}
+
 	// 清理特定的obs数据，此处防止之前有可能插入事务失败导致的脏数据
 	setIndex := fmt.Sprintf("%s-%s-%d-%d-%d-%d",
 		syncOpt.Vendor, syncOpt.MainAccountID, syncOpt.BillYear, syncOpt.BillMonth, start, limit)
@@ -115,7 +127,7 @@ func (act SyncAction) doSyncHuaweiBillItem(kt *kit.Kit,
 	}
 
 	// 进行插入
-	finalItems, err := act.convertHuaweiBill(kt, syncOpt, result, setIndex, mainAccount)
+	finalItems, err := act.convertHuaweiBill(kt, syncOpt, result, setIndex, mainAccount, regionCityMap, hwGpuPrefixes)
 	if err != nil {
 		logs.Errorf("convert obs huawei bill failed, err: %s, setIndex: %s, rid: %s", err.Error(), setIndex, kt.Rid)
 		return err
@@ -147,8 +159,8 @@ func (act SyncAction) getHuaweiMainAccount(kt *kit.Kit, mainAccountID string) (
 }
 
 func (act SyncAction) convertHuaweiBill(kt *kit.Kit, syncOpt *SyncOption, result *databill.HuaweiBillItemListResult,
-	setIndex string, mainAccount *dataas.MainAccountGetResult[accountsetcore.HuaWeiMainAccountExtension]) (
-	[]*tableobs.OBSBillItemHuawei, error) {
+	setIndex string, mainAccount *dataas.MainAccountGetResult[accountsetcore.HuaWeiMainAccountExtension],
+	regionCityMap map[string]int32, hwGpuPrefixes []string) ([]*tableobs.OBSBillItemHuawei, error) {
 
 	if result == nil || len(result.Details) == 0 {
 		return nil, errors.New("nil bill item result or empty bill result details")
@@ -170,7 +182,8 @@ func (act SyncAction) convertHuaweiBill(kt *kit.Kit, syncOpt *SyncOption, result
 
 	// OBS 要求数据，决定汇率
 	var accountType = "HW国际区"
-	if mainAccount.Site == enumor.MainAccountChinaSite {
+	isChina := mainAccount.Site == enumor.MainAccountChinaSite
+	if isChina {
 		accountType = "国内账单"
 	}
 
@@ -182,6 +195,12 @@ func (act SyncAction) convertHuaweiBill(kt *kit.Kit, syncOpt *SyncOption, result
 		if err != nil {
 			return nil, fmt.Errorf("failed, to parse time %s, err %s", item.CreatedAt, err.Error())
 		}
+
+		region := converter.PtrToVal[string](record.Region)
+		productSpecDesc := converter.PtrToVal[string](record.ProductSpecDesc)
+		cityID := lookupCityID(kt, regionCityMap, region, isChina)
+		isGPU := isHuaweiGPU(productSpecDesc, hwGpuPrefixes)
+
 		newItem := &tableobs.OBSBillItemHuawei{
 			SetIndex:                  setIndex,
 			Vendor:                    string(syncOpt.Vendor),
@@ -201,7 +220,7 @@ func (act SyncAction) convertHuaweiBill(kt *kit.Kit, syncOpt *SyncOption, result
 			FreeResourceUsage:         fmt.Sprintf("%f", converter.PtrToVal[float64](record.FreeResourceUsage)),
 			FreeResourceMeasureID:     fmt.Sprintf("%d", converter.PtrToVal[int32](record.FreeResourceMeasureId)),
 			CloudServiceType:          converter.PtrToVal[string](record.CloudServiceType),
-			Region:                    converter.PtrToVal[string](record.Region),
+			Region:                    region,
 			ResourceType:              converter.PtrToVal[string](record.ResourceType),
 			ChargeMode:                converter.PtrToVal[string](record.ChargeMode),
 			ResourceTag:               converter.PtrToVal[string](record.ResourceTag),
@@ -233,6 +252,8 @@ func (act SyncAction) convertHuaweiBill(kt *kit.Kit, syncOpt *SyncOption, result
 			TotalCount:                int32(len(result.Details)),
 			Rate:                      floatRate,
 			RealCost:                  &types.Decimal{Decimal: item.Cost.Mul(decimal.NewFromFloat(floatRate))},
+			CityId:                    cityID,
+			ResClassId:                enumor.GetOBSResClassID(syncOpt.Vendor, isGPU),
 		}
 		retList = append(retList, newItem)
 	}

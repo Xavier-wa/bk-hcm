@@ -23,11 +23,13 @@ import (
 	"hcm/cmd/woa-server/logics/task/scheduler/record"
 	"hcm/cmd/woa-server/model/task"
 	types "hcm/cmd/woa-server/types/task"
-	"hcm/pkg"
 	"hcm/pkg/api/core"
-	"hcm/pkg/criteria/mapstr"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
+	"hcm/pkg/criteria/errf"
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	cvt "hcm/pkg/tools/converter"
 	"hcm/pkg/tools/utils/wait"
 )
 
@@ -71,12 +73,31 @@ func (d *Dispatcher) Run(workers int) {
 
 // runWorker deals with apply order
 func (d *Dispatcher) runWorker() error {
-	order, err := d.informer.Apply().Pop()
+	// Check if informer is available (only available on master node)
+	if d.informer == nil {
+		logs.Warnf("task scheduler informer dispatcher is not available")
+		time.Sleep(time.Second)
+		return nil
+	}
+
+	applyInformer := d.informer.Apply()
+	if applyInformer == nil {
+		logs.Warnf("task scheduler apply informer is not available")
+		time.Sleep(time.Second)
+		return nil
+	}
+
+	order, err := applyInformer.Pop()
 	if err != nil {
 		logs.Errorf("failed to deal apply order, for get apply order from informer err: %v", err)
 		return err
 	}
-	if err := d.dispatchHandler(core.NewBackendKit(), order); err != nil {
+	if order == "" {
+		logs.Warnf("shutdown to deal apply order, for get apply order from informer")
+		time.Sleep(time.Second)
+		return nil
+	}
+	if err = d.dispatchHandler(core.NewBackendKit(), order); err != nil {
 		logs.Errorf("failed to dispatch apply order %s, err: %v", order, err)
 		return err
 	}
@@ -88,69 +109,71 @@ func (d *Dispatcher) runWorker() error {
 // dispatchHandler apply order dispatch handler
 func (d *Dispatcher) dispatchHandler(kt *kit.Kit, key string) error {
 	// get apply order by key
-	applyOrder, err := d.getApplyOrder(key)
+	applyOrder, err := d.getApplyOrder(kt, key)
 	if err != nil {
-		logs.Errorf("get apply order by key %s failed, err: %v", key, err)
+		logs.Errorf("get apply order by key %s failed, err: %v, rid: %s", key, err, kt.Rid)
 		return err
 	}
 
 	// check order stage
 	if applyOrder.Stage != types.TicketStageRunning {
-		logs.Infof("apply order %s need not dispatch, stage: %s", key, applyOrder.Stage)
+		logs.Infof("apply order %s need not dispatch, stage: %s, rid: %s", key, applyOrder.Stage, kt.Rid)
 		return nil
 	}
 
 	// check order status
 	if !shouldDispatch(applyOrder.Status) {
-		logs.Infof("apply order %s need not dispatch, status: %s", key, applyOrder.Status)
+		logs.Infof("apply order %s need not dispatch, status: %s, rid: %s", key, applyOrder.Status, kt.Rid)
 		return nil
 	}
 
 	// check retry time
 	retryLimit := uint(3)
 	if applyOrder.RetryTime > retryLimit {
-		logs.Infof("apply order %s need not dispatch, for retry time %d exceeds limit %d", key, applyOrder.RetryTime,
-			retryLimit)
+		logs.Infof("apply order %s need not dispatch, for retry time %d exceeds limit %d, rid: %s",
+			key, applyOrder.RetryTime, retryLimit, kt.Rid)
 		// update order status to TERMINATE
-		if err := d.updateApplyOrderStatus(applyOrder, types.TicketStageSuspend,
-			types.ApplyStatusTerminate); err != nil {
+		if err = d.updateApplyOrderStatus(
+			kt, applyOrder, types.TicketStageSuspend, types.ApplyStatusTerminate); err != nil {
 			logs.Errorf("failed to update apply order %s status, err: %v, rid: %s", key, err, kt.Rid)
 		}
 		return nil
 	}
 
 	// lock apply order
-	if err := d.lockApplyOrder(applyOrder); err != nil {
-		logs.Errorf("failed to lock apply order %s, err: %v", key, err)
+	if err = d.lockApplyOrder(kt, applyOrder); err != nil {
+		logs.Errorf("failed to lock apply order %s, err: %v, rid: %s", key, err, kt.Rid)
 		return err
 	}
 	// start generate step
-	if err := record.StartStep(applyOrder.SubOrderId, types.StepNameGenerate); err != nil {
-		logs.Errorf("failed to start generate step, order id: %s, err: %v", key, err)
+	if err = record.StartStep(kt, applyOrder.SubOrderId, types.StepNameGenerate); err != nil {
+		logs.Errorf("failed to start generate step, order id: %s, err: %v, rid: %s", key, err, kt.Rid)
 		return err
 	}
 
 	// generate devices according to apply order
-	if err := d.generateDevices(kt, applyOrder); err != nil {
-		logs.Errorf("failed to generate device, order id: %s, err: %v", key, err)
+	if err = d.generateDevices(kt, applyOrder); err != nil {
+		logs.Errorf("failed to generate device, order id: %s, err: %v, rid: %s", key, err, kt.Rid)
 		// update generate step record
-		if errStep := record.UpdateGenerateStep(applyOrder.SubOrderId, applyOrder.TotalNum, err); errStep != nil {
-			logs.Errorf("failed to generate device, order id: %s, err: %v", key, errStep)
+		if errStep := record.UpdateGenerateStep(
+			kt, applyOrder.SubOrderId, applyOrder.TotalNum, err); errStep != nil {
+			logs.Errorf("failed to generate device, order id: %s, err: %v, rid: %s", key, errStep, kt.Rid)
 			return errStep
 		}
 
 		// update order status to TERMINATE
-		errUpdate := d.updateApplyOrderStatus(applyOrder, types.TicketStageSuspend, types.ApplyStatusTerminate)
+		errUpdate := d.updateApplyOrderStatus(kt, applyOrder, types.TicketStageSuspend, types.ApplyStatusTerminate)
 		if errUpdate != nil {
-			logs.Warnf("failed to update apply order %s status, err: %v", key, errUpdate)
+			logs.Warnf("failed to update apply order %s status, err: %v, rid: %s", key, errUpdate, kt.Rid)
 		}
 
 		return err
 	}
 
 	// update generate step record
-	if err := record.UpdateGenerateStep(applyOrder.SubOrderId, applyOrder.TotalNum, nil); err != nil {
-		logs.Errorf("failed to generate device, order id: %s, err: %v", key, err)
+	if err = record.UpdateGenerateStep(
+		kt, applyOrder.SubOrderId, applyOrder.TotalNum, nil); err != nil {
+		logs.Errorf("failed to generate device, order id: %s, err: %v, rid: %s", key, err, kt.Rid)
 		return err
 	}
 
@@ -173,13 +196,11 @@ func shouldDispatch(status types.ApplyStatus) bool {
 }
 
 // getApplyOrder gets apply order by order id
-func (d *Dispatcher) getApplyOrder(key string) (*types.ApplyOrder, error) {
-	filter := &mapstr.MapStr{
-		"suborder_id": key,
-	}
-	order, err := model.Operation().ApplyOrder().GetApplyOrder(context.Background(), filter)
+func (d *Dispatcher) getApplyOrder(kt *kit.Kit, key string) (*types.ApplyOrder, error) {
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", key))
+	order, err := model.Operation().ApplyOrder().GetApplyOrder(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to get apply order by id: %s", key)
+		logs.Errorf("failed to get apply order by id: %s, err: %v, rid: %s", key, err, kt.Rid)
 		return nil, err
 	}
 
@@ -187,22 +208,32 @@ func (d *Dispatcher) getApplyOrder(key string) (*types.ApplyOrder, error) {
 }
 
 // lockApplyOrder locks apply order to avoid order repeat dispatch
-func (d *Dispatcher) lockApplyOrder(order *types.ApplyOrder) error {
-	filter := &mapstr.MapStr{
-		"suborder_id": order.SubOrderId,
-		"status": &mapstr.MapStr{
-			pkg.BKDBNE: types.ApplyStatusMatching,
-		},
+func (d *Dispatcher) lockApplyOrder(kt *kit.Kit, order *types.ApplyOrder) error {
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", order.SubOrderId),
+		tools.RuleNotEqual("status", types.ApplyStatusMatching),
+	)
+
+	// 校验该查询条件是否存在子单数据
+	applyOrder, err := model.Operation().ApplyOrder().GetApplyOrder(kt, filter)
+	if err != nil {
+		logs.Errorf("failed to query apply order, id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
+		return err
 	}
 
-	doc := &mapstr.MapStr{
-		"status":     types.ApplyStatusMatching,
-		"retry_time": order.RetryTime + 1,
-		"update_at":  time.Now(),
+	if applyOrder == nil || len(applyOrder.SubOrderId) == 0 {
+		logs.Warnf("failed to lock apply order, apply order not found, subOrderID: %s, stage: %s, status: %s",
+			order.SubOrderId, order.Stage, order.Status)
+		return errf.Newf(errf.InvalidParameter, "failed to lock apply order, apply order not found, subOrderID: %s",
+			order.SubOrderId)
 	}
 
-	if err := model.Operation().ApplyOrder().UpdateApplyOrder(context.Background(), filter, doc); err != nil {
-		logs.Errorf("failed to lock apply order, id: %s, err: %v", order.SubOrderId, err)
+	update := &cvmapplyproto.ZiyanCvmApplySuborderUpdateReq{
+		Status:    types.ApplyStatusMatching,
+		RetryTime: cvt.ValToPtr(order.RetryTime + 1),
+	}
+	if err = model.Operation().ApplyOrder().UpdateApplyOrder(kt, filter, update); err != nil {
+		logs.Errorf("failed to lock apply order, id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return err
 	}
 
@@ -234,21 +265,18 @@ func (d *Dispatcher) generateDevices(kt *kit.Kit, order *types.ApplyOrder) error
 }
 
 // updateApplyOrderStatus update apply order status
-func (d *Dispatcher) updateApplyOrderStatus(order *types.ApplyOrder, stage types.TicketStage,
-	status types.ApplyStatus) error {
+func (d *Dispatcher) updateApplyOrderStatus(kt *kit.Kit, order *types.ApplyOrder,
+	stage types.TicketStage, status types.ApplyStatus) error {
 
-	filter := &mapstr.MapStr{
-		"suborder_id": order.SubOrderId,
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", order.SubOrderId))
+
+	update := &cvmapplyproto.ZiyanCvmApplySuborderUpdateReq{
+		Stage:  stage,
+		Status: status,
 	}
 
-	doc := &mapstr.MapStr{
-		"stage":     stage,
-		"status":    status,
-		"update_at": time.Now(),
-	}
-
-	if err := model.Operation().ApplyOrder().UpdateApplyOrder(context.Background(), filter, doc); err != nil {
-		logs.Errorf("failed to update apply order status, id: %s, err: %v", order.SubOrderId, err)
+	if err := model.Operation().ApplyOrder().UpdateApplyOrder(kt, filter, update); err != nil {
+		logs.Errorf("failed to update apply order status, id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return err
 	}
 

@@ -57,7 +57,7 @@ func (s *service) CreateApplyOrder(cts *rest.Contexts) (interface{}, error) {
 		return nil, err
 	}
 
-	rst, err := s.logics.CreateApplyOrder(cts.Kit, input)
+	rst, err := s.logics.CreateCvmProductApplyOrder(cts.Kit, input)
 	if err != nil {
 		logs.Errorf("failed to create apply order, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, err

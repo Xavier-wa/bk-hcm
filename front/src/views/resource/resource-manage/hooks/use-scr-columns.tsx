@@ -711,17 +711,17 @@ export default (type: string, isSimpleShow = false) => {
     { label: '所在母机IP', field: 'owner_ip', render: ({ row }: any) => row.owner_ip || '--' },
     {
       label: '交付时间',
-      field: 'update_at',
+      field: 'updated_at',
       width: 160,
       render: ({ cell }: any) => timeFormatter(cell),
-      exportFormatter: (row: any) => timeFormatter(row.update_at),
+      exportFormatter: (row: any) => timeFormatter(row.updated_at),
     },
     {
       label: '申请时间',
-      field: 'create_at',
+      field: 'created_at',
       width: 160,
       render: ({ cell }: any) => timeFormatter(cell),
-      exportFormatter: (row: any) => timeFormatter(row.create_at),
+      exportFormatter: (row: any) => timeFormatter(row.created_at),
     },
     {
       label: '备注信息',
@@ -884,17 +884,17 @@ export default (type: string, isSimpleShow = false) => {
     },
     {
       label: '更新时间',
-      field: 'update_at',
+      field: 'updated_at',
       width: 160,
       render: ({ cell }: any) => timeFormatter(cell),
-      formatter: ({ update_at }: any) => timeFormatter(update_at),
+      formatter: ({ updated_at }: any) => timeFormatter(updated_at),
     },
     {
       label: '创建时间',
-      field: 'create_at',
+      field: 'created_at',
       width: 160,
       render: ({ cell }: any) => timeFormatter(cell),
-      formatter: ({ create_at }: any) => timeFormatter(create_at),
+      formatter: ({ created_at }: any) => timeFormatter(created_at),
     },
   ];
   const getRecycleTaskStatusView = (value: string) => {
@@ -2999,7 +2999,7 @@ export default (type: string, isSimpleShow = false) => {
     },
     {
       label: '创建时间',
-      field: 'create_at',
+      field: 'created_at',
       sort: {
         value: 'desc',
       },
@@ -3008,7 +3008,7 @@ export default (type: string, isSimpleShow = false) => {
     },
     {
       label: '结束时间',
-      field: 'update_at',
+      field: 'updated_at',
       width: 160,
       render: ({ cell }: any) => timeFormatter(cell),
     },

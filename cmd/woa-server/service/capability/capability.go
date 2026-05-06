@@ -35,6 +35,7 @@ import (
 	"hcm/cmd/woa-server/logics/task/recycler"
 	"hcm/cmd/woa-server/logics/task/scheduler"
 	taskStatistics "hcm/cmd/woa-server/logics/task/statistics"
+	"hcm/cmd/woa-server/storage/dal"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/enumor"
@@ -54,6 +55,7 @@ import (
 type Capability struct {
 	Client         *client.ClientSet
 	Dao            dao.Set
+	MongoDB        dal.DB
 	WebService     *restful.WebService
 	PlanController plan.Logics
 	CmdbCli        cmdb.Client

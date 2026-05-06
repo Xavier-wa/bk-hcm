@@ -148,6 +148,7 @@ export default defineComponent({
             <bk-form-item label={t('云盘类型')} property='disk_type' required class={cssModule['span-line']}>
               <bk-select
                 disabled={props.type === AdjustType.time}
+                filterable
                 clearable
                 loading={isLoadingDiskTypes.value}
                 modelValue={props.planTicketDemand.cbs.disk_type}

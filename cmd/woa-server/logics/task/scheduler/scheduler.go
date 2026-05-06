@@ -48,6 +48,7 @@ import (
 	"hcm/pkg/adaptor/types/cvm"
 	"hcm/pkg/api/core"
 	protocloud "hcm/pkg/api/data-service/cloud"
+	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	dissolveproto "hcm/pkg/api/data-service/dissolve"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
@@ -57,6 +58,7 @@ import (
 	"hcm/pkg/criteria/mapstr"
 	"hcm/pkg/dal"
 	"hcm/pkg/dal/dao/tools"
+	tabletypes "hcm/pkg/dal/table/types"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/runtime/filter"
@@ -69,7 +71,6 @@ import (
 	cvt "hcm/pkg/tools/converter"
 	"hcm/pkg/tools/language"
 	"hcm/pkg/tools/maps"
-	"hcm/pkg/tools/metadata"
 	"hcm/pkg/tools/querybuilder"
 	"hcm/pkg/tools/slice"
 	"hcm/pkg/tools/util"
@@ -105,8 +106,6 @@ type Interface interface {
 	GetApplyGenerate(kit *kit.Kit, param *types.GetApplyGenerateReq) (*types.GetApplyGenerateRst, error)
 	// GetApplyInit gets resource apply order init records
 	GetApplyInit(kit *kit.Kit, param *types.GetApplyInitReq) (*types.GetApplyInitRst, error)
-	// GetApplyDiskCheck gets resource apply order disk check records
-	GetApplyDiskCheck(kit *kit.Kit, param *types.GetApplyInitReq) (*types.GetApplyDiskCheckRst, error)
 	// GetApplyDeliver gets resource apply order deliver records
 	GetApplyDeliver(kit *kit.Kit, param *types.GetApplyDeliverReq) (*types.GetApplyDeliverRst, error)
 	// GetApplyDevice get resource apply delivered devices
@@ -136,23 +135,23 @@ type Interface interface {
 	// GetApplyModify gets resource apply order modify records
 	GetApplyModify(kit *kit.Kit, param *types.GetApplyModifyReq) (*types.GetApplyModifyRst, error)
 	// DeliverDevice deliver one device to business
-	DeliverDevice(info *types.DeviceInfo, order *types.ApplyOrder) error
+	DeliverDevice(kt *kit.Kit, info *types.DeviceInfo, order *types.ApplyOrder) error
 	// SetDeviceDelivered set device info delivered
-	SetDeviceDelivered(info *types.DeviceInfo) error
+	SetDeviceDelivered(kt *kit.Kit, info *types.DeviceInfo) error
 	// GetGenerateRecords check and update cvm device
 	GetGenerateRecords(kt *kit.Kit, orderId string) ([]*types.GenerateRecord, error)
 	// AddCvmDevices check and update cvm device
-	AddCvmDevices(kit *kit.Kit, taskId string, generateId uint64, order *types.ApplyOrder) error
+	AddCvmDevices(kit *kit.Kit, taskId string, generateID string, order *types.ApplyOrder) error
 	// UpdateOrderStatus check generate record by order id
-	UpdateOrderStatus(resType types.ResourceType, suborderID string) error
+	UpdateOrderStatus(kt *kit.Kit, resType types.ResourceType, suborderID string) error
 	// UpdateHostOperator update operator of host
 	UpdateHostOperator(info *types.DeviceInfo, hostId int64, operator string) error
 	// ProcessInitStep process init step
-	ProcessInitStep(device *types.DeviceInfo) error
+	ProcessInitStep(kt *kit.Kit, device *types.DeviceInfo) error
 	// CheckSopsUpdate check if the sops task is completed and update the initialization status
-	CheckSopsUpdate(bkBizID int64, info *types.DeviceInfo, jobUrl string, jobIDStr string) error
+	CheckSopsUpdate(kt *kit.Kit, bkBizID int64, info *types.DeviceInfo, jobUrl string, jobIDStr string) error
 	// RunDiskCheck run disk check
-	RunDiskCheck(order *types.ApplyOrder, devices []*types.DeviceInfo) ([]*types.DeviceInfo, error)
+	RunDiskCheck(kt *kit.Kit, order *types.ApplyOrder, devices []*types.DeviceInfo) ([]*types.DeviceInfo, error)
 	// DeliverDevices deliver devices to business
 	DeliverDevices(kt *kit.Kit, order *types.ApplyOrder, observeDevices []*types.DeviceInfo) error
 	// FinalApplyStep after deliver device, update generate record status and order status
@@ -175,6 +174,13 @@ type Interface interface {
 	CreateUpgradeTicketANDOrder(kt *kit.Kit, param *types.ApplyReq) (*types.CreateUpgradeCrpOrderResult, error)
 	// UpdateApplyTicketDemand update apply ticket demand
 	UpdateApplyTicketDemand(kt *kit.Kit, param *types.ApplyTicket) error
+
+	// FillCVMAppliedCore fill cvm applied core
+	FillCVMAppliedCore(kt *kit.Kit, param *types.ApplyReq) (*types.ApplyReq, error)
+	// UpdateTicketState update ticket state
+	UpdateTicketState(kt *kit.Kit, orderId uint64, stage types.TicketStage) error
+	// InitUpgradeCVMSteps init upgrade cvm steps
+	InitUpgradeCVMSteps(kt *kit.Kit, suborderId string, total uint) error
 }
 
 // scheduler provides resource apply service
@@ -265,19 +271,16 @@ func (s *scheduler) UpdateApplyTicket(kt *kit.Kit, param *types.ApplyReq) (*type
 func (s *scheduler) createApplyTicket(kt *kit.Kit, param *types.ApplyReq,
 	stage types.TicketStage) (*types.CreateApplyOrderResult, error) {
 
-	orderId, err := model.Operation().ApplyOrder().NextSequence(kt.Ctx)
-	if err != nil {
-		return nil, errf.Newf(pkg.CCErrObjectDBOpErrno, err.Error())
-	}
-
 	for _, suborder := range param.Suborders {
 		if suborder.Source == "" {
 			suborder.Source = enumor.ApplyTicketSrcBusiness
 		}
 	}
+	if param.ProductType == "" {
+		param.ProductType = enumor.ProductTypeBusiness
+	}
 	now := time.Now()
 	ticket := &types.ApplyTicket{
-		OrderId:      orderId,
 		Stage:        stage,
 		BkBizId:      param.BkBizId,
 		User:         param.User,
@@ -289,12 +292,14 @@ func (s *scheduler) createApplyTicket(kt *kit.Kit, param *types.ApplyReq,
 		Suborders:    param.Suborders,
 		CreateAt:     now,
 		UpdateAt:     now,
+		ProductType:  param.ProductType,
 	}
 
-	logs.V(9).Infof("ticket data: %+v", ticket)
+	logs.V(9).Infof("create apply ticket data, bkBizID: %d, ticket: %+v, rid: %s", param.BkBizId, ticket, kt.Rid)
 
-	if err := model.Operation().ApplyTicket().CreateApplyTicket(kt.Ctx, ticket); err != nil {
-		logs.Errorf("failed to create apply ticket, err: %v, rid: %s", err, kt.Rid)
+	orderId, err := model.Operation().ApplyTicket().CreateApplyTicket(kt, ticket)
+	if err != nil {
+		logs.Errorf("failed to create apply ticket, err: %v, ticket: %+v, rid: %s", err, cvt.PtrToVal(ticket), kt.Rid)
 		return nil, err
 	}
 
@@ -308,13 +313,10 @@ func (s *scheduler) createApplyTicket(kt *kit.Kit, param *types.ApplyReq,
 func (s *scheduler) updateApplyTicket(kt *kit.Kit, param *types.ApplyReq,
 	stage types.TicketStage) (*types.CreateApplyOrderResult, error) {
 
-	filter := mapstr.MapStr{
-		"order_id": param.OrderId,
-	}
-
-	origin, err := model.Operation().ApplyTicket().GetApplyTicket(kt.Ctx, &filter)
+	filter := tools.ExpressionAnd(tools.RuleEqual("order_id", param.OrderId))
+	origin, err := model.Operation().ApplyTicket().GetApplyTicket(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to update apply ticket, err: %v, rid: %s", err, kt.Rid)
+		logs.Errorf("failed to update apply ticket, err: %v, ticket: %+v, rid: %s", err, origin, kt.Rid)
 		return nil, err
 	}
 
@@ -324,21 +326,25 @@ func (s *scheduler) updateApplyTicket(kt *kit.Kit, param *types.ApplyReq,
 		return nil, fmt.Errorf("invalid ticket stage:%s != %s", origin.Stage, types.TicketStageUncommit)
 	}
 
-	update := mapstr.MapStr{
-		"order_id":      param.OrderId,
-		"stage":         stage,
-		"bk_biz_id":     param.BkBizId,
-		"bk_username":   param.User,
-		"follower":      param.Follower,
-		"enable_notice": param.EnableNotice,
-		"require_type":  param.RequireType,
-		"expect_time":   param.ExpectTime,
-		"remark":        param.Remark,
-		"suborders":     param.Suborders,
-		"update_at":     time.Now(),
+	follower, err := model.MarshalToJsonField(param.Follower)
+	if err != nil {
+		return nil, fmt.Errorf("marshal follower failed: %v", err)
 	}
 
-	if err := model.Operation().ApplyTicket().UpdateApplyTicket(kt.Ctx, &filter, update); err != nil {
+	update := &cvmapplyproto.ZiyanCvmApplyOrderUpdateReq{
+		OrderID:      param.OrderId,
+		Stage:        stage,
+		BkBizID:      param.BkBizId,
+		BkUsername:   param.User,
+		Follower:     follower,
+		EnableNotice: cvt.ValToPtr(param.EnableNotice),
+		RequireType:  param.RequireType,
+		ExpectTime:   cvt.ValToPtr(param.ExpectTime),
+		Remark:       param.Remark,
+		Suborders:    param.Suborders,
+	}
+
+	if err = model.Operation().ApplyTicket().UpdateApplyTicket(kt, filter, update); err != nil {
 		logs.Errorf("failed to update apply ticket, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
@@ -351,20 +357,21 @@ func (s *scheduler) updateApplyTicket(kt *kit.Kit, param *types.ApplyReq,
 }
 
 // GetApplyTicket gets resource apply ticket
-func (s *scheduler) GetApplyTicket(kit *kit.Kit, param *types.GetApplyTicketReq) (
+func (s *scheduler) GetApplyTicket(kt *kit.Kit, param *types.GetApplyTicketReq) (
 	*types.GetApplyTicketRst, error) {
 
-	filter := mapstr.MapStr{
-		"order_id": param.OrderId,
-	}
+	rules := make([]*filter.AtomRule, 0)
+	rules = append(rules, tools.RuleEqual("order_id", param.OrderId))
+
 	// 业务下查询时，只查询传入业务对应的单据
 	if param.BkBizID > 0 && param.BkBizID != constant.UnassignedBiz {
-		filter["bk_biz_id"] = param.BkBizID
+		rules = append(rules, tools.RuleEqual("bk_biz_id", param.BkBizID))
 	}
 
-	inst, err := model.Operation().ApplyTicket().GetApplyTicket(kit.Ctx, &filter)
+	filter := tools.ExpressionAnd(rules...)
+	inst, err := model.Operation().ApplyTicket().GetApplyTicket(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to get apply ticket, err: %v, rid: %s", err, kit.Rid)
+		logs.Errorf("failed to get apply ticket, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
 
@@ -391,15 +398,16 @@ func (s *scheduler) GetApplyTicket(kit *kit.Kit, param *types.GetApplyTicketReq)
 func (s *scheduler) GetApplyAuditItsm(kt *kit.Kit, param *types.GetApplyAuditItsmReq) (
 	*types.GetApplyAuditItsmRst, error) {
 
-	filter := mapstr.MapStr{
-		"order_id": param.OrderId,
-	}
+	rules := make([]*filter.AtomRule, 0)
+	rules = append(rules, tools.RuleEqual("order_id", param.OrderId))
+
 	// 业务下查询时，只查询传入业务对应的单据
 	if param.BkBizID > 0 && param.BkBizID != constant.UnassignedBiz {
-		filter["bk_biz_id"] = param.BkBizID
+		rules = append(rules, tools.RuleEqual("bk_biz_id", param.BkBizID))
 	}
 
-	inst, err := model.Operation().ApplyTicket().GetApplyTicket(kt.Ctx, &filter)
+	filter := tools.ExpressionAnd(rules...)
+	inst, err := model.Operation().ApplyTicket().GetApplyTicket(kt, filter)
 	if err != nil {
 		logs.Errorf("failed to get apply ticket audit info, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
@@ -675,20 +683,17 @@ func (s *scheduler) AuditTicket(kit *kit.Kit, param *types.ApplyAuditReq) error 
 type checker func(s *scheduler, kit *kit.Kit, order *types.ApplyTicket) (string, bool, error)
 
 // AutoAuditTicket system automatic audit resource apply ticket callback
-func (s *scheduler) AutoAuditTicket(kit *kit.Kit, param *types.ApplyAutoAuditReq) (*types.ApplyAutoAuditRst, error) {
-	filter := mapstr.MapStr{
-		"order_id": param.OrderId,
-	}
-
-	order, err := model.Operation().ApplyTicket().GetApplyTicket(kit.Ctx, &filter)
+func (s *scheduler) AutoAuditTicket(kt *kit.Kit, param *types.ApplyAutoAuditReq) (*types.ApplyAutoAuditRst, error) {
+	filter := tools.ExpressionAnd(tools.RuleEqual("order_id", param.OrderId))
+	order, err := model.Operation().ApplyTicket().GetApplyTicket(kt, filter)
 	if err != nil {
-		logs.Errorf("failed to auto audit order %d, err: %v, rid: %s", param.OrderId, err, kit.Rid)
+		logs.Errorf("failed to auto audit order %d, err: %v, rid: %s", param.OrderId, err, kt.Rid)
 		return nil, fmt.Errorf("failed to auto audit order %d, err: %v", param.OrderId, err)
 	}
 
 	if order.Stage != types.TicketStageAudit {
 		logs.Errorf("failed to auto audit order %d, for invalid stage %s != AUDIT, rid: %s", param.OrderId, order.Stage,
-			kit.Rid)
+			kt.Rid)
 		return nil, fmt.Errorf("order %d is not at AUDIT stage", param.OrderId)
 	}
 
@@ -705,9 +710,9 @@ func (s *scheduler) AutoAuditTicket(kit *kit.Kit, param *types.ApplyAutoAuditReq
 		checkGPUResource,
 	}
 	for _, checkerRule := range checkerRules {
-		reason, needAudit, err := checkerRule(s, kit, order)
+		reason, needAudit, err := checkerRule(s, kt, order)
 		if err != nil {
-			logs.Errorf("failed to check %s, err: %v, rid: %s", reflect.TypeOf(checkerRule).Name(), err, kit.Rid)
+			logs.Errorf("failed to check %s, err: %v, rid: %s", reflect.TypeOf(checkerRule).Name(), err, kt.Rid)
 			return nil, err
 		}
 
@@ -842,7 +847,7 @@ func checkResourceType(_ *scheduler, _ *kit.Kit, order *types.ApplyTicket) (stri
 	// 所有物理机资源申请，都需要人工审核
 	for _, suborder := range order.Suborders {
 		if suborder.ResourceType == types.ResourceTypePm {
-			reason := fmt.Sprintf("order %d apply resource type %s, but require type is %s",
+			reason := fmt.Sprintf("order %d apply resource type %s, but require type is %d",
 				order.OrderId, suborder.ResourceType, order.RequireType)
 			return reason, true, nil
 		}
@@ -867,21 +872,18 @@ func checkGPUResource(_ *scheduler, _ *kit.Kit, order *types.ApplyTicket) (strin
 
 // ApproveTicket approve or reject resource apply ticket
 func (s *scheduler) ApproveTicket(kt *kit.Kit, param *types.ApproveApplyReq) error {
-	filter := mapstr.MapStr{
-		"order_id": param.OrderId,
-	}
+	filter := tools.ExpressionAnd(tools.RuleEqual("order_id", param.OrderId))
 
 	stage := types.TicketStageTerminate
 	if param.Approval {
 		stage = types.TicketStageRunning
 	}
-	update := mapstr.MapStr{
-		"stage":     stage,
-		"update_at": time.Now(),
+	update := &cvmapplyproto.ZiyanCvmApplyOrderUpdateReq{
+		Stage: stage,
 	}
 
 	err := dal.RunTransaction(kt, func(sc mongo.SessionContext) error {
-		if err := model.Operation().ApplyTicket().UpdateApplyTicket(sc, &filter, update); err != nil {
+		if err := model.Operation().ApplyTicket().UpdateApplyTicket(kt, filter, update); err != nil {
 			logs.Errorf("failed to update apply ticket, orderId: %d, err: %v, rid: %s", param.OrderId, err, kt.Rid)
 			return err
 		}
@@ -899,8 +901,9 @@ func (s *scheduler) ApproveTicket(kt *kit.Kit, param *types.ApproveApplyReq) err
 	})
 
 	if err != nil {
-		update["stage"] = types.TicketStageTerminate
-		if updateErr := model.Operation().ApplyTicket().UpdateApplyTicket(kt.Ctx, &filter, update); updateErr != nil {
+		update.Stage = types.TicketStageTerminate
+		if updateErr := model.Operation().ApplyTicket().UpdateApplyTicket(
+			kt, filter, update); updateErr != nil {
 			logs.Errorf("failed to update apply ticket, orderId: %d, err: %v, rid: %s", param.OrderId, updateErr,
 				kt.Rid)
 			return updateErr
@@ -912,11 +915,8 @@ func (s *scheduler) ApproveTicket(kt *kit.Kit, param *types.ApproveApplyReq) err
 }
 
 func (s *scheduler) createSubOrders(kt *kit.Kit, orderId uint64) error {
-	filter := mapstr.MapStr{
-		"order_id": orderId,
-	}
-
-	ticket, err := model.Operation().ApplyTicket().GetApplyTicket(kt.Ctx, &filter)
+	filter := tools.ExpressionAnd(tools.RuleEqual("order_id", orderId))
+	ticket, err := model.Operation().ApplyTicket().GetApplyTicket(kt, filter)
 	if err != nil {
 		logs.Errorf("failed to get apply ticket by filter: %+v, err: %v, rid: %s", filter, err, kt.Rid)
 		return err
@@ -941,9 +941,6 @@ func (s *scheduler) createSubOrders(kt *kit.Kit, orderId uint64) error {
 	suborders := make([]*types.ApplyOrder, len(subOrders))
 	purchaseToResPoolUser := cc.WoaServer().ApplyTicketConfig.PurchaseToResourcePool.User
 	for index, suborder := range subOrders {
-		// TODO: delete debug log
-		logs.V(5).Infof("suborder data: %+v", suborder)
-
 		subOrder := &types.ApplyOrder{
 			OrderId:           orderId,
 			SubOrderId:        fmt.Sprintf("%d-%d", orderId, index+1),
@@ -955,6 +952,7 @@ func (s *scheduler) createSubOrders(kt *kit.Kit, orderId uint64) error {
 			ExpectTime:        ticket.ExpectTime,
 			ResourceType:      suborder.ResourceType,
 			Source:            suborder.Source,
+			ProductType:       ticket.ProductType,
 			Spec:              suborder.Spec,
 			AntiAffinityLevel: suborder.AntiAffinityLevel,
 			EnableDiskCheck:   suborder.EnableDiskCheck,
@@ -977,15 +975,16 @@ func (s *scheduler) createSubOrders(kt *kit.Kit, orderId uint64) error {
 			subOrder.Stage = types.TicketStageUncommit
 			subOrder.User = purchaseToResPoolUser
 		}
-		logs.V(4).Infof("suborder data: %+v", subOrder)
+		logs.V(4).Infof("create apply suborder data, bkBizID: %d, subOrder: %+v, rid: %s",
+			ticket.BkBizId, subOrder, kt.Rid)
 
-		if err := model.Operation().ApplyOrder().CreateApplyOrder(kt.Ctx, subOrder); err != nil {
-			logs.Errorf("failed to create apply order, err: %v, rid: %s", err, kt.Rid)
+		if err = model.Operation().ApplyOrder().CreateApplyOrder(kt, subOrder); err != nil {
+			logs.Errorf("failed to create apply order, err: %v, subOrder: %+v, rid: %s", err, subOrder, kt.Rid)
 			return err
 		}
 
 		// init all step record
-		if err := s.initAllSteps(kt, subOrder.SubOrderId, subOrder.TotalNum, subOrder.EnableDiskCheck); err != nil {
+		if err = s.initAllSteps(kt, subOrder.SubOrderId, subOrder.TotalNum, subOrder.EnableDiskCheck); err != nil {
 			logs.Errorf("failed to init apply step record, err: %v, rid: %s", err, kt.Rid)
 			return err
 		}
@@ -1121,21 +1120,21 @@ func (s *scheduler) initAllSteps(kt *kit.Kit, suborderId string, total uint,
 	enableDiskCheck bool) error {
 	// init commit step
 	stepID := 1
-	if err := record.CreateCommitStep(kt.Ctx, suborderId, total, stepID); err != nil {
+	if err := record.CreateCommitStep(kt, suborderId, total, stepID); err != nil {
 		logs.Errorf("order %s failed to create commit step, err: %v, rid: %s", suborderId, err, kt.Rid)
 		return err
 	}
 
 	// init generate step
 	stepID++
-	if err := record.CreateGenerateStep(kt.Ctx, suborderId, total, stepID); err != nil {
+	if err := record.CreateGenerateStep(kt, suborderId, total, stepID); err != nil {
 		logs.Errorf("order %s failed to create generate step, err: %v, rid: %s", suborderId, err, kt.Rid)
 		return err
 	}
 
 	// init init step
 	stepID++
-	if err := record.CreateInitStep(kt.Ctx, suborderId, total, stepID); err != nil {
+	if err := record.CreateInitStep(kt, suborderId, total, stepID); err != nil {
 		logs.Errorf("order %s failed to create init step, err: %v, rid: %s", suborderId, err, kt.Rid)
 		return err
 	}
@@ -1143,7 +1142,7 @@ func (s *scheduler) initAllSteps(kt *kit.Kit, suborderId string, total uint,
 	if enableDiskCheck {
 		// init disk check step
 		stepID++
-		if err := record.CreateDiskCheckStep(kt.Ctx, suborderId, total, stepID); err != nil {
+		if err := record.CreateDiskCheckStep(kt, suborderId, total, stepID); err != nil {
 			logs.Errorf("order %s failed to create disk check step, err: %v, rid: %s", suborderId, err, kt.Rid)
 			return err
 		}
@@ -1151,7 +1150,7 @@ func (s *scheduler) initAllSteps(kt *kit.Kit, suborderId string, total uint,
 
 	// init deliver step
 	stepID++
-	if err := record.CreateDeliverStep(kt.Ctx, suborderId, total, stepID); err != nil {
+	if err := record.CreateDeliverStep(kt, suborderId, total, stepID); err != nil {
 		logs.Errorf("order %s failed to create deliver step, err: %v, rid: %s", suborderId, err, kt.Rid)
 		return err
 	}
@@ -1175,51 +1174,47 @@ func (s *scheduler) CreateApplyOrder(kt *kit.Kit, param *types.ApplyReq) (*types
 		return nil, err
 	}
 
-	param, err = s.fillCVMAppliedCore(kt, param)
+	param, err = s.FillCVMAppliedCore(kt, param)
 	if err != nil {
 		logs.Errorf("failed to fill applied core, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
 
-	txnErr := dal.RunTransaction(kt, func(sc mongo.SessionContext) error {
-		sessionKit := &kit.Kit{Ctx: sc, Rid: kt.Rid}
-		if param.OrderId <= 0 {
-			rst, err = s.createApplyTicket(sessionKit, param, types.TicketStageAudit)
-		} else {
-			rst, err = s.updateApplyTicket(sessionKit, param, types.TicketStageAudit)
-		}
-		if err != nil {
-			logs.Errorf("failed to create apply order, orderId: %d, err: %v, rid: %s", param.OrderId, err, kt.Rid)
-			return err
-		}
+	if param.OrderId <= 0 {
+		rst, err = s.createApplyTicket(kt, param, types.TicketStageAudit)
+	} else {
+		rst, err = s.updateApplyTicket(kt, param, types.TicketStageAudit)
+	}
+	if err != nil {
+		logs.Errorf("failed to create apply order, orderId: %d, err: %v, rid: %s", param.OrderId, err, kt.Rid)
+		return nil, err
+	}
 
-		resType := types.ResourceTypeCvm
-		if len(param.Suborders) > 0 && param.Suborders[0] != nil {
-			resType = param.Suborders[0].ResourceType
-		}
-		resp, err := s.itsm.CreateApplyTicket(sessionKit, param.User, rst.OrderId, param.BkBizId, param.Remark,
-			string(resType))
-		if err != nil {
-			logs.Errorf("failed to create apply order, for create itsm ticket err: %v, rid: %s, orderId: %d, BkBIzId: %d",
-				err, kt.Rid, rst.OrderId, param.BkBizId)
-			return err
-		}
+	resType := types.ResourceTypeCvm
+	if len(param.Suborders) > 0 && param.Suborders[0] != nil {
+		resType = param.Suborders[0].ResourceType
+	}
+	resp, err := s.itsm.CreateApplyTicket(kt, param.User, rst.OrderId, param.BkBizId, param.Remark,
+		string(resType))
+	if err != nil {
+		logs.Errorf("failed to create apply order, for create itsm ticket err: %v, rid: %s, orderId: %d, BkBIzId: %d",
+			err, kt.Rid, rst.OrderId, param.BkBizId)
+		return nil, err
+	}
 
-		if resp.Code != 0 {
-			logs.Errorf("failed to create apply order, for create itsm ticket err, code: %d, msg: %s, rid: %s, orderId: %d,"+
-				" BkBIzId: %d", resp.Code, resp.ErrMsg, kt.Rid, rst.OrderId, param.BkBizId)
-			return err
-		}
+	if resp.Code != 0 {
+		logs.Errorf("failed to create apply order, for create itsm ticket err, code: %d, msg: %s, rid: %s, orderId: %d,"+
+			" BkBIzId: %d", resp.Code, resp.ErrMsg, kt.Rid, rst.OrderId, param.BkBizId)
+		return nil, err
+	}
 
-		if err = s.setTicketId(sessionKit, rst.OrderId, resp.Data.Sn); err != nil {
-			logs.Errorf("failed to create apply order, for set ticket id err: %v, rid: %s, orderId: %d, sn: %s",
-				err, kt.Rid, rst.OrderId, resp.Data.Sn)
-			return err
-		}
-		return nil
-	})
+	if err = s.setTicketId(kt, rst.OrderId, resp.Data.Sn); err != nil {
+		logs.Errorf("failed to create apply order, for set ticket id err: %v, rid: %s, orderId: %d, sn: %s",
+			err, kt.Rid, rst.OrderId, resp.Data.Sn)
+		return nil, err
+	}
 
-	return rst, txnErr
+	return rst, nil
 }
 
 func (s *scheduler) processingTicketByRequireType(kt *kit.Kit, param *types.ApplyReq) error {
@@ -1387,7 +1382,7 @@ func (s *scheduler) checkRollingServer(kt *kit.Kit, param *types.ApplyReq) error
 	return nil
 }
 
-func (s *scheduler) fillCVMAppliedCore(kt *kit.Kit, param *types.ApplyReq) (*types.ApplyReq, error) {
+func (s *scheduler) FillCVMAppliedCore(kt *kit.Kit, param *types.ApplyReq) (*types.ApplyReq, error) {
 	if param == nil {
 		logs.Errorf("failed to fill applied core, param is nil, rid: %s", kt.Rid)
 		return nil, errf.New(errf.InvalidParameter, "param is nil")
@@ -1432,16 +1427,12 @@ func (s *scheduler) fillCVMAppliedCore(kt *kit.Kit, param *types.ApplyReq) (*typ
 }
 
 func (s *scheduler) setTicketId(kt *kit.Kit, orderId uint64, itsmTicketId string) error {
-	filter := mapstr.MapStr{
-		"order_id": orderId,
+	filter := tools.ExpressionAnd(tools.RuleEqual("order_id", orderId))
+	update := &cvmapplyproto.ZiyanCvmApplyOrderUpdateReq{
+		ItsmTicketID: itsmTicketId,
 	}
 
-	doc := mapstr.MapStr{
-		"itsm_ticket_id": itsmTicketId,
-		"update_at":      time.Now(),
-	}
-
-	if err := model.Operation().ApplyTicket().UpdateApplyTicket(kt.Ctx, &filter, doc); err != nil {
+	if err := model.Operation().ApplyTicket().UpdateApplyTicket(kt, filter, update); err != nil {
 		logs.Errorf("failed to update apply ticket, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
@@ -1454,28 +1445,33 @@ func (s *scheduler) GetApplyOrder(kt *kit.Kit, param *types.GetApplyParam) (*typ
 	orderFilter := param.GetFilter(false)
 	ticketFilter := param.GetFilter(true)
 
-	page := metadata.BasePage{
-		Sort:  "-create_at",
-		Limit: pkg.BKNoLimit,
-		Start: 0,
+	var tickets []*types.ApplyTicket
+	var err error
+	page := &core.BasePage{Count: param.Page.Count, Sort: param.Page.Sort, Order: param.Page.Order}
+	if param.ShouldQueryTicketList() {
+		tickets, err = model.Operation().ApplyTicket().FindManyApplyTicket(kt, ticketFilter, page)
+		if err != nil {
+			logs.Errorf("get apply ticket failed, err: %v, rid: %s", err, kt.Rid)
+			return nil, err
+		}
 	}
 
-	tickets, err := model.Operation().ApplyTicket().FindManyApplyTicket(kt.Ctx, page, ticketFilter)
-	if err != nil {
-		logs.Errorf("get apply ticket failed, err: %v, rid: %s", err, kt.Rid)
-		return nil, err
-	}
-
-	orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt.Ctx, page, orderFilter)
+	orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt, orderFilter, page)
 	if err != nil {
 		logs.Errorf("get apply order failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
+
+	tickets = s.filterRunningTicketsBySubOrderStage(param, tickets, orders)
 	mergedOrders := s.mergeApplyTicketOrder(kt, tickets, orders, param.GetProduct)
 	total := len(mergedOrders)
 
+	if param.Page.Count {
+		return &types.GetApplyOrderRst{Count: int64(total)}, nil
+	}
+
 	// 翻页超过当前总数，直接返回空列表
-	if param.Page.Start > total {
+	if int(param.Page.Start) > total {
 		logs.Warnf("start out of range, cnt: %d, param page: %+v, rid: %s", total, param.Page, kt.Rid)
 		return &types.GetApplyOrderRst{
 			Count: int64(total),
@@ -1483,10 +1479,10 @@ func (s *scheduler) GetApplyOrder(kt *kit.Kit, param *types.GetApplyParam) (*typ
 		}, nil
 	}
 
-	begin := max(0, param.Page.Start)
+	begin := max(0, int(param.Page.Start))
 	end := total
 	if param.Page.Limit > 0 {
-		end = min(begin+param.Page.Limit, total)
+		end = min(begin+int(param.Page.Limit), total)
 	}
 
 	rst := &types.GetApplyOrderRst{
@@ -1497,6 +1493,33 @@ func (s *scheduler) GetApplyOrder(kt *kit.Kit, param *types.GetApplyParam) (*typ
 	return rst, nil
 }
 
+func (s *scheduler) filterRunningTicketsBySubOrderStage(param *types.GetApplyParam,
+	tickets []*types.ApplyTicket, orders []*types.ApplyOrder) []*types.ApplyTicket {
+
+	if len(tickets) == 0 || !util.InArray(types.TicketStageRunning, param.Stage) {
+		return tickets
+	}
+
+	runningOrderIDSet := make(map[uint64]struct{}, len(orders))
+	for _, order := range orders {
+		if order.Stage == types.TicketStageRunning {
+			runningOrderIDSet[order.OrderId] = struct{}{}
+		}
+	}
+
+	filtered := make([]*types.ApplyTicket, 0, len(tickets))
+	for _, ticket := range tickets {
+		if ticket.Stage == types.TicketStageRunning {
+			if _, exists := runningOrderIDSet[ticket.OrderId]; !exists {
+				continue
+			}
+		}
+		filtered = append(filtered, ticket)
+	}
+
+	return filtered
+}
+
 func (s *scheduler) mergeApplyTicketOrder(kt *kit.Kit, tickets []*types.ApplyTicket,
 	orders []*types.ApplyOrder, getProduct bool) []*types.UnifyOrder {
 
@@ -1505,7 +1528,18 @@ func (s *scheduler) mergeApplyTicketOrder(kt *kit.Kit, tickets []*types.ApplyTic
 	unifyTickets := s.ticketToUnifyOrder(tickets)
 	unifyOrders := s.orderToUnifyOrder(kt, orders, getProduct)
 
-	mergeOrders = append(mergeOrders, unifyTickets...)
+	// 合并前去重，避免同一 order_id 同时出现主单与子单
+	orderIDSet := make(map[uint64]struct{}, len(unifyOrders))
+	for _, order := range unifyOrders {
+		orderIDSet[order.OrderId] = struct{}{}
+	}
+
+	for _, ticket := range unifyTickets {
+		if _, exists := orderIDSet[ticket.OrderId]; exists {
+			continue
+		}
+		mergeOrders = append(mergeOrders, ticket)
+	}
 	mergeOrders = append(mergeOrders, unifyOrders...)
 
 	sort.Sort(sort.Reverse(mergeOrders))
@@ -1546,7 +1580,7 @@ func (s *scheduler) orderToUnifyOrder(kt *kit.Kit, orders []*types.ApplyOrder, g
 		// 获取实际生产成功的总数量
 		productNum := uint(0)
 		if getProduct {
-			deviceInfos, err := s.matcher.GetUnreleasedDevice(order.SubOrderId)
+			deviceInfos, err := s.matcher.GetUnreleasedDevice(kt, order.SubOrderId)
 			if err != nil {
 				// 记录日志不影响获取订单信息
 				logs.Warnf("order to unify get has product device list failed, subOrderID: %s, err: %v, rid: %s",
@@ -1597,14 +1631,11 @@ func (s *scheduler) orderToUnifyOrder(kt *kit.Kit, orders []*types.ApplyOrder, g
 }
 
 // GetApplyDetail gets resource apply order detail info
-func (s *scheduler) GetApplyDetail(kit *kit.Kit, param *types.GetApplyDetailReq) (*types.GetApplyDetailRst, error) {
-	filter := &mapstr.MapStr{
-		"suborder_id": param.SuborderId,
-	}
-
-	insts, err := model.Operation().ApplyStep().FindManyApplyStep(kit.Ctx, filter)
+func (s *scheduler) GetApplyDetail(kt *kit.Kit, param *types.GetApplyDetailReq) (*types.GetApplyDetailRst, error) {
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", param.SuborderId))
+	insts, err := model.Operation().ApplyStep().FindManyApplyStep(kt, filter)
 	if err != nil {
-		logs.Errorf("get apply order detail info failed, err: %v, rid: %s", err, kit.Rid)
+		logs.Errorf("get apply order detail info failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
 
@@ -1617,105 +1648,79 @@ func (s *scheduler) GetApplyDetail(kit *kit.Kit, param *types.GetApplyDetailReq)
 }
 
 // GetApplyGenerate gets resource apply order generate records
-func (s *scheduler) GetApplyGenerate(kit *kit.Kit, param *types.GetApplyGenerateReq) (*types.GetApplyGenerateRst,
-	error) {
+func (s *scheduler) GetApplyGenerate(kt *kit.Kit, param *types.GetApplyGenerateReq) (
+	*types.GetApplyGenerateRst, error) {
 
-	filter, err := param.GetFilter()
+	rules := []filter.RuleFactory{tools.RuleEqual("suborder_id", param.SuborderId)}
+	if param.Filter != nil {
+		rules = append(rules, param.Filter)
+	}
+	mergeFilter := &filter.Expression{
+		Op:    filter.And,
+		Rules: rules,
+	}
+
+	if param.Page.Count {
+		count, err := model.Operation().GenerateRecord().CountGenerateRecord(kt, mergeFilter)
+		if err != nil {
+			return nil, err
+		}
+		return &types.GetApplyGenerateRst{Count: int64(count)}, nil
+	}
+
+	insts, err := model.Operation().GenerateRecord().FindManyGenerateRecord(kt, mergeFilter, param.Page)
 	if err != nil {
-		logs.Errorf("get apply order generate record failed, err: %v, rid: %s", err, kit.Rid)
 		return nil, err
 	}
-	filter["suborder_id"] = param.SuborderId
 
-	count, err := model.Operation().GenerateRecord().CountGenerateRecord(kit.Ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	insts, err := model.Operation().GenerateRecord().FindManyGenerateRecord(kit.Ctx, param.Page, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	rst := &types.GetApplyGenerateRst{
-		Count: int64(count),
-		Info:  insts,
-	}
-
-	return rst, nil
+	return &types.GetApplyGenerateRst{Info: insts}, nil
 }
 
 // GetApplyInit gets resource apply order init records
-func (s *scheduler) GetApplyInit(kit *kit.Kit, param *types.GetApplyInitReq) (*types.GetApplyInitRst, error) {
-	filter, err := param.GetFilter()
-	if err != nil {
-		logs.Errorf("get apply order init record failed, err: %v, rid: %s", err, kit.Rid)
-		return nil, err
+func (s *scheduler) GetApplyInit(kt *kit.Kit, param *types.GetApplyInitReq) (*types.GetApplyInitRst, error) {
+	// Merge SuborderId and Filter conditions
+	rules := []filter.RuleFactory{tools.RuleEqual("suborder_id", param.SuborderId)}
+	if param.Filter != nil {
+		rules = append(rules, param.Filter)
 	}
-	filter["suborder_id"] = param.SuborderId
-
-	count, err := model.Operation().InitRecord().CountInitRecord(kit.Ctx, filter)
-	if err != nil {
-		return nil, err
+	mergedFilter := &filter.Expression{
+		Op:    filter.And,
+		Rules: rules,
 	}
 
-	insts, err := model.Operation().InitRecord().FindManyInitRecord(kit.Ctx, param.Page, filter)
-	if err != nil {
-		return nil, err
+	if param.Page.Count {
+		count, err := model.Operation().InitRecord().CountInitRecord(kt, mergedFilter)
+		if err != nil {
+			return nil, err
+		}
+		return &types.GetApplyInitRst{Count: int64(count)}, nil
 	}
 
-	rst := &types.GetApplyInitRst{
-		Count: int64(count),
-		Info:  insts,
-	}
-
-	return rst, nil
-}
-
-// GetApplyDiskCheck gets resource apply order disk check records
-func (s *scheduler) GetApplyDiskCheck(kit *kit.Kit, param *types.GetApplyInitReq) (*types.GetApplyDiskCheckRst,
-	error) {
-
-	filter, err := param.GetFilter()
-	if err != nil {
-		logs.Errorf("get apply order disk check record failed, err: %v, rid: %s", err, kit.Rid)
-		return nil, err
-	}
-	filter["suborder_id"] = param.SuborderId
-
-	count, err := model.Operation().DiskCheckRecord().CountDiskCheckRecord(kit.Ctx, filter)
+	insts, err := model.Operation().InitRecord().FindManyInitRecord(kt, mergedFilter, param.Page)
 	if err != nil {
 		return nil, err
 	}
 
-	insts, err := model.Operation().DiskCheckRecord().FindManyDiskCheckRecord(kit.Ctx, param.Page, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	rst := &types.GetApplyDiskCheckRst{
-		Count: int64(count),
-		Info:  insts,
-	}
-
-	return rst, nil
+	return &types.GetApplyInitRst{Info: insts}, nil
 }
 
 // GetApplyDeliver gets resource apply order deliver records
-func (s *scheduler) GetApplyDeliver(kit *kit.Kit, param *types.GetApplyDeliverReq) (*types.GetApplyDeliverRst, error) {
-	filter, err := param.GetFilter()
-	if err != nil {
-		logs.Errorf("get apply order deliver record failed, err: %v, rid: %s", err, kit.Rid)
-		return nil, err
+func (s *scheduler) GetApplyDeliver(kt *kit.Kit, param *types.GetApplyDeliverReq) (*types.GetApplyDeliverRst, error) {
+	rules := []filter.RuleFactory{tools.RuleEqual("suborder_id", param.SuborderId)}
+	if param.Filter != nil {
+		rules = append(rules, param.Filter)
 	}
-	filter["suborder_id"] = param.SuborderId
-
-	count, err := model.Operation().DeliverRecord().CountDeliverRecord(kit.Ctx, filter)
-	if err != nil {
-		return nil, err
+	mergedFilter := &filter.Expression{
+		Op:    filter.And,
+		Rules: rules,
 	}
 
-	insts, err := model.Operation().DeliverRecord().FindManyDeliverRecord(kit.Ctx, param.Page, filter)
+	count, err := model.Operation().DeliverRecord().CountDeliverRecord(kt, mergedFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	insts, err := model.Operation().DeliverRecord().FindManyDeliverRecord(kt, mergedFilter, param.Page)
 	if err != nil {
 		return nil, err
 	}
@@ -1729,28 +1734,32 @@ func (s *scheduler) GetApplyDeliver(kit *kit.Kit, param *types.GetApplyDeliverRe
 }
 
 // GetApplyDevice get resource apply delivered devices
-func (s *scheduler) GetApplyDevice(kit *kit.Kit, param *types.GetApplyDeviceReq) (*types.GetApplyDeviceRst, error) {
-	filter, err := param.GetFilter()
-	if err != nil {
-		logs.Errorf("failed to get apply order device info, err: %v, rid: %s", err, kit.Rid)
-		return nil, err
+func (s *scheduler) GetApplyDevice(kt *kit.Kit, param *types.GetApplyDeviceReq) (*types.GetApplyDeviceRst, error) {
+	rules := []filter.RuleFactory{tools.RuleEqual("is_delivered", true)}
+	if len(param.BkBizIDs) > 0 {
+		rules = append(rules, tools.RuleIn("bk_biz_id", param.BkBizIDs))
 	}
-	// return delivered device only
-	filter["is_delivered"] = true
+	if param.Filter != nil {
+		rules = append(rules, param.Filter)
+	}
+	mergedFilter := &filter.Expression{
+		Op:    filter.And,
+		Rules: rules,
+	}
 
-	if param.Page.EnableCount {
-		count, err := model.Operation().DeviceInfo().CountDeviceInfo(kit.Ctx, filter)
+	if param.Page.Count {
+		count, err := model.Operation().DeviceInfo().CountDeviceInfo(kt, mergedFilter)
 		if err != nil {
-			logs.Errorf("failed to count apply device, filter: %+v, err: %v, rid: %s", filter, err, kit.Rid)
+			logs.Errorf("failed to count apply device, filter: %+v, err: %v, rid: %s", mergedFilter, err, kt.Rid)
 			return nil, err
 		}
 		return &types.GetApplyDeviceRst{Count: int64(count)}, nil
 	}
 
-	insts, err := model.Operation().DeviceInfo().FindManyDeviceInfo(kit.Ctx, param.Page, filter)
+	insts, err := model.Operation().DeviceInfo().FindManyDeviceInfo(kt, mergedFilter, param.Page)
 	if err != nil {
 		logs.Errorf("failed to find apply device, filter: %+v, page: %+v, err: %v, rid: %s",
-			filter, param.Page, err, kit.Rid)
+			mergedFilter, param.Page, err, kt.Rid)
 		return nil, err
 	}
 
@@ -1758,28 +1767,24 @@ func (s *scheduler) GetApplyDevice(kit *kit.Kit, param *types.GetApplyDeviceReq)
 }
 
 // ExportDeliverDevice export resource apply delivered devices
-func (s *scheduler) ExportDeliverDevice(kit *kit.Kit, param *types.ExportDeliverDeviceReq) (*types.GetApplyDeviceRst,
-	error) {
+func (s *scheduler) ExportDeliverDevice(kt *kit.Kit, param *types.ExportDeliverDeviceReq) (
+	*types.GetApplyDeviceRst, error) {
 
-	filter, err := param.GetFilter()
+	rules := []filter.RuleFactory{tools.RuleEqual("is_delivered", true)}
+	if param.Filter != nil {
+		rules = append(rules, param.Filter)
+	}
+	mergedFilter := &filter.Expression{
+		Op:    filter.And,
+		Rules: rules,
+	}
+
+	count, err := model.Operation().DeviceInfo().CountDeviceInfo(kt, mergedFilter)
 	if err != nil {
-		logs.Errorf("failed to export apply delivered device info, err: %v, rid: %s", err, kit.Rid)
 		return nil, err
 	}
-	// return delivered device only
-	filter["is_delivered"] = true
 
-	count, err := model.Operation().DeviceInfo().CountDeviceInfo(kit.Ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	page := metadata.BasePage{
-		Start: 0,
-		Limit: pkg.BKNoLimit,
-	}
-
-	insts, err := model.Operation().DeviceInfo().FindManyDeviceInfo(kit.Ctx, page, filter)
+	insts, err := model.Operation().DeviceInfo().FindManyDeviceInfo(kt, mergedFilter, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2055,7 +2060,7 @@ func (s *scheduler) convertHostsToMatchDevices(hosts []cmdb.Host, pendingNum int
 // MatchDevice execute resource apply match devices
 func (s *scheduler) MatchDevice(kt *kit.Kit, param *types.MatchDeviceReq) error {
 	// get order by suborder id
-	order, err := s.generator.GetApplyOrder(param.SuborderId)
+	order, err := s.generator.GetApplyOrder(kt, param.SuborderId)
 	if err != nil {
 		logs.Errorf("failed to match cvm when get apply order, err: %v, order id: %s, rid: %s", err, param.SuborderId,
 			kt.Rid)
@@ -2063,7 +2068,7 @@ func (s *scheduler) MatchDevice(kt *kit.Kit, param *types.MatchDeviceReq) error 
 	}
 
 	// 获取实际生产成功的数量
-	deviceInfos, err := s.matcher.GetUnreleasedDevice(param.SuborderId)
+	deviceInfos, err := s.matcher.GetUnreleasedDevice(kt, param.SuborderId)
 	if err != nil {
 		logs.Errorf("failed to get product device info, subOrderID: %s, err: %v, rid: %s",
 			param.SuborderId, err, kt.Rid)
@@ -2088,8 +2093,8 @@ func (s *scheduler) MatchDevice(kt *kit.Kit, param *types.MatchDeviceReq) error 
 }
 
 // MatchPoolDevice execute resource apply match devices from resource pool
-func (s *scheduler) MatchPoolDevice(_ *kit.Kit, param *types.MatchPoolDeviceReq) error {
-	go s.generator.MatchPoolDevice(param)
+func (s *scheduler) MatchPoolDevice(kt *kit.Kit, param *types.MatchPoolDeviceReq) error {
+	go s.generator.MatchPoolDevice(kt, param)
 
 	return nil
 }
@@ -2108,15 +2113,8 @@ func (s *scheduler) ResumeApplyOrder(_ *kit.Kit, _ mapstr.MapStr) error {
 
 // StartApplyOrder starts resource apply order
 func (s *scheduler) StartApplyOrder(kt *kit.Kit, param *types.StartApplyOrderReq) error {
-	filter := map[string]interface{}{
-		"suborder_id": mapstr.MapStr{
-			pkg.BKDBIN: param.SuborderID,
-		},
-	}
-
-	page := metadata.BasePage{}
-
-	insts, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt.Ctx, page, filter)
+	filter := tools.ExpressionAnd(tools.RuleIn("suborder_id", param.SuborderID))
+	insts, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt, filter, nil)
 	if err != nil {
 		logs.Errorf("failed to get apply order, err: %v, rid: %s", err, kt.Rid)
 		return err
@@ -2156,7 +2154,6 @@ func (s *scheduler) StartApplyOrder(kt *kit.Kit, param *types.StartApplyOrderReq
 }
 
 func (s *scheduler) startOrder(kt *kit.Kit, orders []*types.ApplyOrder) error {
-	now := time.Now()
 	for _, order := range orders {
 		// cannot start apply order if its stage is not SUSPEND、CONFIRMING
 		if order.Stage != types.TicketStageSuspend && order.Stage != types.TicketStageConfirming {
@@ -2172,18 +2169,15 @@ func (s *scheduler) startOrder(kt *kit.Kit, orders []*types.ApplyOrder) error {
 			return err
 		}
 
-		filter := &mapstr.MapStr{
-			"suborder_id": order.SubOrderId,
+		filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", order.SubOrderId))
+
+		update := &cvmapplyproto.ZiyanCvmApplySuborderUpdateReq{
+			Stage:     types.TicketStageRunning,
+			Status:    types.ApplyStatusWaitForMatch,
+			RetryTime: cvt.ValToPtr(uint(0)),
 		}
 
-		update := &mapstr.MapStr{
-			"stage":      types.TicketStageRunning,
-			"status":     types.ApplyStatusWaitForMatch,
-			"retry_time": 0,
-			"update_at":  now,
-		}
-
-		if err := model.Operation().ApplyOrder().UpdateApplyOrder(context.Background(), filter, update); err != nil {
+		if err := model.Operation().ApplyOrder().UpdateApplyOrder(kt, filter, update); err != nil {
 			logs.Errorf("failed to set order %s running, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 			return fmt.Errorf("failed to set order %s running, err: %v", order.SubOrderId, err)
 		}
@@ -2200,20 +2194,19 @@ func (s *scheduler) startOrder(kt *kit.Kit, orders []*types.ApplyOrder) error {
 }
 
 func (s *scheduler) startSubOrderFailedStep(kt *kit.Kit, subOrderID string) error {
-	filter := mapstr.MapStr{
-		"suborder_id": subOrderID,
-		"status":      types.StepStatusFailed,
-	}
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", subOrderID),
+		tools.RuleEqual("status", types.StepStatusFailed),
+	)
 
 	now := time.Now()
-	doc := mapstr.MapStr{
-		"status":    types.StepStatusHandling,
-		"message":   types.StepMsgHandling,
-		"start_at":  now,
-		"update_at": now,
+	update := &cvmapplyproto.ZiyanCvmApplyStepUpdateReq{
+		Status:  cvt.ValToPtr(types.StepStatusHandling),
+		Message: types.StepMsgHandling,
+		StartAt: now.Format(constant.DateTimeLayout),
 	}
 
-	if err := model.Operation().ApplyStep().UpdateApplyStep(kt.Ctx, &filter, &doc); err != nil {
+	if err := model.Operation().ApplyStep().UpdateApplyStep(kt, filter, update); err != nil {
 		logs.Errorf("failed to start order failed step, err: %v, sub orderID: %s, rid: %s", err, subOrderID, kt.Rid)
 		return err
 	}
@@ -2237,8 +2230,10 @@ func (s *scheduler) retryFailedDevices(oldKt *kit.Kit, subOrderID string) error 
 			return fmt.Errorf("retry failed devices timeout, sub order id: %s", subOrderID)
 		}
 
-		filter := &mapstr.MapStr{"suborder_id": subOrderID}
-		order, err := model.Operation().ApplyOrder().GetApplyOrder(kt.Ctx, filter)
+		applyFilter := tools.ExpressionAnd(
+			tools.RuleEqual("suborder_id", subOrderID),
+		)
+		order, err := model.Operation().ApplyOrder().GetApplyOrder(kt, applyFilter)
 		if err != nil {
 			logs.Errorf("failed to get apply order, err: %v, sub order id: %s, rid: %s", err, subOrderID, kt.Rid)
 			return err
@@ -2258,7 +2253,7 @@ func (s *scheduler) retryFailedDevices(oldKt *kit.Kit, subOrderID string) error 
 			return fmt.Errorf("order status is not matching, id: %s, status: %s", subOrderID, order.Status)
 		}
 
-		devices, err := model.Operation().DeviceInfo().GetDeviceInfo(kt.Ctx, filter)
+		devices, err := model.Operation().DeviceInfo().GetDeviceInfo(kt, applyFilter)
 		if err != nil {
 			logs.Errorf("failed to get binding devices to sub order id: %s, err: %v, rid: %s", subOrderID, err, kt.Rid)
 			return err
@@ -2271,10 +2266,10 @@ func (s *scheduler) retryFailedDevices(oldKt *kit.Kit, subOrderID string) error 
 			return nil
 		}
 
-		genIDs := make([]int64, 0)
+		genIDs := make([]string, 0)
 		for _, device := range devices {
 			if !device.IsDelivered {
-				genIDs = append(genIDs, int64(device.GenerateId))
+				genIDs = append(genIDs, device.GenerateId)
 			}
 		}
 		if len(genIDs) == 0 {
@@ -2282,9 +2277,11 @@ func (s *scheduler) retryFailedDevices(oldKt *kit.Kit, subOrderID string) error 
 		}
 
 		genIDs = slice.Unique(genIDs)
-		filter = &mapstr.MapStr{"generate_id": &mapstr.MapStr{pkg.BKDBIN: genIDs}}
-		update := mapstr.MapStr{"is_matched": false, "update_at": time.Now()}
-		if err = model.Operation().GenerateRecord().UpdateGenerateRecord(kt.Ctx, filter, &update); err != nil {
+
+		filter := tools.ExpressionAnd(tools.RuleIn("generate_id", genIDs))
+		update := &cvmapplyproto.ZiyanCvmGenerateRecordUpdateReq{IsMatched: cvt.ValToPtr(false)}
+		if err = model.Operation().GenerateRecord().UpdateGenerateRecord(
+			kt, filter, update); err != nil {
 			logs.Errorf("failed to update generate record, err: %v, generate ids: %v, sub order id: %s, update: %+v, "+
 				"rid: %s", err, genIDs, subOrderID, update, kt.Rid)
 			return err
@@ -2296,24 +2293,17 @@ func (s *scheduler) retryFailedDevices(oldKt *kit.Kit, subOrderID string) error 
 }
 
 // TerminateApplyOrder terminates resource apply order
-func (s *scheduler) TerminateApplyOrder(kit *kit.Kit, param *types.TerminateApplyOrderReq) error {
-	filter := map[string]interface{}{
-		"suborder_id": mapstr.MapStr{
-			pkg.BKDBIN: param.SuborderID,
-		},
-	}
-
-	page := metadata.BasePage{}
-
-	insts, err := model.Operation().ApplyOrder().FindManyApplyOrder(kit.Ctx, page, filter)
+func (s *scheduler) TerminateApplyOrder(kt *kit.Kit, param *types.TerminateApplyOrderReq) error {
+	filter := tools.ExpressionAnd(tools.RuleIn("suborder_id", param.SuborderID))
+	insts, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt, filter, nil)
 	if err != nil {
-		logs.Errorf("failed to get apply order, err: %v, rid: %s", err, kit.Rid)
+		logs.Errorf("failed to get apply order, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
 
 	cnt := len(insts)
 	if cnt == 0 {
-		logs.Errorf("found no apply order to terminate, rid: %s", kit.Rid)
+		logs.Errorf("found no apply order to terminate, rid: %s", kt.Rid)
 		return fmt.Errorf("found no apply order to terminate")
 	}
 
@@ -2329,7 +2319,7 @@ func (s *scheduler) TerminateApplyOrder(kit *kit.Kit, param *types.TerminateAppl
 	}
 
 	// set order status terminate
-	if err := s.terminateOrder(insts); err != nil {
+	if err = s.terminateOrder(kt, insts); err != nil {
 		logs.Errorf("failed to terminate apply order, err: %v", err)
 		return fmt.Errorf("failed to terminate apply order, err: %v", err)
 	}
@@ -2337,27 +2327,22 @@ func (s *scheduler) TerminateApplyOrder(kit *kit.Kit, param *types.TerminateAppl
 	return nil
 }
 
-func (s *scheduler) terminateOrder(orders []*types.ApplyOrder) error {
-	now := time.Now()
+func (s *scheduler) terminateOrder(kt *kit.Kit, orders []*types.ApplyOrder) error {
 	for _, order := range orders {
 		// cannot terminate apply order if its stage is not SUSPEND
 		if order.Stage != types.TicketStageSuspend {
-			logs.Errorf("cannot terminate order %s, for its stage %s != %s", order.SubOrderId, order.Status,
-				types.TicketStageSuspend)
+			logs.Errorf("cannot terminate order %s, for its stage %s != %s, rid: %s", order.SubOrderId, order.Status,
+				types.TicketStageSuspend, kt.Rid)
 			return fmt.Errorf("cannot terminate order %s, for its stage %s != %s", order.SubOrderId, order.Stage,
 				types.TicketStageSuspend)
 		}
 
-		filter := &mapstr.MapStr{
-			"suborder_id": order.SubOrderId,
+		filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", order.SubOrderId))
+		update := &cvmapplyproto.ZiyanCvmApplySuborderUpdateReq{
+			Stage: types.TicketStageTerminate,
 		}
 
-		update := &mapstr.MapStr{
-			"stage":     types.TicketStageTerminate,
-			"update_at": now,
-		}
-
-		if err := model.Operation().ApplyOrder().UpdateApplyOrder(context.Background(), filter, update); err != nil {
+		if err := model.Operation().ApplyOrder().UpdateApplyOrder(kt, filter, update); err != nil {
 			logs.Warnf("failed to set order %s terminate, err: %v", order.SubOrderId, err)
 			return fmt.Errorf("failed to set order %s terminate, err: %v", order.SubOrderId, err)
 		}
@@ -2368,13 +2353,10 @@ func (s *scheduler) terminateOrder(orders []*types.ApplyOrder) error {
 
 // ModifyApplyOrder 修改需求重试
 func (s *scheduler) ModifyApplyOrder(kt *kit.Kit, param *types.ModifyApplyReq) error {
-	filter := &mapstr.MapStr{
-		"suborder_id": mapstr.MapStr{
-			pkg.BKDBEQ: param.SuborderID,
-		},
-	}
-
-	order, err := model.Operation().ApplyOrder().GetApplyOrder(kt.Ctx, filter)
+	applyFilter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", param.SuborderID),
+	)
+	order, err := model.Operation().ApplyOrder().GetApplyOrder(kt, applyFilter)
 	if err != nil {
 		logs.Errorf("failed to get apply order, err: %v, rid: %s", err, kt.Rid)
 		return err
@@ -2449,7 +2431,7 @@ func (s *scheduler) ModifyApplyOrder(kt *kit.Kit, param *types.ModifyApplyReq) e
 }
 
 // sendConfirmMessage 发送[蓝鲸审批助手]消息
-func (s *scheduler) sendConfirmMessage(kt *kit.Kit, order *types.ApplyOrder, modifyID uint64,
+func (s *scheduler) sendConfirmMessage(kt *kit.Kit, order *types.ApplyOrder, modifyID string,
 	param *types.ModifyApplyReq) error {
 
 	// 主机申请单的详情链接
@@ -2618,7 +2600,7 @@ func (s *scheduler) validateReplicasAndModifyParam(kt *kit.Kit, order *types.App
 	}
 
 	// 获取实际生产成功的数量
-	deviceInfos, err := s.matcher.GetUnreleasedDevice(order.SubOrderId)
+	deviceInfos, err := s.matcher.GetUnreleasedDevice(kt, order.SubOrderId)
 	if err != nil {
 		logs.Errorf("failed to get generate records, subOrderID: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return nil, err
@@ -2793,7 +2775,6 @@ func (s *scheduler) validateInheritedHostAndModifyParam(kt *kit.Kit, order *type
 }
 
 func (s *scheduler) modifyOrder(kt *kit.Kit, order *types.ApplyOrder, param *types.ModifyApplyReq) error {
-	now := time.Now()
 	// cannot modify apply order if its stage is not SUSPEND、CONFIRMING
 	if order.Stage != types.TicketStageSuspend && order.Stage != types.TicketStageConfirming {
 		logs.Errorf("cannot modify order %s, for its stage %s != %s and %s, rid: %s", order.SubOrderId, order.Status,
@@ -2808,43 +2789,46 @@ func (s *scheduler) modifyOrder(kt *kit.Kit, order *types.ApplyOrder, param *typ
 		return err
 	}
 
-	filter := &mapstr.MapStr{
-		"suborder_id": order.SubOrderId,
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", order.SubOrderId))
+	update := &cvmapplyproto.ZiyanCvmApplySuborderUpdateReq{
+		Region:            param.Spec.Region,
+		Zone:              param.Spec.Zone,
+		DeviceType:        param.Spec.DeviceType,
+		ImageID:           param.Spec.ImageId,
+		DiskSize:          cvt.ValToPtr(param.Spec.DiskSize),
+		DiskType:          param.Spec.DiskType,
+		NetworkType:       param.Spec.NetworkType,
+		Vpc:               param.Spec.Vpc,
+		Subnet:            param.Spec.Subnet,
+		FailedZoneIds:     cvt.ValToPtr(tabletypes.JsonField("[]")), // 修改需求重试时需要清空已失败的可用区，也就是全可用区重试
+		ResAssign:         cvt.ValToPtr(param.Spec.ResAssign),
+		Stage:             types.TicketStageRunning,
+		Status:            types.ApplyStatusWaitForMatch,
+		TotalNum:          cvt.ValToPtr(param.TotalNum),
+		PendingNum:        cvt.ValToPtr(param.TotalNum - param.ProductNum),
+		RetryTime:         cvt.ValToPtr(uint(0)),
+		ModifyTime:        cvt.ValToPtr(order.ModifyTime + 1),
+		InheritInstanceID: param.Spec.InheritInstanceId,
+		BkAssetID:         param.Spec.BkAssetID,
 	}
 
-	update := &mapstr.MapStr{
-		"spec.region":              param.Spec.Region,
-		"spec.zone":                param.Spec.Zone,
-		"spec.device_type":         param.Spec.DeviceType,
-		"spec.image_id":            param.Spec.ImageId,
-		"spec.disk_size":           param.Spec.DiskSize,
-		"spec.disk_type":           param.Spec.DiskType,
-		"spec.network_type":        param.Spec.NetworkType,
-		"spec.vpc":                 param.Spec.Vpc,
-		"spec.subnet":              param.Spec.Subnet,
-		"spec.failed_zone_ids":     []string{}, // 修改需求重试时需要清空已失败的可用区，也就是全可用区重试
-		"spec.zones":               param.Spec.Zones,
-		"spec.res_assign":          param.Spec.ResAssign,
-		"spec.bk_asset_id":         param.Spec.BkAssetID,
-		"spec.inherit_instance_id": param.Spec.InheritInstanceId,
-		"stage":                    types.TicketStageRunning,
-		"status":                   types.ApplyStatusWaitForMatch,
-		"total_num":                param.TotalNum,
-		"pending_num":              param.TotalNum - param.ProductNum,
-		"retry_time":               0,
-		"modify_time":              order.ModifyTime + 1,
-		"update_at":                now,
+	// Marshal JSON fields
+	var err error
+	zonesJSON, err := model.MarshalToJsonField(param.Spec.Zones)
+	if err != nil {
+		logs.Errorf("failed to marshal zones, err: %v, rid: %s", err, kt.Rid)
+		return fmt.Errorf("failed to marshal zones, err: %v", err)
 	}
+	update.Zones = cvt.ValToPtr(zonesJSON)
 
-	if err := model.Operation().ApplyOrder().UpdateApplyOrder(context.Background(), filter, update); err != nil {
+	if err = model.Operation().ApplyOrder().UpdateApplyOrder(kt, filter, update); err != nil {
 		logs.Errorf("failed to set order %s terminate, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return fmt.Errorf("failed to set order %s terminate, err: %v", order.SubOrderId, err)
 	}
 
 	go func(suborderID string) {
-		if err := s.retryFailedDevices(kt, suborderID); err != nil {
-			logs.Errorf("failed to retry failed devices, err: %v, sub orderID: %s, rid: %s", err, suborderID,
-				kt.Rid)
+		if err = s.retryFailedDevices(kt, suborderID); err != nil {
+			logs.Errorf("failed to retry failed devices, err: %v, sub orderID: %s, rid: %s", err, suborderID, kt.Rid)
 		}
 	}(order.SubOrderId)
 
@@ -2861,16 +2845,12 @@ func (s *scheduler) modifyOrderStatusConfirming(kt *kit.Kit, order *types.ApplyO
 			types.TicketStageSuspend)
 	}
 
-	filter := &mapstr.MapStr{
-		"suborder_id": order.SubOrderId,
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", order.SubOrderId))
+	update := &cvmapplyproto.ZiyanCvmApplySuborderUpdateReq{
+		Stage:  types.TicketStageConfirming,
+		Status: types.ApplyStatusConfirming,
 	}
-
-	update := &mapstr.MapStr{
-		"stage":  types.TicketStageConfirming,
-		"status": types.ApplyStatusConfirming,
-	}
-
-	if err := model.Operation().ApplyOrder().UpdateApplyOrder(context.Background(), filter, update); err != nil {
+	if err := model.Operation().ApplyOrder().UpdateApplyOrder(kt, filter, update); err != nil {
 		logs.Errorf("failed to update order %s status, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return fmt.Errorf("failed to update order %s status, err: %v", order.SubOrderId, err)
 	}
@@ -2879,17 +2859,9 @@ func (s *scheduler) modifyOrderStatusConfirming(kt *kit.Kit, order *types.ApplyO
 }
 
 func (s *scheduler) createModifyRecord(kt *kit.Kit, order *types.ApplyOrder, param *types.ModifyApplyReq,
-	status enumor.CvmModifyRecordStatus) (uint64, error) {
-
-	id, err := dao.Set().ModifyRecord().NextSequence(kt.Ctx)
-	if err != nil {
-		logs.Errorf("failed to get modify record next sequence id, subOrderID: %s, err: %v, rid: %s",
-			order.SubOrderId, err, kt.Rid)
-		return 0, errf.Newf(pkg.CCErrObjectDBOpErrno, err.Error())
-	}
+	status enumor.CvmModifyRecordStatus) (string, error) {
 
 	modifyRecord := &table.ModifyRecord{
-		ID:         id,
 		SuborderID: order.SubOrderId,
 		User:       kt.User,
 		Details: &table.ModifyDetail{
@@ -2931,35 +2903,34 @@ func (s *scheduler) createModifyRecord(kt *kit.Kit, order *types.ApplyOrder, par
 				InheritInstanceID: param.Spec.InheritInstanceId,
 			},
 		},
-		CreateAt: time.Now(),
-		Status:   status,
+		Status: status,
 	}
 
-	if err = dao.Set().ModifyRecord().CreateModifyRecord(kt.Ctx, modifyRecord); err != nil {
+	id, err := dao.Set().ModifyRecord().CreateModifyRecord(kt, s.apiClientSet, modifyRecord)
+	if err != nil {
 		logs.Errorf("failed to create modify record, subOrderID: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
-		return 0, err
+		return "", err
 	}
 
 	return id, nil
 }
 
 // updateModifyRecordStatus 更新变更记录状态
-func (s *scheduler) updateModifyRecordData(kt *kit.Kit, subOrderID string, modifyID uint64,
+func (s *scheduler) updateModifyRecordData(kt *kit.Kit, subOrderID string, modifyID string,
 	status enumor.CvmModifyRecordStatus) error {
 
-	filter := mapstr.MapStr{
-		"id":          modifyID,
-		"suborder_id": subOrderID,
+	filterExpr := tools.ExpressionAnd(
+		tools.RuleEqual("id", modifyID),
+		tools.RuleEqual("suborder_id", subOrderID),
+	)
+
+	update := &cvmapplyproto.ZiyanCvmModifyRecordUpdateReq{
+		Status:   cvt.ValToPtr(status),
+		Approver: kt.User,
 	}
 
-	update := &mapstr.MapStr{
-		"status":    status,
-		"approver":  kt.User,
-		"update_at": time.Now(),
-	}
-
-	if err := dao.Set().ModifyRecord().UpdateModifyRecord(kt.Ctx, &filter, update); err != nil {
-		logs.Errorf("failed to update modify record, err: %v, subOrderID: %s, modifyID: %d, rid: %s",
+	if err := dao.Set().ModifyRecord().UpdateModifyRecord(kt, s.apiClientSet, filterExpr, update); err != nil {
+		logs.Errorf("failed to update modify record, err: %v, subOrderID: %s, modifyID: %s, rid: %s",
 			err, subOrderID, modifyID, kt.Rid)
 		return err
 	}
@@ -2969,15 +2940,11 @@ func (s *scheduler) updateModifyRecordData(kt *kit.Kit, subOrderID string, modif
 
 // GetApplyModify gets resource apply order modify records
 func (s *scheduler) GetApplyModify(kt *kit.Kit, param *types.GetApplyModifyReq) (*types.GetApplyModifyRst, error) {
-	filter, err := param.GetFilter()
-	if err != nil {
-		logs.Errorf("failed to get apply order modify record, for get filter err: %v, rid: %s", err, kt.Rid)
-		return nil, err
-	}
+	filterExpr := param.GetFilter()
 
 	rst := &types.GetApplyModifyRst{}
-	if param.Page.EnableCount {
-		cnt, err := dao.Set().ModifyRecord().CountModifyRecord(kt.Ctx, filter)
+	if param.Page != nil && param.Page.Count {
+		cnt, err := dao.Set().ModifyRecord().CountModifyRecord(kt, s.apiClientSet, filterExpr)
 		if err != nil {
 			logs.Errorf("failed to get apply order modify record count, err: %v, rid: %s", err, kt.Rid)
 			return nil, err
@@ -2987,7 +2954,12 @@ func (s *scheduler) GetApplyModify(kt *kit.Kit, param *types.GetApplyModifyReq) 
 		return rst, nil
 	}
 
-	insts, err := dao.Set().ModifyRecord().FindManyModifyRecord(kt.Ctx, param.Page, filter)
+	if param.Page != nil && param.Page.Sort == "" {
+		param.Page.Sort = "created_at"
+		param.Page.Order = core.Descending
+	}
+
+	insts, err := dao.Set().ModifyRecord().FindManyModifyRecord(kt, s.apiClientSet, filterExpr, param.Page)
 	if err != nil {
 		logs.Errorf("failed to get apply order modify record, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
@@ -2999,8 +2971,8 @@ func (s *scheduler) GetApplyModify(kt *kit.Kit, param *types.GetApplyModifyReq) 
 }
 
 // ProcessInitStep processes orders with init step
-func (s *scheduler) ProcessInitStep(device *types.DeviceInfo) error {
-	_, errMap := s.matcher.ProcessInitStep([]*types.DeviceInfo{device})
+func (s *scheduler) ProcessInitStep(kt *kit.Kit, device *types.DeviceInfo) error {
+	_, errMap := s.matcher.ProcessInitStep(kt, []*types.DeviceInfo{device})
 	if len(errMap) != 0 {
 		return errMap[0]
 	}
@@ -3008,13 +2980,17 @@ func (s *scheduler) ProcessInitStep(device *types.DeviceInfo) error {
 }
 
 // CheckSopsUpdate checks sops task and update status, return err if sops task failed or update failed
-func (s *scheduler) CheckSopsUpdate(bkBizID int64, info *types.DeviceInfo, jobUrl string, jobIDStr string) error {
-	return s.matcher.CheckSopsUpdate(bkBizID, info, jobUrl, jobIDStr)
+func (s *scheduler) CheckSopsUpdate(kt *kit.Kit, bkBizID int64, info *types.DeviceInfo, jobUrl string,
+	jobIDStr string) error {
+
+	return s.matcher.CheckSopsUpdate(kt, bkBizID, info, jobUrl, jobIDStr)
 }
 
 // RunDiskCheck runs disk check
-func (s *scheduler) RunDiskCheck(order *types.ApplyOrder, devices []*types.DeviceInfo) ([]*types.DeviceInfo, error) {
-	return s.matcher.RunDiskCheck(order, devices)
+func (s *scheduler) RunDiskCheck(kt *kit.Kit, order *types.ApplyOrder, devices []*types.DeviceInfo) (
+	[]*types.DeviceInfo, error) {
+
+	return s.matcher.RunDiskCheck(kt, order, devices)
 }
 
 // DeliverDevices delivers devices to order biz
@@ -3029,7 +3005,7 @@ func (s *scheduler) FinalApplyStep(kt *kit.Kit, genRecord *types.GenerateRecord,
 
 // GetGenerateRecords get generate record by order id
 func (s *scheduler) GetGenerateRecords(kt *kit.Kit, subOrderId string) ([]*types.GenerateRecord, error) {
-	recordInfo, err := s.matcher.GetOrderGenRecords(subOrderId)
+	recordInfo, err := s.matcher.GetOrderGenRecords(kt, subOrderId)
 	if err != nil {
 		logs.Errorf("failed to get generate generateRecord by subOrderId, subOrderId: %s, err: %v, rid: %s", subOrderId,
 			err, kt.Rid)
@@ -3039,7 +3015,7 @@ func (s *scheduler) GetGenerateRecords(kt *kit.Kit, subOrderId string) ([]*types
 }
 
 // AddCvmDevices check and add cvm device
-func (s *scheduler) AddCvmDevices(kt *kit.Kit, taskId string, generateId uint64, order *types.ApplyOrder) error {
+func (s *scheduler) AddCvmDevices(kt *kit.Kit, taskId string, generateId string, order *types.ApplyOrder) error {
 	var err error
 	switch order.ResourceType {
 	// 升降配使用不同的CRP接口轮询单据状态
@@ -3058,8 +3034,8 @@ func (s *scheduler) AddCvmDevices(kt *kit.Kit, taskId string, generateId uint64,
 }
 
 // UpdateOrderStatus check generate record by order id
-func (s *scheduler) UpdateOrderStatus(resType types.ResourceType, suborderID string) error {
-	return s.generator.UpdateOrderStatus(resType, suborderID)
+func (s *scheduler) UpdateOrderStatus(kt *kit.Kit, resType types.ResourceType, suborderID string) error {
+	return s.generator.UpdateOrderStatus(kt, resType, suborderID)
 }
 
 // GetMatcher get matcher
@@ -3068,8 +3044,8 @@ func (s *scheduler) GetMatcher() *matcher.Matcher {
 }
 
 // DeliverDevice deliver device
-func (s *scheduler) DeliverDevice(info *types.DeviceInfo, order *types.ApplyOrder) error {
-	return s.matcher.DeliverDevice(info, order)
+func (s *scheduler) DeliverDevice(kt *kit.Kit, info *types.DeviceInfo, order *types.ApplyOrder) error {
+	return s.matcher.DeliverDevice(kt, info, order)
 }
 
 // UpdateHostOperator update host operator
@@ -3078,8 +3054,8 @@ func (s *scheduler) UpdateHostOperator(info *types.DeviceInfo, hostId int64, ope
 }
 
 // SetDeviceDelivered set device delivered
-func (s *scheduler) SetDeviceDelivered(info *types.DeviceInfo) error {
-	return s.matcher.SetDeviceDelivered(info)
+func (s *scheduler) SetDeviceDelivered(kt *kit.Kit, info *types.DeviceInfo) error {
+	return s.matcher.SetDeviceDelivered(kt, info)
 }
 
 // CheckInheritedHost check inherited host
@@ -3096,6 +3072,10 @@ func (s *scheduler) CheckInheritedHost(kt *kit.Kit, param *types.CheckInheritedH
 	ccReq := &getHostFromCCReq{
 		AssetID: param.AssetID,
 		BizID:   param.BizID,
+	}
+	// 机房裁撤仅校验主机存在性，不校验归属业务
+	if param.RequireType == enumor.RequireTypeDissolve {
+		ccReq.BizID = 0
 	}
 	host, err := s.getInheritedHostFromCC(kt, ccReq)
 	if err != nil {
@@ -3333,11 +3313,8 @@ func calculateMonths(startTime, endTime time.Time) int {
 
 // CancelApplyTicketItsm ...
 func (s *scheduler) CancelApplyTicketItsm(kt *kit.Kit, req *types.CancelApplyTicketItsmReq) error {
-	filter := mapstr.MapStr{
-		"order_id": req.OrderID,
-	}
-
-	applyTicket, err := model.Operation().ApplyTicket().GetApplyTicket(kt.Ctx, &filter)
+	filter := tools.ExpressionAnd(tools.RuleEqual("order_id", req.OrderID))
+	applyTicket, err := model.Operation().ApplyTicket().GetApplyTicket(kt, filter)
 	if err != nil {
 		logs.Errorf("failed to get apply ticket, err: %v, rid: %s", err, kt.Rid)
 		return err
@@ -3436,15 +3413,9 @@ func checkStepCanCancel(nodeName string, cancelNodes []string) bool {
 // CancelApplyTicketCrp ...
 func (s *scheduler) CancelApplyTicketCrp(kt *kit.Kit, req *types.CancelApplyTicketCrpReq) error {
 	// common filter and page
-	filter := map[string]interface{}{
-		"suborder_id": req.SubOrderID,
-	}
-	page := metadata.BasePage{
-		Limit: 1,
-		Start: 0,
-	}
-
-	orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt.Ctx, page, filter)
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", req.SubOrderID))
+	page := &core.BasePage{Limit: 1, Start: 0}
+	orders, err := model.Operation().ApplyOrder().FindManyApplyOrder(kt, filter, page)
 	if err != nil {
 		logs.Errorf("failed to get apply order, err: %v, rid: %s", err, kt.Rid)
 		return err
@@ -3463,7 +3434,7 @@ func (s *scheduler) CancelApplyTicketCrp(kt *kit.Kit, req *types.CancelApplyTick
 		return errf.New(errf.InvalidParameter, fmt.Sprintf("order status is %s cannot cancel", order.Status))
 	}
 
-	generateRecords, err := model.Operation().GenerateRecord().FindManyGenerateRecord(kt.Ctx, page, filter)
+	generateRecords, err := model.Operation().GenerateRecord().FindManyGenerateRecord(kt, filter, nil)
 	if err != nil {
 		return err
 	}
@@ -3471,7 +3442,7 @@ func (s *scheduler) CancelApplyTicketCrp(kt *kit.Kit, req *types.CancelApplyTick
 	// 检查是否有单据尚未发起 crp 请求
 	for _, generateRecord := range generateRecords {
 		if generateRecord.TaskId == "" {
-			return fmt.Errorf("has task still in init,can't revoke suborder, generate id: %d, order id: %s",
+			return fmt.Errorf("has task still in init,can't revoke suborder, generate id: %s, order id: %s",
 				generateRecord.GenerateId, order.SubOrderId)
 		}
 	}
@@ -3539,13 +3510,11 @@ func (s *scheduler) filterCanRevokeCrpTask(kt *kit.Kit, taskIDs []string) []stri
 // revokeApplyOrder revoke apply order
 func (s *scheduler) revokeApplyOrder(kt *kit.Kit, subOrderId string, taskIDs []string) error {
 	// 1. 修改 apply order 状态为 GracefulTerminate
-	filter := &mapstr.MapStr{
-		"suborder_id": subOrderId,
+	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", subOrderId))
+	update := &cvmapplyproto.ZiyanCvmApplySuborderUpdateReq{
+		Status: types.ApplyStatusGracefulTerminate,
 	}
-	doc := &mapstr.MapStr{
-		"status": types.ApplyStatusGracefulTerminate,
-	}
-	err := model.Operation().ApplyOrder().UpdateApplyOrder(kt.Ctx, filter, doc)
+	err := model.Operation().ApplyOrder().UpdateApplyOrder(kt, filter, update)
 	if err != nil {
 		return err
 	}
@@ -3616,10 +3585,10 @@ func (s *scheduler) ConfirmApplyModify(kt *kit.Kit, param *types.ConfirmApplyMod
 	*types.ConfirmApplyModifyResp, error) {
 
 	// 查询主机申请单信息
-	filter := &mapstr.MapStr{
-		"suborder_id": param.SuborderID,
-	}
-	order, err := model.Operation().ApplyOrder().GetApplyOrder(kt.Ctx, filter)
+	applyFilter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", param.SuborderID),
+	)
+	order, err := model.Operation().ApplyOrder().GetApplyOrder(kt, applyFilter)
 	if err != nil {
 		logs.Errorf("failed to get apply order, err: %v, param: %+v, rid: %s", err, cvt.PtrToVal(param), kt.Rid)
 		return nil, err
@@ -3646,7 +3615,7 @@ func (s *scheduler) ConfirmApplyModify(kt *kit.Kit, param *types.ConfirmApplyMod
 	}
 
 	// 获取实际生产成功的数量
-	deviceInfos, err := s.matcher.GetUnreleasedDevice(order.SubOrderId)
+	deviceInfos, err := s.matcher.GetUnreleasedDevice(kt, order.SubOrderId)
 	if err != nil {
 		logs.Errorf("failed to get generate records, subOrderID: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return nil, err
@@ -3732,7 +3701,7 @@ func (s *scheduler) auditApplyModifyCallback(kt *kit.Kit, param *types.ConfirmAp
 func (s *scheduler) checkAndGetModifyRecord(kt *kit.Kit, param *types.ConfirmApplyModifyReq, order *types.ApplyOrder) (
 	*table.ModifyRecord, bool, error) {
 
-	mrReq := &types.GetApplyModifyReq{ID: []uint64{param.ModifyID}}
+	mrReq := &types.GetApplyModifyReq{ID: []string{param.ModifyID}, Page: core.NewDefaultBasePage()}
 	listModify, err := s.GetApplyModify(kt, mrReq)
 	if err != nil {
 		logs.Errorf("failed to get apply modify record, err: %v, param: %+v, rid: %s", err, cvt.PtrToVal(param), kt.Rid)
@@ -3740,7 +3709,7 @@ func (s *scheduler) checkAndGetModifyRecord(kt *kit.Kit, param *types.ConfirmApp
 	}
 
 	if len(listModify.Info) != 1 {
-		return nil, false, fmt.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %d, "+
+		return nil, false, fmt.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %s, "+
 			"modify record count %d != 1", order.SubOrderId, param.ModifyID, len(listModify.Info))
 	}
 
@@ -3750,26 +3719,26 @@ func (s *scheduler) checkAndGetModifyRecord(kt *kit.Kit, param *types.ConfirmApp
 		auditStatusName := enumor.CvmModifyRecordStatusMap[modifyRecord.Status]
 		logs.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %d, action: %s, 变更单不能重复操作，"+
 			"当前状态是: %s, rid: %s", order.SubOrderId, param.ModifyID, param.Action, auditStatusName, kt.Rid)
-		return nil, false, fmt.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %d, action: %s, "+
+		return nil, false, fmt.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %s, action: %s, "+
 			"变更单不能重复操作，当前状态是: %s", order.SubOrderId, param.ModifyID, param.Action, auditStatusName)
 	}
 
 	// 计算6小时之前的时间
 	sixHoursAgo := time.Now().Add(-6 * time.Hour)
 	// 判断modifyRecord.CreateAt是否早于6小时之前的时间
-	if modifyRecord.CreateAt.Before(sixHoursAgo) {
+	if modifyRecord.CreatedAt.Before(sixHoursAgo) {
 		// 如果审批超过6小时，需要自动释放
 		logs.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %d, action: %s, 该变更单已超过6小时，"+
 			"已自动释放本次修改, rid: %s", order.SubOrderId, param.ModifyID, param.Action, kt.Rid)
-		return nil, true, fmt.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %d, action: %s, "+
+		return nil, true, fmt.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %s, action: %s, "+
 			"该变更单已超过6小时，已自动释放本次修改", order.SubOrderId, param.ModifyID, param.Action)
 	}
 
 	if modifyRecord.Details == nil || modifyRecord.Details.CurData == nil {
-		logs.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %d, action: %s, modify record details "+
+		logs.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %s, action: %s, modify record details "+
 			"is nil, rid: %s", order.SubOrderId, param.ModifyID, param.Action, kt.Rid)
-		return nil, false, fmt.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %d, action: %s, modify record "+
-			"details is nil", order.SubOrderId, param.ModifyID, param.Action)
+		return nil, false, fmt.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %s, action: %s, "+
+			"modify record details is nil", order.SubOrderId, param.ModifyID, param.Action)
 	}
 
 	return modifyRecord, false, nil
@@ -3797,7 +3766,7 @@ func validateConfirm(kt *kit.Kit, param *types.ConfirmApplyModifyReq, order *typ
 		logs.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %d, action: %s, stage: %s, param: %+v, "+
 			"单据处于备货中或已完成，确认失败, rid: %s", order.SubOrderId, param.ModifyID, param.Action, order.Stage,
 			cvt.PtrToVal(param), kt.Rid)
-		return fmt.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %d, action: %s, stage: %s, "+
+		return fmt.Errorf("cannot confirm apply modify, subOrderID: %s, modifyID: %s, action: %s, stage: %s, "+
 			"单据处于备货中或已完成，确认失败", order.SubOrderId, param.ModifyID, param.Action, order.Stage)
 	}
 
@@ -3829,15 +3798,12 @@ func (s *scheduler) UpdateApplyTicketDemand(kt *kit.Kit, param *types.ApplyTicke
 		return err
 	}
 
-	filter := mapstr.MapStr{
-		"order_id": param.OrderId,
+	filter := tools.ExpressionAnd(tools.RuleEqual("order_id", param.OrderId))
+	update := &cvmapplyproto.ZiyanCvmApplyOrderUpdateReq{
+		Suborders:    param.Suborders,
+		OldSuborders: param.OldSuborders,
 	}
-	update := mapstr.MapStr{
-		"suborders":     param.Suborders,
-		"old_suborders": param.OldSuborders,
-		"update_at":     time.Now(),
-	}
-	if err := model.Operation().ApplyTicket().UpdateApplyTicket(kt.Ctx, &filter, &update); err != nil {
+	if err := model.Operation().ApplyTicket().UpdateApplyTicket(kt, filter, update); err != nil {
 		logs.Errorf("failed to update apply ticket, err: %v, ticket id: %d, rid: %s", err, param.OrderId, kt.Rid)
 		return err
 	}

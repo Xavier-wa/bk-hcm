@@ -501,6 +501,11 @@ export default defineComponent({
       },
       requestOption: {
         dataPath: 'data.info',
+        sortOption: {
+          sort: 'created_at',
+          order: 'DESC',
+          legacy: false,
+        },
         immediate: false,
       },
       scrConfig: () => {
@@ -511,6 +516,7 @@ export default defineComponent({
         return {
           url: '/api/v1/woa/task/findmany/apply',
           payload,
+          pageEnableCountKey: 'count',
         };
       },
     });
@@ -532,7 +538,7 @@ export default defineComponent({
           option: field.option,
         };
       }
-      if (field.id === 'create_at') {
+      if (field.id === 'created_at') {
         return {
           type: 'daterange',
           format: 'yyyy-MM-dd',
@@ -578,7 +584,7 @@ export default defineComponent({
       () => route.query,
       async (query) => {
         const defaultCondition = {
-          create_at: getDateRange('last30d', true),
+          created_at: getDateRange('last30d', true),
           bk_biz_id: businessGlobalStore.getCacheSelected(serviceShareBizSelectedKey) ?? [0],
         };
         condition.value = searchQs.get(query, defaultCondition);
@@ -639,21 +645,18 @@ export default defineComponent({
     // 查询交付IP和固号IP
     const getDeliveredHostField = (row, fieldKey) => {
       const params = {
+        bk_biz_ids: [row.bk_biz_id],
         filter: {
-          condition: 'AND',
+          op: 'and',
           rules: [
             {
               field: 'suborder_id',
-              operator: 'equal',
+              op: 'eq',
               value: row.suborder_id,
-            },
-            {
-              field: 'bk_biz_id',
-              operator: 'in',
-              value: [row.bk_biz_id],
             },
           ],
         },
+        page: { start: 0, limit: 500, count: false },
       };
       return getDeliveredDevices(params).then((res) => {
         const value = res?.data?.info?.map((item) => item[fieldKey]) || [];
@@ -689,14 +692,16 @@ export default defineComponent({
       if (payload.bk_biz_id?.[0] === 0) {
         payload.bk_biz_id = businessGlobalStore.businessAuthorizedList.map((item: any) => item.id);
       }
+      // 与列表查询保持一致，避免导出分页请求缺少排序字段导致后端校验失败。
+      payload.page = { sort: 'created_at', order: 'DESC' };
       const list = await rollRequest({
         httpClient: http,
-        pageEnableCountKey: 'enable_count',
+        pageEnableCountKey: 'count',
       }).rollReqUseTotalCount(
         '/api/v1/woa/task/findmany/apply',
         payload,
         {
-          limit: 5000,
+          limit: 500,
           total: pagination.count,
           listGetter: (res: { data: { info: any[] } }) => res.data.info,
           countGetter: (res: { data: { count: number } }) => res.data.count,
@@ -872,7 +877,7 @@ export default defineComponent({
           />
         </CommonDialog>
 
-        <Sideslider v-model:isShow={isMatchPanelShow.value} title='待匹配' width={1600} renderDirective='if'>
+        <Sideslider v-model:isShow={isMatchPanelShow.value} title='待匹配' width={1180} renderDirective='if'>
           <MatchPanel data={curRow.value} handleClose={() => (isMatchPanelShow.value = false)} />
         </Sideslider>
       </div>

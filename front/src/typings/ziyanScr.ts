@@ -251,8 +251,8 @@ export interface IApplyOrderItem {
   pending_num: number;
   product_num: number;
   modify_time: number;
-  create_at: string;
-  update_at: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ICloudInstanceConfigItem {

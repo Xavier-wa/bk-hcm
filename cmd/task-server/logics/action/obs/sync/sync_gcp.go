@@ -101,6 +101,12 @@ func (act SyncAction) doSyncGcpBillItem(kt *kit.Kit,
 		return nil
 	}
 
+	regionCityMap, err := loadRegionCityMap(kt, syncOpt.Vendor)
+	if err != nil {
+		logs.Errorf("load region city map failed, err: %v, vendor: %s, rid: %s", err, syncOpt.Vendor, kt.Rid)
+		return fmt.Errorf("load region city map failed, err: %v", err)
+	}
+
 	// 清理特定的obs数据，此处防止之前有可能插入事务失败导致的脏数据
 	setIndex := fmt.Sprintf("%s-%s-%d-%d-%d-%d",
 		syncOpt.Vendor, syncOpt.MainAccountID, syncOpt.BillYear, syncOpt.BillMonth, start, limit)
@@ -123,7 +129,7 @@ func (act SyncAction) doSyncGcpBillItem(kt *kit.Kit,
 	}
 
 	// 进行插入
-	finalItems, err := act.convertGcpBill(kt, syncOpt, result, setIndex, mainAccount)
+	finalItems, err := act.convertGcpBill(kt, syncOpt, result, setIndex, mainAccount, regionCityMap)
 	if err != nil {
 		logs.Warnf("convert obs gcp bill failed, err %s, rid: %s", err.Error(), kt.Rid)
 		return err
@@ -144,8 +150,8 @@ func (act SyncAction) doSyncGcpBillItem(kt *kit.Kit,
 }
 
 func (act SyncAction) convertGcpBill(kt *kit.Kit, syncOpt *SyncOption, result *databill.GcpBillItemListResult,
-	setIndex string, mainAccount *asproto.MainAccountGetResult[accountsetcore.GcpMainAccountExtension]) (
-	[]*tableobs.OBSBillItemGcp, error) {
+	setIndex string, mainAccount *asproto.MainAccountGetResult[accountsetcore.GcpMainAccountExtension],
+	regionCityMap map[string]int32) ([]*tableobs.OBSBillItemGcp, error) {
 
 	yearM := syncOpt.BillYear*100 + syncOpt.BillMonth
 	item := result.Details[0]
@@ -163,6 +169,8 @@ func (act SyncAction) convertGcpBill(kt *kit.Kit, syncOpt *SyncOption, result *d
 	}
 	floatRate, _ := exchangeRate.Float64()
 
+	isChina := mainAccount.Site == enumor.MainAccountChinaSite
+
 	var retList = make([]*tableobs.OBSBillItemGcp, 0, len(result.Details))
 
 	for _, item := range result.Details {
@@ -171,6 +179,16 @@ func (act SyncAction) convertGcpBill(kt *kit.Kit, syncOpt *SyncOption, result *d
 		if err != nil {
 			return nil, fmt.Errorf("failed, to parse time %s, err %s", item.CreatedAt, err.Error())
 		}
+
+		var region, skuDescription string
+		if record != nil && record.GcpRawBillItem != nil {
+			region = converter.PtrToVal(record.Region)
+			skuDescription = converter.PtrToVal(record.SkuDescription)
+		}
+
+		cityID := lookupCityID(kt, regionCityMap, region, isChina)
+		isGPU := isGcpGPU(skuDescription, item.HcProductName)
+
 		newItem := &tableobs.OBSBillItemGcp{
 			SetIndex:               setIndex,
 			MainAccountID:          syncOpt.MainAccountID,
@@ -187,13 +205,15 @@ func (act SyncAction) convertGcpBill(kt *kit.Kit, syncOpt *SyncOption, result *d
 			UsageUnit:              item.ResAmountUnit,
 			FetchTime:              fetchTime.Format("2006-01-02 15:04:05"),
 			RealCost:               item.Cost.Mul(decimal.NewFromFloat(floatRate)).InexactFloat64(),
+			CityId:                 cityID,
+			ResClassId:             enumor.GetOBSResClassID(syncOpt.Vendor, isGPU),
 		}
 		if record != nil && record.GcpRawBillItem != nil {
 			newItem.BillingAccountId = record.BillingAccountID
 			newItem.ServiceId = converter.PtrToVal(record.ServiceID)
 			newItem.ServiceDescription = converter.PtrToVal(record.ServiceDescription)
 			newItem.SkuId = converter.PtrToVal(record.SkuID)
-			newItem.SkuDescription = converter.PtrToVal(record.SkuDescription)
+			newItem.SkuDescription = skuDescription
 			newItem.UsageStartTime = converter.PtrToVal(record.UsageStartTime)
 			newItem.UsageEndTime = converter.PtrToVal(record.UsageEndTime)
 			newItem.ProjectId = converter.PtrToVal(record.ProjectID)
@@ -202,7 +222,7 @@ func (act SyncAction) convertGcpBill(kt *kit.Kit, syncOpt *SyncOption, result *d
 			newItem.ExportTime = converter.PtrToVal(record.UsageEndTime)
 			newItem.Location = converter.PtrToVal(record.Location)
 			newItem.Country = converter.PtrToVal(record.Country)
-			newItem.Region = converter.PtrToVal(record.Region)
+			newItem.Region = region
 			newItem.Zone = converter.PtrToVal(record.Zone)
 			newItem.DispatchProjectId = converter.PtrToVal(record.ProjectID)
 		} else {

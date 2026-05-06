@@ -53,7 +53,7 @@ func (s *service) GetProductionStageTimeCostOverview(cts *rest.Contexts) (any, e
 		logs.Errorf("failed to get production stage time cost overview, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, err
 	}
-	return types.ProductionStageTimeCostOverviewResp{Details: rst}, nil
+	return rst, nil
 }
 
 // GetProductionStageTimeCostCompare get production stage time cost compare

@@ -120,3 +120,23 @@ const CrpCvmApplySubnetMaxNum = 10
 
 // GpuInstanceClassValue  GPU机型族
 const GpuInstanceClassValue = "GPU型"
+
+// GpuHighFreqInstanceClassValue GPU高主频型机型族
+const GpuHighFreqInstanceClassValue = "GPU高主频型"
+
+const (
+	// ProductionStageMinValidTime 生产阶段耗时最小有效时间，用于过滤异常时间数据
+	ProductionStageMinValidTime = "2000-01-01 00:00:00"
+	// ProductionStageMinDurationHours 生产阶段耗时最小有效时长阈值（小时），排除时长为 0 或负数的异常数据
+	ProductionStageMinDurationHours = 0
+	// ProductionStageOverviewMaxDurationHours 生产阶段耗时 Overview 接口最大有效时长阈值（小时）= 10 天
+	ProductionStageOverviewMaxDurationHours = 240
+	// ProductionStageCompareMaxDurationHours 生产阶段耗时 Compare 接口最大有效时长阈值（小时）= 30 天
+	ProductionStageCompareMaxDurationHours = 720
+)
+
+// CvmApplyDeviceQueryInLimit CVM申请及设备列表查询in查询数量限制
+const CvmApplyDeviceQueryInLimit = 3000
+
+// CvmApplyDeviceExportLimit 导出CVM设备列表的数量限制
+const CvmApplyDeviceExportLimit = 5000

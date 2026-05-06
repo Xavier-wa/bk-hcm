@@ -155,3 +155,11 @@ func (v *BillClient) ListRootBillItems(kt *kit.Kit,
 	return common.Request[hcbill.AwsRootBillItemsListReq, core.ListResultT[map[string]string]](
 		v.client, rest.POST, kt, req, "/root_account_bills/list_items")
 }
+
+// GetRootAccountSpCoveredUsageByType get sp covered usage grouped by product type
+func (v *BillClient) GetRootAccountSpCoveredUsageByType(kt *kit.Kit,
+	req *hcbill.AwsRootSpCoveredUsageByTypeReq) (*core.ListResultT[hcbill.AwsSpCoveredUsageByTypeItem], error) {
+
+	return common.Request[hcbill.AwsRootSpCoveredUsageByTypeReq, core.ListResultT[hcbill.AwsSpCoveredUsageByTypeItem]](
+		v.client, rest.POST, kt, req, "/root_account_bills/sp_covered_usage_by_type")
+}

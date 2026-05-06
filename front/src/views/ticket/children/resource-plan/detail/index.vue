@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onBeforeMount, computed, useTemplateRef, reactive } from 'vue';
-import { RouteLocationRaw, useRoute, useRouter } from 'vue-router';
+import { ref, onBeforeMount, computed, useTemplateRef } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useResourcePlanStore } from '@/store';
 import { useI18n } from 'vue-i18n';
 import { useWhereAmI } from '@/hooks/useWhereAmI';
@@ -23,11 +23,11 @@ const { t } = useI18n();
 const resourcePlanStore = useResourcePlanStore();
 const { getBizsId, isBusinessPage } = useWhereAmI();
 
-// 跳转至单据列表
-const navigateTo: RouteLocationRaw = reactive({
-  name: computed(() => (isBusinessPage ? MENU_BUSINESS_TICKET_MANAGEMENT : MENU_SERVICE_TICKET_MANAGEMENT)),
-  query: computed(() => ({ type: 'resource_plan', [GLOBAL_BIZS_KEY]: route.query[GLOBAL_BIZS_KEY] })),
-});
+// 返回单据列表
+const fromConfig = computed(() => ({
+  name: isBusinessPage ? MENU_BUSINESS_TICKET_MANAGEMENT : MENU_SERVICE_TICKET_MANAGEMENT,
+  query: { type: 'resource_plan', [GLOBAL_BIZS_KEY]: route.query[GLOBAL_BIZS_KEY] },
+}));
 
 // 响应式数据
 const ticketDetail = ref<TicketByIdResult>();
@@ -116,7 +116,7 @@ onBeforeMount(() => {
 
 <template>
   <bk-loading :loading="isLoading">
-    <DetailHeader :to="navigateTo">
+    <DetailHeader :from-config="fromConfig">
       <span>{{ detailTitle }}</span>
     </DetailHeader>
     <section class="home">
@@ -147,6 +147,7 @@ onBeforeMount(() => {
           <SubTicketList
             ref="subTicketList"
             :ticket-status="ticketDetail?.status_info?.status"
+            :demands="ticketDetail?.demands"
             @retry-ticket="getResultData"
           />
         </bk-tab-panel>

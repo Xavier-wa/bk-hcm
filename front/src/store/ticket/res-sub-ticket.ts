@@ -29,6 +29,14 @@ export const useResSubTicketStore = defineStore('resSubTicketStore', () => {
     );
   };
 
+  // 批量部门审批
+  const batchApproveAdminNode = (params: BatchApproveAdminNodeParams, bizId?: number): Promise<ActionResult> => {
+    return http.post(
+      `/api/v1/woa/${resolveBizApiPath(bizId)}plans/resources/sub_tickets/approve_admin_node/batch`,
+      params,
+    );
+  };
+
   // 获取审批额度
   const getTransferQuotaConfigs = (): Promise<TransferQuotasConfigsResult> => {
     return http.get(getEntirePath(`plans/resources/transfer_quotas/configs`));
@@ -49,6 +57,7 @@ export const useResSubTicketStore = defineStore('resSubTicketStore', () => {
     getDetail,
     retryTickets,
     approveAdminNode,
+    batchApproveAdminNode,
     getTransferQuotaConfigs,
     terminateTicket,
   };
@@ -107,6 +116,15 @@ export type SubTicketsResult = { details: SubTicketItem[]; data: { details: SubT
 export interface ApproveAdminNodeParams {
   approval: boolean;
   use_transfer_pool: boolean;
+  operate_info?: string; // 审批意见，最多100字
+}
+
+// 批量部门审核
+export interface BatchApproveAdminNodeParams {
+  sub_ticket_ids: string[];
+  approval: boolean;
+  use_transfer_pool: boolean;
+  operate_info?: string; // 审批意见，最多100字
 }
 
 // 审批流
@@ -123,6 +141,7 @@ export interface AdminAudit {
     operator: string;
     operate_at: string;
     message: string;
+    operate_info?: string; // 审批意见
   }[];
 }
 

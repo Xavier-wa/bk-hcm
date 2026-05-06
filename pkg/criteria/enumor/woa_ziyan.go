@@ -745,3 +745,25 @@ func (r ResAssign) GetName() string {
 	}
 	return "--"
 }
+
+// ProductType 生产类型(business:业务生产 admin:管理员生产)
+type ProductType string
+
+const (
+	// ProductTypeBusiness 业务生产
+	ProductTypeBusiness ProductType = "business"
+	// ProductTypeAdmin 管理员生产
+	ProductTypeAdmin ProductType = "admin"
+)
+
+// Validate ProductType.
+func (r ProductType) Validate() error {
+	switch r {
+	case ProductTypeBusiness:
+	case ProductTypeAdmin:
+	default:
+		return fmt.Errorf("unsupported verify product type result: %s", r)
+	}
+
+	return nil
+}
