@@ -38,7 +38,9 @@ import (
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/runtime/filter"
+	"hcm/pkg/tools/converter"
 	"hcm/pkg/tools/times"
+	"hcm/pkg/tools/utils/wait"
 )
 
 // NewMainSummaryDailyController create main account daily splitter controller
@@ -105,27 +107,31 @@ func (msdc *MainSummaryDailyController) Start() error {
 	cancelFunc := kt.CtxBackgroundWithCancel()
 	msdc.kt = kt
 	msdc.cancelFunc = cancelFunc
+
 	go msdc.runBillDailySummaryLoop(kt)
+
 	return nil
 }
 
 func (msdc *MainSummaryDailyController) runBillDailySummaryLoop(kt *kit.Kit) {
-	if err := msdc.doSync(kt); err != nil {
-		logs.Warnf("sync daily summary failed, err %s, rid: %s", err.Error(), kt.Rid)
-	}
-	ticker := time.NewTicker(*cc.AccountServer().Controller.DailySummarySyncDuration)
-	for {
-		select {
-		case <-ticker.C:
-			if err := msdc.doSync(kt); err != nil {
-				logs.Warnf("sync daily summary for account (%s, %s, %s) failed, err %s",
-					msdc.RootAccountID, msdc.MainAccountID, msdc.Vendor, err.Error())
+	wait.JitterUntil(
+		func() error {
+			err := msdc.doSync(kt)
+			if err != nil {
+				logs.Warnf("sync daily summary failed, err %s, rid: %s", err.Error(), kt.Rid)
 			}
-		case <-kt.Ctx.Done():
-			logs.Infof("main account (%s, %s, %s) daily summary controller context done",
-				msdc.RootAccountID, msdc.MainAccountID, msdc.Vendor)
-			return
-		}
+			return err
+		},
+		converter.PtrToVal(cc.AccountServer().Controller.DailySummarySyncDuration),
+		0.5,
+		true,
+		kt.Ctx,
+	)
+	select {
+	case <-kt.Ctx.Done():
+		logs.Infof("main account (%s, %s, %s) daily summary controller context done",
+			msdc.RootAccountID, msdc.MainAccountID, msdc.Vendor)
+		return
 	}
 }
 

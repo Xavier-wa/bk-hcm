@@ -39,7 +39,9 @@ import (
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/runtime/filter"
+	"hcm/pkg/tools/converter"
 	"hcm/pkg/tools/times"
+	"hcm/pkg/tools/utils/wait"
 )
 
 // NewMainDailySplitController create main account daily splitter controller
@@ -110,7 +112,9 @@ func (msdc *MainDailySplitController) Start() error {
 			return err
 		}
 	}
+
 	go msdc.runBillDailySplitLoop(kt)
+
 	return nil
 }
 
@@ -130,22 +134,24 @@ func (msdc *MainDailySplitController) setAwsExtension(kt *kit.Kit) error {
 }
 
 func (msdc *MainDailySplitController) runBillDailySplitLoop(kt *kit.Kit) {
-	if err := msdc.doSync(kt); err != nil {
-		logs.Warnf("sync daily split failed, err %s, rid: %s", err.Error(), kt.Rid)
-	}
-	ticker := time.NewTicker(*cc.AccountServer().Controller.ControllerSyncDuration)
-	for {
-		select {
-		case <-ticker.C:
-			if err := msdc.doSync(kt); err != nil {
-				logs.Warnf("sync daily split for account (%s, %s, %s) failed, err %s, rid: %s",
-					msdc.RootAccountID, msdc.MainAccountID, msdc.Vendor, err.Error(), kt.Rid)
+	wait.JitterUntil(
+		func() error {
+			err := msdc.doSync(kt)
+			if err != nil {
+				logs.Warnf("sync daily split failed, err %s, rid: %s", err.Error(), kt.Rid)
 			}
-		case <-kt.Ctx.Done():
-			logs.Infof("main account (%s, %s, %s) daily split controller context done, rid: %s",
-				msdc.RootAccountID, msdc.MainAccountID, msdc.Vendor, kt.Rid)
-			return
-		}
+			return err
+		},
+		converter.PtrToVal(cc.AccountServer().Controller.ControllerSyncDuration),
+		0.5,
+		true,
+		kt.Ctx,
+	)
+	select {
+	case <-kt.Ctx.Done():
+		logs.Infof("main account (%s, %s, %s) daily split controller context done, rid: %s",
+			msdc.RootAccountID, msdc.MainAccountID, msdc.Vendor, kt.Rid)
+		return
 	}
 }
 
