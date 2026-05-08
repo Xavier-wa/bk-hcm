@@ -309,23 +309,57 @@ func convertToJsonField(data interface{}) (tabletypes.JsonField, error) {
 // unmarshalDataDisk unmarshals JSON data to DiskSpec slice
 func unmarshalDataDisk(jsonData tabletypes.JsonField) ([]enumor.DiskSpec, error) {
 	var dataDisk []enumor.DiskSpec
-	if len(jsonData) > 0 {
-		if err := json.Unmarshal([]byte(jsonData), &dataDisk); err != nil {
-			return nil, err
-		}
+	if len(jsonData) == 0 {
+		return dataDisk, nil
 	}
-	return dataDisk, nil
+
+	if err := json.Unmarshal([]byte(jsonData), &dataDisk); err == nil {
+		filteredDataDisk := make([]enumor.DiskSpec, 0, len(dataDisk))
+		for _, disk := range dataDisk {
+			if disk != (enumor.DiskSpec{}) {
+				filteredDataDisk = append(filteredDataDisk, disk)
+			}
+		}
+		return filteredDataDisk, nil
+	}
+
+	var singleDisk enumor.DiskSpec
+	if err := json.Unmarshal([]byte(jsonData), &singleDisk); err == nil {
+		if singleDisk == (enumor.DiskSpec{}) {
+			return dataDisk, nil
+		}
+		return []enumor.DiskSpec{singleDisk}, nil
+	}
+
+	return nil, fmt.Errorf("unsupported data_disk json: %s", jsonData)
 }
 
 // unmarshalZones unmarshals JSON data to string slice
 func unmarshalZones(jsonData tabletypes.JsonField) ([]string, error) {
 	var zones []string
-	if len(jsonData) > 0 {
-		if err := json.Unmarshal([]byte(jsonData), &zones); err != nil {
-			return nil, err
-		}
+	if len(jsonData) == 0 {
+		return zones, nil
 	}
-	return zones, nil
+
+	if err := json.Unmarshal([]byte(jsonData), &zones); err == nil {
+		filteredZones := make([]string, 0, len(zones))
+		for _, zone := range zones {
+			if zone != "" {
+				filteredZones = append(filteredZones, zone)
+			}
+		}
+		return filteredZones, nil
+	}
+
+	var singleZone string
+	if err := json.Unmarshal([]byte(jsonData), &singleZone); err == nil {
+		if singleZone == "" {
+			return zones, nil
+		}
+		return []string{singleZone}, nil
+	}
+
+	return nil, fmt.Errorf("unsupported zones json: %s", jsonData)
 }
 
 // buildSystemDisk builds DiskSpec from MySQL fields
