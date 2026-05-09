@@ -215,6 +215,7 @@ func (s *service) ListDeviceType(cts *rest.Contexts) (interface{}, error) {
 				CoreType:     string(detail.CoreType),
 				CpuCore:      detail.CpuCore,
 				Memory:       detail.Memory,
+				GpuAmount:    detail.GpuAmount,
 				DeviceClass:  detail.DeviceClass,
 				DeviceFamily: detail.DeviceFamily,
 			})

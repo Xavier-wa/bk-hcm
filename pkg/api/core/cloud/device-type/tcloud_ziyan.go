@@ -43,6 +43,7 @@ type DeviceType struct {
 	CoreType        enumor.CoreType          `json:"core_type"`
 	CpuCore         int64                    `json:"cpu_core"`
 	Memory          int64                    `json:"memory"`
+	GpuAmount       float64                  `json:"gpu_amount"`
 	TechnicalClass  string                   `json:"technical_class"`
 	Disable         bool                     `json:"disable"`
 	Source          enumor.DeviceTypeSource  `json:"source"`
@@ -95,6 +96,7 @@ func ConvTableToDeviceType(one dt.DeviceTypeTable) DeviceType {
 		CoreType:        one.CoreType,
 		CpuCore:         one.CpuCore,
 		Memory:          one.Memory,
+		GpuAmount:       one.GpuAmount,
 		TechnicalClass:  one.TechnicalClass,
 		Disable:         cvt.PtrToVal(one.Disable),
 		Source:          one.Source,
@@ -114,6 +116,7 @@ type DistinctDeviceType struct {
 	CoreType        enumor.CoreType          `json:"core_type"`
 	CpuCore         int64                    `json:"cpu_core"`
 	Memory          int64                    `json:"memory"`
+	GpuAmount       float64                  `json:"gpu_amount"`
 	TechnicalClass  string                   `json:"technical_class"`
 	DeviceTypeClass cvmapi.InstanceTypeClass `json:"device_type_class"`
 	Disable         bool                     `json:"disable"`
@@ -134,6 +137,7 @@ func ConvTableToDistinctDeviceType(one dt.DeviceTypeTable) DistinctDeviceType {
 		CoreType:        one.CoreType,
 		CpuCore:         one.CpuCore,
 		Memory:          one.Memory,
+		GpuAmount:       one.GpuAmount,
 		TechnicalClass:  one.TechnicalClass,
 		DeviceTypeClass: one.DeviceTypeClass,
 		Disable:         cvt.PtrToVal(one.Disable),
