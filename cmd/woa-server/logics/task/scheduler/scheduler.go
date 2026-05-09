@@ -2523,7 +2523,7 @@ func getModifyApplyCompare(order *types.ApplyOrder, param *types.ModifyApplyReq)
 	newZones := getApplyOrderZones(param.Spec)
 	modifyCompare.PreZone = fmt.Sprintf("修改前园区：%s\n", strings.Join(oldZones, "、"))
 	modifyCompare.CurZone = fmt.Sprintf("修改后园区：%s", strings.Join(newZones, "、"))
-	if order.Spec.DeviceType != param.Spec.DeviceType {
+	if strings.Join(oldZones, ",") != strings.Join(newZones, ",") {
 		modifyCompare.CurZone += "<font color=red>（有调整）</font>"
 	}
 	modifyCompare.CurZone += "\n"
