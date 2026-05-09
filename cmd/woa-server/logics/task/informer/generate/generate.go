@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	tasktype "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/api/core"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	ziyan "hcm/pkg/client/data-service/tcloud-ziyan"
@@ -27,6 +28,7 @@ import (
 	"hcm/pkg/logs"
 	"hcm/pkg/runtime/filter"
 	cvt "hcm/pkg/tools/converter"
+	"hcm/pkg/tools/times"
 
 	"k8s.io/client-go/util/workqueue"
 )
@@ -34,6 +36,8 @@ import (
 const (
 	// defaultPollInterval default polling interval
 	defaultPollInterval = 5 * time.Second
+	// defaultPollLookback default polling lookback window used to cover boundary jitter.
+	defaultPollLookback = 5 * time.Second
 )
 
 // Interface generate informer interface
@@ -49,7 +53,9 @@ type generateInformer struct {
 	client       *ziyan.Client
 	queue        workqueue.RateLimitingInterface
 	pollInterval time.Duration
+	pollLookback time.Duration
 	lastPollTime time.Time
+	lastSeen     map[string]time.Time
 	wg           sync.WaitGroup
 	mu           sync.Mutex
 	stopCh       chan struct{}
@@ -67,7 +73,9 @@ func New(client *ziyan.Client) (*generateInformer, error) {
 		stopCh:       make(chan struct{}),
 		client:       client,
 		pollInterval: defaultPollInterval,
+		pollLookback: defaultPollLookback,
 		lastPollTime: time.Now(),
+		lastSeen:     make(map[string]time.Time),
 	}
 
 	if err := generateInformer.Run(); err != nil {
@@ -144,15 +152,27 @@ func (g *generateInformer) pollGenerateRecords() error {
 
 	g.mu.Lock()
 	lastPoll := g.lastPollTime
-	g.lastPollTime = time.Now()
+	pollLookback := g.pollLookback
 	g.mu.Unlock()
 
-	// build filter: updated_at > lastPollTime
-	filterExpr := &filter.Expression{
-		Op: filter.And,
-		Rules: []filter.RuleFactory{
-			tools.RuleGreaterThan("updated_at", lastPoll.Format(constant.TimeStdFormat)),
-		},
+	pollStart := time.Now()
+	queryFrom := lastPoll.Add(-pollLookback)
+	if queryFrom.After(pollStart) {
+		queryFrom = pollStart
+	}
+
+	logs.V(5).Infof("generate informer polling window, from: %s, to: %s, lookback: %s, rid: %s",
+		queryFrom.Format(constant.TimeStdFormat), pollStart.Format(constant.TimeStdFormat), pollLookback, kt.Rid)
+
+	filterExpr, err := tools.And(
+		tools.RuleEqual("status", tasktype.GenerateStatusSuccess),
+		tools.RuleEqual("is_matched", false),
+		tools.RuleGreaterThanEqual("updated_at", queryFrom.Format(constant.TimeStdFormat)),
+		tools.RuleLessThan("updated_at", pollStart.Format(constant.TimeStdFormat)),
+	)
+	if err != nil {
+		logs.Errorf("failed to build generate informer poll filter expression, err: %v, rid: %s", err, kt.Rid)
+		return err
 	}
 
 	recordIDs, err := g.queryGenerateRecords(kt, filterExpr)
@@ -164,8 +184,15 @@ func (g *generateInformer) pollGenerateRecords() error {
 		g.queue.Add(id)
 	}
 
+	g.mu.Lock()
+	g.lastPollTime = pollStart
+	g.mu.Unlock()
+	g.cleanupSeenBefore(queryFrom.Add(-pollLookback))
+
 	if len(recordIDs) > 0 {
-		logs.V(5).Infof("generate informer polled %d records, rid: %s", len(recordIDs), kt.Rid)
+		logs.V(5).Infof("generate informer polled %d records in window [%s, %s], queueLen: %d, recordIDs: %v, rid: %s",
+			len(recordIDs), queryFrom.Format(constant.TimeStdFormat), pollStart.Format(constant.TimeStdFormat),
+			g.queue.Len(), recordIDs, kt.Rid)
 	}
 
 	return nil
@@ -178,7 +205,7 @@ func (g *generateInformer) queryGenerateRecords(kt *kit.Kit, filterExpr *filter.
 	req := &cvmapplyproto.ZiyanCvmGenerateRecordListReq{
 		Filter: filterExpr,
 		Page:   core.NewDefaultBasePage(),
-		Fields: []string{"generate_id"},
+		Fields: []string{"generate_id", "updated_at"},
 	}
 
 	for {
@@ -189,9 +216,24 @@ func (g *generateInformer) queryGenerateRecords(kt *kit.Kit, filterExpr *filter.
 		}
 
 		for _, record := range resp.Details {
-			if record.GenerateID != "" {
-				recordIDs = append(recordIDs, record.GenerateID)
+			if record.GenerateID == "" {
+				continue
 			}
+
+			updatedAt, err := times.ParseTypesTime(record.UpdatedAt)
+			if err != nil {
+				logs.Errorf("failed to parse generate record updated_at, generate_id: %s, updated_at: %s, err: %v, rid: %s",
+					record.GenerateID, record.UpdatedAt.String(), err, kt.Rid)
+				return nil, err
+			}
+
+			if g.shouldSkipRecord(record.GenerateID, updatedAt) {
+				logs.V(4).Infof("generate informer skip duplicated record, generate_id: %s, updated_at: %s, rid: %s",
+					record.GenerateID, record.UpdatedAt.String(), kt.Rid)
+				continue
+			}
+
+			recordIDs = append(recordIDs, record.GenerateID)
 		}
 
 		if len(resp.Details) < int(req.Page.Limit) {
@@ -201,4 +243,30 @@ func (g *generateInformer) queryGenerateRecords(kt *kit.Kit, filterExpr *filter.
 	}
 
 	return recordIDs, nil
+}
+
+// shouldSkipRecord 如果当前 updated_at 没有比上次更晚，则跳过，不再入队，只有真正“变新”的记录才入队
+func (g *generateInformer) shouldSkipRecord(generateID string, updatedAt time.Time) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	lastUpdatedAt, exists := g.lastSeen[generateID]
+	if exists && !updatedAt.After(lastUpdatedAt) {
+		return true
+	}
+
+	g.lastSeen[generateID] = updatedAt
+	return false
+}
+
+// cleanupSeenBefore 每轮轮询成功后清理较老的 lastSeen 记录，避免 map 一直增长
+func (g *generateInformer) cleanupSeenBefore(expireBefore time.Time) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	for generateID, updatedAt := range g.lastSeen {
+		if updatedAt.Before(expireBefore) {
+			delete(g.lastSeen, generateID)
+		}
+	}
 }

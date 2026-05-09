@@ -92,7 +92,7 @@ func New(ctx context.Context, rsLogics rollingserver.Logics, thirdCli *thirdpart
 	}
 
 	// TODO: get worker num from config
-	go matcher.Run(20)
+	go matcher.Run(60)
 
 	return matcher, nil
 }
@@ -147,14 +147,15 @@ func (m *Matcher) runWorker() error {
 
 	// check generate record status
 	if generateRecord.Status != types.GenerateStatusSuccess {
-		logs.Infof("generate record %s is not done yet, need not match, status: %d, rid: %s",
-			generateID, generateRecord.Status, kt.Rid)
+		logs.Infof("generate record %s is not done yet, need not match, subOrderID: %s, status: %d, rid: %s",
+			generateID, generateRecord.SubOrderId, generateRecord.Status, kt.Rid)
 		return nil
 	}
 
 	// check generate record matched or not
 	if generateRecord.IsMatched == true {
-		logs.Infof("generate record %s is matched, need not match again, rid: %s", generateID, kt.Rid)
+		logs.Infof("generate record %s is matched, need not match again, subOrderID: %s, rid: %s",
+			generateID, generateRecord.SubOrderId, kt.Rid)
 		return nil
 	}
 
@@ -223,8 +224,8 @@ func (m *Matcher) matchHandler(kt *kit.Kit, genRecord *types.GenerateRecord) err
 
 	// check order status
 	if applyOrder.Status != types.ApplyStatusMatching && applyOrder.Status != types.ApplyStatusGracefulTerminate {
-		logs.Infof("apply order %s cannot match for status not Matching, status: %s, rid: %s", genRecord.SubOrderId,
-			applyOrder.Status, kt.Rid)
+		logs.Infof("apply order %s cannot match for status not Matching, generateID: %s, status: %s, rid: %s",
+			genRecord.SubOrderId, genRecord.GenerateId, applyOrder.Status, kt.Rid)
 		return fmt.Errorf("apply order %s cannot match for status not Matching, status: %s", genRecord.SubOrderId,
 			applyOrder.Status)
 	}
@@ -236,7 +237,8 @@ func (m *Matcher) matchHandler(kt *kit.Kit, genRecord *types.GenerateRecord) err
 
 	// match device
 	if err = m.matchDevice(kt, applyOrder, genRecord.GenerateId); err != nil {
-		logs.Errorf("failed to match device, order id: %s, err: %v, rid: %s", genRecord.SubOrderId, err, kt.Rid)
+		logs.Errorf("failed to match device, order id: %s, generateID: %s, err: %v, rid: %s", genRecord.SubOrderId,
+			genRecord.GenerateId, err, kt.Rid)
 		return err
 	}
 
