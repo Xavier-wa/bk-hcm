@@ -176,6 +176,35 @@ func (s *service) ListDeviceClass(cts *rest.Contexts) (interface{}, error) {
 	return &core.ListResultT[string]{Details: maps.Keys(deviceClassSet)}, nil
 }
 
+// ListDeviceFamily 获取实例族列表，分页获取所有设备类型数据后提取去重的 device_family。
+func (s *service) ListDeviceFamily(cts *rest.Contexts) (interface{}, error) {
+	deviceFamilySet := make(map[string]struct{})
+	req := &protocloud.DistinctDeviceTypeListReq{
+		ListReq: core.ListReq{
+			Filter: tools.EqualExpression("vendor", enumor.TCloudZiyan),
+			Page:   core.NewDefaultBasePage(),
+		},
+	}
+	for {
+		result, err := s.client.DataService().TCloudZiyan.DeviceType.ListDistinctDeviceType(cts.Kit, req)
+		if err != nil {
+			logs.Errorf("failed to list device type for family, err: %v, rid: %s", err, cts.Kit.Rid)
+			return nil, err
+		}
+		for _, detail := range result.Details {
+			if detail.DeviceFamily != "" {
+				deviceFamilySet[detail.DeviceFamily] = struct{}{}
+			}
+		}
+		if len(result.Details) < int(req.Page.Limit) {
+			break
+		}
+		req.Page.Start += uint32(req.Page.Limit)
+	}
+
+	return &core.ListResultT[string]{Details: maps.Keys(deviceFamilySet)}, nil
+}
+
 // ListDeviceType lists device type.
 func (s *service) ListDeviceType(cts *rest.Contexts) (interface{}, error) {
 	req := new(mtypes.ListDeviceTypeReq)
