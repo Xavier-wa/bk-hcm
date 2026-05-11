@@ -9,24 +9,24 @@ import DevicetypeSelector from '@/views/ziyanScr/components/devicetype-selector/
 import { VendorEnum } from '@/common/constant';
 import './index.scss';
 import useColumns from '@/views/resource/resource-manage/hooks/use-scr-columns';
+import { type IDeviceFamilyItem } from '@/store/config/device-family';
+import HcmFormDeviceFamily from '@/components/form/device-family.vue';
 
 const { FormItem } = Form;
 export default defineComponent({
   name: 'AllhostInventoryManager',
   setup() {
     const { columns } = useColumns('hostInventor');
-    const deviceGroups = ['标准型', '高IO型', '大数据型', '计算型'];
     const filter = ref({
       region: [],
       zone: [],
       device_type: [],
-      device_group: deviceGroups && [deviceGroups[0]],
+      device_group: [],
       cpu: '',
       mem: '',
       disk: '',
     });
     const options = ref({
-      device_groups: deviceGroups,
       device_types: [],
       regions: [],
       zones: [],
@@ -35,25 +35,36 @@ export default defineComponent({
     });
     const deviceConfigDisabled = ref(false);
     const deviceTypeDisabled = ref(false);
-    const getDeviceGroup = () => (Array.isArray(filter.value.device_group) ? filter.value.device_group : []);
+
+    // 选中的机型族
+    const selectedDeviceFamily = ref<IDeviceFamilyItem[]>([]);
+
+    const filterDeviceFamily = computed(() => {
+      return selectedDeviceFamily.value.flatMap((item) =>
+        item.children?.length ? item.children?.map((child) => child.id) : [item.id],
+      );
+    });
+
     const page = ref({
       limit: 50,
       start: 0,
     });
-    const queryRules = ref(
+
+    const queryRules = computed(() =>
       [
         filter.value.region.length && { field: 'dc.region', op: 'in', value: filter.value.region },
         filter.value.zone.length && { field: 'dc.zone', op: 'in', value: filter.value.zone },
-        getDeviceGroup().length && {
+        filterDeviceFamily.value.length && {
           field: 'device_family',
           op: 'in',
-          value: getDeviceGroup(),
+          value: filterDeviceFamily.value,
         },
         filter.value.device_type.length && { field: 'dc.device_type', op: 'in', value: filter.value.device_type },
         filter.value.cpu && { field: 'cpu_core', op: 'eq', value: filter.value.cpu },
         filter.value.mem && { field: 'memory', op: 'eq', value: filter.value.mem },
       ].filter(Boolean),
     );
+
     const loadResources = () => {
       getListData();
     };
@@ -62,7 +73,7 @@ export default defineComponent({
         region: [],
         zone: [],
         device_type: [],
-        device_group: deviceGroups && [deviceGroups[0]],
+        device_group: [],
         cpu: '',
         mem: '',
         disk: '',
@@ -77,29 +88,17 @@ export default defineComponent({
       emptyform();
       deviceConfigDisabled.value = false;
       deviceTypeDisabled.value = false;
+      selectedDeviceFamily.value = [];
       filterDevices();
     };
-    const handleDeviceGroupChange = () => {
+    const handleDeviceGroupChange = (items: IDeviceFamilyItem[]) => {
       filter.value.cpu = '';
       filter.value.mem = '';
       filter.value.device_type = [];
+      selectedDeviceFamily.value = items;
     };
     const filterDevices = () => {
-      queryRules.value = [
-        filter.value.region.length && { field: 'dc.region', op: 'in', value: filter.value.region },
-        filter.value.zone.length && { field: 'dc.zone', op: 'in', value: filter.value.zone },
-        getDeviceGroup().length && {
-          field: 'device_family',
-          op: 'in',
-          value: getDeviceGroup(),
-        },
-        filter.value.device_type.length && { field: 'dc.device_type', op: 'in', value: filter.value.device_type },
-        filter.value.cpu && { field: 'cpu_core', op: 'eq', value: filter.value.cpu },
-        filter.value.mem && { field: 'memory', op: 'eq', value: filter.value.mem },
-      ].filter(Boolean);
-
       page.value.start = 0;
-
       loadResources();
     };
     const handleDeviceTypeChange = () => {
@@ -114,7 +113,7 @@ export default defineComponent({
         vendor: VendorEnum.ZIYAN,
         region,
         zone,
-        device_family: getDeviceGroup(),
+        device_family: filterDeviceFamily.value,
         cpu,
         mem,
         disk,
@@ -148,6 +147,7 @@ export default defineComponent({
           payload: {
             filter: {
               op: 'and',
+              // TODO: 这里无法支持使用异步接口的数据作为默认选中的条件值，比如实例族默认选中标准型
               rules: [...queryRules.value],
             },
             page: page.value,
@@ -182,16 +182,14 @@ export default defineComponent({
                 }}></ZoneSelector>
             </FormItem>
             <FormItem label='实例族'>
-              <bk-select
+              <HcmFormDeviceFamily
                 v-model={filter.value.device_group}
+                filterable
                 multiple
                 clearable
                 collapse-tags
-                onChange={handleDeviceGroupChange}>
-                {options.value.device_groups.map((item) => (
-                  <bk-option key={item} value={item} label={item}></bk-option>
-                ))}
-              </bk-select>
+                onChange={handleDeviceGroupChange}
+              />
             </FormItem>
             <FormItem label='机型'>
               <DevicetypeSelector

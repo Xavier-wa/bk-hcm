@@ -72,7 +72,11 @@ watchEffect(async () => {
             <template v-if="deviceTypeList?.length">
               <grid-item class="device-item" v-for="(item, index) in deviceTypeList" :key="index">
                 {{ item.device_type }}
-                <span class="extra-text">({{ item.device_family }}, {{ item.cpu_core }}核{{ item.memory }}GB)</span>
+                <span class="extra-text">
+                  ({{ item.device_family }}, {{ item.cpu_core }}核{{ item.memory }}GB{{
+                    item.gpu_amount > 0 ? `${item.gpu_amount}卡` : ''
+                  }})
+                </span>
               </grid-item>
             </template>
             <span v-else>--</span>
@@ -108,14 +112,22 @@ watchEffect(async () => {
             <div class="original">
               <div v-for="(item, index) in originalData.deviceTypeList" :key="index" class="device-item">
                 <span class="device-type">{{ item.device_type }}</span>
-                <span class="extra-text">({{ item.device_family }}, {{ item.cpu_core }}核{{ item.memory }}GB)</span>
+                <span class="extra-text">
+                  ({{ item.device_family }}, {{ item.cpu_core }}核{{ item.memory }}GB{{
+                    item.gpu_amount > 0 ? `${item.gpu_amount}卡` : ''
+                  }})
+                </span>
               </div>
             </div>
             <div class="update">
               <arrows-right class="right-icon" />
               <div v-for="(item, index) in deviceTypeList" :key="index" class="device-item">
                 <span class="device-type">{{ item.device_type }}</span>
-                <span class="extra-text">({{ item.device_family }}, {{ item.cpu_core }}核{{ item.memory }}GB)</span>
+                <span class="extra-text">
+                  ({{ item.device_family }}, {{ item.cpu_core }}核{{ item.memory }}GB{{
+                    item.gpu_amount > 0 ? `${item.gpu_amount}卡` : ''
+                  }})
+                </span>
               </div>
             </div>
           </div>

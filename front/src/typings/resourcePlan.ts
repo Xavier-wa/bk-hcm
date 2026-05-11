@@ -252,6 +252,7 @@ export interface IDeviceType {
   memory: number;
   device_class: string;
   device_family: string;
+  gpu_amount: number;
 }
 
 export interface IDiskType {

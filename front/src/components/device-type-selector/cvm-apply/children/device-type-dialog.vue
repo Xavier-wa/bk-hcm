@@ -10,6 +10,8 @@ import { transformSimpleCondition } from '@/utils/search';
 import { RequirementType } from '@/store/config/requirement';
 import { QueryRuleOPEnum } from '@/typings';
 import { useConfigSpringResPoolStore } from '@/store/config/spring-res-pool';
+import { type IDeviceFamilyItem } from '@/store/config/device-family';
+import HcmFormDeviceFamily from '@/components/form/device-family.vue';
 import ChargeType from './charge-type.vue';
 import AssetMatch from './asset-match.vue';
 import Inventory from './inventory.vue';
@@ -95,6 +97,9 @@ const selectedDeviceTypeList = computed(() => {
 const selectedDeviceType = computed(() => {
   return selectedDeviceTypeList.value?.[0];
 });
+
+// 选中的机型族
+const selectedDeviceFamily = ref<IDeviceFamilyItem>();
 
 // 可用区hook，获取可用区列表
 const useZone = useZoneFactory(props.vendor);
@@ -281,7 +286,7 @@ const displayColumns = computed(() => {
       colKey: 'device_family',
       thClassName: 'th-class-name',
       title: '机型族',
-      width: 90,
+      width: 70,
     },
     {
       colKey: 'cpu_core',
@@ -296,16 +301,25 @@ const displayColumns = computed(() => {
       colKey: 'memory',
       thClassName: 'th-class-name',
       title: '内存(GB)',
-      width: 110,
+      width: 90,
       align: 'right',
       cell: (h, { row }) => `${row.memory}`,
+      sorter: true,
+    },
+    {
+      colKey: 'gpu_amount',
+      thClassName: 'th-class-name',
+      title: 'GPU卡数',
+      width: 90,
+      align: 'right',
+      cell: (h, { row }) => `${row.gpu_amount ?? '--'}`,
       sorter: true,
     },
     {
       colKey: 'available',
       thClassName: 'th-class-name',
       title: '是否预测',
-      width: 80,
+      width: 70,
       cell: (h, { row }) => (
         <>
           {chargeTypeDeviceTypeListLoading.value && <Loading theme='primary' mode='spin' size='mini' />}
@@ -317,7 +331,7 @@ const displayColumns = computed(() => {
       colKey: 'maxLimit',
       thClassName: 'th-class-name',
       title: '可申请数',
-      width: 110,
+      width: 90,
       sorter: true,
       cell: (h, { row }) => (
         <>
@@ -341,6 +355,10 @@ const displayColumns = computed(() => {
 
   if (isNonPlanType.value) {
     columns = columns.filter((col) => !['available', 'maxLimit'].includes(col.colKey));
+  }
+
+  if (condition.deviceGroup !== 'GPU型') {
+    columns = columns.filter((col) => !['gpu_amount'].includes(col.colKey));
   }
 
   return columns;
@@ -387,7 +405,13 @@ const getDeviceTypeList = async () => {
     vendor: props.vendor,
     region: props.region,
     zone: zoneSelected.value.includes(ZONE_ALL) ? undefined : zoneSelected.value,
-    device_family: condition.deviceGroup === '全部' ? undefined : condition.deviceGroup,
+    device_family:
+      // eslint-disable-next-line no-nested-ternary
+      condition.deviceGroup === '全部'
+        ? undefined
+        : selectedDeviceFamily.value?.children?.length
+        ? selectedDeviceFamily.value?.children?.map((item) => item.id)
+        : condition.deviceGroup,
   };
 
   // 小额绿通特殊处理，只展示标准型，且CPU不超过16核
@@ -506,8 +530,9 @@ const handleZoneSelect = (zone: string) => {
   getDeviceTypeList();
 };
 
-const handleDeviceGroupChange = () => {
+const handleDeviceGroupChange = (items: IDeviceFamilyItem[]) => {
   selectedRowKeys.value = [];
+  selectedDeviceFamily.value = items?.[0];
   getDeviceTypeList();
 };
 
@@ -716,18 +741,21 @@ provide('isInheritPackage', isInheritPackage);
           <div class="condition-row">
             <div class="device-group">
               <div class="form-label">机型族</div>
-              <bk-radio-group type="capsule" v-model="condition.deviceGroup" @change="handleDeviceGroupChange">
-                <bk-radio-button
-                  v-for="group in option.deviceGroups"
-                  :key="group"
-                  :label="group"
-                  :disabled="isGreenChannel && !['全部', '标准型'].includes(group)"
-                  v-bk-tooltips="{
+              <HcmFormDeviceFamily
+                v-model="condition.deviceGroup"
+                :multiple="false"
+                :appearance="'capsule'"
+                :show-all="true"
+                :all-option-id="'全部'"
+                :option-disabled="(group) => isGreenChannel && !['全部', '标准型'].includes(group.id)"
+                :option-disabled-tips="
+                  (group) => ({
                     content: '小额绿通，仅支持<=16核的标准型机型',
-                    disabled: !isGreenChannel || ['全部', '标准型'].includes(group),
-                  }"
-                />
-              </bk-radio-group>
+                    disabled: !isGreenChannel || ['全部', '标准型'].includes(group.id),
+                  })
+                "
+                @change="handleDeviceGroupChange"
+              />
             </div>
             <div class="available-only">
               <bk-checkbox size="small" :disabled="isGreenChannelOrSpringPool" v-model="condition.isAvailable">
@@ -838,7 +866,9 @@ provide('isInheritPackage', isInheritPackage);
                         <bk-overflow-title type="tips">
                           {{ item.device_type }}
                           <span class="extra-text">
-                            ({{ item.device_family }}, {{ item.cpu_core }}核{{ item.memory }}GB)
+                            ({{ item.device_family }}, {{ item.cpu_core }}核{{ item.memory }}GB{{
+                              item.gpu_amount > 0 ? `${item.gpu_amount}卡` : ''
+                            }})
                           </span>
                         </bk-overflow-title>
                       </div>
@@ -978,7 +1008,7 @@ provide('isInheritPackage', isInheritPackage);
     }
 
     .device-type-list {
-      padding: 12px 24px 0;
+      padding: 12px 12px 0;
 
       .condition-row {
         display: flex;

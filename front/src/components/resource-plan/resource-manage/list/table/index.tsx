@@ -19,6 +19,7 @@ import { useGlobalPermissionDialog } from '@/store/useGlobalPermissionDialog';
 import { ITimeRange } from '@/typings/plan';
 import { GLOBAL_BIZS_KEY } from '@/common/constant';
 import useCvmChargeType from '@/views/ziyanScr/hooks/use-cvm-charge-type';
+import { MENU_BUSINESS_RESOURCE_PLAN_CVM } from '@/constants/menu-symbol';
 
 const { DropdownMenu, DropdownItem } = Dropdown;
 
@@ -250,7 +251,7 @@ export default defineComponent({
     };
 
     const handleToBizPage = (bizId: number) => {
-      router.push({ name: 'bizResourcePlanList', query: { [GLOBAL_BIZS_KEY]: bizId, ...route.query } });
+      router.push({ name: MENU_BUSINESS_RESOURCE_PLAN_CVM, query: { [GLOBAL_BIZS_KEY]: bizId, ...route.query } });
     };
 
     const handleCancel = () => {

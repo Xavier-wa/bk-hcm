@@ -2962,7 +2962,10 @@ const lang: ILANG = {
   原始CPU: ['Raw CPUs'],
   当前数量: ['Current number'],
   当前CPU: ['Current CPUs'],
-  '所选机型为{0}，CPU为{1}核，内存为{2}G': ['The selected model is {0}, CPU is {1} core, RAM is {2}G'],
+  '所选机型为{0}，CPU为{1}核，内存为{2}G': ['The selected model is {0}, CPU is {1} core(s), RAM is {2}G'],
+  '所选机型为{0}，CPU为{1}核，内存为{2}G，GPU卡为{3}张': [
+    'The selected model is {0}, CPU is {1} core(s), RAM is {2}G, GPU is {3} card(s)',
+  ],
   增加预测需求: ['Increased demand for forecasting'],
   修改预测需求: ['Modification of projected requirements'],
   基础信息: ['Basic Information'],
