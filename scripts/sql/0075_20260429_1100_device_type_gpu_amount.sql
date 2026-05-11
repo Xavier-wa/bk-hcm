@@ -18,7 +18,7 @@
  */
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9
+    SQLVER=0075,HCMVER=v1.8.11.12
 
     Notes:
     1. 机型表添加 gpu_amount 字段
@@ -30,6 +30,6 @@ ALTER TABLE `device_type`
     ADD COLUMN `gpu_amount` DOUBLE NOT NULL DEFAULT 0 COMMENT 'GPU卡数' AFTER `memory`;
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.8.11.12' as `hcm_ver`, '0075' as `sql_ver`;
 
 COMMIT;
