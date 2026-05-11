@@ -145,6 +145,10 @@ func (d *Dispatcher) dispatchHandler(kt *kit.Kit, key string) error {
 		logs.Errorf("failed to lock apply order %s, err: %v, rid: %s", key, err, kt.Rid)
 		return err
 	}
+
+	// 锁定成功后，需要更新applyOrder的状态为：匹配中
+	applyOrder.Status = types.ApplyStatusMatching
+
 	// start generate step
 	if err = record.StartStep(kt, applyOrder.SubOrderId, types.StepNameGenerate); err != nil {
 		logs.Errorf("failed to start generate step, order id: %s, err: %v, rid: %s", key, err, kt.Rid)

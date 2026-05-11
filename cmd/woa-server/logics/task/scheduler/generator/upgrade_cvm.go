@@ -67,15 +67,18 @@ func (g *Generator) UpgradeCVMSync(kt *kit.Kit, order *types.ApplyOrder) (orderI
 	}()
 
 	// 1. get history generated devices
-	existDevices, err := g.getUnreleasedDevice(kt, order.SubOrderId)
+	_, _, scheduledCount, err := g.getScheduledDeviceStats(kt, order.SubOrderId)
 	if err != nil {
-		logs.Errorf("failed to get unreleased device, order id: %s, err: %v, rid: %s", order.SubOrderId, err,
-			kt.Rid)
 		return "", err
 	}
 
 	// cvm upgrade do not require separate campus
-	_, orderID, err = g.batchUpgradeCvm(kt, order, order.TotalNum-uint(len(existDevices)))
+	replicas := uint(0)
+	if scheduledCount < order.TotalNum {
+		replicas = order.TotalNum - scheduledCount
+	}
+
+	_, orderID, err = g.batchUpgradeCvm(kt, order, replicas)
 	if err != nil {
 		logs.Errorf("failed to upgrade cvm, suborder id: %s, rid: %s", order.SubOrderId, kt.Rid)
 		return "", err
@@ -86,25 +89,26 @@ func (g *Generator) UpgradeCVMSync(kt *kit.Kit, order *types.ApplyOrder) (orderI
 // UpgradeCVM upgrade cvm devices
 func (g *Generator) UpgradeCVM(kt *kit.Kit, order *types.ApplyOrder) error {
 	// 1. get history generated devices
-	existDevices, err := g.getUnreleasedDevice(kt, order.SubOrderId)
+	existDevices, generatingCount, scheduledCount, err := g.getScheduledDeviceStats(kt, order.SubOrderId)
 	if err != nil {
-		logs.Errorf("failed to get unreleased device, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
+		logs.Errorf("failed to get schedule device, subOrderID: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return err
 	}
 
 	// check if need generate cvm
-	existCount := uint(len(existDevices))
-	if existCount >= order.TotalNum {
-		logs.Infof("apply order %s has been scheduled %d cvm, rid: %s", order.SubOrderId, existCount, kt.Rid)
+	if scheduledCount >= order.TotalNum {
+		logs.Infof("apply upgrade order %s has been scheduled %d cvm (existing: %d, generatingCount: %d), rid: %s",
+			order.SubOrderId, scheduledCount, len(existDevices), generatingCount, kt.Rid)
 		// check if need retry match task
-		if err := g.retryMatchDevice(existDevices); err != nil {
-			logs.Warnf("failed to retry match device, order id: %s, err: %v, rid: %s", order.SubOrderId, err,
+		if err = g.retryMatchDevice(existDevices); err != nil {
+			logs.Warnf("failed to retry match device, subOrderID: %s, err: %v, rid: %s", order.SubOrderId, err,
 				kt.Rid)
 		}
 		return nil
 	}
 
-	logs.Infof("apply order %s existing device number: %d, rid: %s", order.SubOrderId, existCount, kt.Rid)
+	logs.Infof("apply upgrade order %s existing device number: %d, generating number: %d, scheduled device "+
+		"number: %d, rid: %s", order.SubOrderId, len(existDevices), generatingCount, scheduledCount, kt.Rid)
 
 	// cvm upgrade do not require separate campus
 	if err = g.generateCVMConcentrate(kt, order, existDevices, []string{order.Spec.Zone}); err != nil {
@@ -212,7 +216,7 @@ func (g *Generator) buildUpgradeCvmReq(kt *kit.Kit, order *types.ApplyOrder, rep
 	*cvmapi.UpgradeParam, error) {
 
 	// 获取已完成升配的cvm
-	existDevices, err := g.getUnreleasedDevice(kt, order.SubOrderId)
+	existDevices, err := g.getExistDevices(kt, order.SubOrderId)
 	if err != nil {
 		logs.Errorf("failed to get unreleased device, order id: %s, err: %v, rid: %s", order.SubOrderId, err,
 			kt.Rid)
