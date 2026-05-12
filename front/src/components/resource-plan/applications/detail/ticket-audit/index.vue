@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { type Component, computed, h, onUnmounted, PropType, ref, VNode, watch } from 'vue';
+import { type Component, computed, h, onUnmounted, ref, VNode, watch } from 'vue';
 import type {
   IPlanTicketAudit,
   IPlanTicketAuditLog,
   IPlanTicketCrpAudit,
   IPlanTicketItsmAudit,
+  TicketByIdResult,
 } from '@/typings/resourcePlan';
 import { useI18n } from 'vue-i18n';
 import { useUserStore } from '@/store';
@@ -40,13 +41,15 @@ interface Step {
   auto?: boolean;
   link?: VNode;
 }
+interface IProps {
+  detail: Partial<IPlanTicketAudit & SubTicketAudit>;
+  fetchData: () => Promise<void>;
+  timeoutPollAction: TimeoutPollAction;
+  ticketStatus?: TicketByIdResult['status_info'];
+}
 
 defineOptions({ name: 'resource-plan-ticket-audit' });
-const props = defineProps({
-  detail: Object as PropType<Partial<IPlanTicketAudit & SubTicketAudit>>, // audit接口数据，从外部传入
-  fetchData: Function as PropType<() => Promise<void>>,
-  timeoutPollAction: Object as PropType<TimeoutPollAction>,
-});
+const props = withDefaults(defineProps<IProps>(), {});
 
 const { t } = useI18n();
 const { getBusinessApiPath, isBusinessPage } = useWhereAmI();
@@ -104,7 +107,7 @@ const getHistoryStepItems = (
   audit: IPlanTicketItsmAudit | IPlanTicketCrpAudit | AdminAudit,
   auditType: 'itsm' | 'crp',
 ) => {
-  const { logs, status } = audit;
+  const { logs, status } = audit || {};
 
   // 兼容 crp init/failed 的情况
   if (!logs) return [];
@@ -321,7 +324,8 @@ watch(
       return;
     }
 
-    if (!itsm_audit) return Message({ theme: 'error', message: t('ITSM单据信息异常') });
+    if (!itsm_audit) return;
+    //  Message({ theme: 'error', message: t('ITSM单据信息异常') });
     renderItsmAuditLogs.value = renderItsmLogs(itsm_audit);
 
     // crp_audit 可能为空, 为空则不展示crp审批信息
@@ -342,6 +346,10 @@ const hasAuditAuth = (type: 'itsm_audit' | 'crp_audit') => {
   );
 };
 
+const itsmSkip = computed(() => {
+  return props?.ticketStatus?.itsm_sn === 'skip' || !props?.detail?.itsm_audit;
+});
+
 onUnmounted(() => {
   clearTimeout(approvalLoadingTimer);
   props.timeoutPollAction?.reset();
@@ -349,8 +357,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <panel v-if="renderItsmAuditLogs.length || detail?.admin_audit" class="panel" :title="t('审批信息')">
-    <div class="step-wrap" v-if="renderItsmAuditLogs.length">
+  <panel v-if="renderItsmAuditLogs.length || detail?.admin_audit || itsmSkip" class="panel" :title="t('审批信息')">
+    <div class="step-wrap">
       <h3 class="label">{{ t('业务审批') }}：</h3>
       <ticket-audit
         class="content"
@@ -360,9 +368,13 @@ onUnmounted(() => {
       >
         <template #title>
           <div class="aduit-title">
-            <p>
+            <p v-if="!itsmSkip">
               <img v-if="detail?.itsm_audit?.status === 'done'" width="17" height="17" :src="successIcon" alt="" />
               {{ t('ITSM 平台审批') }}
+            </p>
+            <p v-else>
+              <img width="17" height="17" :src="successIcon" alt="" />
+              审批自动通过
             </p>
           </div>
         </template>

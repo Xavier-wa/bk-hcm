@@ -42,7 +42,7 @@ const detailTitle = computed(() => `${t('申请单详情')} - ${ticketDetail.val
 
 // 计算属性：是否显示审批详情组件
 const isTicketAuditDetailShow = computed(() => {
-  return ticketAuditDetail.value?.itsm_audit.status !== 'init';
+  return ticketAuditDetail.value?.itsm_audit?.status !== 'init';
 });
 
 // 获取数据的逻辑
@@ -139,6 +139,7 @@ onBeforeMount(() => {
             :fetch-data="getResultData"
             :timeout-poll-action="autoFlushTask"
             :is-business-page="isBusinessPage"
+            :ticket-status="ticketDetail?.status_info"
           />
           <div class="divider">
             <bk-divider color="#dcdee5"></bk-divider>
