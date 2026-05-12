@@ -1,11 +1,16 @@
 /* eslint-disable */
 import { saveAs } from 'file-saver';
-import * as XLSX from 'xlsx';
+import { Workbook, Worksheet } from 'exceljs';
 
 interface CellRange {
   s: { r: number; c: number };
   e: { r: number; c: number };
 }
+
+const SHEET_NAME = 'SheetJS';
+const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const MIN_COLUMN_WIDTH = 10;
+const COLUMN_WIDTH_PADDING = 2;
 
 function generateArray(table: HTMLTableElement): [any[][], CellRange[]] {
   var out = [];
@@ -57,67 +62,87 @@ function generateArray(table: HTMLTableElement): [any[][], CellRange[]] {
   return [out, ranges];
 }
 
-function datenum(v: Date, date1904?: boolean) {
-  let serial = (v.getTime() - new Date(Date.UTC(1899, 11, 30)).getTime()) / (24 * 60 * 60 * 1000);
-  if (date1904) serial -= 1462;
-  return serial;
+function createWorksheet(data: any[][], merges: CellRange[] = [], autoWidth = false, headerIndex = 0) {
+  const workbook = new Workbook();
+  const worksheet = workbook.addWorksheet(SHEET_NAME);
+
+  worksheet.addRows(data);
+  setDateCellFormat(worksheet, data);
+  setWorksheetMerges(worksheet, merges);
+
+  if (autoWidth) {
+    setWorksheetAutoWidth(worksheet, data, headerIndex);
+  }
+
+  return workbook;
 }
 
-function sheet_from_array_of_arrays(data: any[][], opts?: any) {
-  var ws: { [key: string]: any } = {};
-  var range = {
-    s: {
-      c: 10000000,
-      r: 10000000,
-    },
-    e: {
-      c: 0,
-      r: 0,
-    },
-  };
-  for (var R = 0; R != data.length; ++R) {
-    for (var C = 0; C != data[R].length; ++C) {
-      if (range.s.r > R) range.s.r = R;
-      if (range.s.c > C) range.s.c = C;
-      if (range.e.r < R) range.e.r = R;
-      if (range.e.c < C) range.e.c = C;
-      var cell: { v: any; t?: string; z?: string } = {
-        v: data[R][C],
-      };
-      if (cell.v == null) continue;
-      var cell_ref = XLSX.utils.encode_cell({
-        c: C,
-        r: R,
-      });
+function setDateCellFormat(worksheet: Worksheet, data: any[][]) {
+  data.forEach((row, rowIndex) => {
+    row.forEach((val, columnIndex) => {
+      if (val instanceof Date) {
+        worksheet.getRow(rowIndex + 1).getCell(columnIndex + 1).numFmt = 'm/d/yy';
+      }
+    });
+  });
+}
 
-      if (typeof cell.v === 'number') cell.t = 'n';
-      else if (typeof cell.v === 'boolean') cell.t = 'b';
-      else if (cell.v instanceof Date) {
-        cell.t = 'n';
-        cell.z = XLSX.SSF._table[14];
-        cell.v = datenum(cell.v);
-      } else cell.t = 's';
+function setWorksheetMerges(worksheet: Worksheet, merges: CellRange[]) {
+  merges.forEach((range) => {
+    worksheet.mergeCells(range.s.r + 1, range.s.c + 1, range.e.r + 1, range.e.c + 1);
+  });
+}
 
-      ws[cell_ref] = cell;
+function getCellWidth(val: any) {
+  if (val == null) {
+    return MIN_COLUMN_WIDTH;
+  }
+
+  const cellText = val.toString();
+  if (cellText.charCodeAt(0) > 255) {
+    return cellText.length * 2;
+  }
+  return cellText.length;
+}
+
+function setWorksheetAutoWidth(worksheet: Worksheet, data: any[][], headerIndex = 0) {
+  const colWidth = data.map((row) => row.map((val) => getCellWidth(val)));
+  const result = [...(colWidth[headerIndex] || [])];
+
+  for (let i = 0; i < colWidth.length; i++) {
+    for (let j = 0; j < colWidth[i].length; j++) {
+      if (!result[j]) {
+        result[j] = MIN_COLUMN_WIDTH;
+      }
+
+      if (result[j] < colWidth[i][j]) {
+        result[j] = colWidth[i][j];
+      }
     }
   }
-  if (range.s.c < 10000000) ws['!ref'] = XLSX.utils.encode_range(range);
-  return ws;
+
+  result.forEach((width, index) => {
+    worksheet.getColumn(index + 1).width = Math.max(width + COLUMN_WIDTH_PADDING, MIN_COLUMN_WIDTH);
+  });
 }
 
-class Workbook {
-  SheetNames: string[] = [];
-  Sheets: { [key: string]: any } = {};
+async function saveWorkbook(workbook: Workbook, filename: string) {
+  const buffer = await workbook.xlsx.writeBuffer();
+  saveAs(
+    new Blob([buffer], {
+      type: XLSX_MIME_TYPE,
+    }),
+    `${filename}.xlsx`,
+  );
 }
 
-function s2ab(s: string) {
-  var buf = new ArrayBuffer(s.length);
-  var view = new Uint8Array(buf);
-  for (var i = 0; i != s.length; ++i) view[i] = s.charCodeAt(i) & 0xff;
-  return buf;
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
-export function export_table_to_excel(id: string) {
+export async function export_table_to_excel(id: string): Promise<void> {
   var theTable = document.getElementById(id) as HTMLTableElement | null;
   if (!theTable) {
     console.error(`Table element with id "${id}" not found`);
@@ -128,31 +153,8 @@ export function export_table_to_excel(id: string) {
 
   /* original data */
   var data = oo[0];
-  var ws_name = 'SheetJS';
-
-  var wb = new Workbook(),
-    ws = sheet_from_array_of_arrays(data);
-
-  /* add ranges to worksheet */
-  // ws['!cols'] = ['apple', 'banan'];
-  ws['!merges'] = ranges;
-
-  /* add worksheet to workbook */
-  wb.SheetNames.push(ws_name);
-  wb.Sheets[ws_name] = ws;
-
-  var wbout = XLSX.write(wb, {
-    bookType: 'xlsx',
-    bookSST: false,
-    type: 'binary',
-  });
-
-  saveAs(
-    new Blob([s2ab(wbout)], {
-      type: 'application/octet-stream',
-    }),
-    'test.xlsx',
-  );
+  const workbook = createWorksheet(data, ranges);
+  await saveWorkbook(workbook, 'test');
 }
 export interface ExportOptions {
   header: string[] | string[][];
@@ -174,7 +176,7 @@ function exportSingleExcel({
   mutipleHeader = false,
   merges = [],
   headerIndex = 0,
-}: Omit<ExportOptions, 'maxRowsPerFile'>) {
+}: Omit<ExportOptions, 'maxRowsPerFile'>): Promise<void> {
   data = [...data];
   if (mutipleHeader) {
     // 多行表头时，header 应为 string[][]
@@ -186,72 +188,16 @@ function exportSingleExcel({
   } else {
     data.unshift(header as string[]);
   }
-  var ws_name = 'SheetJS';
-  var wb = new Workbook(),
-    ws = sheet_from_array_of_arrays(data);
-
-  if (autoWidth) {
-    /*设置worksheet每列的最大宽度*/
-    const colWidth = data.map((row) =>
-      row.map((val) => {
-        /*先判断是否为null/undefined*/
-        if (val == null) {
-          return {
-            wch: 10,
-          };
-        } else if (val.toString().charCodeAt(0) > 255) {
-          /*再判断是否为中文*/
-          return {
-            wch: val.toString().length * 2,
-          };
-        } else {
-          return {
-            wch: val.toString().length,
-          };
-        }
-      }),
-    );
-    /*以第一行为初始值*/
-    let result = colWidth[headerIndex];
-    for (let i = 1; i < colWidth.length; i++) {
-      for (let j = 0; j < colWidth[i].length; j++) {
-        if (!result[j]) {
-          result[j] = { wch: 10 };
-        }
-
-        if (result[j]['wch'] < colWidth[i][j]['wch']) {
-          result[j]['wch'] = colWidth[i][j]['wch'];
-        }
-      }
-    }
-    ws['!cols'] = result;
-  }
-
-  if (merges.length) {
-    ws['!merges'] = merges;
-  }
-
-  /* add worksheet to workbook */
-  wb.SheetNames.push(ws_name);
-  wb.Sheets[ws_name] = ws;
-
-  var wbout = XLSX.write(wb, {
-    bookType: 'xlsx',
-    bookSST: false,
-    type: 'array', // 使用 array 类型避免 s2ab 转换问题
-  });
-  saveAs(
-    new Blob([wbout], {
-      type: 'application/octet-stream',
-    }),
-    filename + '.xlsx',
-  );
+  const workbook = createWorksheet(data, merges, autoWidth, headerIndex);
+  return saveWorkbook(workbook, filename);
 }
 
-// 每批最大行数（5万行，避免内存溢出）
+// 每批最大行数（15万行，避免内存溢出）
 export const MAX_ROWS_PER_FILE = 150000;
 
-export function export_json_to_excel(opts: ExportOptions = { header: [], data: [], filename: '' }): Promise<void> {
+export async function export_json_to_excel(
+  opts: ExportOptions = { header: [], data: [], filename: '' },
+): Promise<void> {
   let {
     header,
     data,
@@ -262,53 +208,45 @@ export function export_json_to_excel(opts: ExportOptions = { header: [], data: [
     headerIndex = 0, //以 header 第几列为基础
     maxRowsPerFile = MAX_ROWS_PER_FILE,
   } = opts;
-  return new Promise((resolve) => {
-    /* original data */
-    filename = filename || 'excel-list';
+  /* original data */
+  filename = filename || 'excel-list';
 
-    // 如果数据量不大，直接导出
-    if (data.length <= maxRowsPerFile) {
-      exportSingleExcel({
-        header,
-        data,
-        filename,
-        autoWidth,
-        mutipleHeader,
-        merges,
-        headerIndex,
-      });
-      resolve();
-      return;
+  // 如果数据量不大，直接导出
+  if (data.length <= maxRowsPerFile) {
+    await exportSingleExcel({
+      header,
+      data,
+      filename,
+      autoWidth,
+      mutipleHeader,
+      merges,
+      headerIndex,
+    });
+    return;
+  }
+
+  // 数据量大，分批导出多个文件
+  const totalParts = Math.ceil(data.length / maxRowsPerFile);
+  console.log(`数据量较大（${data.length} 行），将分 ${totalParts} 个文件导出`);
+
+  for (let i = 0; i < totalParts; i++) {
+    const start = i * maxRowsPerFile;
+    const end = Math.min(start + maxRowsPerFile, data.length);
+    const chunk = data.slice(start, end);
+
+    if (i > 0) {
+      // 延迟导出，避免连续创建多个大文件导致内存问题
+      await delay(500);
     }
 
-    // 数据量大，分批导出多个文件
-    const totalParts = Math.ceil(data.length / maxRowsPerFile);
-    console.log(`数据量较大（${data.length} 行），将分 ${totalParts} 个文件导出`);
-
-    let completedParts = 0;
-
-    for (let i = 0; i < totalParts; i++) {
-      const start = i * maxRowsPerFile;
-      const end = Math.min(start + maxRowsPerFile, data.length);
-      const chunk = data.slice(start, end);
-
-      // 延迟导出，避免同时创建多个大文件导致内存问题
-      setTimeout(() => {
-        exportSingleExcel({
-          header,
-          data: chunk,
-          filename: `${filename}_第${i + 1}部分_共${totalParts}部分`,
-          autoWidth,
-          mutipleHeader,
-          merges: i === 0 ? merges : [], // 只有第一个文件保留合并单元格
-          headerIndex,
-        });
-        completedParts++;
-        // 所有部分导出完成后 resolve
-        if (completedParts === totalParts) {
-          resolve();
-        }
-      }, i * 500); // 每个文件间隔 500ms
-    }
-  });
+    await exportSingleExcel({
+      header,
+      data: chunk,
+      filename: `${filename}_第${i + 1}部分_共${totalParts}部分`,
+      autoWidth,
+      mutipleHeader,
+      merges: i === 0 ? merges : [], // 只有第一个文件保留合并单元格
+      headerIndex,
+    });
+  }
 }
