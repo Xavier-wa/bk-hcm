@@ -49,6 +49,25 @@ func makeAutoApproveDemand(family string, cpuCore int64, cbsSize int64) rpt.ResP
 	}
 }
 
+// makeCbsOnlyDemand builds a CBS-only (pure disk) demand with empty Cvm.
+// Such demands are produced by CBS split logic, e.g. when a ticket is split
+// into a CVM part and a pure-disk part.
+func makeCbsOnlyDemand(cbsSize int64) rpt.ResPlanDemand {
+	return rpt.ResPlanDemand{
+		Updated: &rpt.UpdatedRPDemandItem{
+			ObsProject: enumor.ObsProjectNormal,
+			ExpectTime: "2025-01-01",
+			RegionID:   "ap-shanghai",
+			RegionName: "上海",
+			AreaName:   "华东",
+			Cvm:        rpt.Cvm{}, // empty CVM => pure disk demand
+			Cbs: rpt.Cbs{
+				DiskSize: cbsSize,
+			},
+		},
+	}
+}
+
 // makeDeleteDemand builds a delete type demand (Original != nil, Updated == nil).
 func makeDeleteDemand() rpt.ResPlanDemand {
 	return rpt.ResPlanDemand{
@@ -142,6 +161,53 @@ func buildBasicConditionCases() []autoApproveTestCase {
 			wantReasonContain: "满足自动过单条件",
 			wantCPUCores:      500,
 			wantCBSSizeGB:     10000,
+		},
+		{
+			// 纯磁盘单（CVM 为空）：应当跳过机型校验，允许自动过单
+			name: "CBS-only demand (pure disk) should be auto-approved",
+			demands: rpt.ResPlanDemands{
+				makeCbsOnlyDemand(10000),
+			},
+			wantCanApprove:    true,
+			wantReasonContain: "满足自动过单条件",
+			wantCPUCores:      0,
+			wantCBSSizeGB:     10000,
+		},
+		{
+			// 多个纯磁盘单：累加 CBS 容量
+			name: "multiple CBS-only demands should be auto-approved",
+			demands: rpt.ResPlanDemands{
+				makeCbsOnlyDemand(10000),
+				makeCbsOnlyDemand(20000),
+				makeCbsOnlyDemand(15000),
+			},
+			wantCanApprove:    true,
+			wantReasonContain: "满足自动过单条件",
+			wantCPUCores:      0,
+			wantCBSSizeGB:     45000,
+		},
+		{
+			// 纯磁盘单 + 标准型 CVM 单的组合：均应满足自动过单条件
+			name: "mix CBS-only and standard CVM demands should be auto-approved",
+			demands: rpt.ResPlanDemands{
+				makeAutoApproveDemand(standardFamily, 500, 10000),
+				makeCbsOnlyDemand(20000),
+			},
+			wantCanApprove:    true,
+			wantReasonContain: "满足自动过单条件",
+			wantCPUCores:      500,
+			wantCBSSizeGB:     30000,
+		},
+		{
+			// 纯磁盘单超阈值：仍需校验 CBS 容量
+			name: "CBS-only demand exceeding CBS threshold should not be auto-approved",
+			demands: rpt.ResPlanDemands{
+				makeCbsOnlyDemand(50000),
+			},
+			wantCanApprove:    false,
+			wantReasonContain: "CBS容量超出阈值",
+			wantCPUCores:      0,
+			wantCBSSizeGB:     50000,
 		},
 	}
 }

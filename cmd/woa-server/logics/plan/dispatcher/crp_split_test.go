@@ -461,6 +461,10 @@ func (m *mockCRPClient) ConfirmOrderForIEG(_ context.Context, _ http.Header,
 	_ *cvmapi.ConfirmOrderForIEGReq) (*cvmapi.ConfirmOrderForIEGResp, error) {
 	panic("unexpected")
 }
+func (m *mockCRPClient) QueryZoneCityList(_ context.Context, _ http.Header,
+	_ *cvmapi.QueryZoneCityListReq) (*cvmapi.QueryZoneCityListResp, error) {
+	panic("unexpected")
+}
 
 // newTestCreator builds a CrpTicketCreator with the provided mock client for unit testing.
 func newTestCreator(cli cvmapi.CVMClientInterface) *CrpTicketCreator {

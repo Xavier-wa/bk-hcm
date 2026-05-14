@@ -45,59 +45,23 @@ type autoApproveCheckResult struct {
 // checkPredictionAutoApprove 检查预测单是否满足自动过单条件
 // 前置条件：只有"追加"类型的需求单才允许自动过单
 // 三个条件必须全部满足：
-// 1. 机型全部为标准型（DeviceFamily == "标准型"）
+// 1. 机型全部为标准型（DeviceFamily == "标准型"）；纯磁盘单（CVM 为空）跳过此校验
 // 2. 整单CPU ≤ 1500 核
 // 3. 整单CBS ≤ 45TB（46080GB）
 func checkPredictionAutoApprove(kt *kit.Kit, demands rpt.ResPlanDemands) *autoApproveCheckResult {
-	result := &autoApproveCheckResult{
-		CanAutoApprove: true,
-	}
-
+	result := &autoApproveCheckResult{CanAutoApprove: true}
 	var reasons []string
 	// 用于去重非标准机型，避免重复记录
 	nonStandardFamilies := make(map[string]struct{})
 
+	// 遍历需求，检查需求类型和机型，统计资源
 	for _, demand := range demands {
-		// 判断需求类型：
-		// - 追加：Original == nil && Updated != nil
-		// - 删除：Original != nil && Updated == nil
-		// - 变更：Original != nil && Updated != nil
-		// 只有"追加"类型才允许自动过单
-		if demand.Original != nil {
-			// 删除或变更类型，不走自动过单，直接退出循环
-			result.CanAutoApprove = false
-			if demand.Updated == nil {
-				reasons = append(reasons, "包含删除类型需求")
-			} else {
-				reasons = append(reasons, "包含变更类型需求")
-			}
+		var demandReasons []string
+		result, demandReasons = processDemand(demand, result, nonStandardFamilies)
+		reasons = append(reasons, demandReasons...)
+		// 已确定不能自动过单，无需继续遍历
+		if !result.CanAutoApprove {
 			break
-		}
-
-		// 追加类型：Original == nil，检查 Updated
-		if demand.Updated == nil {
-			continue
-		}
-
-		// 统计 CPU 核心数
-		result.TotalCPUCores += demand.Updated.Cvm.CpuCore
-		// 统计 CBS 容量
-		result.TotalCBSSizeGB += demand.Updated.Cbs.DiskSize
-
-		// 条件1：检查机型是否为标准型（在遍历过程中直接检查）
-		// 只有机型为"标准型"才允许自动过单，空机型或其他机型都不允许
-		family := demand.Updated.Cvm.DeviceFamily
-		if family != string(enumor.DeviceFamilyStandard) {
-			// 使用 map 去重，避免重复记录相同的非标准机型
-			if _, exists := nonStandardFamilies[family]; !exists {
-				nonStandardFamilies[family] = struct{}{}
-				result.CanAutoApprove = false
-				if family == "" {
-					reasons = append(reasons, "包含未指定机型的需求")
-				} else {
-					reasons = append(reasons, fmt.Sprintf("包含非标准型机型: %s", family))
-				}
-			}
 		}
 	}
 
@@ -107,7 +71,6 @@ func checkPredictionAutoApprove(kt *kit.Kit, demands rpt.ResPlanDemands) *autoAp
 		reasons = append(reasons, fmt.Sprintf("CPU核心数超出阈值: %d > %d",
 			result.TotalCPUCores, constant.AutoApproveCPUCoreThreshold))
 	}
-
 	// 条件3：检查CBS容量是否超出阈值
 	if result.TotalCBSSizeGB > constant.AutoApproveCBSSizeThreshold {
 		result.CanAutoApprove = false
@@ -123,8 +86,51 @@ func checkPredictionAutoApprove(kt *kit.Kit, demands rpt.ResPlanDemands) *autoAp
 	}
 
 	logs.Infof("auto approve check result: can_auto_approve=%v, reason=%s, cpu=%d, cbs=%dGB, rid: %s",
-		result.CanAutoApprove, result.Reason, result.TotalCPUCores, result.TotalCBSSizeGB,
-		kt.Rid)
+		result.CanAutoApprove, result.Reason, result.TotalCPUCores, result.TotalCBSSizeGB, kt.Rid)
 
 	return result
+}
+
+// processDemand 处理单个需求，返回更新后的结果和原因列表
+func processDemand(demand rpt.ResPlanDemand, result *autoApproveCheckResult,
+	nonStandardFamilies map[string]struct{}) (*autoApproveCheckResult, []string) {
+
+	// 检查需求类型：只有"追加"类型才允许自动过单
+	if demand.Original != nil {
+		result.CanAutoApprove = false
+		if demand.Updated == nil {
+			return result, []string{"包含删除类型需求"}
+		}
+		return result, []string{"包含变更类型需求"}
+	}
+
+	if demand.Updated == nil {
+		return result, nil
+	}
+
+	// 统计资源
+	result.TotalCPUCores += demand.Updated.Cvm.CpuCore
+	result.TotalCBSSizeGB += demand.Updated.Cbs.DiskSize
+
+	// 纯磁盘单（CVM 为空）跳过机型校验
+	if demand.Updated.Cvm.IsEmpty() {
+		return result, nil
+	}
+
+	// 条件1：检查机型是否为标准型
+	var reasons []string
+	family := demand.Updated.Cvm.DeviceFamily
+	if family != string(enumor.DeviceFamilyStandard) {
+		if _, exists := nonStandardFamilies[family]; !exists {
+			nonStandardFamilies[family] = struct{}{}
+			result.CanAutoApprove = false
+			if family == "" {
+				reasons = append(reasons, "包含未指定机型族的需求")
+			} else {
+				reasons = append(reasons, fmt.Sprintf("包含非标准机型族: %s", family))
+			}
+		}
+	}
+
+	return result, reasons
 }
