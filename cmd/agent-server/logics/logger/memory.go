@@ -22,7 +22,6 @@ package logger
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
@@ -168,7 +167,6 @@ func (s *loggingMemoryService) Close() error {
 }
 
 func truncate(s string, maxLen int) string {
-	s = strings.ReplaceAll(s, "\n", "\\n")
 	if len(s) <= maxLen {
 		return s
 	}

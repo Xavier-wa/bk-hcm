@@ -90,32 +90,9 @@ storage:
   #   autoExtractPolicy: "any"
   #   autoExtractMessages: 100
   #   extractPromptFile: "cmd/agent-server/etc/prompts/memory_extract_prompt.md"
-
-# aidev 配置兼容 OpenAI API 协议的蓝鲸 AI 网关。
-aidev:
-  # Endpoints is a seed list of host:port addresses of aidev nodes.
-  endpoints:
-    - https://path/to/apigw/test
-  # AppCode is the BlueKing app code of irisbot to request aidev.
-  appCode: aidev-iris
-  # AppSecret is the BlueKing app secret of irisbot to request aidev.
-  appSecret: xxxxx
-  # User is the BlueKing user of irisbot to request aidev.
-  user:
-  # BkTicket is the BlueKing access ticket of irisbot to request aidev.
-  bkTicket:
-  # defines tls related options.
-  tls:
-    # server should be accessed without verifying the TLS certificate.
-    insecureSkipVerify:
-    # server requires TLS client certificate authentication.
-    certFile:
-    # server requires TLS client certificate authentication.
-    keyFile:
-    # trusted root certificates for server.
-    caFile:
-    # the password to decrypt the certificate.
-    password:
+  checkpoint:
+    backend: "sqlite"
+    dbPath: "/data/agent-server/checkpoint.db"
 
 # LLM 提供方配置。
 # 目前支持两种类型：
@@ -124,7 +101,7 @@ aidev:
 # 此处可配置其他 OpenAI 兼容的 LLM endpoint（如 DeepSeek、OpenAI 等），
 # 模型通过 allowedModels[].provider 字段关联到对应的 provider。
 providers:
-  - name: aidev
+  - name: bkaidev
     type: bkapigw
     endpoints:
       - https://path/to/apigw/test
@@ -172,9 +149,15 @@ providers:
 agui:
   enable: true
   path: "/api/v1/agent/agui"
-  defaultModel: "gpt-4o"
   appName: hcm-agent
-  stream: true       # true=流式输出，每个 token 单独推送一个 TEXT_MESSAGE_CONTENT SSE 事件（逐字打字机效果）
+
+  model:
+    defaultModel: "gpt-4o"
+    maxTokens: 38000
+    temperature: 0.7
+    displayReasoning: true # 是否输出思考内容给前端
+    stream: true       # true=流式输出，每个 token 单独推送一个 TEXT_MESSAGE_CONTENT SSE 事件（逐字打字机效果）
+    mode: graph
 
   # prompt 配置 Agent 的系统提示词和任务指令，均从文件加载。
   # 支持绝对路径或相对路径（相对于进程工作目录，通常为项目根目录）。
@@ -192,6 +175,7 @@ agui:
   # provider 指定模型使用哪个 LLM 提供方（对应 providers[].name）。
   allowedModels: []
   #   - name: deepseek-v3
+  #     provider: bkaidev
   #     contextWindow: 131072
   #   - name: dsv32-thinking
   #     contextWindow: 131072

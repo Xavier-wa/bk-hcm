@@ -29,7 +29,6 @@ import (
 
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
-	"hcm/pkg/logs"
 )
 
 var (
@@ -842,13 +841,15 @@ func (s *PurchaseToResourcePool) validate() error {
 // When session DSN is empty, chat history uses in-memory storage (lost on restart).
 // When memory DSN is empty, long-term memory is disabled.
 type AgentStorage struct {
-	Session AgentSessionStorage `yaml:"session"`
-	Memory  AgentMemoryStorage  `yaml:"memory"`
+	Session    AgentSessionStorage    `yaml:"session"`
+	Memory     AgentMemoryStorage     `yaml:"memory"`
+	Checkpoint AgentCheckpointStorage `yaml:"checkpoint"`
 }
 
 func (s *AgentStorage) trySetDefault() {
 	s.Session.trySetDefault()
 	s.Memory.trySetDefault()
+	s.Checkpoint.trySetDefault()
 }
 
 // AgentSessionStorage defines MySQL settings for AGUI chat history (session) persistence.
@@ -946,6 +947,39 @@ type AgentMemoryStorage struct {
 
 func (s *AgentMemoryStorage) trySetDefault() {
 	s.ExtractPrompt = loadPromptFile(s.ExtractPromptFile)
+}
+
+// AgentCheckpointStorage defines checkpoint storage settings for the graph agent.
+// Checkpoint is used for interrupt/resume support in graph-based workflows.
+// When backend is empty or "inmemory", checkpoints are stored in memory (lost on restart).
+// When backend is "sqlite", checkpoints are persisted to a SQLite database.
+type AgentCheckpointStorage struct {
+	// Backend selects the checkpoint storage engine: "inmemory" or "sqlite".
+	// Default: "inmemory".
+	Backend enumor.GraphCheckpointBackend `yaml:"backend"`
+	// DBPath is the SQLite database file path (backend=sqlite).
+	// Example: "/data/agent-server/checkpoint.db"
+	DBPath string `yaml:"dbPath"`
+}
+
+func (s *AgentCheckpointStorage) trySetDefault() {
+	if s.Backend == "" {
+		s.Backend = enumor.GraphCheckpointBackendInMemory
+	}
+}
+
+// Validate validates the checkpoint storage configuration.
+func (s *AgentCheckpointStorage) Validate() error {
+	if err := s.Backend.Validate(); err != nil {
+		return err
+	}
+
+	if s.Backend == enumor.GraphCheckpointBackendSQLite {
+		if s.DBPath == "" {
+			return fmt.Errorf("dbPath is required when backend is sqlite")
+		}
+	}
+	return nil
 }
 
 // ResolveMemoryBackend determines which backend to use based on explicit config or auto-detection.
@@ -1131,7 +1165,8 @@ func loadPromptFile(path string) string {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		logs.Warnf("failed to load prompt file %q: %v", path, err)
+		// trySetDefault 中不可以使用 logs，会导致 logfile 提前创建
+		fmt.Fprintf(os.Stderr, "failed to load prompt file %q: %v", path, err)
 		return ""
 	}
 	return strings.TrimSpace(string(data))
@@ -1182,12 +1217,15 @@ func (a *AgentModelProvider) IsBKAPIProvider() bool {
 
 // ConvertToBKAPIProvider converts the model provider to a BK API gateway provider.
 func (a *AgentModelProvider) ConvertToBKAPIProvider() *AgentModelProvider {
+	baseURL := a.BaseURL
+	if len(a.Endpoints) > 0 {
+		baseURL = a.Endpoints[0]
+	}
 	return &AgentModelProvider{
 		ApiGateway: a.ApiGateway,
 		Name:       a.Name,
 		Type:       enumor.AgentModelProviderTypeBKAPIGW,
-		BaseURL:    a.BaseURL,
-		APIKey:     a.APIKey,
+		BaseURL:    baseURL,
 	}
 }
 
@@ -1218,6 +1256,55 @@ type AgentModelConfig struct {
 	ContextWindow int `yaml:"contextWindow"`
 }
 
+// AgentModelGeneralConfig describes the model config for the AGUI agent.
+type AgentModelGeneralConfig struct {
+	// DefaultModel is the default LLM model identifier used by the agent.
+	// When empty, the first model in AllowedModels is used as default.
+	DefaultModel string `yaml:"defaultModel"`
+	// Stream enables token-level streaming when calling the upstream LLM.
+	// When true, each token is forwarded to the client as a separate TEXT_MESSAGE_CONTENT
+	// SSE event, producing a real-time typewriter effect.
+	// When false (default), the LLM response is returned as a single event after completion.
+	Stream bool `yaml:"stream"`
+	// DisplayReasoning enables the display of reasoning content in the response.
+	DisplayReasoning bool `yaml:"displayReasoning"`
+	// MaxTokens is the maximum number of tokens in the LLM response.
+	MaxTokens int `yaml:"maxTokens"`
+	// Temperature is the temperature of the LLM response.
+	Temperature float64 `yaml:"temperature"`
+	// Mode selects the agent implementation: "agent" (default) uses llmagent, "graph" uses graphagent.
+	Mode enumor.AgentMode `yaml:"mode"`
+}
+
+// Validate validates the agent AGUI model configuration.
+func (a *AgentModelGeneralConfig) Validate() error {
+	if a.DefaultModel == "" {
+		return fmt.Errorf("defaultModel must not be empty")
+	}
+	if err := a.Mode.Validate(); err != nil {
+		return err
+	}
+	if a.MaxTokens <= 0 {
+		return fmt.Errorf("maxTokens must be greater than 0")
+	}
+	if a.Temperature < 0 || a.Temperature > 1 {
+		return fmt.Errorf("temperature must be between 0 and 1")
+	}
+	return nil
+}
+
+func (a *AgentModelGeneralConfig) trySetDefault() {
+	if a.MaxTokens == 0 {
+		a.MaxTokens = 38000
+	}
+	if a.Temperature == 0 {
+		a.Temperature = 0.7
+	}
+	if a.Mode == "" {
+		a.Mode = enumor.AgentModeAgent
+	}
+}
+
 // AgentAGUI configures the AG-UI protocol endpoint and its optional history feature.
 type AgentAGUI struct {
 	// Enable enables the AG-UI protocol endpoint.
@@ -1230,20 +1317,23 @@ type AgentAGUI struct {
 	// AllowedModels is the list of permitted AI models.
 	// When empty, the platform default list (pkg/criteria/enumor.DefaultAllowedAIModels) is used.
 	AllowedModels []AgentModelConfig `yaml:"allowedModels"`
-	// DefaultModel is the default LLM model identifier used by the agent.
-	// When empty, the first model in AllowedModels is used as default.
-	DefaultModel string `yaml:"defaultModel"`
-	// Stream enables token-level streaming when calling the upstream LLM.
-	// When true, each token is forwarded to the client as a separate TEXT_MESSAGE_CONTENT
-	// SSE event, producing a real-time typewriter effect.
-	// When false (default), the LLM response is returned as a single event after completion.
-	Stream bool `yaml:"stream"`
+	// Model is the model config for the AGUI agent.
+	Model AgentModelGeneralConfig `yaml:"model"`
 	// Prompt configures the prompt files (system_prompt and instruction) for the AGUI agent.
 	Prompt AgentPromptConfig `yaml:"prompt"`
 }
 
+// Validate validates the agent AGUI configuration.
+func (a *AgentAGUI) Validate() error {
+	if err := a.Model.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (a *AgentAGUI) trySetDefault() {
 	a.Prompt.trySetDefault()
+	a.Model.trySetDefault()
 }
 
 // AllowedModelNames returns the plain model name list (for backward-compatible call sites).
@@ -1322,6 +1412,10 @@ func (s AgentServerSetting) Validate() error {
 	}
 
 	if err := s.Service.validate(); err != nil {
+		return err
+	}
+
+	if err := s.AGUI.Validate(); err != nil {
 		return err
 	}
 

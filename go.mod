@@ -74,6 +74,7 @@ require (
 
 require (
 	git.woa.com/trpc-go/trpc-agent-go v1.7.0
+	github.com/ag-ui-protocol/ag-ui/sdks/community/go v0.0.0-20260305114736-115a967b66a9
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/ncruces/go-sqlite3 v0.32.0
 	github.com/openai/openai-go v1.12.0
@@ -166,7 +167,6 @@ require (
 	git.woa.com/trpc/trpc-robust/proto/pb/go/trpc-robust v0.0.0-20240820014626-322181997537 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
 	github.com/BurntSushi/toml v0.3.1 // indirect
-	github.com/ag-ui-protocol/ag-ui/sdks/community/go v0.0.0-20260305114736-115a967b66a9 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/asg017/sqlite-vec-go-bindings v0.1.6 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.9.1 // indirect

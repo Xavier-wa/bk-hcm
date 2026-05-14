@@ -106,7 +106,7 @@ func buildSQLiteVecMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model, aid
 		return nil, fmt.Errorf("memory backend=sqlitevec requires dbPath")
 	}
 	if strings.TrimSpace(aidevGW.BaseURL) == "" {
-		return nil, fmt.Errorf("memory backend=sqlitevec requires aidev baseURL (embedding shares the LLM gateway)")
+		return nil, fmt.Errorf("memory backend=sqlitevec requires bkaidev baseURL (embedding shares the LLM gateway)")
 	}
 
 	embedCfg := cfg.Embedding
@@ -214,7 +214,8 @@ func buildMemoryExtractor(cfg cc.AgentMemoryStorage, mdl model.Model) extractor.
 	// Inject model logger into extractor so that AfterModel callbacks fire for
 	// LLM calls made by the background memory extraction worker (which bypasses
 	// the Agent-level callback pipeline).
-	modelCb := logger.ModelLoggerCallback()
+	modelCb := model.NewCallbacks()
+	modelCb.AfterModel = append(modelCb.AfterModel, logger.MakeModelLoggerCallback())
 	opts = append(opts, extractor.WithModelCallbacks(modelCb))
 
 	return extractor.NewExtractor(mdl, opts...)

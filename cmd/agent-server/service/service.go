@@ -218,6 +218,8 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 		// even when the request is canceled. This helps prevent incomplete event
 		// sequences (e.g., TEXT_MESSAGE_CONTENT without TEXT_MESSAGE_START).
 		agui.WithPostRunFinalizationTimeout(20 * time.Second),
+		// 展示思考内容
+		agui.WithReasoningContentEnabled(svcCfg.Model.DisplayReasoning),
 		agui.WithAGUIRunnerOptions(
 			aguirunner.WithUserIDResolver(resolveAGUIUserID),
 			aguirunner.WithRunOptionResolver(

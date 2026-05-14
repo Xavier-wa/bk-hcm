@@ -25,24 +25,22 @@ import (
 	"fmt"
 	"sync"
 
-	"hcm/cmd/agent-server/logics/logger"
+	"hcm/cmd/agent-server/logics/agent"
 	"hcm/cmd/agent-server/logics/model"
 	"hcm/cmd/agent-server/logics/skill"
 	"hcm/cmd/agent-server/logics/storage"
 	"hcm/cmd/agent-server/logics/tool"
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/logs"
-	cvt "hcm/pkg/tools/converter"
 
 	_ "github.com/ncruces/go-sqlite3/driver" // import sqlite3 driver, used by memory/sqlitevec
-	"trpc.group/trpc-go/trpc-agent-go/agent"
-	"trpc.group/trpc-go/trpc-agent-go/agent/llmagent"
+	trpcagent "trpc.group/trpc-go/trpc-agent-go/agent"
 	"trpc.group/trpc-go/trpc-agent-go/memory"
 	trpcmodel "trpc.group/trpc-go/trpc-agent-go/model"
 	"trpc.group/trpc-go/trpc-agent-go/runner"
 	"trpc.group/trpc-go/trpc-agent-go/session"
-	skillpkg "trpc.group/trpc-go/trpc-agent-go/skill"
 	trpctool "trpc.group/trpc-go/trpc-agent-go/tool"
 )
 
@@ -96,8 +94,8 @@ func New() (*Runtime, error) {
 
 	// Build one model instance per allowed model name.
 	// Each model is associated with its provider's gateway config; models without
-	// an explicit provider use the default "aidev" provider.
-	defaultMdl, modelsMap, err := model.BuildAllModels(aguiCfg.DefaultModel, allowedModels,
+	// an explicit provider use the default "bkaidev" provider.
+	defaultMdl, modelsMap, err := model.BuildAllModels(aguiCfg.Model.DefaultModel, allowedModels,
 		aguiCfg.ModelProviderMapping())
 	if err != nil {
 		return nil, fmt.Errorf("build all models: %w", err)
@@ -131,22 +129,11 @@ func New() (*Runtime, error) {
 			d.Strategy, d.TopN, d.ScoreThreshold, len(d.ToolTags))
 	}
 
-	// Build skill repository from configuration.
-	skillRepo, err := skill.BuildSkillRepo()
-	if err != nil {
-		return nil, fmt.Errorf("build skill repo: %w", err)
-	}
-
-	// When any MCP toolset requires per-request authentication (e.g. type "bkaidev"),
-	// disable eager tool loading at construction time. Tools are fetched lazily on
-	// the first agent run, at which point the real request context (with bk_ticket)
-	// is available so MCP session initialization can authenticate successfully.
-	refreshOnRun := cc.AgentServer().Tools.NeedToRefreshToolSetsOnRun()
-	agt := newAgentWithModel(defaultMdl, modelsMap, aguiCfg.Stream,
-		aguiCfg.Prompt.SystemPrompt, aguiCfg.Prompt.Instruction, skillRepo, mcpToolSets.TS, refreshOnRun)
 	runnerOpts := buildRunnerOpts(sessionSvc, memorySvc)
-	agUIRunner := runner.NewRunner(agt.Info().Name, agt, runnerOpts...)
-
+	agUIRunner, err := newAGUIRunner(defaultMdl, modelsMap, mcpToolSets, runnerOpts)
+	if err != nil {
+		return nil, fmt.Errorf("build AGUI runner: %w", err)
+	}
 	return &Runtime{
 		AGUIRunner:        agUIRunner,
 		aguiSessionSvc:    sessionSvc,
@@ -169,74 +156,41 @@ func buildRunnerOpts(sessionSvc session.Service, memorySvc memory.Service) []run
 	return opts
 }
 
-// newAgentWithModel assembles the AGUI llm agent.
-// defaultMdl is the fallback model used when no per-request model name is specified.
-// modelsMap registers all models that can be selected per-request via agent.WithModelName.
-// systemPrompt is the GlobalInstruction content (prepended to every LLM request).
-// instruction is the per-request task instruction content (appended to every LLM request).
-// skillRepo is the optional skill repository for progressive skill loading (may be nil).
-// toolSets contains ToolSet instances (e.g. MCP server toolsets).
-// refreshOnRun controls whether toolset tool lists are resolved lazily per-run.
-func newAgentWithModel(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Model, isStream bool,
-	systemPrompt, instruction string, skillRepo skillpkg.Repository, toolSets []trpctool.ToolSet,
-	refreshOnRun bool) agent.Agent {
+func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Model, mcpToolSets *tool.MCPToolSet,
+	runnerOpts []runner.Option) (runner.Runner, error) {
 
-	generationConfig := trpcmodel.GenerationConfig{
-		MaxTokens:   cvt.ValToPtr(38000),
-		Temperature: cvt.ValToPtr(0.7),
-		Stream:      isStream,
+	aguiCfg := cc.AgentServer().AGUI
+
+	// Build skill repository from configuration.
+	skillRepo, err := skill.BuildSkillRepo()
+	if err != nil {
+		return nil, fmt.Errorf("build skill repo: %w", err)
 	}
 
-	opts := []llmagent.Option{
-		llmagent.WithGenerationConfig(generationConfig),
-		llmagent.WithMaxLLMCalls(constant.DefaultMaxLLMCalls),
-		llmagent.WithMaxToolIterations(constant.DefaultMaxToolIterations),
-		llmagent.WithAddCurrentTime(true),
-		llmagent.WithTimezone("Asia/Shanghai"),
-		llmagent.WithAddSessionSummary(true),
-		llmagent.WithMaxHistoryRuns(constant.DefaultMaxHistoryRuns),
-		llmagent.WithPreloadMemory(cc.AgentServer().Storage.Memory.PreloadLimit),
-	}
-	if systemPrompt != "" {
-		opts = append(opts, llmagent.WithGlobalInstruction(systemPrompt))
-	}
-	if instruction != "" {
-		opts = append(opts, llmagent.WithInstruction(instruction))
-	}
-	if defaultMdl != nil {
-		opts = append(opts, llmagent.WithModel(defaultMdl))
-	}
-	if len(modelsMap) > 0 {
-		opts = append(opts, llmagent.WithModels(modelsMap))
-	}
-	if skillRepo != nil {
-		opts = append(opts, llmagent.WithSkills(skillRepo))
-		opts = append(opts, llmagent.WithSkillLoadMode(llmagent.SkillLoadModeSession))
-		// NOTE: skill_run 幻觉严重，使用仅知识注入模式，避免模型编造 script 执行;
-		//  该模式下不支持在 skill 中引入 command / script
-		opts = append(opts, llmagent.WithSkillToolProfile(llmagent.SkillToolProfileKnowledgeOnly))
-		// TODO 增加 prompt cache 命中率，不再把 skill 注入到 system prompt，而是单独提供 tool result;
-		//  启用该模式需改造 tool result 的压缩功能
-		// opts = append(opts, llmagent.WithSkillsLoadedContentInToolResults(true))
-	}
-	if len(toolSets) > 0 {
-		opts = append(opts, llmagent.WithToolSets(toolSets))
-		if refreshOnRun {
-			opts = append(opts, llmagent.WithRefreshToolSetsOnRun(true))
+	// When any MCP toolset requires per-request authentication (e.g. type "bkaidev"),
+	// disable eager tool loading at construction time. Tools are fetched lazily on
+	// the first agent run, at which point the real request context (with bk_ticket)
+	// is available so MCP session initialization can authenticate successfully.
+	refreshOnRun := cc.AgentServer().Tools.NeedToRefreshToolSetsOnRun()
+
+	var agt trpcagent.Agent
+	switch aguiCfg.Model.Mode {
+	case enumor.AgentModeGraph:
+		compiledGraph, err := agent.BuildGraph(defaultMdl, skillRepo, mcpToolSets,
+			aguiCfg.Prompt.SystemPrompt, aguiCfg.Prompt.Instruction, aguiCfg.AppName, aguiCfg.Model)
+		if err != nil {
+			return nil, fmt.Errorf("build graph: %w", err)
 		}
+		agt, err = agent.NewGraphAgent(aguiCfg.AppName, compiledGraph, cc.AgentServer().Storage.Checkpoint)
+		if err != nil {
+			return nil, fmt.Errorf("create graph agent: %w", err)
+		}
+	default:
+		agt = agent.NewLLMAgent(defaultMdl, modelsMap, aguiCfg.Model,
+			aguiCfg.Prompt.SystemPrompt, aguiCfg.Prompt.Instruction, skillRepo, mcpToolSets.TS, refreshOnRun)
 	}
 
-	toolCb := logger.ToolLoggerCallback()
-	toolCb.BeforeTool = append(toolCb.BeforeTool, tool.MakeParamFixCallbacks())
-	opts = append(opts, llmagent.WithToolCallbacks(toolCb))
-
-	modelCb := logger.ModelLoggerCallback()
-	modelCb.BeforeModel = append(modelCb.BeforeModel, model.MakeHistoricalToolResultFilter())
-	opts = append(opts, llmagent.WithModelCallbacks(modelCb))
-
-	logs.Infof("AGUI agent: models=%d skills=%v toolSets=%d refreshToolSetsOnRun=%v systemPrompt=%v instruction=%v",
-		len(modelsMap), skillRepo != nil, len(toolSets), refreshOnRun, systemPrompt != "", instruction != "")
-	return llmagent.New(cc.AgentServer().AGUI.AppName, opts...)
+	return runner.NewRunner(aguiCfg.AppName, agt, runnerOpts...), nil
 }
 
 // Close releases all resources held by the Runtime. It is safe to call multiple

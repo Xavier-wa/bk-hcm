@@ -91,3 +91,44 @@ func (t AgentModelProviderType) Validate() error {
 	}
 	return nil
 }
+
+type AgentMode string
+
+const (
+	// AgentModeAgent is the agent mode.
+	AgentModeAgent AgentMode = "agent"
+	// AgentModeGraph is the graph mode.
+	AgentModeGraph AgentMode = "graph"
+)
+
+// Validate validates the agent mode.
+func (m AgentMode) Validate() error {
+	switch m {
+	case AgentModeAgent, AgentModeGraph:
+	default:
+		return fmt.Errorf("unsupported agent mode: %s", m)
+	}
+	return nil
+}
+
+// GraphCheckpointBackend is the backend type for the graph checkpoint storage.
+type GraphCheckpointBackend string
+
+const (
+	// GraphCheckpointBackendInMemory is the in-memory checkpoint backend.
+	GraphCheckpointBackendInMemory GraphCheckpointBackend = "inmemory"
+	// GraphCheckpointBackendSQLite is the SQLite checkpoint backend.
+	GraphCheckpointBackendSQLite GraphCheckpointBackend = "sqlite"
+	// GraphCheckpointBackendRedis is the Redis checkpoint backend.
+	GraphCheckpointBackendRedis GraphCheckpointBackend = "redis"
+)
+
+// Validate validates the graph checkpoint backend.
+func (b GraphCheckpointBackend) Validate() error {
+	switch b {
+	case GraphCheckpointBackendInMemory, GraphCheckpointBackendSQLite, GraphCheckpointBackendRedis:
+	default:
+		return fmt.Errorf("unsupported graph checkpoint backend: %s", b)
+	}
+	return nil
+}

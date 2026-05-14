@@ -39,7 +39,17 @@ const (
 
 	// DefaultProviderName is the well-known provider name that the "aidev" config
 	// section is mapped to. Models without an explicit provider use this one.
-	DefaultProviderName = "aidev"
+	DefaultProviderName = MCPTypeBKAIDev
+)
+
+// Skill
+const (
+	// SkillLoadToolName is the name of the skill load tool.
+	SkillLoadToolName = "skill_load"
+	// SkillListDocsToolName is the name of the skill list docs tool.
+	SkillListDocsToolName = "skill_list_docs"
+	// SkillSelectDocsToolName is the name of the skill select docs tool.
+	SkillSelectDocsToolName = "skill_select_docs"
 )
 
 // Default upper bounds for the agent invocation loop.
@@ -79,4 +89,7 @@ const (
 
 	// RetrievedToolsCacheKey is the cache key for the retrieved tools.
 	RetrievedToolsCacheKey = "custom:retrieved_tools"
+
+	// AvailableSkillsInjected is the session state key for the available skills injected.
+	AvailableSkillsInjected = "available_skills_injected"
 )

@@ -35,23 +35,12 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/model"
 )
 
-// ModelLoggerCallback creates model callbacks that log LLM reasoning (thinking)
+// MakeModelLoggerCallback creates model callbacks that log LLM reasoning (thinking)
 // and response content for debugging.
-func ModelLoggerCallback() *model.Callbacks {
+func MakeModelLoggerCallback() model.AfterModelCallbackStructured {
 	const maxLog = 2048
 
-	truncate := func(s string) string {
-		if len(s) <= maxLog {
-			return s
-		}
-		return s[:maxLog] + "...(truncated)"
-	}
-
-	cb := model.NewCallbacks()
-	cb.AfterModel = append(cb.AfterModel, func(
-		ctx context.Context,
-		args *model.AfterModelArgs,
-	) (*model.AfterModelResult, error) {
+	return func(ctx context.Context, args *model.AfterModelArgs) (*model.AfterModelResult, error) {
 		if args == nil {
 			return nil, nil
 		}
@@ -71,15 +60,15 @@ func ModelLoggerCallback() *model.Callbacks {
 		msg := choice.Message
 
 		if msg.ReasoningContent != "" {
-			logs.Infof("[model] LLM reasoning: %s", truncate(msg.ReasoningContent))
+			logs.Infof("[model] LLM reasoning: %s", truncate(msg.ReasoningContent, maxLog))
 		}
 		if msg.Content != "" {
-			logs.Infof("[model] LLM content: %s", truncate(msg.Content))
+			logs.Infof("[model] LLM content: %s", truncate(msg.Content, maxLog))
 		}
 		if len(msg.ToolCalls) > 0 {
 			for _, tc := range msg.ToolCalls {
 				logs.Infof("[model] LLM tool_call: %s args=%s", tc.Function.Name,
-					truncate(string(tc.Function.Arguments)))
+					truncate(string(tc.Function.Arguments), maxLog))
 			}
 		}
 
@@ -88,8 +77,7 @@ func ModelLoggerCallback() *model.Callbacks {
 				rsp.Usage.PromptTokens, rsp.Usage.CompletionTokens, rsp.Usage.TotalTokens)
 		}
 		return nil, nil
-	})
-	return cb
+	}
 }
 
 // LLMRequestLogger is an OpenAI middleware that logs request details and estimates input tokens.
