@@ -27,7 +27,6 @@ import (
 
 	ptypes "hcm/cmd/woa-server/types/plan"
 	dt "hcm/pkg/api/core/cloud/device-type"
-	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	rpt "hcm/pkg/dal/table/resource-plan/res-plan-ticket"
 	ttypes "hcm/pkg/dal/table/types"
@@ -115,9 +114,9 @@ func (s *SubTicketSplitter) prepareAddSubTickets(kt *kit.Kit, ticketID string, v
 		}
 		// 2.1. 对每个变更需求，匹配可转移的CRP预测，匹配不完的拆分为另一个子单
 		for _, demand := range cvmDemands {
-			// GPU 条目跳过转移匹配，直接放入追加组 GPU 资源具有特殊性，不应从中转池获取，必须走常规追加流程以确保独立评审和分配
-			// 包含 "GPU型" 和 "GPU高主频型" 两种机型族
-			if IsGpuDeviceFamily(demand.Updated.Cvm.DeviceFamily) {
+			// 专用机型跳过转移匹配，直接放入追加组
+			deviceType := demand.Updated.Cvm.DeviceType
+			if dtInfo, ok := deviceTypeMap[deviceType]; ok && dtInfo.DeviceTypeClass == cvmapi.SpecialType {
 				s.adjSplitGroupDemands[enumor.RPTicketTypeAdd] = append(
 					s.adjSplitGroupDemands[enumor.RPTicketTypeAdd], &demand)
 				continue
@@ -143,12 +142,6 @@ func (s *SubTicketSplitter) prepareAddSubTickets(kt *kit.Kit, ticketID string, v
 	return canTransfer, cvmDemands, nil
 }
 
-// IsGpuDeviceFamily checks if the given device family is a GPU type that should skip transfer matching.
-// GPU types include "GPU型" and "GPU高主频型".
-func IsGpuDeviceFamily(deviceFamily string) bool {
-	return deviceFamily == constant.GpuInstanceClassValue ||
-		deviceFamily == constant.GpuHighFreqInstanceClassValue
-}
 
 // separateAndProcessDemands 分离并处理仅包含 CBS 的和包含 CVM 的需求
 func (s *SubTicketSplitter) separateAndProcessDemands(kt *kit.Kit, ticketID string, demands rpt.ResPlanDemands) (
