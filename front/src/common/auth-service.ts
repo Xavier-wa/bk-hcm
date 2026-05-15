@@ -60,7 +60,7 @@ export interface IAuthDefinition {
 
 const basicTransform = (
   definition: IAuthDefinition,
-  meta?: { bk_biz_id?: number; resource_id?: number | string;[key: string]: number | string },
+  meta?: { bk_biz_id?: number; resource_id?: number | string; [key: string]: number | string },
 ) => {
   const { action, resourceType } = definition;
   return {

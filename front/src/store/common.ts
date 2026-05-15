@@ -110,6 +110,7 @@ export const useCommonStore = defineStore({
         path: /^\/platform\/stats\/delivery/,
       },
 
+      { type: 'agent_assistant', action: 'agent_assistant', id: 'chatbot_access', path: '/chatbot' },
       // 权限策略库
       // {
       //   // hcm权限type

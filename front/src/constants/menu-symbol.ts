@@ -1,4 +1,9 @@
 /**
+ * 首页
+ */
+export const MENU_INDEX = 'menu_index';
+
+/**
  * 业务（资源管理）
  */
 export const MENU_BUSINESS = 'menu_business';

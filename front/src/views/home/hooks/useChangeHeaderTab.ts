@@ -43,6 +43,16 @@ export default () => {
     // 更新当前 active header-tab
     topMenuActiveItem.value = id;
     switch (id) {
+      case '': {
+        topMenuActiveItem.value = 'index';
+        menus.value = [];
+        break;
+      }
+      case 'chatbot': {
+        topMenuActiveItem.value = 'index';
+        menus.value = [];
+        break;
+      }
       case 'business':
         menus.value = businessViews;
         break;

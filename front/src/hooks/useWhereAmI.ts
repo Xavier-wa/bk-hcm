@@ -17,6 +17,7 @@ export const useWhereAmI = (): {
   const route = useRoute();
   const senario = computed(() => {
     if (!route) return;
+    if (route.path === '/chatbot' || route.path.startsWith('/chatbot/')) return Senarios.index;
     if (/^\/resource\/.+$/.test(route?.path)) return Senarios.resource;
     if (/^\/business\/.+$/.test(route.path)) return Senarios.business;
     if (/^\/service\/.+$/.test(route.path)) return Senarios.service;
@@ -54,6 +55,7 @@ export const useWhereAmI = (): {
 };
 
 export enum Senarios {
+  index = 'index',
   business = 'business',
   resource = 'resource',
   service = 'service',

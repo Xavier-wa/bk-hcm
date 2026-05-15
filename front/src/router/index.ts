@@ -8,11 +8,10 @@ import {
 import {
   MENU_BUSINESS,
   MENU_SERVICE,
-  MENU_BUSINESS_HOST_MANAGEMENT,
   MENU_PLATFORM_MANAGEMENT,
   MENU_ROLLING_SERVER_MANAGEMENT,
 } from '@/constants/menu-symbol';
-import { businessViews, serviceViews, platformManagementViews } from '@/views';
+import { indexViews, businessViews, serviceViews, platformManagementViews } from '@/views';
 import common from './module/common';
 import resource from './module/resource';
 import resourceInside from './module/resource-inside';
@@ -27,6 +26,7 @@ import { useVerify } from '@/hooks';
 import { isArray, isRegExp, isString } from 'lodash';
 
 const routes: RouteRecordRaw[] = [
+  ...indexViews,
   ...common,
   ...resource,
   ...resourceInside,
@@ -44,9 +44,6 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/',
     redirect: '/business/host',
-    meta: {
-      activeKey: MENU_BUSINESS_HOST_MANAGEMENT,
-    },
   },
   {
     path: '/403',

@@ -67,7 +67,10 @@ export default defineComponent({
     const language = ref(Cookies.get('blueking_language') || i18n.global.locale.value);
 
     const isNeedSideMenu = computed(
-      () => ![Senarios.resource, Senarios.scheme, Senarios.unauthorized].includes(whereAmI.value),
+      () =>
+        ![Senarios.unknown, Senarios.index, Senarios.resource, Senarios.scheme, Senarios.unauthorized].includes(
+          whereAmI.value,
+        ),
     );
 
     const { hasPagePermission, permissionMsg, logout } = usePagePermissionStore();
@@ -186,7 +189,8 @@ export default defineComponent({
                     .filter(
                       ({ id }) =>
                         ((ENABLE_CLOUD_SELECTION !== 'true' && id !== 'scheme') || ENABLE_CLOUD_SELECTION === 'true') &&
-                        ((ENABLE_ACCOUNT_BILL !== 'true' && id !== 'bill') || ENABLE_ACCOUNT_BILL === 'true'),
+                        ((ENABLE_ACCOUNT_BILL !== 'true' && id !== 'bill') || ENABLE_ACCOUNT_BILL === 'true') &&
+                        (id !== 'index' || authVerifyData.value?.permissionAction?.chatbot_access),
                     )
                     .map(({ id, name, path }) => (
                       <Button
