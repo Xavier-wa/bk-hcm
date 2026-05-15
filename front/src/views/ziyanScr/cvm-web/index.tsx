@@ -307,7 +307,7 @@ export default defineComponent({
               </bk-input>
             </bk-form-item>
             <bk-form-item label='启用'>
-              <bk-select v-model={cvmWebForm.value.enable} clearable allowEmptyValues={[false]}>
+              <bk-select v-model={cvmWebForm.value.enable} clearable allowEmptyValues={[false]} filterable>
                 {useList.map(({ label, value }) => {
                   return <bk-option key={value} name={label} id={value}></bk-option>;
                 })}
@@ -333,7 +333,7 @@ export default defineComponent({
             default: () => (
               <bk-form label-width='110' model={updateForm}>
                 <bk-form-item label='启用'>
-                  <bk-select v-model={updateForm.value.enable} clearable allowEmptyValues={[false]}>
+                  <bk-select v-model={updateForm.value.enable} clearable allowEmptyValues={[false]} filterable>
                     <bk-option name='保持不变' id=''></bk-option>
                     {useList.map(({ label, value }) => {
                       return <bk-option key={value} label={label} id={value}></bk-option>;

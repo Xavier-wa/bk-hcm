@@ -246,7 +246,7 @@ export default defineComponent({
             {this.detail.vendor === 'azure' ? (
               <>
                 <span class='mr10'>缓存类型:</span>
-                <bk-select v-model={this.cachingType} style='width: 200px;display: inline-block;'>
+                <bk-select v-model={this.cachingType} style='width: 200px;display: inline-block;' filterable>
                   {this.cacheTypes.map((type) => (
                     <bk-option key={type} value={type} label={type} />
                   ))}

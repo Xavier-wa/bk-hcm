@@ -338,7 +338,8 @@ export default defineComponent({
                 v-model={batchEditForm.value.disable}
                 style='width: 250px'
                 clearable={false}
-                allowEmptyValues={[false, 0]}>
+                allowEmptyValues={[false, 0]}
+                filterable>
                 {[
                   {
                     value: 0,

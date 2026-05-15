@@ -141,7 +141,7 @@ export default defineComponent({
         field: 'action',
         render: ({ data }: any) => {
           return (
-            <Select class='mt25' v-model={data.action}>
+            <Select class='mt25' v-model={data.action} filterable>
               {(props.vendor === 'huawei' ? HUAWEI_ACTION_STATUS : ACTION_STATUS).map((ele: any) => (
                 <Option value={ele.id} label={ele.name} key={ele.id} />
               ))}
@@ -171,7 +171,7 @@ export default defineComponent({
         render: ({ data }: any) => {
           return (
             <>
-              <Select v-model={data.ethertype}>
+              <Select v-model={data.ethertype} filterable>
                 {HUAWEI_TYPE_LIST.map((ele) => (
                   <Option value={ele.id} label={ele.name} key={ele.id} />
                 ))}
@@ -186,7 +186,7 @@ export default defineComponent({
         render: ({ data }: any) => {
           return (
             <>
-              <Select v-model={data.sourceAddress}>
+              <Select v-model={data.sourceAddress} filterable>
                 {securityGroupSource.value.map((ele) => (
                   <Option value={ele.id} label={ele.name} key={ele.id} />
                 ))}
@@ -238,7 +238,7 @@ export default defineComponent({
         field: 'access',
         render: ({ data }: any) => {
           return (
-            <Select class='mt25' v-model={data.access}>
+            <Select class='mt25' v-model={data.access} filterable>
               {HUAWEI_ACTION_STATUS.map((ele: any) => (
                 <Option value={ele.id} label={ele.name} key={ele.id} />
               ))}
@@ -252,7 +252,7 @@ export default defineComponent({
         render: ({ data }: any) => {
           return (
             <>
-              <Select v-model={data.sourceAddress}>
+              <Select v-model={data.sourceAddress} filterable>
                 {azureSecurityGroupSource.value.map((ele) => (
                   <Option value={ele.id} label={ele.name} key={ele.id} />
                 ))}
@@ -273,7 +273,7 @@ export default defineComponent({
         render: ({ data }: any) => {
           return (
             <>
-              <Select v-model={data.targetAddress}>
+              <Select v-model={data.targetAddress} filterable>
                 {azureSecurityGroupTarget.value.map((ele) => (
                   <Option value={ele.id} label={ele.name} key={ele.id} />
                 ))}

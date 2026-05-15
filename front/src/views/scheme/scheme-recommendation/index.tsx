@@ -116,7 +116,7 @@ export default defineComponent({
         label: '业务类型',
         property: 'biz_type',
         content: () => (
-          <bk-select loading={bizTypesInitLoading.value} v-model={formData.biz_type}>
+          <bk-select loading={bizTypesInitLoading.value} v-model={formData.biz_type} filterable>
             {bizTypeList.value.map((bizType) => (
               <bk-option key={bizType.id} value={bizType.biz_type} label={bizType.biz_type} />
             ))}
@@ -158,7 +158,7 @@ export default defineComponent({
         required: true,
         content: () => (
           <div class='flex-row' style={{ overflow: 'hidden' }}>
-            <bk-select class='flex-1' v-model={formData.user_distribution_mode} clearable={false}>
+            <bk-select class='flex-1' v-model={formData.user_distribution_mode} clearable={false} filterable>
               <bk-option label='默认分布占比' value='default' />
             </bk-select>
             <div

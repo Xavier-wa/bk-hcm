@@ -55,7 +55,7 @@ export default defineComponent({
       <div class='recycleForm'>
         <bk-form ref={recycleForm} model={props.returnPlan} rules={rules.value} label-width='220'>
           <bk-form-item label='CVM回收类型' property='cvm' required>
-            <bk-select v-model={props.returnPlan.cvm} class='wid300'>
+            <bk-select v-model={props.returnPlan.cvm} class='wid300' filterable>
               {cvmOptions.value.map((item) => (
                 <bk-option key={item.id} label={item.name} value={item.id} />
               ))}
@@ -63,7 +63,7 @@ export default defineComponent({
             <div style='color: #ccc; font-size: 12px;'>CVM 非立即销毁隔离7天，隔离期间费用仍由业务承担</div>
           </bk-form-item>
           <bk-form-item label='物理机回收类型' property='pm' required>
-            <bk-select v-model={props.returnPlan.pm} class='wid300'>
+            <bk-select v-model={props.returnPlan.pm} class='wid300' filterable>
               {pmOptions.value.map((item) => (
                 <bk-option key={item.id} label={item.name} value={item.id} />
               ))}

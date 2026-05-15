@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, defineEmits, defineExpose, defineProps } from 'vue';
 
-const emit = defineEmits(['change']);
 defineProps({
   region: {
     type: String,
@@ -10,6 +9,7 @@ defineProps({
     type: String,
   },
 });
+const emit = defineEmits(['change']);
 const formData = ref<any>({
   eip_name: '', // eip名称
   eip_type: '5_bgp', // 线路类型. 5_bgp（全动态BGP） |5_sbgp（静态BGP）
@@ -135,7 +135,7 @@ defineExpose([validate]);
     >
       <bk-compose-form-item>
         <bk-input v-model.number="internet_charge_prepaid.period_num" placeholder="请输入时间" type="number" />
-        <bk-select v-model="internet_charge_prepaid.period_type" :clearable="false">
+        <bk-select v-model="internet_charge_prepaid.period_type" :clearable="false" filterable>
           <bk-option value="month" label="月" />
           <bk-option value="year" label="年" />
         </bk-select>

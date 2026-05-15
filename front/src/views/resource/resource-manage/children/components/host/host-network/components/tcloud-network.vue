@@ -1,30 +1,7 @@
 <script lang="ts" setup>
-import type {
-  // PlainObject,
-  FilterType,
-} from '@/typings/resource';
 import { useI18n } from 'vue-i18n';
-import { ref, h, reactive, PropType } from 'vue';
+import { ref, h, reactive } from 'vue';
 import { Button, InfoBox } from 'bkui-vue';
-import { useResourceStore } from '@/store/resource';
-import useQueryList from '@/views/resource/resource-manage/hooks/use-query-list';
-
-const props = defineProps({
-  filter: {
-    type: Object as PropType<FilterType>,
-  },
-  data: {
-    type: Object,
-  },
-});
-const resourceStore = useResourceStore();
-
-console.log('props.data.vendor', props.data.vendor);
-const { datas, pagination, isLoading, handlePageChange, handlePageSizeChange } = useQueryList(props, '', () => {
-  return Promise.all([resourceStore.cvmNetwork(props.data.vendor, props.data.id)]);
-});
-
-console.log(datas, pagination, isLoading, handlePageChange, handlePageSizeChange);
 
 const { t } = useI18n();
 const showBind = ref(false);
@@ -124,15 +101,11 @@ const handleFreedIp = (type: string) => {
     headerAlign: 'center',
     footerAlign: 'center',
     contentAlign: 'center',
-    onConfirm() {
-      console.log('111');
-    },
+    onConfirm() {},
   });
 };
 
-const handleRadio = (item: any) => {
-  console.log(item);
-};
+const handleRadio = () => {};
 </script>
 
 <template>
@@ -240,7 +213,7 @@ const handleRadio = (item: any) => {
               label=""
               @click="
                 () => {
-                  handleRadio(data);
+                  handleRadio();
                 }
               "
             />
@@ -309,7 +282,7 @@ const handleRadio = (item: any) => {
       </bk-form-item>
       <bk-form-item :label="t('分配IP')">
         <div class="flex">
-          <bk-select v-model="fromData.name"></bk-select>
+          <bk-select v-model="fromData.name" filterable></bk-select>
           <bk-input class="ml10 mr10" v-model="fromData.name"></bk-input>
           <bk-button text theme="primary">{{ t('删除') }}</bk-button>
         </div>
@@ -342,7 +315,7 @@ const handleRadio = (item: any) => {
               label=""
               @click="
                 () => {
-                  handleRadio(data);
+                  handleRadio();
                 }
               "
             />
@@ -360,22 +333,27 @@ const handleRadio = (item: any) => {
   font-size: 14px;
   margin-bottom: 8px;
 }
+
 .sub-title {
   font-size: 12px;
 }
+
 .cell-flex {
   display: flex;
   align-items: center;
 }
+
 .table-warp {
   padding: 20px;
-  border: 1px dashed rgb(225, 221, 221);
+  border: 1px dashed rgb(225 221 221);
+
   .table-flex {
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
 }
+
 .flex {
   display: flex;
   align-items: center;

@@ -277,6 +277,7 @@ export default defineComponent({
                     <Select
                       v-model={filterForm.value.cpu}
                       clearable
+                      filterable
                       placeholder='请选择'
                       disabled={deviceConfigDisabled.value}
                       onChange={handleDeviceConfigChange}>
@@ -289,6 +290,7 @@ export default defineComponent({
                     <Select
                       v-model={filterForm.value.mem}
                       clearable
+                      filterable
                       placeholder='请选择'
                       disabled={deviceConfigDisabled.value}
                       onChange={handleDeviceConfigChange}>

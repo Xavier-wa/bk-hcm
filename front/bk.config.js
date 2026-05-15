@@ -95,7 +95,7 @@ const getConfig = (custom = {}) => ({
     config.watchOptions({
       ignored: ['**/node_modules', '**/.git'],
       aggregateTimeout: 300,
-      poll: 1000,
+      // poll: 1000,
     });
 
     return config;

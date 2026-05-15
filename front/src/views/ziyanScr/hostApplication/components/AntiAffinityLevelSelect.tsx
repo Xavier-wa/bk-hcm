@@ -67,7 +67,7 @@ export default defineComponent({
     );
     return () => (
       <div>
-        <bk-select v-model={selectedValue.value} onChange={handleSelectorChange}>
+        <bk-select v-model={selectedValue.value} onChange={handleSelectorChange} filterable>
           {options.value.map((opt) => (
             <bk-option key={opt.value} label={opt.label} value={opt.value} />
           ))}

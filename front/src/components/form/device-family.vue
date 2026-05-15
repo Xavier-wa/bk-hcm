@@ -87,6 +87,7 @@ watchEffect(async () => {
     :shwo-all="showAll"
     :all-option-id="allOptionId"
     @change="handleChange"
+    filterable
     v-bind="attrs"
   >
     <bk-option

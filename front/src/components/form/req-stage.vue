@@ -4,11 +4,12 @@ import { useConfigApplyStageStore, type IApplyStageItem } from '@/store/config/a
 
 defineOptions({ name: 'hcm-form-req-stage' });
 
+const model = defineModel<string | string[]>();
+
 const props = withDefaults(defineProps<{ multiple?: boolean; clearable?: boolean; disabled?: boolean }>(), {
   multiple: false,
 });
 
-const model = defineModel<string | string[]>();
 const attrs = useAttrs();
 
 const list = ref<IApplyStageItem[]>([]);
@@ -41,6 +42,7 @@ watchEffect(async () => {
     :multiple-mode="multiple ? 'tag' : 'default'"
     :id-key="'stage'"
     :display-key="'description'"
+    filterable
     v-bind="attrs"
   />
 </template>

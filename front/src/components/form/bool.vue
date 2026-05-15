@@ -6,6 +6,8 @@ import { SelectColumn } from '@blueking/ediatable';
 
 defineOptions({ name: 'hcm-form-bool' });
 
+const model = defineModel<boolean | string>();
+
 const props = withDefaults(defineProps<{ option: ModelProperty['option']; display: DisplayType }>(), {
   option: () => ({}),
   display: () => ({
@@ -13,7 +15,6 @@ const props = withDefaults(defineProps<{ option: ModelProperty['option']; displa
   }),
 });
 
-const model = defineModel<boolean | string>();
 const attrs = useAttrs();
 
 const trueText = computed(() => props.option.trueText as string);
@@ -44,7 +45,7 @@ defineExpose({
     <select-column :list="selectList" v-model="model" ref="selectColumnRef" v-bind="attrs" />
   </template>
   <template v-else-if="appearance === 'select'">
-    <bk-select v-model="model" :list="selectList" v-bind="attrs" />
+    <bk-select v-model="model" :list="selectList" filterable v-bind="attrs" />
   </template>
   <template v-else>
     <bk-switcher v-model="model" :on-text="trueText" :off-text="falseText" v-bind="attrs" />
