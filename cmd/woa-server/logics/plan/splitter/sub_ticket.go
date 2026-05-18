@@ -21,6 +21,7 @@ package splitter
 
 import (
 	"errors"
+	"strconv"
 	"time"
 
 	"hcm/pkg/api/core"
@@ -102,6 +103,29 @@ func (s *SubTicketSplitter) createSubTicket(kt *kit.Kit, ticketID string, allDem
 	return nil
 }
 
+// containsNonCurrentYearDemand 检查 demands 中是否包含非今年的预测需求
+//
+// NOTE：cmd/woa-server/logics/plan/dispatcher/auto_approve.go:50 有一个相同的实现
+// 本次临时需求暂不统一，后续如果转为长期需求，需考虑合并
+func containsNonCurrentYearDemand(demands []*rpt.ResPlanDemand) bool {
+	currentYear := time.Now().Year()
+	for _, demand := range demands {
+		if demand.Original != nil && demand.Original.ExpectTime != "" {
+			year, err := strconv.Atoi(demand.Original.ExpectTime[:4])
+			if err == nil && year != currentYear {
+				return true
+			}
+		}
+		if demand.Updated != nil && demand.Updated.ExpectTime != "" {
+			year, err := strconv.Atoi(demand.Updated.ExpectTime[:4])
+			if err == nil && year != currentYear {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // constructSubTicketCreateReq 构造子单据创建请求
 func constructSubTicketCreateReq(ticket *rpt.ResPlanTicketTable, auditQuota int64, subTicketType enumor.RPTicketType,
 	demands []*rpt.ResPlanDemand, demandsJson tabletypes.JsonField) rpproto.ResPlanSubTicketCreateReq {
@@ -163,15 +187,19 @@ func constructSubTicketCreateReq(ticket *rpt.ResPlanTicketTable, auditQuota int6
 		SubUpdatedDiskSize:  cvt.ValToPtr(updatedDiskSize),
 		SubmittedAt:         time.Now().Format(constant.DateTimeLayout),
 	}
+	// 非本年度预测，不能跳过管理员审批
+	hasNonCurrentYear := containsNonCurrentYearDemand(demands)
+
 	// 调减单、自动延期单、非转移单跳过管理员审批
 	if ticket.Type == enumor.RPTicketTypeDelete || ticket.Type == enumor.RPTicketTypeAutomaticTransfer ||
 		subTicket.SubType != enumor.RPTicketTypeTransfer {
-
-		subTicket.AdminAuditStatus = enumor.RPAdminAuditStatusSkip
+		if !hasNonCurrentYear {
+			subTicket.AdminAuditStatus = enumor.RPAdminAuditStatusSkip
+		}
 	}
 	if subTicket.SubType == enumor.RPTicketTypeTransfer || subTicket.SubType == enumor.RPTicketTypeTransferExempt {
 		// 转移单核数小于审批下限，跳过管理员审批
-		if updatedCpuCore <= auditQuota {
+		if updatedCpuCore <= auditQuota && !hasNonCurrentYear {
 			subTicket.AdminAuditStatus = enumor.RPAdminAuditStatusSkip
 		}
 		// 转移单不等待合并

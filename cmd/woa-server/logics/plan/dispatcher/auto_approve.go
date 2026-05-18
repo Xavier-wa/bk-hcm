@@ -21,7 +21,9 @@ package dispatcher
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
@@ -42,16 +44,46 @@ type autoApproveCheckResult struct {
 	TotalCBSSizeGB int64
 }
 
+// containsNonCurrentYearDemand 检查 demands 中是否包含非今年的预测需求
+//
+// NOTE：cmd/woa-server/logics/plan/splitter/sub_ticket.go:109 有一个相同的实现
+// 本次临时需求暂不统一，后续如果转为长期需求，需考虑合并
+func containsNonCurrentYearDemand(demands rpt.ResPlanDemands) bool {
+	currentYear := time.Now().Year()
+	for _, demand := range demands {
+		if demand.Original != nil && demand.Original.ExpectTime != "" {
+			year, err := strconv.Atoi(demand.Original.ExpectTime[:4])
+			if err == nil && year != currentYear {
+				return true
+			}
+		}
+		if demand.Updated != nil && demand.Updated.ExpectTime != "" {
+			year, err := strconv.Atoi(demand.Updated.ExpectTime[:4])
+			if err == nil && year != currentYear {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // checkPredictionAutoApprove 检查预测单是否满足自动过单条件
 // 前置条件：只有"追加"类型的需求单才允许自动过单
-// 三个条件必须全部满足：
+// 四个条件必须全部满足：
+// 0. 不包含非今年的预测需求
 // 1. 机型全部为标准型（DeviceFamily == "标准型"）；纯磁盘单（CVM 为空）跳过此校验
 // 2. 整单CPU ≤ 1500 核
 // 3. 整单CBS ≤ 45TB（46080GB）
 func checkPredictionAutoApprove(kt *kit.Kit, demands rpt.ResPlanDemands) *autoApproveCheckResult {
 	result := &autoApproveCheckResult{CanAutoApprove: true}
 	var reasons []string
-	// 用于去重非标准机型，避免重复记录
+
+	// 条件0：检查是否包含非今年的预测需求
+	if containsNonCurrentYearDemand(demands) {
+		result.CanAutoApprove = false
+		reasons = append(reasons, "包含非今年的预测需求")
+	}
+
 	nonStandardFamilies := make(map[string]struct{})
 
 	// 遍历需求，检查需求类型和机型，统计资源

@@ -20,7 +20,9 @@
 package dispatcher
 
 import (
+	"strconv"
 	"testing"
+	"time"
 
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
@@ -29,12 +31,37 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// currentTestYear 返回当前年份，用于构造测试数据的 expect_time
+func currentTestYear() string {
+	return strconv.Itoa(time.Now().Year()) + "-01-01"
+}
+
 // makeAutoApproveDemand builds a rpt.ResPlanDemand for auto approve test use.
 func makeAutoApproveDemand(family string, cpuCore int64, cbsSize int64) rpt.ResPlanDemand {
 	return rpt.ResPlanDemand{
 		Updated: &rpt.UpdatedRPDemandItem{
 			ObsProject: enumor.ObsProjectNormal,
-			ExpectTime: "2025-01-01",
+			ExpectTime: currentTestYear(),
+			RegionID:   "ap-shanghai",
+			RegionName: "上海",
+			AreaName:   "华东",
+			Cvm: rpt.Cvm{
+				DeviceFamily: family,
+				CpuCore:      cpuCore,
+			},
+			Cbs: rpt.Cbs{
+				DiskSize: cbsSize,
+			},
+		},
+	}
+}
+
+// makeAutoApproveDemandWithTime builds a demand with specified expect_time.
+func makeAutoApproveDemandWithTime(family string, cpuCore int64, cbsSize int64, expectTime string) rpt.ResPlanDemand {
+	return rpt.ResPlanDemand{
+		Updated: &rpt.UpdatedRPDemandItem{
+			ObsProject: enumor.ObsProjectNormal,
+			ExpectTime: expectTime,
 			RegionID:   "ap-shanghai",
 			RegionName: "上海",
 			AreaName:   "华东",
@@ -74,7 +101,7 @@ func makeDeleteDemand() rpt.ResPlanDemand {
 		Original: &rpt.OriginalRPDemandItem{
 			DemandID:   "demand-001",
 			ObsProject: enumor.ObsProjectNormal,
-			ExpectTime: "2025-01-01",
+			ExpectTime: currentTestYear(),
 			RegionID:   "ap-shanghai",
 			RegionName: "上海",
 			AreaName:   "华东",
@@ -93,7 +120,7 @@ func makeChangeDemand() rpt.ResPlanDemand {
 		Original: &rpt.OriginalRPDemandItem{
 			DemandID:   "demand-001",
 			ObsProject: enumor.ObsProjectNormal,
-			ExpectTime: "2025-01-01",
+			ExpectTime: currentTestYear(),
 			RegionID:   "ap-shanghai",
 			RegionName: "上海",
 			AreaName:   "华东",
@@ -104,7 +131,7 @@ func makeChangeDemand() rpt.ResPlanDemand {
 		},
 		Updated: &rpt.UpdatedRPDemandItem{
 			ObsProject: enumor.ObsProjectNormal,
-			ExpectTime: "2025-01-01",
+			ExpectTime: currentTestYear(),
 			RegionID:   "ap-shanghai",
 			RegionName: "上海",
 			AreaName:   "华东",
@@ -370,6 +397,64 @@ func buildDemandTypeCases() []autoApproveTestCase {
 	}
 }
 
+// buildNonCurrentYearCases returns test cases for non-current-year demand validation.
+func buildNonCurrentYearCases() []autoApproveTestCase {
+	standardFamily := string(enumor.DeviceFamilyStandard)
+	nextYear := strconv.Itoa(time.Now().Year() + 1)
+
+	return []autoApproveTestCase{
+		{
+			name: "updated expect_time is next year",
+			demands: rpt.ResPlanDemands{
+				makeAutoApproveDemandWithTime(standardFamily, 500, 10000, nextYear+"-01-01"),
+			},
+			wantCanApprove:    false,
+			wantReasonContain: "包含非今年的预测需求",
+			wantCPUCores:      500,
+			wantCBSSizeGB:     10000,
+		},
+		{
+			name: "original expect_time is next year in change demand",
+			demands: rpt.ResPlanDemands{
+				{
+					Original: &rpt.OriginalRPDemandItem{
+						DemandID:   "demand-001",
+						ObsProject: enumor.ObsProjectNormal,
+						ExpectTime: nextYear + "-06-01",
+						Cvm: rpt.Cvm{
+							DeviceFamily: standardFamily,
+							CpuCore:      100,
+						},
+					},
+					Updated: &rpt.UpdatedRPDemandItem{
+						ObsProject: enumor.ObsProjectNormal,
+						ExpectTime: currentTestYear(),
+						Cvm: rpt.Cvm{
+							DeviceFamily: standardFamily,
+							CpuCore:      200,
+						},
+					},
+				},
+			},
+			wantCanApprove:    false,
+			wantReasonContain: "包含非今年的预测需求",
+			wantCPUCores:      0,
+			wantCBSSizeGB:     0,
+		},
+		{
+			name: "mixed current and next year demands",
+			demands: rpt.ResPlanDemands{
+				makeAutoApproveDemand(standardFamily, 500, 10000),
+				makeAutoApproveDemandWithTime(standardFamily, 500, 10000, nextYear+"-03-01"),
+			},
+			wantCanApprove:    false,
+			wantReasonContain: "包含非今年的预测需求",
+			wantCPUCores:      1000,
+			wantCBSSizeGB:     20000,
+		},
+	}
+}
+
 // buildAutoApproveTestCases aggregates all test cases.
 func buildAutoApproveTestCases() []autoApproveTestCase {
 	var cases []autoApproveTestCase
@@ -378,6 +463,7 @@ func buildAutoApproveTestCases() []autoApproveTestCase {
 	cases = append(cases, buildThresholdExceedCases()...)
 	cases = append(cases, buildDeviceFamilyCases()...)
 	cases = append(cases, buildDemandTypeCases()...)
+	cases = append(cases, buildNonCurrentYearCases()...)
 	return cases
 }
 
@@ -674,4 +760,81 @@ func TestAutoApprove_MultipleNonStandardFamilies(t *testing.T) {
 	assert.Contains(t, result.Reason, "内存型")
 	assert.Contains(t, result.Reason, "GPU型")
 	assert.Contains(t, result.Reason, "未指定机型")
+}
+
+// TestContainsNonCurrentYearDemand tests the containsNonCurrentYearDemand function.
+func TestContainsNonCurrentYearDemand(t *testing.T) {
+	currentYear := time.Now().Year()
+	nextYear := strconv.Itoa(currentYear + 1)
+	prevYear := strconv.Itoa(currentYear - 1)
+
+	testCases := []struct {
+		name     string
+		demands  rpt.ResPlanDemands
+		wantTrue bool
+	}{
+		{
+			name:     "empty demands",
+			demands:  rpt.ResPlanDemands{},
+			wantTrue: false,
+		},
+		{
+			name: "all current year",
+			demands: rpt.ResPlanDemands{
+				makeAutoApproveDemand(string(enumor.DeviceFamilyStandard), 100, 1000),
+			},
+			wantTrue: false,
+		},
+		{
+			name: "updated is next year",
+			demands: rpt.ResPlanDemands{
+				makeAutoApproveDemandWithTime(string(enumor.DeviceFamilyStandard), 100, 1000, nextYear+"-01-01"),
+			},
+			wantTrue: true,
+		},
+		{
+			name: "updated is previous year",
+			demands: rpt.ResPlanDemands{
+				makeAutoApproveDemandWithTime(string(enumor.DeviceFamilyStandard), 100, 1000, prevYear+"-01-01"),
+			},
+			wantTrue: true,
+		},
+		{
+			name: "original is next year in change demand",
+			demands: rpt.ResPlanDemands{
+				{
+					Original: &rpt.OriginalRPDemandItem{
+						ExpectTime: nextYear + "-06-01",
+						Cvm: rpt.Cvm{
+							DeviceFamily: string(enumor.DeviceFamilyStandard),
+							CpuCore:      100,
+						},
+					},
+					Updated: &rpt.UpdatedRPDemandItem{
+						ExpectTime: currentTestYear(),
+						Cvm: rpt.Cvm{
+							DeviceFamily: string(enumor.DeviceFamilyStandard),
+							CpuCore:      200,
+						},
+					},
+				},
+			},
+			wantTrue: true,
+		},
+		{
+			name: "mixed current and next year",
+			demands: rpt.ResPlanDemands{
+				makeAutoApproveDemand(string(enumor.DeviceFamilyStandard), 100, 1000),
+				makeAutoApproveDemandWithTime(string(enumor.DeviceFamilyStandard), 100, 1000, nextYear+"-03-01"),
+			},
+			wantTrue: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := containsNonCurrentYearDemand(tc.demands)
+			assert.Equal(t, tc.wantTrue, got)
+		})
+	}
 }
