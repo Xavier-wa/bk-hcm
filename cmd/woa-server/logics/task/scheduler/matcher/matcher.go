@@ -785,12 +785,34 @@ func (m *Matcher) initDevice(kt *kit.Kit, info *types.DeviceInfo) (*types.Device
 	}
 
 	// create init record
-	if err = record.CreateInitRecord(kt, info.SubOrderId, info.Ip); err != nil {
-		logs.Errorf("host %s failed to initialize, err: %v, rid: %s", info.Ip, err, kt.Rid)
+	created, err := record.CreateInitRecord(kt, info.SubOrderId, info.Ip)
+	if err != nil {
+		logs.Errorf("create init task record failed, subOrderID: %s, ip: %s, err: %v, rid: %s",
+			info.SubOrderId, info.Ip, err, kt.Rid)
 		return nil, fmt.Errorf("host %s failed to initialize, err: %v", info.Ip, err)
 	}
 
-	// 创建初始化任务
+	// 记录已存在：可能是上次失败重试，也可能是其他协程并发抢先创建，仅当当前状态为 Failed 时才继续重试发起新的 sops 任务；
+	// 其余状态(Init/Handling/Success)说明已有其他协程在处理或已完成，直接复用现有任务信息返回，避免重复创建 sops 任务。
+	if !created {
+		cur := initRecord
+		if cur == nil {
+			// race: validate 时还没有记录，但 CreateInitRecord 时已存在，重新读取最新状态
+			cur, err = record.GetInitRecord(kt, info.SubOrderId, info.Ip)
+			if err != nil {
+				logs.Errorf("failed to get init record after duplicated create, subOrderID: %s, ip: %s, err: %v, "+
+					"rid: %s", info.SubOrderId, info.Ip, err, kt.Rid)
+				return nil, fmt.Errorf("host %s failed to initialize, err: %v", info.Ip, err)
+			}
+		}
+		if cur.Status != types.InitStatusFailed {
+			logs.Infof("init record already exists, skip creating new sops task, subOrderID: %s, ip: %s, status: %d, "+
+				"rid: %s", info.SubOrderId, info.Ip, cur.Status, kt.Rid)
+			return &types.DeviceInitMsg{Device: info, JobUrl: cur.TaskLink, JobID: cur.TaskId, BizID: bkBizID}, nil
+		}
+	}
+
+	// 创建初始化任务（新建场景 或 已存在 Failed 重试场景）
 	return m.createInitTask(kt, info, bkBizID, hostInfo)
 }
 
