@@ -50,6 +50,7 @@ import (
 	"hcm/pkg/thirdparty/cvmapi"
 	"hcm/pkg/tools/concurrence"
 	cvt "hcm/pkg/tools/converter"
+	"hcm/pkg/tools/maps"
 	"hcm/pkg/tools/slice"
 	"hcm/pkg/tools/times"
 
@@ -1582,7 +1583,8 @@ func initResourceSpec(sub *cvmapplytable.ZiyanCvmApplySuborder) *tasktypes.Resou
 }
 
 // parseResourceSpecFields parse fields for ResourceSpec
-func parseResourceSpecFields(kt *kit.Kit, sub *cvmapplytable.ZiyanCvmApplySuborder, spec *tasktypes.ResourceSpec) error {
+func parseResourceSpecFields(kt *kit.Kit, sub *cvmapplytable.ZiyanCvmApplySuborder,
+	spec *tasktypes.ResourceSpec) error {
 	if err := parseJSONField(sub.SystemDisk, &spec.SystemDisk); err != nil {
 		logs.Errorf("failed to parse system disk, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID, kt.Rid)
 		return err
@@ -2069,7 +2071,8 @@ func (c *Controller) SyncBudgetOperatorByTime(kt *kit.Kit, start, end time.Time)
 
 	demands, err := c.collectBudgetOperatorDemands(kt, start, end)
 	if err != nil {
-		logs.Errorf("collect budget operator demands failed, err: %v, start: %v, end: %v, rid: %s", err, start, end, kt.Rid)
+		logs.Errorf("collect budget operator demands failed, err: %v, start: %v, end: %v, rid: %s", err, start, end,
+			kt.Rid)
 		return resp, err
 	}
 
@@ -2129,7 +2132,36 @@ func groupBudgetDemands(demands []budgetDemand) map[string]*demandGroup {
 // batchFetchBudgetOperatorCandidates 批量获取所有分组的预算提报人候选
 func (c *Controller) batchFetchBudgetOperatorCandidates(kt *kit.Kit,
 	groups map[string]*demandGroup) (map[string]string, error) {
-	// 收集所有唯一的 OpProductID 和 Year
+	years, opProductIDs := collectDistinctYearsAndOpIDs(groups)
+	if len(years) == 0 {
+		return nil, nil
+	}
+
+	candidateCache := make(map[string]string)
+	const maxYearsPerBatch = 20
+
+	for i := 0; i < len(years); i += maxYearsPerBatch {
+		end := i + maxYearsPerBatch
+		if end > len(years) {
+			end = len(years)
+		}
+		batchYears := years[i:end]
+
+		resp, err := c.callFinOpsAPIWithRetry(kt, batchYears, opProductIDs)
+		if err != nil {
+			logs.Errorf("batch get budget declaration operator from finops failed, "+
+				"err: %v, years: %v, op_product_ids: %v, rid: %s", err, batchYears, opProductIDs, kt.Rid)
+			return nil, err
+		}
+
+		buildCandidateCache(kt, resp, candidateCache)
+	}
+
+	return candidateCache, nil
+}
+
+// collectDistinctYearsAndOpIDs 收集并去重年份和运营产品ID
+func collectDistinctYearsAndOpIDs(groups map[string]*demandGroup) ([]int, []int64) {
 	opProductYearSet := make(map[int64]map[int]bool)
 	for _, group := range groups {
 		if _, exists := opProductYearSet[group.OpProductID]; !exists {
@@ -2138,50 +2170,51 @@ func (c *Controller) batchFetchBudgetOperatorCandidates(kt *kit.Kit,
 		opProductYearSet[group.OpProductID][group.Year] = true
 	}
 
-	// 构建批量查询参数
-	var years []int
-	var opProductIDs []int64
+	yearSet := make(map[int]bool)
+	opIDSet := make(map[int64]bool)
 	for opID, yearMap := range opProductYearSet {
+		opIDSet[opID] = true
 		for year := range yearMap {
-			years = append(years, year)
-			opProductIDs = append(opProductIDs, opID)
+			yearSet[year] = true
 		}
 	}
 
-	if len(years) == 0 {
-		return nil, nil
-	}
+	return maps.Keys(yearSet), maps.Keys(opIDSet)
+}
 
+// callFinOpsAPIWithRetry 带重试地调用 FinOps API
+func (c *Controller) callFinOpsAPIWithRetry(kt *kit.Kit, years []int, opProductIDs []int64) (
+	*finops.GetBudgetDeclarationOperatorResult, error) {
 	param := &finops.GetBudgetDeclarationOperatorParam{
 		Years:        years,
 		OpProductIDs: opProductIDs,
 	}
 
-	// 批量调用 FinOps API（带重试）
 	var resp *finops.GetBudgetDeclarationOperatorResult
 	var err error
-	for i := 0; i < 3; i++ {
+	for retry := 0; retry < 3; retry++ {
 		resp, err = c.finOpsCli.GetBudgetDeclarationOperator(kt, param)
 		if err == nil {
 			break
 		}
+		logs.Warnf("get budget declaration operator from finops failed, retry: %d, err: %v, rid: %s",
+			retry, err, kt.Rid)
 		time.Sleep(time.Second)
 	}
-	if err != nil {
-		logs.Errorf("batch get budget declaration operator from finops failed, "+
-			"err: %v, years: %v, op_product_ids: %v, rid: %s", err, years, opProductIDs, kt.Rid)
-		return nil, err
-	}
 
-	// 构建缓存：key=opID-year, value=candidate
-	candidateCache := make(map[string]string)
+	return resp, err
+}
+
+// buildCandidateCache 从 FinOps 响应构建候选人缓存
+func buildCandidateCache(kt *kit.Kit, resp *finops.GetBudgetDeclarationOperatorResult,
+	candidateCache map[string]string) {
+
 	for _, item := range resp.Items {
 		for _, comp := range item.Composition {
 			key := fmt.Sprintf("%d-%d", comp.OpProductID, item.Year)
 			logs.Infof("processing budget operator, op_product_id: %d, year: %d, creators: %v, committers: %v, rid: %s",
 				comp.OpProductID, item.Year, comp.Creators, comp.Committers, kt.Rid)
 
-			// 提取第一个有效的候选人
 			candidates := deduplicateBudgetOperatorCandidates(comp.Creators, comp.Committers)
 			for _, operator := range candidates {
 				candidateCache[key] = operator
@@ -2190,8 +2223,6 @@ func (c *Controller) batchFetchBudgetOperatorCandidates(kt *kit.Kit,
 			}
 		}
 	}
-
-	return candidateCache, nil
 }
 
 func (c *Controller) collectBudgetOperatorDemands(kt *kit.Kit, start, end time.Time) ([]budgetDemand, error) {
