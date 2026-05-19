@@ -1627,15 +1627,17 @@ func parseTime(kt *kit.Kit, t tabletypes.Time) (time.Time, error) {
 func (c *Controller) getApplyOrderConsumePoolMapV2(kt *kit.Kit, subOrders []*tasktypes.ApplyOrder) (
 	ResPlanConsumePool, error) {
 
+	// 查询子单"已生产"核心数，覆盖未交付但已生产成功的主机，避免因仅按 DeliveredCore 计算导致用户卡在交付前重复提单造成超额申领
+	productedCoreMap, err := c.batchCalcSuborderProductedCore(kt, subOrders)
+	if err != nil {
+		logs.Errorf("batch calc producted core failed, err: %v, suborder count: %d, rid: %s",
+			err, len(subOrders), kt.Rid)
+		return nil, err
+	}
+
 	orderConsumePoolMap := make(ResPlanConsumePool)
 	for _, subOrderInfo := range subOrders {
-		// TODO 目前预测只关注CVM类型的主机 + 升降配主机
-		if subOrderInfo.ResourceType != tasktypes.ResourceTypeCvm &&
-			subOrderInfo.ResourceType != tasktypes.ResourceTypeUpgradeCvm {
-			continue
-		}
-		// 如果项目类型是常规，则RequireType也需要是对应的常规项目
-		if subOrderInfo.ObsProject == enumor.ObsProjectNormal && subOrderInfo.RequireType != enumor.RequireTypeRegular {
+		if !shouldCountApplyOrderConsumePool(subOrderInfo) {
 			continue
 		}
 
@@ -1646,62 +1648,168 @@ func (c *Controller) getApplyOrderConsumePoolMapV2(kt *kit.Kit, subOrders []*tas
 			return nil, err
 		}
 
-		var planType enumor.PlanTypeCode
-		switch subOrderInfo.ResourceType {
-		case tasktypes.ResourceTypeUpgradeCvm:
-			// 升降配需要忽略预测内外
-			planType = ""
-		default:
-			planType, err = c.GetPlanTypeByChargeType(subOrderInfo.Spec.ChargeType)
-			if err != nil {
-				logs.Errorf("failed to get plan type by charge type, err: %v, subOrder: %+v, rid: %s", err,
-					*subOrderInfo, kt.Rid)
-				return nil, err
-			}
+		planType, err := c.getApplyOrderPlanType(subOrderInfo)
+		if err != nil {
+			logs.Errorf("failed to get plan type by charge type, err: %v, subOrder: %+v, rid: %s", err,
+				*subOrderInfo, kt.Rid)
+			return nil, err
 		}
 
-		// 兼容历史单据，CVM申领单依然使用spec进行计算
 		if subOrderInfo.Spec != nil {
-			consumePoolKey := ResPlanPoolKeyV2{
-				PlanType:      planType,
-				AvailableTime: NewAvailableTime(demandYear, demandMonth),
-				DeviceType:    subOrderInfo.Spec.DeviceType,
-				ObsProject:    subOrderInfo.ObsProject,
-				BkBizID:       subOrderInfo.BkBizId,
-				DemandClass:   enumor.DemandClassCVM,
-				RegionID:      subOrderInfo.Spec.Region,
-			}
-			// 机房裁撤需要忽略预测内、预测外 --story=121848852
-			if subOrderInfo.RequireType == enumor.RequireTypeDissolve {
-				consumePoolKey.PlanType = ""
-			}
-			// 交付的核心数量(消耗预测CRP的核心数)
-			consumeCpuCore := int64(subOrderInfo.DeliveredCore)
-			orderConsumePoolMap[consumePoolKey] += consumeCpuCore
+			addSpecApplyOrderConsumePool(kt, orderConsumePoolMap, subOrderInfo, planType, demandYear, demandMonth,
+				productedCoreMap[subOrderInfo.SubOrderId])
 			continue
 		}
 
-		for _, expendPlan := range subOrderInfo.PlanExpendGroup {
-			consumePoolKey := ResPlanPoolKeyV2{
-				PlanType:      planType,
-				AvailableTime: NewAvailableTime(demandYear, demandMonth),
-				DeviceType:    expendPlan.DeviceType,
-				ObsProject:    subOrderInfo.ObsProject,
-				BkBizID:       subOrderInfo.BkBizId,
-				DemandClass:   enumor.DemandClassCVM,
-				RegionID:      expendPlan.Region,
-			}
-			// 机房裁撤需要忽略预测内、预测外 --story=121848852
-			if subOrderInfo.RequireType == enumor.RequireTypeDissolve {
-				consumePoolKey.PlanType = ""
-			}
-			// 交付的核心数量(消耗预测CRP的核心数)
-			consumeCpuCore := expendPlan.CPUCore
-			orderConsumePoolMap[consumePoolKey] += consumeCpuCore
-		}
+		addPlanExpendApplyOrderConsumePool(orderConsumePoolMap, subOrderInfo, planType, demandYear, demandMonth)
 	}
 
 	return orderConsumePoolMap, nil
+}
+
+func shouldCountApplyOrderConsumePool(sub *tasktypes.ApplyOrder) bool {
+	// TODO 目前预测只关注CVM类型的主机 + 升降配主机
+	if sub.ResourceType != tasktypes.ResourceTypeCvm && sub.ResourceType != tasktypes.ResourceTypeUpgradeCvm {
+		return false
+	}
+	// 如果项目类型是常规，则RequireType也需要是对应的常规项目
+	return sub.ObsProject != enumor.ObsProjectNormal || sub.RequireType == enumor.RequireTypeRegular
+}
+
+func (c *Controller) getApplyOrderPlanType(sub *tasktypes.ApplyOrder) (enumor.PlanTypeCode, error) {
+	if sub.ResourceType == tasktypes.ResourceTypeUpgradeCvm {
+		// 升降配需要忽略预测内外
+		return "", nil
+	}
+	return c.GetPlanTypeByChargeType(sub.Spec.ChargeType)
+}
+
+func addSpecApplyOrderConsumePool(kt *kit.Kit, poolMap ResPlanConsumePool, sub *tasktypes.ApplyOrder,
+	planType enumor.PlanTypeCode, demandYear int, demandMonth time.Month, productedCore int64) {
+
+	consumePoolKey := ResPlanPoolKeyV2{
+		PlanType:      planType,
+		AvailableTime: NewAvailableTime(demandYear, demandMonth),
+		DeviceType:    sub.Spec.DeviceType,
+		ObsProject:    sub.ObsProject,
+		BkBizID:       sub.BkBizId,
+		DemandClass:   enumor.DemandClassCVM,
+		RegionID:      sub.Spec.Region,
+	}
+	// 机房裁撤需要忽略预测内、预测外 --story=121848852
+	if sub.RequireType == enumor.RequireTypeDissolve {
+		consumePoolKey.PlanType = ""
+	}
+	// 占用预测核心数 = max(AppliedCore, 已生产核心数)，终止单据按已生产核心数
+	consumeCpuCore := calcSuborderConsumeCore(sub, productedCore)
+	logs.V(2).Infof("calc cvm suborder consume core, suborderID: %s, stage: %s, status: %s, applied: %d, "+
+		"delivered: %d, producteCore: %d, consumeCore: %d, rid: %s",
+		sub.SubOrderId, sub.Stage, sub.Status, sub.AppliedCore, sub.DeliveredCore, productedCore, consumeCpuCore, kt.Rid)
+	if consumeCpuCore <= 0 {
+		return
+	}
+	poolMap[consumePoolKey] += consumeCpuCore
+}
+
+func addPlanExpendApplyOrderConsumePool(poolMap ResPlanConsumePool, sub *tasktypes.ApplyOrder,
+	planType enumor.PlanTypeCode, demandYear int, demandMonth time.Month) {
+
+	for _, expendPlan := range sub.PlanExpendGroup {
+		consumePoolKey := ResPlanPoolKeyV2{
+			PlanType:      planType,
+			AvailableTime: NewAvailableTime(demandYear, demandMonth),
+			DeviceType:    expendPlan.DeviceType,
+			ObsProject:    sub.ObsProject,
+			BkBizID:       sub.BkBizId,
+			DemandClass:   enumor.DemandClassCVM,
+			RegionID:      expendPlan.Region,
+		}
+		// 机房裁撤需要忽略预测内、预测外 --story=121848852
+		if sub.RequireType == enumor.RequireTypeDissolve {
+			consumePoolKey.PlanType = ""
+		}
+		poolMap[consumePoolKey] += expendPlan.CPUCore
+	}
+}
+
+// calcSuborderConsumeCore 计算单个 CVM 子单对预测额度的实际占用核心数。
+//
+// 规则：
+//   - 终止单据：占用 = 已生产核心数（剩余不会再生产，但已生产的不会自动退还）
+//   - 活跃单据：占用 = max(AppliedCore, 已生产核心数)，AppliedCore 覆盖"卡在交付前重复提单"场景，
+//     已生产核心数兜底极少数手工补录超 AppliedCore 情形
+//
+// productedCore 由 batchCalcSuborderProductedCore 一次性预算好后传入，避免逐单查询。
+func calcSuborderConsumeCore(sub *tasktypes.ApplyOrder, productedCore int64) int64 {
+	// 若单据已终止，返回"已生产核心数"
+	if sub.IsSuborderTerminated() {
+		return productedCore
+	}
+
+	return max(int64(sub.AppliedCore), productedCore)
+}
+
+// batchCalcSuborderProductedCore 批量计算子单"已生产成功"主机的总 CPU 核心数。
+//
+// "已生产" 的判定：ziyan_cvm_device_info 表中存在该子单关联的设备记录（不区分是否已交付/初始化）。
+// 这与 scheduler.calProductDeviceTypeCountMap(devices, false) 的语义保持一致。
+//
+// 性能：
+//   - 仅对普通 CVM 的 Spec 分支、升降配子单查询（PlanExpendGroup 分支不需要）
+//   - subOrderIDs IN(...) 单次查询设备表，按 DefaultMaxPageLimit 分批
+//   - 机型 CPU 核数从 Controller 已加载的 deviceTypesMap 缓存中读取，无额外查询
+func (c *Controller) batchCalcSuborderProductedCore(kt *kit.Kit, subOrders []*tasktypes.ApplyOrder) (
+	map[string]int64, error) {
+
+	subOrderIDs := make([]string, 0, len(subOrders))
+	for _, sub := range subOrders {
+		// 普通 CVM 仅 Spec 分支需要补齐已生产核心数；升降配不依赖 Spec，按子单查询 device_info。
+		if (sub.ResourceType == tasktypes.ResourceTypeCvm && sub.Spec != nil) ||
+			sub.ResourceType == tasktypes.ResourceTypeUpgradeCvm {
+			subOrderIDs = append(subOrderIDs, sub.SubOrderId)
+		}
+	}
+	result := make(map[string]int64, len(subOrderIDs))
+	if len(subOrderIDs) == 0 {
+		return result, nil
+	}
+
+	deviceTypeMap, err := c.deviceTypesMap.GetDeviceTypes(kt)
+	if err != nil {
+		logs.Errorf("batch calc suborder get device types failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	for _, batch := range slice.Split(subOrderIDs, int(core.DefaultMaxPageLimit)) {
+		listReq := &cvmapplyproto.ZiyanCvmDeviceInfoListReq{
+			Filter: tools.ExpressionAnd(tools.RuleIn("suborder_id", batch)),
+			Page:   core.NewDefaultBasePage(),
+			Fields: []string{"suborder_id", "device_type"},
+		}
+		for {
+			resp, err := c.client.DataService().TCloudZiyan.ZiyanCvmDeviceInfo.List(kt.Ctx, kt.Header(), listReq)
+			if err != nil {
+				logs.Errorf("list tcloud-ziyan cvm device info failed, err: %v, suborder_count: %d, rid: %s",
+					err, len(batch), kt.Rid)
+				return nil, err
+			}
+			for _, dev := range resp.Details {
+				deviceInfo, ok := deviceTypeMap[dev.DeviceType]
+				if !ok {
+					logs.Warnf("batch calc suborder device type %s not found in cache, suborderID: %s, rid: %s",
+						dev.DeviceType, dev.SuborderID, kt.Rid)
+					continue
+				}
+				result[dev.SuborderID] += deviceInfo.CpuCore
+			}
+			if len(resp.Details) < int(listReq.Page.Limit) {
+				break
+			}
+			listReq.Page.Start += uint32(listReq.Page.Limit)
+		}
+	}
+
+	return result, nil
 }
 
 // VerifyProdDemandsV2 verify whether the needs of biz can be satisfied.

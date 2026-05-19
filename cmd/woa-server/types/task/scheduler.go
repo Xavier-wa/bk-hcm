@@ -72,6 +72,11 @@ type ApplyOrder struct {
 	UpdateAt        time.Time         `json:"update_at" bson:"update_at"`
 }
 
+// IsSuborderTerminated 判断子单是否已终止：终止后剩余的主机不再继续生产
+func (subOrder *ApplyOrder) IsSuborderTerminated() bool {
+	return subOrder.Stage == enumor.TicketStageTerminate
+}
+
 // UpgradeCVMSpec cvm升降配规格
 type UpgradeCVMSpec struct {
 	InstanceID           string   `json:"instance_id" bson:"instance_id"`
