@@ -638,30 +638,27 @@ export default defineComponent({
         suborder_id: subOrderId,
       });
     };
-    // 已交付设备
-    const getDeliveredDevices = (params) => {
-      return http.post('/api/v1/woa/task/findmany/apply/device', params);
-    };
-    // 查询交付IP和固号IP
-    const getDeliveredHostField = (row, fieldKey) => {
-      const params = {
-        bk_biz_ids: [row.bk_biz_id],
-        filter: {
-          op: 'and',
-          rules: [
-            {
-              field: 'suborder_id',
-              op: 'eq',
-              value: row.suborder_id,
-            },
-          ],
+    // 查询交付IP和固资号 - 使用 rollRequest 获取全部数据
+    const getDeliveredHostField = async (row, fieldKey) => {
+      const list = await rollRequest({
+        httpClient: http,
+        pageEnableCountKey: 'count',
+      }).rollReqUseCount(
+        '/api/v1/woa/task/findmany/apply/device',
+        {
+          bk_biz_ids: [row.bk_biz_id],
+          filter: {
+            op: 'and',
+            rules: [{ field: 'suborder_id', op: 'eq', value: row.suborder_id }],
+          },
         },
-        page: { start: 0, limit: 500, count: false },
-      };
-      return getDeliveredDevices(params).then((res) => {
-        const value = res?.data?.info?.map((item) => item[fieldKey]) || [];
-        return value;
-      });
+        {
+          limit: 500,
+          listGetter: (res) => res?.data?.info || [],
+          countGetter: (res) => res?.data?.count || 0,
+        },
+      );
+      return list.map((item) => item[fieldKey]);
     };
     const throttleInfo = ref(null);
     const throttleDeliveredHostField = () => {
