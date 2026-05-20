@@ -98,6 +98,14 @@ const (
 )
 
 const (
+	// GlobalConfigTypeResPlan 资源预测相关全局配置类型
+	GlobalConfigTypeResPlan = "resource_plan"
+
+	// ResPlanNonCurrentYearReportDeadlineConfigKey 非本年度预测的提报截至时间
+	ResPlanNonCurrentYearReportDeadlineConfigKey = "non_current_year_report_deadline"
+)
+
+const (
 	// ResourcePlanTransferKey this is the config type for resource plan transfer.
 	ResourcePlanTransferKey = "resource_plan_transfer"
 	// TransferQuotaKey this is the config key for transfer quota.
@@ -114,6 +122,16 @@ const AdminHandler = "dommyzhang;forestchen"
 
 // ResPlanItsmAuditSkip 资源预测itsm免审标志
 const ResPlanItsmAuditSkip string = "skip"
+
+const (
+	// ResPlanSubTicketDropTicketIDPrefix 主单覆盖修改时子单 ticket_id 前缀
+	ResPlanSubTicketDropTicketIDPrefix = "drop_"
+)
+
+// ResPlanDropTicketID builds dropped sub ticket ticket_id from original ticket id.
+func ResPlanDropTicketID(ticketID string) string {
+	return ResPlanSubTicketDropTicketIDPrefix + ticketID
+}
 
 // CrpCvmApplySubnetMaxNum CRP主机申请接口-子网最大数量
 const CrpCvmApplySubnetMaxNum = 10

@@ -176,12 +176,39 @@ func (s RPTicketStatus) IsUnfinished() bool {
 	return true
 }
 
+// IsNonFinalState return true if RPTicketStatus is Non-final state (can be terminated).
+func (s RPTicketStatus) IsNonFinalState() bool {
+	switch s {
+	case RPTicketStatusRejected:
+	case RPTicketStatusPartialRejected:
+	case RPTicketStatusFailed:
+	case RPTicketStatusPartialFailed:
+	default:
+		return false
+	}
+	return true
+}
+
+// IsOverwritable return true if RPTicketStatus is can be overwritten.
+func (s RPTicketStatus) IsOverwritable() bool {
+	switch s {
+	case RPTicketStatusRejected:
+	case RPTicketStatusPartialRejected:
+	case RPTicketStatusFailed:
+	case RPTicketStatusPartialFailed:
+	case RPTicketStatusRevoked:
+	default:
+		return false
+	}
+	return true
+}
+
 // rdTicketStatusNameMap records RPTicketStatus's name.
 var rdTicketStatusNameMap = map[RPTicketStatus]string{
 	RPTicketStatusInit:            "待审批",
 	RPTicketStatusAuditing:        "审批中",
-	RPTicketStatusRejected:        "审批拒绝",
-	RPTicketStatusPartialRejected: "部分拒绝",
+	RPTicketStatusRejected:        "审批驳回",
+	RPTicketStatusPartialRejected: "部分驳回",
 	RPTicketStatusDone:            "成功",
 	RPTicketStatusFailed:          "失败",
 	RPTicketStatusPartialFailed:   "部分失败",
@@ -263,7 +290,7 @@ var rpSubTicketStatusNameMap = map[RPSubTicketStatus]string{
 	RPSubTicketStatusInit:     "待审批",
 	RPSubTicketStatusWaiting:  "等待中",
 	RPSubTicketStatusAuditing: "审批中",
-	RPSubTicketStatusRejected: "审批拒绝",
+	RPSubTicketStatusRejected: "审批驳回",
 	RPSubTicketStatusDone:     "成功",
 	RPSubTicketStatusFailed:   "失败",
 	RPSubTicketStatusInvalid:  "已失效",

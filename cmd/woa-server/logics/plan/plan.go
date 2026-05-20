@@ -44,6 +44,7 @@ import (
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/dal/dao"
+	"hcm/pkg/dal/dao/orm"
 	"hcm/pkg/dal/dao/tools"
 	rpdaotypes "hcm/pkg/dal/dao/types/resource-plan"
 	rpts "hcm/pkg/dal/table/resource-plan/res-plan-ticket-status"
@@ -56,6 +57,8 @@ import (
 	"hcm/pkg/thirdparty/api-gateway/itsm"
 	"hcm/pkg/thirdparty/cvmapi"
 	"hcm/pkg/tools/times"
+
+	"github.com/jmoiron/sqlx"
 )
 
 // Logics provides management interface for resource plan.
@@ -149,6 +152,10 @@ type Logics interface {
 	GetPlanTransferQuotaConfigs(kt *kit.Kit) (ptypes.TransferQuotaConfig, error)
 	// UpdatePlanTransferQuotaConfigs 更新预测转移额度配置
 	UpdatePlanTransferQuotaConfigs(kt *kit.Kit, req *ptypes.UpdatePlanTransferQuotaConfigsReq) error
+	// GetNonCurrentYearReportDeadline gets non-current-year demand report deadline config.
+	GetNonCurrentYearReportDeadline(kt *kit.Kit) (ptypes.GetResPlanNonCurrentYearReportDeadlineResp, error)
+	// UpsertNonCurrentYearReportDeadline upserts non-current-year demand report deadline config.
+	UpsertNonCurrentYearReportDeadline(kt *kit.Kit, req *ptypes.UpsertResPlanNonCurrentYearReportDeadlineReq) error
 
 	// ApproveResPlanSubTicketAdmin approve res plan ticket admin.
 	ApproveResPlanSubTicketAdmin(kt *kit.Kit, subTicketID string, bizID int64,
@@ -158,6 +165,8 @@ type Logics interface {
 		req *ptypes.BatchAuditResPlanTicketAdminReq) (*ptypes.BatchApproveResPlanSubTicketsAdminResp, error)
 	// RetryResPlanFailedSubTickets retry res plan failed sub tickets.
 	RetryResPlanFailedSubTickets(kt *kit.Kit, ticketID string) error
+	// OverwriteResPlanTicket overwrite res plan ticket.
+	OverwriteResPlanTicket(kt *kit.Kit, ticketID string, req *ptypes.OverwriteResPlanTicketReq) error
 	// TerminateResPlanFailedTicket terminate res plan failed ticket.
 	TerminateResPlanFailedTicket(kt *kit.Kit, ticketID string) error
 
@@ -201,6 +210,7 @@ type Logics interface {
 
 // Controller motivates the resource plan ticket status flow.
 type Controller struct {
+	location       *time.Location
 	resPlanCfg     cc.ResPlan
 	dao            dao.Set
 	sd             serviced.State
@@ -244,7 +254,15 @@ func New(sd serviced.State, client *client.ClientSet, dao dao.Set, cmsiCli cmsi.
 		return nil, err
 	}
 
+	loc, err := time.LoadLocation(cc.WoaServer().LocalTimezone)
+	if err != nil {
+		logs.Warnf("%s: load location: %s failed: %v", constant.ResPlanExpireNotificationPushFailed,
+			cc.WoaServer().LocalTimezone, err)
+		loc = time.UTC
+	}
+
 	ctrl := &Controller{
+		location:       loc,
 		resPlanCfg:     cc.WoaServer().ResPlan,
 		dao:            dao,
 		sd:             sd,
@@ -390,7 +408,11 @@ func (c *Controller) CreateAuditFlow(kt *kit.Kit, ticketID string) error {
 // updateTicketStatus update ticket status.
 func (c *Controller) updateTicketStatus(kt *kit.Kit, ticket *rpts.ResPlanTicketStatusTable) error {
 	expr := tools.EqualExpression("ticket_id", ticket.TicketID)
-	if err := c.dao.ResPlanTicketStatus().Update(kt, expr, ticket); err != nil {
+	_, err := c.dao.Txn().AutoTxn(kt, func(txn *sqlx.Tx, opt *orm.TxnOption) (interface{}, error) {
+		err := c.dao.ResPlanTicketStatus().UpdateWithTx(kt, txn, expr, ticket)
+		return nil, err
+	})
+	if err != nil {
 		logs.Errorf("failed to update resource plan ticket status, err: %v, ticket_id: %s, rid: %s", err,
 			ticket.TicketID, kt.Rid)
 		return err

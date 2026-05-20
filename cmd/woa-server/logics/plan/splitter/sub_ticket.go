@@ -21,9 +21,9 @@ package splitter
 
 import (
 	"errors"
-	"strconv"
 	"time"
 
+	"hcm/cmd/woa-server/logics/plan/demand-time"
 	"hcm/pkg/api/core"
 	rpproto "hcm/pkg/api/data-service/resource-plan"
 	"hcm/pkg/criteria/constant"
@@ -103,29 +103,6 @@ func (s *SubTicketSplitter) createSubTicket(kt *kit.Kit, ticketID string, allDem
 	return nil
 }
 
-// containsNonCurrentYearDemand 检查 demands 中是否包含非今年的预测需求
-//
-// NOTE：cmd/woa-server/logics/plan/dispatcher/auto_approve.go:50 有一个相同的实现
-// 本次临时需求暂不统一，后续如果转为长期需求，需考虑合并
-func containsNonCurrentYearDemand(demands []*rpt.ResPlanDemand) bool {
-	currentYear := time.Now().Year()
-	for _, demand := range demands {
-		if demand.Original != nil && demand.Original.ExpectTime != "" {
-			year, err := strconv.Atoi(demand.Original.ExpectTime[:4])
-			if err == nil && year != currentYear {
-				return true
-			}
-		}
-		if demand.Updated != nil && demand.Updated.ExpectTime != "" {
-			year, err := strconv.Atoi(demand.Updated.ExpectTime[:4])
-			if err == nil && year != currentYear {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // constructSubTicketCreateReq 构造子单据创建请求
 func constructSubTicketCreateReq(ticket *rpt.ResPlanTicketTable, auditQuota int64, subTicketType enumor.RPTicketType,
 	demands []*rpt.ResPlanDemand, demandsJson tabletypes.JsonField) rpproto.ResPlanSubTicketCreateReq {
@@ -188,7 +165,7 @@ func constructSubTicketCreateReq(ticket *rpt.ResPlanTicketTable, auditQuota int6
 		SubmittedAt:         time.Now().Format(constant.DateTimeLayout),
 	}
 	// 非本年度预测，不能跳过管理员审批
-	hasNonCurrentYear := containsNonCurrentYearDemand(demands)
+	hasNonCurrentYear := demandtime.ContainsNonCurrentYearDemandPtrs(demands)
 
 	// 调减单、自动延期单、非转移单跳过管理员审批
 	if ticket.Type == enumor.RPTicketTypeDelete || ticket.Type == enumor.RPTicketTypeAutomaticTransfer ||

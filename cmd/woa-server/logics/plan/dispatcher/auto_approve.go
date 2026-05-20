@@ -21,10 +21,9 @@ package dispatcher
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
-	"time"
 
+	"hcm/cmd/woa-server/logics/plan/demand-time"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	rpt "hcm/pkg/dal/table/resource-plan/res-plan-ticket"
@@ -44,29 +43,6 @@ type autoApproveCheckResult struct {
 	TotalCBSSizeGB int64
 }
 
-// containsNonCurrentYearDemand 检查 demands 中是否包含非今年的预测需求
-//
-// NOTE：cmd/woa-server/logics/plan/splitter/sub_ticket.go:109 有一个相同的实现
-// 本次临时需求暂不统一，后续如果转为长期需求，需考虑合并
-func containsNonCurrentYearDemand(demands rpt.ResPlanDemands) bool {
-	currentYear := time.Now().Year()
-	for _, demand := range demands {
-		if demand.Original != nil && demand.Original.ExpectTime != "" {
-			year, err := strconv.Atoi(demand.Original.ExpectTime[:4])
-			if err == nil && year != currentYear {
-				return true
-			}
-		}
-		if demand.Updated != nil && demand.Updated.ExpectTime != "" {
-			year, err := strconv.Atoi(demand.Updated.ExpectTime[:4])
-			if err == nil && year != currentYear {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // checkPredictionAutoApprove 检查预测单是否满足自动过单条件
 // 前置条件：只有"追加"类型的需求单才允许自动过单
 // 四个条件必须全部满足：
@@ -79,7 +55,7 @@ func checkPredictionAutoApprove(kt *kit.Kit, demands rpt.ResPlanDemands) *autoAp
 	var reasons []string
 
 	// 条件0：检查是否包含非今年的预测需求
-	if containsNonCurrentYearDemand(demands) {
+	if demandtime.ContainsNonCurrentYearDemand(demands) {
 		result.CanAutoApprove = false
 		reasons = append(reasons, "包含非今年的预测需求")
 	}

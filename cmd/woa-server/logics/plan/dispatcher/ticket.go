@@ -29,6 +29,7 @@ import (
 	rpproto "hcm/pkg/api/data-service/resource-plan"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/dal/dao/orm"
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/dal/dao/types"
 	rpts "hcm/pkg/dal/table/resource-plan/res-plan-ticket-status"
@@ -36,6 +37,8 @@ import (
 	"hcm/pkg/logs"
 	"hcm/pkg/thirdparty/api-gateway/itsm"
 	"hcm/pkg/tools/times"
+
+	"github.com/jmoiron/sqlx"
 )
 
 // listAndWatchTickets list and watch tickets
@@ -363,7 +366,11 @@ func (d *Dispatcher) itsmTicketInCRPState(status *itsm.GetTicketStatusResp) bool
 // updateTicketStatus update ticket status.
 func (d *Dispatcher) updateTicketStatus(kt *kit.Kit, ticket *rpts.ResPlanTicketStatusTable) error {
 	expr := tools.EqualExpression("ticket_id", ticket.TicketID)
-	if err := d.dao.ResPlanTicketStatus().Update(kt, expr, ticket); err != nil {
+	_, err := d.dao.Txn().AutoTxn(kt, func(txn *sqlx.Tx, opt *orm.TxnOption) (interface{}, error) {
+		err := d.dao.ResPlanTicketStatus().UpdateWithTx(kt, txn, expr, ticket)
+		return nil, err
+	})
+	if err != nil {
 		logs.Errorf("failed to update resource plan ticket status, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
