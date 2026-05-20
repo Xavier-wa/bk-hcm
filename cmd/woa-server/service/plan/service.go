@@ -70,6 +70,7 @@ func (s *service) initPlanService(h *rest.Handler) {
 
 	// ticket
 	h.Add("ListResPlanTicket", http.MethodPost, "/plans/resources/tickets/list", s.ListResPlanTicket)
+	h.Add("ExportResPlanTicket", http.MethodPost, "/plans/resources/tickets/export", s.ExportResPlanTicket)
 	h.Add("GetResPlanTicket", http.MethodGet, "/plans/resources/tickets/{id}", s.GetResPlanTicket)
 	h.Add("GetResPlanTicketAudit", http.MethodGet,
 		"/plans/resources/tickets/{ticket_id}/audit", s.GetResPlanTicketAudit)
