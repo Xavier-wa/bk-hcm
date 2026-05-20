@@ -1,11 +1,16 @@
 .home {
   // height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 
   .status {
     display: flex;
     align-items: center;
     color: #313238;
     font-size: 14px;
+    flex: 1;
+    min-width: 0;
 
     .audit-status {
       display: inline-flex;
@@ -42,4 +47,9 @@
   .error-message-color {
     color: #d9001b !important;
   }
+}
+
+.modify-btn {
+  margin-left: 16px;
+  flex-shrink: 0;
 }

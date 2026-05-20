@@ -3072,6 +3072,15 @@ const lang: ILANG = {
   ],
   'ICR(IEG资源服务助手)': ['ICR (IEG Resource Service Assistant)'],
   预测ID: ['Prediction ID'],
+  '预算评审期间，不允许提交 {year} 及之后的预测；如需调整已有单据，请使用单据详情页的「修改需求」入口': [
+    'In the budget review period, the expected arrival date of the non-current year prediction after {year} is locked operation',
+  ],
+  '所选包含 {year} 及之后的非本年预测，评审期内已锁定操作；请取消勾选后再批量操作': [
+    'The selected includes non-current year predictions after {year} in the review period, and the operation is locked; please cancel the selection and then batch operation',
+  ],
+  '预算评审期间，期望到货日期为 {year} 及之后的非本年预测已锁定操作': [
+    'In the budget review period, the expected arrival date of the non-current year prediction after {year} is locked operation',
+  ],
   //   '111': ['111'],
   //   '111': ['111'],
   //   '111': ['111'],

@@ -1,0 +1,20 @@
+{
+  "id": "req-resource-plan-2027-cvm-budget",
+  "title": "资源预测-2027 CVM 预算提报",
+  "createdAt": "2026-05-19T07:35:00.276Z",
+  "updatedAt": "2026-05-19T07:35:25.690Z",
+  "iterations": [
+    {
+      "wfId": "feat-resplan-cvm-reqmodify",
+      "status": "prd",
+      "branch": "feat-resplan-cvm-reqmodify",
+      "title": "资源预测-2027 CVM 预算提报 - 首迭代",
+      "createdAt": "2026-05-19T07:35:25.661Z"
+    }
+  ],
+  "aggregatedArtifacts": {},
+  "codeScope": {
+    "globs": [],
+    "autoLearned": true
+  }
+}

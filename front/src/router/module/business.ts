@@ -15,6 +15,7 @@ import {
   MENU_BUSINESS_VPC_MANAGEMENT,
   MENU_BUSINESS_TICKET_MANAGEMENT,
   MENU_BUSINESS_RESOURCE_PLAN_CVM,
+  MENU_BUSINESS_RESOURCE_PLAN_CVM_MODIFY,
 } from '@/constants/menu-symbol';
 import { operationLogBiz as operationLogBizRouteConfig } from '@/views/operation-log/route-config';
 import { loadBalancerBiz as loadBalancerBizRouteConfig } from '@/views/load-balancer/route-config';
@@ -374,6 +375,14 @@ const businessMenus: RouteRecordRaw[] = [
             path: '/business/resource-plan/cvm/add',
             name: 'BizResourcePlanAdd',
             component: () => import('@/views/business/resource-plan/add'),
+            meta: {
+              activeKey: 'bizResourcePlan',
+            },
+          },
+          {
+            path: '/business/resource-plan/cvm/modify',
+            name: MENU_BUSINESS_RESOURCE_PLAN_CVM_MODIFY,
+            component: () => import('@/views/business/resource-plan/modify'),
             meta: {
               activeKey: 'bizResourcePlan',
             },

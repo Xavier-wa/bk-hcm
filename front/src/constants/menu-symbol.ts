@@ -32,6 +32,7 @@ export const MENU_BUSINESS_RECYCLE_BIN_MANAGEMENT = 'menu_business_recycle_bin_m
  * 资源预测
  */
 export const MENU_BUSINESS_RESOURCE_PLAN_CVM = 'menu_business_resource_plan_cvm';
+export const MENU_BUSINESS_RESOURCE_PLAN_CVM_MODIFY = 'menu_business_resource_plan_cvm_modify';
 export const MENU_BUSINESS_RESOURCE_PLAN_GPU = 'menu_business_resource_plan_gpu';
 export const MENU_SERVICE_RESOURCE_PLAN_CVM = 'menu_service_resource_plan_cvm';
 export const MENU_SERVICE_RESOURCE_PLAN_GPU = 'menu_service_resource_plan_gpu';

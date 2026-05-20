@@ -107,14 +107,18 @@ export interface TicketDemands {
   obs_project: string;
   expect_time: string;
   region_id: string;
+  region_name: string;
   zone_id: string;
+  zone_name: string;
   demand_res_types: string[];
+  remark: string;
   cvm: {
     res_mode: string;
     device_family: string;
     device_type: string;
     device_class: string;
     cpu_core: number;
+    os: string;
     memory: number;
     res_pool: string;
     core_type: string;
@@ -187,6 +191,13 @@ export interface IPlanTicket {
   demand_class: string;
   demands: IPlanTicketDemand[];
   remark: string;
+}
+
+// 覆盖修改主单请求体, 字段全部可选, bizId/ticketId 在 URL 路径
+export interface IPlanTicketOverwrite {
+  demand_class?: string;
+  demands?: IPlanTicketDemand[];
+  remark?: string;
 }
 
 export interface IPlanTicketDemand {

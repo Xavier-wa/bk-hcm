@@ -74,7 +74,7 @@ export interface SubTicketParam {
 export const STATUS_ENUM: Record<string, string> = {
   init: '待审批',
   auditing: '审批中',
-  rejected: '审批拒绝',
+  rejected: '审批驳回',
   failed: '失败',
   done: '成功',
   invalid: '已失效',

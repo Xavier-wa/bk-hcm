@@ -12,9 +12,10 @@ import ResourcePlanList from '@/components/resource-plan/applications/detail/lis
 import SubTicketList from '../sub-ticket/sub-ticket-list.vue';
 import DetailHeader from '@/views/resource/resource-manage/common/header/detail-header';
 import { TicketByIdResult } from '@/typings/resourcePlan';
-import { SubTicketAudit } from '@/store/ticket/res-sub-ticket';
+import { SubTicketAudit, SubTicketItem } from '@/store/ticket/res-sub-ticket';
 import { MENU_BUSINESS_TICKET_MANAGEMENT, MENU_SERVICE_TICKET_MANAGEMENT } from '@/constants/menu-symbol';
 import { GLOBAL_BIZS_KEY } from '@/common/constant';
+import useTicketModifiable from './use-modifiable';
 
 // 路由、状态管理、工具函数
 const route = useRoute();
@@ -44,6 +45,12 @@ const detailTitle = computed(() => `${t('申请单详情')} - ${ticketDetail.val
 const isTicketAuditDetailShow = computed(() => {
   return ticketAuditDetail.value?.itsm_audit?.status !== 'init';
 });
+
+// 子单列表（用于聚合判断是否可修改），来自 SubTicketList 内部表格数据
+const subTickets = computed<SubTicketItem[] | undefined>(() => subTicketListRef.value?.tableData);
+
+// 是否展示「修改需求」入口：业务视角 + CVM 单据 + 主单可覆盖 + 无 done 子单
+const isModifiable = useTicketModifiable(ticketDetail, subTickets, isBusinessPage);
 
 // 获取数据的逻辑
 const getResultData = async () => {
@@ -127,6 +134,7 @@ onBeforeMount(() => {
         :is-biz="isBusinessPage"
         :error-message="errorMessage"
         :ticket-audit-detail="ticketAuditDetail"
+        :is-modifiable="isModifiable"
       />
 
       <bk-tab type="card-grid" v-model:active="active" class="header-tab" @update:active="handelUpdate">
@@ -149,6 +157,7 @@ onBeforeMount(() => {
             ref="subTicketList"
             :ticket-status="ticketDetail?.status_info?.status"
             :demands="ticketDetail?.demands"
+            :is-modifiable="isModifiable"
             @retry-ticket="getResultData"
           />
         </bk-tab-panel>

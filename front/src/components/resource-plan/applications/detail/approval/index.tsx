@@ -1,8 +1,12 @@
 import { defineComponent, VNode, type PropType } from 'vue';
 import StatusUnknown from '@/assets/image/Status-unknown.png';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import Panel from '@/components/panel';
 import cssModule from './index.module.scss';
+import routerAction from '@/router/utils/action';
+import { GLOBAL_BIZS_KEY } from '@/common/constant';
+import { MENU_BUSINESS_RESOURCE_PLAN_CVM_MODIFY } from '@/constants/menu-symbol';
 // import ExpeditingBtn from '@/views/ziyanScr/components/ticket-audit/children/expediting-btn.vue';
 
 import type { IPlanTicketAudit, TicketByIdResult } from '@/typings/resourcePlan';
@@ -16,9 +20,24 @@ export default defineComponent({
       type: Object as PropType<Partial<IPlanTicketAudit & SubTicketAudit>>,
       default: () => ({}),
     },
+    isModifiable: {
+      type: Boolean,
+      default: false,
+    },
   },
   setup(props) {
     const { t } = useI18n();
+    const route = useRoute();
+
+    const handleModify = () => {
+      routerAction.redirect({
+        name: MENU_BUSINESS_RESOURCE_PLAN_CVM_MODIFY,
+        query: {
+          id: route.query?.id as string,
+          [GLOBAL_BIZS_KEY]: route.query?.[GLOBAL_BIZS_KEY],
+        },
+      });
+    };
 
     const renderIcon = () => {
       switch (props.statusInfo?.status) {
@@ -74,6 +93,11 @@ export default defineComponent({
             </div>
           )}
         </span>
+        {props.isModifiable && (
+          <bk-button class={cssModule['modify-btn']} onClick={handleModify}>
+            {t('修改需求')}
+          </bk-button>
+        )}
       </Panel>
     );
   },
