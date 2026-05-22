@@ -1376,11 +1376,18 @@ func (c *Controller) listAllPlanDemandsByBkBizID(kt *kit.Kit, bkBizID int64, sta
 func (c *Controller) GetProdResConsumePoolV2(kt *kit.Kit, bkBizIDs []int64, startDay, endDay time.Time) (
 	ResPlanConsumePool, error) {
 
+	return c.getProdResConsumePoolV2(kt, bkBizIDs, startDay, endDay, nil)
+}
+
+func (c *Controller) getProdResConsumePoolV2(kt *kit.Kit, bkBizIDs []int64, startDay, endDay time.Time,
+	excludeSuborderIDs []string) (ResPlanConsumePool, error) {
+
 	// list apply order from db by bk biz id.
-	subOrders, err := c.listApplyOrder(kt, bkBizIDs, startDay, endDay)
+	subOrders, err := c.listApplyOrder(kt, bkBizIDs, startDay, endDay, excludeSuborderIDs)
 	if err != nil {
-		logs.Errorf("failed to list apply order details, err: %v, bkBizIDs: %v, startDay: %s, endDay: %s, rid: %s",
-			err, bkBizIDs, startDay.Format(constant.TimeStdFormat), endDay.Format(constant.TimeStdFormat), kt.Rid)
+		logs.Errorf("failed to list apply order details, err: %v, bkBizIDs: %v, startDay: %s, endDay: %s, "+
+			"excludeSuborderIDs: %v, rid: %s", err, bkBizIDs, startDay.Format(constant.TimeStdFormat),
+			endDay.Format(constant.TimeStdFormat), excludeSuborderIDs, kt.Rid)
 		return nil, err
 	}
 
@@ -1426,20 +1433,23 @@ func (c *Controller) GetProdResConsumePoolV2(kt *kit.Kit, bkBizIDs []int64, star
 }
 
 // listApplyOrder list apply order from db by bk biz ids.
-func (c *Controller) listApplyOrder(kt *kit.Kit, bkBizIDs []int64, startDay, endDay time.Time) (
-	[]*tasktypes.ApplyOrder, error) {
+func (c *Controller) listApplyOrder(kt *kit.Kit, bkBizIDs []int64, startDay, endDay time.Time,
+	excludeSuborderIDs []string) ([]*tasktypes.ApplyOrder, error) {
 
 	result := make([]*tasktypes.ApplyOrder, 0)
 	batches := slice.Split(bkBizIDs, int(core.DefaultMaxPageLimit))
 	for _, batch := range batches {
-		filterExpr := tools.ExpressionAnd(
+		filterRules := []*filter.AtomRule{
 			tools.RuleIn("bk_biz_id", batch),
 			tools.RuleGreaterThanEqual("created_at", startDay.Format(constant.TimeStdFormat)),
 			tools.RuleLessThanEqual("created_at", endDay.Format(constant.TimeStdFormat)),
-		)
+		}
+		for _, excludeBatch := range slice.Split(excludeSuborderIDs, int(core.DefaultMaxPageLimit)) {
+			filterRules = append(filterRules, tools.RuleNotIn("suborder_id", excludeBatch))
+		}
 
 		listReq := &cvmapplyproto.ZiyanCvmApplySuborderListReq{
-			Filter: filterExpr,
+			Filter: tools.ExpressionAnd(filterRules...),
 			Page:   core.NewDefaultBasePage(),
 		}
 
@@ -1816,10 +1826,16 @@ func (c *Controller) batchCalcSuborderProductedCore(kt *kit.Kit, subOrders []*ta
 func (c *Controller) VerifyProdDemandsV2(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType,
 	needs []VerifyResPlanElemV2) ([]VerifyResPlanResElem, error) {
 
-	prodRemain, prodMaxAvailable, err := c.GetProdResRemainPoolMatch(kt, bkBizID, requireType)
+	return c.verifyProdDemandsV2(kt, bkBizID, requireType, needs, nil)
+}
+
+func (c *Controller) verifyProdDemandsV2(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType,
+	needs []VerifyResPlanElemV2, excludeSuborderIDs []string) ([]VerifyResPlanResElem, error) {
+
+	prodRemain, prodMaxAvailable, err := c.getProdResRemainPoolMatch(kt, bkBizID, requireType, excludeSuborderIDs)
 	if err != nil {
-		logs.Errorf("failed to get product resource remain pool match, bkBizID: %d, err: %v, rid: %s",
-			bkBizID, err, kt.Rid)
+		logs.Errorf("failed to get product resource remain pool match, bkBizID: %d, excludeSuborderIDs: %v, "+
+			"err: %v, rid: %s", bkBizID, excludeSuborderIDs, err, kt.Rid)
 		return nil, err
 	}
 
@@ -1844,8 +1860,9 @@ func (c *Controller) VerifyProdDemandsV2(kt *kit.Kit, bkBizID int64, requireType
 			}
 		}
 	}
-	logs.Infof("verify prod demands v2 end, bkBizID: %d, needs: %+v, prodRemain: %+v, prodMaxAvailable: %+v, "+
-		"result: %+v, rid: %s", bkBizID, needs, prodRemain, prodMaxAvailable, result, kt.Rid)
+	logs.Infof("verify prod demands v2 end, bkBizID: %d, excludeSuborderIDs: %v, needs: %+v, prodRemain: %+v, "+
+		"prodMaxAvailable: %+v, result: %+v, rid: %s", bkBizID, excludeSuborderIDs, needs, prodRemain,
+		prodMaxAvailable, result, kt.Rid)
 
 	return result, nil
 }
@@ -1858,7 +1875,13 @@ func (c *Controller) VerifyProdDemandsV2(kt *kit.Kit, bkBizID int64, requireType
 func (c *Controller) GetProdResRemainPoolMatch(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType) (
 	ResPlanPoolMatch, ResPlanPoolMatch, error) {
 
-	prodPlanPool, prodConsumePool, err := c.getCurrMonthPlanConsumePool(kt, bkBizID, requireType)
+	return c.getProdResRemainPoolMatch(kt, bkBizID, requireType, nil)
+}
+
+func (c *Controller) getProdResRemainPoolMatch(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType,
+	excludeSuborderIDs []string) (ResPlanPoolMatch, ResPlanPoolMatch, error) {
+
+	prodPlanPool, prodConsumePool, err := c.getCurrMonthPlanConsumePool(kt, bkBizID, requireType, excludeSuborderIDs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1916,8 +1939,8 @@ func deepCopyPlanPool(src ResPlanPoolMatch) ResPlanPoolMatch {
 	return dst
 }
 
-func (c *Controller) getCurrMonthPlanConsumePool(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType) (
-	ResPlanPoolMatch, ResPlanConsumePool, error) {
+func (c *Controller) getCurrMonthPlanConsumePool(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType,
+	excludeSuborderIDs []string) (ResPlanPoolMatch, ResPlanConsumePool, error) {
 
 	nowDemandYear, nowDemandMonth, err := c.demandTime.GetDemandYearMonth(kt, time.Now())
 	if err != nil {
@@ -1935,9 +1958,10 @@ func (c *Controller) getCurrMonthPlanConsumePool(kt *kit.Kit, bkBizID int64, req
 	}
 
 	// get biz resource consume pool.
-	prodConsumePool, err := c.GetProdResConsumePoolV2(kt, []int64{bkBizID}, startDay, endDay)
+	prodConsumePool, err := c.getProdResConsumePoolV2(kt, []int64{bkBizID}, startDay, endDay, excludeSuborderIDs)
 	if err != nil {
-		logs.Errorf("failed to get biz resource consume pool v2, bkBizID: %d, err: %v, rid: %s", bkBizID, err, kt.Rid)
+		logs.Errorf("failed to get biz resource consume pool v2, bkBizID: %d, excludeSuborderIDs: %v, "+
+			"err: %v, rid: %s", bkBizID, excludeSuborderIDs, err, kt.Rid)
 		return nil, nil, err
 	}
 

@@ -757,6 +757,7 @@ func (req *ApplyReq) validateAsRollingServer() error {
 
 // Suborder resource apply suborder info
 type Suborder struct {
+	SuborderID        string                   `json:"suborder_id" bson:"suborder_id"`
 	ResourceType      ResourceType             `json:"resource_type" bson:"resource_type"`
 	Replicas          uint                     `json:"replicas" bson:"replicas"`
 	AntiAffinityLevel string                   `json:"anti_affinity_level" bson:"anti_affinity_level"`
@@ -773,6 +774,10 @@ type Suborder struct {
 // errKey: invalid key
 // err: detail reason why errKey is invalid
 func (s *Suborder) Validate() error {
+	if s == nil {
+		return fmt.Errorf("suborder cannot be empty")
+	}
+
 	if util.InArray(s.ResourceType, AllResourceType) != true {
 		return fmt.Errorf("unkown resource_type")
 	}
@@ -790,8 +795,15 @@ func (s *Suborder) Validate() error {
 		return fmt.Errorf("remark exceed size limit %d", remarkLimit)
 	}
 
-	if err := s.Spec.Validate(s.ResourceType); err != nil {
-		return err
+	// 除了升降配之外，其他资源类型必须传入规格
+	if s.ResourceType != ResourceTypeUpgradeCvm && s.Spec == nil {
+		return fmt.Errorf("spec cannot be empty")
+	}
+
+	if s.Spec != nil {
+		if err := s.Spec.Validate(s.ResourceType); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -841,6 +853,10 @@ type ResourceSpec struct {
 
 // Validate whether ResourceSpec is valid
 func (s *ResourceSpec) Validate(resType ResourceType) error {
+	if s == nil {
+		return fmt.Errorf("spec cannot be empty")
+	}
+
 	// 地域、可用区、VPC、子网校验
 	if err := s.validateRegionZoneAndNetwork(); err != nil {
 		return err
@@ -1582,6 +1598,10 @@ type ModifyApplyReq struct {
 func (param *ModifyApplyReq) Validate() error {
 	if len(param.SuborderID) == 0 {
 		return fmt.Errorf("suborder_id should be set")
+	}
+
+	if param.Spec == nil {
+		return fmt.Errorf("spec cannot be empty")
 	}
 
 	if err := param.Spec.Validate(ResourceTypeCvm); err != nil {
