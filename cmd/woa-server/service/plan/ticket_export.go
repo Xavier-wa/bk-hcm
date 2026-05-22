@@ -41,7 +41,6 @@ import (
 	"hcm/pkg/tools/excel"
 	"hcm/pkg/tools/slice"
 
-	"github.com/shopspring/decimal"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -73,7 +72,7 @@ func (s *service) ExportResPlanTicket(cts *rest.Contexts) (interface{}, error) {
 		return nil, err
 	}
 
-	tmpPath, err := generateTicketExcel(cts.Kit, tickets)
+	tmpPath, err := s.generateTicketExcel(cts.Kit, tickets)
 	if err != nil {
 		logs.Errorf("generate ticket excel failed, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, err
@@ -133,13 +132,19 @@ func (s *service) fetchTicketsWithStatus(kt *kit.Kit, ticketIDs []string) ([]rpd
 
 // buildExportRows expands each ticket's demands into individual export rows.
 // Returns an error if any demand's Updated field is nil.
-func buildExportRows(kt *kit.Kit, tickets []rpdaotypes.RPTicketWithStatus) ([]ptypes.TicketExportRow, error) {
+func (s *service) buildExportRows(kt *kit.Kit, tickets []rpdaotypes.RPTicketWithStatus) (
+	[]ptypes.TicketExportRow, error) {
+
+	deviceTypeMap, err := s.planController.GetAllDeviceTypeMap(kt)
+	if err != nil {
+		logs.Errorf("get all device type map failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
 	rows := make([]ptypes.TicketExportRow, 0, len(tickets))
 	for _, ticket := range tickets {
 		var demands rpt.ResPlanDemands
 		if err := json.Unmarshal([]byte(ticket.Demands), &demands); err != nil {
-			logs.Errorf("unmarshal demands for ticket %s failed, err: %v, rid: %s",
-				ticket.ID, err, kt.Rid)
+			logs.Errorf("unmarshal demands for ticket %s failed, err: %v, rid: %s", ticket.ID, err, kt.Rid)
 			return nil, errf.Newf(errf.Aborted, "unmarshal demands for ticket %s failed: %v", ticket.ID, err)
 		}
 
@@ -150,7 +155,6 @@ func buildExportRows(kt *kit.Kit, tickets []rpdaotypes.RPTicketWithStatus) ([]pt
 				return nil, errf.Newf(errf.Aborted, "ticket %s demand[%d] has nil updated item", ticket.ID, idx)
 			}
 			updated := demand.Updated
-			totalCores := types.Decimal{Decimal: updated.Cvm.Os.Mul(decimal.NewFromInt(updated.Cvm.CpuCore))}
 
 			rows = append(rows, ptypes.TicketExportRow{
 				TicketID:        ticket.ID,
@@ -172,10 +176,10 @@ func buildExportRows(kt *kit.Kit, tickets []rpdaotypes.RPTicketWithStatus) ([]pt
 				DiskSize:        updated.Cbs.DiskSize,
 				ExpectTime:      updated.ExpectTime,
 				OSCount:         updated.Cvm.Os,
+				CPUCorePerOS:    deviceTypeMap[updated.Cvm.DeviceType].CpuCore,
 				DemandRemark:    updated.Remark,
 				Remark:          ticket.Remark,
-				CpuCore:         updated.Cvm.CpuCore,
-				TotalCores:      totalCores,
+				CPUCore:         updated.Cvm.CpuCore,
 			})
 		}
 	}
@@ -183,8 +187,8 @@ func buildExportRows(kt *kit.Kit, tickets []rpdaotypes.RPTicketWithStatus) ([]pt
 }
 
 // generateTicketExcel builds export rows from tickets, writes to a temp file, and returns its path.
-func generateTicketExcel(kt *kit.Kit, tickets []rpdaotypes.RPTicketWithStatus) (string, error) {
-	rows, err := buildExportRows(kt, tickets)
+func (s *service) generateTicketExcel(kt *kit.Kit, tickets []rpdaotypes.RPTicketWithStatus) (string, error) {
+	rows, err := s.buildExportRows(kt, tickets)
 	if err != nil {
 		logs.Errorf("build export rows failed, err: %v, rid: %s", err, kt.Rid)
 		return "", err

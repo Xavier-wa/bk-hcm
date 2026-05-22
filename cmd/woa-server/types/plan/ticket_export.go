@@ -55,11 +55,11 @@ type TicketExportRow struct {
 	RegionName      string        `excel:"城市"`
 	DeviceType      string        `excel:"机型"`
 	ExpectTime      string        `excel:"期望交付时间"`
-	TotalCores      types.Decimal `excel:"总核心数"`
 	CoreType        string        `excel:"核心类型"`
 	OSCount         types.Decimal `excel:"业务需求OS数"`
-	CpuCore         int64         `excel:"单OS核心数"`
-	DiskSize        int64         `excel:"单台数据盘容量（G）"`
+	CPUCorePerOS    int64         `excel:"单OS核心数"`
+	CPUCore         int64         `excel:"CPU总核数"`
+	DiskSize        int64         `excel:"数据盘总容量（G）"`
 	DiskType        string        `excel:"数据盘类型"`
 	DemandRemark    string        `excel:"预测说明"`
 	Remark          string        `excel:"备注"`
