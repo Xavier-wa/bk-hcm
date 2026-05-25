@@ -2,7 +2,7 @@
   "id": "req-resource-plan-2027-cvm-budget",
   "title": "资源预测-2027 CVM 预算提报",
   "createdAt": "2026-05-19T07:35:00.276Z",
-  "updatedAt": "2026-05-19T07:35:25.690Z",
+  "updatedAt": "2026-05-22T02:32:46.657Z",
   "iterations": [
     {
       "wfId": "feat-resplan-cvm-reqmodify",
@@ -10,11 +10,23 @@
       "branch": "feat-resplan-cvm-reqmodify",
       "title": "资源预测-2027 CVM 预算提报 - 首迭代",
       "createdAt": "2026-05-19T07:35:25.661Z"
+    },
+    {
+      "wfId": "feat-resplan-cvm-reqmodify-shortrental-patch",
+      "status": "prd",
+      "branch": "feat-resplan-cvm-reqmodify-shortrental-patch",
+      "title": "短租 patch - 修改需求回填字段修复",
+      "createdAt": "2026-05-21T13:07:44.332Z"
     }
   ],
   "aggregatedArtifacts": {},
   "codeScope": {
     "globs": [],
     "autoLearned": true
+  },
+  "codeFingerprint": {
+    "computedAt": "2026-05-22T02:32:46.657Z",
+    "files": {},
+    "rootHash": "da39a3ee5e6b4b0d3255bfef95601890afd80709"
   }
 }
