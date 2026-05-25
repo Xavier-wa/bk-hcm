@@ -298,6 +298,7 @@ watchEffect(() => {
           v-if="isRollingServer"
           v-model="formModel.bk_asset_id"
           :region="formModel.spec.region"
+          :require-type="formModel.require_type"
           @validate-success="handleInheritPackageValidateSuccess"
           @validate-failed="handleInheritPackageValidateFailed"
         />
