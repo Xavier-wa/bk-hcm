@@ -35,7 +35,7 @@ export default defineComponent({
 
     const cvmOptions = ref([
       { id: 'IMMEDIATE', name: '立即销毁' },
-      { id: 'DELAY', name: '延迟销毁(隔离7天)' },
+      { id: 'DELAY', name: '延迟销毁(隔离15天)' },
     ]);
 
     const pmOptions = ref([
@@ -60,7 +60,7 @@ export default defineComponent({
                 <bk-option key={item.id} label={item.name} value={item.id} />
               ))}
             </bk-select>
-            <div style='color: #ccc; font-size: 12px;'>CVM 非立即销毁隔离7天，隔离期间费用仍由业务承担</div>
+            <div style='color: #ccc; font-size: 12px;'>CVM 非立即销毁隔离15天，隔离期间费用仍由业务承担</div>
           </bk-form-item>
           <bk-form-item label='物理机回收类型' property='pm' required>
             <bk-select v-model={props.returnPlan.pm} class='wid300' filterable>

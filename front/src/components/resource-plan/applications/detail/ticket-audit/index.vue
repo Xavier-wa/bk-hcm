@@ -358,7 +358,7 @@ onUnmounted(() => {
 
 <template>
   <panel v-if="renderItsmAuditLogs.length || detail?.admin_audit || itsmSkip" class="panel" :title="t('审批信息')">
-    <div class="step-wrap">
+    <div class="step-wrap" v-if="renderItsmAuditLogs.length">
       <h3 class="label">{{ t('业务审批') }}：</h3>
       <ticket-audit
         class="content"

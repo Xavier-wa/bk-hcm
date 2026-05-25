@@ -16,7 +16,7 @@ function getReturnPlanName(returnPlan: string, resourceType: string) {
     if (resourceType === 'IDCPM') {
       label += '（隔离1天）';
     } else if (resourceType === 'QCLOUDCVM') {
-      label += '（隔离7天）';
+      label += '（隔离15天）';
     }
     return label;
   }

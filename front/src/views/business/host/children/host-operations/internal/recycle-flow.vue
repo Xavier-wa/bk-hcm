@@ -64,7 +64,7 @@ const getReturnPlanName = (returnPlan: string, resourceType: string) => {
     if (resourceType === 'IDCPM') {
       label += '(隔离1天)';
     } else if (resourceType === 'QCLOUDCVM') {
-      label += '(隔离7天)';
+      label += '(隔离15天)';
     }
     return label;
   }
@@ -372,9 +372,9 @@ defineExpose({
             <dd class="setting-item-content">
               <BkRadioGroup class="radio-group" v-model="settings.cvm" type="card">
                 <BkRadioButton label="IMMEDIATE">立即销毁</BkRadioButton>
-                <BkRadioButton label="DELAY">延迟销毁(隔离7天)</BkRadioButton>
+                <BkRadioButton label="DELAY">延迟销毁(隔离15天)</BkRadioButton>
               </BkRadioGroup>
-              <div class="content-tips">CVM非立即销毁隔离7天，隔离期间费用仍由业务承担</div>
+              <div class="content-tips">CVM非立即销毁隔离15天，隔离期间费用仍由业务承担</div>
             </dd>
           </div>
           <div class="setting-item">
