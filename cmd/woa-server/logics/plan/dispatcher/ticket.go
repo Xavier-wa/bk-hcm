@@ -47,6 +47,11 @@ func (d *Dispatcher) listAndWatchTickets() error {
 	if !d.sd.IsMaster() {
 		// pop all pending orders
 		d.ticketQueue.Clear()
+		// 清理处理中记录，避免主节点切换后残留
+		d.processingTickets.Range(func(key, value any) bool {
+			d.processingTickets.Delete(key)
+			return true
+		})
 		return nil
 	}
 
@@ -138,6 +143,18 @@ func (d *Dispatcher) dealTicket() error {
 
 	// check the status of the ticket
 	kt := core.NewBackendKit()
+
+	// 并发控制：如果该单据正在处理中，跳过本次执行
+	if _, loaded := d.processingTickets.LoadOrStore(tkID, struct{}{}); loaded {
+		logs.Warnf("ticket %s is already being processed, skip, rid: %s", tkID, kt.Rid)
+		return nil
+	}
+	// 处理完成后释放锁
+	defer func() {
+		d.processingTickets.Delete(tkID)
+		logs.Infof("ticket %s processing completed and releasing lock, rid: %s", tkID, kt.Rid)
+	}()
+
 	logs.Infof("ready to handle ticket %s, rid: %s", tkID, kt.Rid)
 	tkInfo, err := d.resFetcher.GetTicketInfo(kt, tkID)
 	if err != nil {
