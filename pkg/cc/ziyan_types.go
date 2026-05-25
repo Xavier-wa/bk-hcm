@@ -1119,6 +1119,8 @@ type StuckCheckCfg struct {
 	StartUpDelay time.Duration `yaml:"startUpDelay"`
 	MaxTime      time.Duration `yaml:"maxTime"`
 	MinTime      time.Duration `yaml:"minTime"`
+	CvmDelayTime time.Duration `yaml:"cvmDelayTime"` // CVM延迟销毁隔离时间
+	PmDelayTime  time.Duration `yaml:"pmDelayTime"`  // PM延迟销毁隔离时间
 }
 
 // StuckCheck order stuck check.
@@ -1144,6 +1146,12 @@ func (c *StuckCheckCfg) trySetDefault() {
 	}
 	if c.StartUpDelay <= 0 {
 		c.StartUpDelay = 2 * time.Minute
+	}
+	if c.CvmDelayTime <= 0 {
+		c.CvmDelayTime = 24 * 7 * time.Hour
+	}
+	if c.PmDelayTime <= 0 {
+		c.PmDelayTime = 24 * time.Hour
 	}
 }
 

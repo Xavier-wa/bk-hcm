@@ -1457,7 +1457,9 @@ stuckCheck:
     startUpDelay: 2m
     # 关注 [now-maxTime,now-minTime] 的单据
     minTime: 24h
-    maxTime: 336h
+    maxTime: 360h
+    cvmDelayTime: 360h
+    pmDelayTime: 24h
 
 compatibility:
   # 旧版本deployment中spec.selector.matchLabels 缺少component标签。

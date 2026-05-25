@@ -439,6 +439,8 @@ stuckCheck:
     # 关注 [now-maxTime,now-minTime] 的单据
     minTime: 24h
     maxTime: 336h
+    cvmDelayTime: 360h
+    pmDelayTime: 24h
 
 # 主机回收通知配置
 recycleNotice:
