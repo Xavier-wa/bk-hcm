@@ -57,11 +57,13 @@ const getResultData = async () => {
   try {
     isLoading.value = true;
     let promise = null;
+    // 优先从 query 获取业务 ID，支持资源运营视图跳转过来的场景，解决直接使用 getBizsId() 获取业务 ID 不可靠的问题
+    const bizId = Number(route.query?.[GLOBAL_BIZS_KEY]) || getBizsId();
     // 判断是否业务页面
     if (isBusinessPage) {
       promise = Promise.all([
-        resourcePlanStore.getBizResourcesTicketsById(getBizsId(), route.query?.id as string),
-        resourcePlanStore.getBizResourcesTicketsAuditById(getBizsId(), route.query?.id as string),
+        resourcePlanStore.getBizResourcesTicketsById(bizId, route.query?.id as string),
+        resourcePlanStore.getBizResourcesTicketsAuditById(bizId, route.query?.id as string),
       ]);
     } else {
       // 服务页面

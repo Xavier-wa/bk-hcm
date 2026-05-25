@@ -12,6 +12,7 @@ import Button from './button';
 import Add from '@/components/resource-plan/add';
 import { mapTicketDetailToPlanTicket } from './utils';
 import type { IPlanTicket, IPlanTicketDemand } from '@/typings/resourcePlan';
+import { GLOBAL_BIZS_KEY } from '@/common/constant';
 
 export default defineComponent({
   setup() {
@@ -20,6 +21,7 @@ export default defineComponent({
     const resourcePlanStore = useResourcePlanStore();
 
     const ticketId = computed(() => route.query.id as string);
+    const bizId = computed(() => Number(route.query?.[GLOBAL_BIZS_KEY]) || getBizsId());
     const isLoading = ref(true);
 
     const basicRef = ref();
@@ -28,7 +30,7 @@ export default defineComponent({
     const isShowAdd = ref(false);
     const initDemand = ref<IPlanTicketDemand>();
     const planTicket = ref<IPlanTicket>({
-      bk_biz_id: getBizsId(),
+      bk_biz_id: bizId.value,
       demand_class: 'CVM',
       remark: '',
       demands: [],
@@ -58,8 +60,8 @@ export default defineComponent({
       }
       try {
         isLoading.value = true;
-        const res = await resourcePlanStore.getBizResourcesTicketsById(getBizsId(), ticketId.value);
-        planTicket.value = mapTicketDetailToPlanTicket(res.data, getBizsId());
+        const res = await resourcePlanStore.getBizResourcesTicketsById(bizId.value, ticketId.value);
+        planTicket.value = mapTicketDetailToPlanTicket(res.data, bizId.value);
       } catch (error: any) {
         Message({ message: error.message || error, theme: 'error' });
       } finally {
