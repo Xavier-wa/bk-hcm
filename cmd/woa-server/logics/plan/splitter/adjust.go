@@ -20,6 +20,9 @@
 package splitter
 
 import (
+	"time"
+
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	rpt "hcm/pkg/dal/table/resource-plan/res-plan-ticket"
 	"hcm/pkg/kit"
@@ -33,8 +36,8 @@ func (s *SubTicketSplitter) SplitAdjustTicket(kt *kit.Kit, ticketID string, virt
 	demands rpt.ResPlanDemands, planProductName, opProductName string) error {
 
 	// 1. 无需考虑转移的预测，单独创建子单
-	// 包含延期类调整、关键属性未产生变化（技术分类、项目类型、总核数）的调整
-	remainDemands := s.getDemandsWithoutTransfer(demands)
+	// 包含非跨年延期类调整、关键属性未产生变化（技术分类、项目类型、总核数）的调整
+	remainDemands := s.getDemandsWithoutTransfer(kt, demands)
 
 	// 2. 将剩余需求拆分为调减和调增两部分
 	addDemands, delDemands := s.splitAdjustDemandsToAddAndDelete(remainDemands)
@@ -85,8 +88,10 @@ func (s *SubTicketSplitter) SplitAdjustTicket(kt *kit.Kit, ticketID string, virt
 }
 
 // getDemandsWithoutTransfer 从预测需求中拆分出无需考虑转移的需求，以 delay 类型存入 adjSplitGroupDemands 备用
-// 并将剩余的需要考虑转移的需求返回继续常规拆分
-func (s *SubTicketSplitter) getDemandsWithoutTransfer(allDemands rpt.ResPlanDemands) rpt.ResPlanDemands {
+// 并将剩余的需要考虑转移的需求返回继续常规拆分。
+// 注意：跨年延期需求（原始和更新后的期望交付时间属于不同需求年）不放入延期组，
+// 而是返回继续走调减/调增拆分逻辑，以确保额度计算正确。
+func (s *SubTicketSplitter) getDemandsWithoutTransfer(kt *kit.Kit, allDemands rpt.ResPlanDemands) rpt.ResPlanDemands {
 
 	remainDemands := make([]rpt.ResPlanDemand, 0, len(allDemands))
 	for _, demand := range allDemands {
@@ -98,6 +103,34 @@ func (s *SubTicketSplitter) getDemandsWithoutTransfer(allDemands rpt.ResPlanDema
 
 		// 调整类型需求中的延期需求
 		if demand.Updated.ExpectTime != demand.Original.ExpectTime {
+			// 判断是否为跨年延期：使用 GetDemandYearMonth 获取需求年进行对比
+			originalTime, err1 := time.Parse(constant.DateLayout, demand.Original.ExpectTime)
+			updatedTime, err2 := time.Parse(constant.DateLayout, demand.Updated.ExpectTime)
+			if err1 != nil || err2 != nil {
+				logs.Warnf("failed to parse demand time, demand_id: %s, original: %s, updated: %s, "+
+					"err1: %v, err2: %v, rid: %s", demand.Original.DemandID,
+					demand.Original.ExpectTime, demand.Updated.ExpectTime, err1, err2, kt.Rid)
+				remainDemands = append(remainDemands, demand)
+				continue
+			}
+
+			originalYear, _, err1 := s.demandTime.GetDemandYearMonth(kt, originalTime)
+			updatedYear, _, err2 := s.demandTime.GetDemandYearMonth(kt, updatedTime)
+			if err1 != nil || err2 != nil {
+				logs.Warnf("failed to get demand year month, demand_id: %s, original: %s, updated: %s, "+
+					"err1: %v, err2: %v, rid: %s", demand.Original.DemandID,
+					demand.Original.ExpectTime, demand.Updated.ExpectTime, err1, err2, kt.Rid)
+				remainDemands = append(remainDemands, demand)
+				continue
+			}
+
+			// 跨年延期，不放入延期组，走普通调整逻辑
+			if originalYear != updatedYear {
+				remainDemands = append(remainDemands, demand)
+				continue
+			}
+
+			// 非跨年延期，放入延期组
 			delayDemand := demand.Clone()
 			s.adjSplitGroupDemands[enumor.RPTicketTypeDelay] = append(s.adjSplitGroupDemands[enumor.RPTicketTypeDelay],
 				delayDemand)
