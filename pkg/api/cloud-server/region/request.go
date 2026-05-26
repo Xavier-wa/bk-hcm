@@ -20,7 +20,11 @@
 package region
 
 import (
+	"errors"
+	"fmt"
+
 	"hcm/pkg/api/core"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/validator"
 	"hcm/pkg/runtime/filter"
 )
@@ -33,5 +37,24 @@ type RegionListReq struct {
 
 // Validate ...
 func (req *RegionListReq) Validate() error {
+	return validator.Validate.Struct(req)
+}
+
+// RegionBatchUpdateSyncEnableReq define region batch update sync_enable request.
+type RegionBatchUpdateSyncEnableReq struct {
+	IDs        []string `json:"ids" validate:"required,min=1"`
+	SyncEnable bool     `json:"sync_enable"`
+}
+
+// Validate validate RegionBatchUpdateSyncEnableReq.
+func (req *RegionBatchUpdateSyncEnableReq) Validate() error {
+	if len(req.IDs) == 0 {
+		return errors.New("ids is required")
+	}
+
+	if len(req.IDs) > constant.BatchOperationMaxLimit {
+		return fmt.Errorf("ids count should <= 100")
+	}
+
 	return validator.Validate.Struct(req)
 }

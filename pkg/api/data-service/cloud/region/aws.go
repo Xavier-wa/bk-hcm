@@ -47,6 +47,7 @@ type AwsRegionBatchCreate struct {
 	RegionName string        `json:"region_name" validate:"required"`
 	Status     string        `json:"status"`
 	Endpoint   string        `json:"endpoint"`
+	SyncEnable *bool         `json:"sync_enable"`
 }
 
 // Validate aws region create request.
@@ -78,6 +79,7 @@ type AwsRegionBatchUpdate struct {
 	RegionName string        `json:"region_name"`
 	Status     string        `json:"status"`
 	Endpoint   string        `json:"endpoint"`
+	SyncEnable *bool         `json:"sync_enable"`
 }
 
 // Validate aws region batch update request.

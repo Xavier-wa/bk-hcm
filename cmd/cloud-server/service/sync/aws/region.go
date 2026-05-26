@@ -59,8 +59,11 @@ func SyncRegion(kt *kit.Kit, hcCli *hcservice.Client, accountID string) error {
 // ListRegion 获取某个账号的region
 func ListRegion(kt *kit.Kit, dataCli *dataservice.Client, accountID string) ([]string, error) {
 	listReq := &core.ListReq{
-		Filter: tools.EqualExpression("account_id", accountID),
-		Page:   core.NewDefaultBasePage(),
+		Filter: tools.ExpressionAnd(
+			tools.RuleEqual("account_id", accountID),
+			tools.RuleEqual("sync_enable", true),
+		),
+		Page: core.NewDefaultBasePage(),
 	}
 	result, err := dataCli.Aws.Region.ListRegion(kt.Ctx, kt.Header(), listReq)
 	if err != nil {
@@ -76,6 +79,8 @@ func ListRegion(kt *kit.Kit, dataCli *dataservice.Client, accountID string) ([]s
 	for _, one := range result.Details {
 		regions = append(regions, one.RegionID)
 	}
+
+	logs.Infof("aws account[%s] sync enabled regions: %v, rid: %s", accountID, regions, kt.Rid)
 
 	return regions, nil
 }
