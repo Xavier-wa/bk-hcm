@@ -65,7 +65,7 @@ type AwsRegionTable struct {
 	// Endpoint Aws的Endpoint
 	Endpoint string `db:"endpoint" validate:"max=64"`
 	// SyncEnable 是否启用同步
-	SyncEnable bool `db:"sync_enable"`
+	SyncEnable *bool `db:"sync_enable"`
 	// Creator 创建者
 	Creator string `db:"creator" validate:"max=64"`
 	// Reviser 更新者
