@@ -1,4 +1,13 @@
-import type { Message } from '@blueking/chat-x';
+import { MessageRole, MessageStatus, type Message } from '@blueking/chat-x';
+
+// 前端内部使用的扩展消息类型（交叉类型，因为 Message 是联合类型无法直接扩展）
+export type HitlInterruptMessage = Message & {
+  role: MessageRole.Assistant; // 实际以 assistant 角色展示
+  content: HitlInterruptValue; // 结构化内容
+  status: MessageStatus.Complete;
+  // 自定义标记，用于 slot 中识别
+  __type: 'hitl.interrupt';
+};
 
 export interface ChatSession {
   sessionCode: string;
@@ -7,6 +16,15 @@ export interface ChatSession {
   createdAt: string;
   updatedAt: string;
   messages: Message[];
+}
+
+export interface HitlInterruptValue {
+  checkpoint_id: string;
+  lineage_id: string;
+  value: {
+    question: string;
+    options: string[];
+  };
 }
 
 export enum EventType {

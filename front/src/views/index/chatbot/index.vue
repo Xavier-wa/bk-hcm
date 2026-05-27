@@ -19,6 +19,8 @@ import '@blueking/chat-x/dist/index.css';
 
 import { useChatbot, extractText, type ChatSession } from '@/hooks/chatbot/use-chatbot';
 import { useUserStore } from '@/store/user';
+import HitlInterruptCard from './children/hitl-interrupt-card.vue';
+import { type HitlInterruptValue, type HitlInterruptMessage } from '@/hooks/chatbot/types';
 
 const route = useRoute();
 const router = useRouter();
@@ -171,6 +173,37 @@ const handleAgentAction = async (tool: IToolBtn, msgs: Message[]) => {
   if (tool.id === 'rebuild') {
     await regenerate(msgs);
   }
+};
+
+// 类型守卫：检查消息是否为 HITL 中断消息
+const isHitlInterruptMessage = (message: Message): boolean => {
+  return (message as HitlInterruptMessage).__type === 'hitl.interrupt';
+};
+
+const getHitlContent = (message: Message): HitlInterruptValue | null => {
+  if (!isHitlInterruptMessage(message)) return null;
+  return (message as HitlInterruptMessage).content as HitlInterruptValue;
+};
+
+// 历史消息只读展示：仅当后续 user 文本命中 options 时，才视为有效选择；
+// 未命中则按“其它/未命中”处理（不回填具体文本，避免误判为自定义输入）
+const getHitlReadonlyState = (message: Message): { readonly: boolean; value: string } => {
+  if (!isHitlInterruptMessage(message)) return { readonly: false, value: '' };
+
+  const currentIndex = messages.value.findIndex((item) => item.id === message.id);
+  if (currentIndex < 0) return { readonly: false, value: '' };
+
+  const nextMessage = messages.value[currentIndex + 1];
+  if (!nextMessage || nextMessage.role !== MessageRole.User) return { readonly: false, value: '' };
+
+  const userAnswer = extractText(nextMessage.content).trim();
+  const hitlContent = getHitlContent(message);
+  const options = hitlContent?.value.options ?? [];
+
+  if (!userAnswer) return { readonly: true, value: '' };
+  if (options.includes(userAnswer)) return { readonly: true, value: userAnswer };
+
+  return { readonly: true, value: '' };
 };
 
 const handleUserInputConfirm = async (message: Message, content: UserMessage['content']) => {
@@ -394,7 +427,17 @@ onMounted(() => {
             :on-agent-action="handleAgentAction"
             :on-user-input-confirm="handleUserInputConfirm"
             @stop-streaming="handleStopSending"
-          />
+          >
+            <template #default="{ message }">
+              <HitlInterruptCard
+                v-if="isHitlInterruptMessage(message)"
+                :content="getHitlContent(message)"
+                :readonly="getHitlReadonlyState(message).readonly"
+                :readonly-value="getHitlReadonlyState(message).value"
+                :on-confirm="sendMessage"
+              />
+            </template>
+          </MessageContainer>
         </div>
         <div v-if="userAnchors.length >= 2" class="message-nav">
           <div class="nav-track">
@@ -610,6 +653,30 @@ onMounted(() => {
     color: var(--sidebar-text-secondary);
   }
 
+  .session-actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    opacity: 0;
+    border-radius: 4px;
+    transition: opacity 0.15s;
+
+    .icon-more::before {
+      content: '···';
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--sidebar-text-secondary);
+    }
+
+    &:hover {
+      background: var(--sidebar-actions-hover);
+    }
+  }
+
   .session-item {
     position: relative;
     display: flex;
@@ -643,30 +710,6 @@ onMounted(() => {
     color: inherit;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .session-actions {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    cursor: pointer;
-    opacity: 0;
-    border-radius: 4px;
-    transition: opacity 0.15s;
-
-    .icon-more::before {
-      content: '···';
-      font-size: 14px;
-      font-weight: bold;
-      color: var(--sidebar-text-secondary);
-    }
-
-    &:hover {
-      background: var(--sidebar-actions-hover);
-    }
   }
 
   .session-rename-input {
@@ -853,6 +896,69 @@ onMounted(() => {
     }
   }
 
+  .nav-track {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 60vh;
+    overflow: hidden auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .nav-dot {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    background: var(--message-nav-dot-color);
+    border-radius: 50%;
+    transform: translateY(-50%);
+    transition: all 0.2s;
+  }
+
+  .nav-label {
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 20px;
+    color: var(--message-nav-label-color);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+
+    &:hover {
+      color: var(--message-nav-label-hover);
+    }
+  }
+
+  .nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 28px;
+    padding-right: 34px;
+    padding-left: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: padding-left 0.25s ease, background 0.15s;
+
+    &.active .nav-dot {
+      width: 10px;
+      height: 4px;
+      background: var(--message-nav-dot-active);
+      border-radius: 2px;
+    }
+
+    &.active .nav-label {
+      color: var(--message-nav-label-active);
+    }
+  }
+
   .message-nav {
     position: absolute;
     top: 50%;
@@ -876,70 +982,6 @@ onMounted(() => {
 
       .nav-item {
         padding-left: 10px;
-      }
-    }
-
-    .nav-track {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      max-height: 60vh;
-      overflow-y: auto;
-      overflow-x: hidden;
-      scrollbar-width: none;
-
-      &::-webkit-scrollbar {
-        display: none;
-      }
-    }
-
-    .nav-item {
-      position: relative;
-      display: flex;
-      align-items: center;
-      height: 28px;
-      padding-right: 34px;
-      padding-left: 0;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: padding-left 0.25s ease, background 0.15s;
-
-      &.active .nav-dot {
-        width: 10px;
-        height: 4px;
-        background: var(--message-nav-dot-active);
-        border-radius: 2px;
-      }
-
-      &.active .nav-label {
-        color: var(--message-nav-label-active);
-      }
-    }
-
-    .nav-dot {
-      position: absolute;
-      right: 10px;
-      top: 50%;
-      width: 6px;
-      height: 6px;
-      background: var(--message-nav-dot-color);
-      border-radius: 50%;
-      transform: translateY(-50%);
-      transition: all 0.2s;
-    }
-
-    .nav-label {
-      overflow: hidden;
-      font-size: 12px;
-      line-height: 20px;
-      color: var(--message-nav-label-color);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      opacity: 0;
-      transition: opacity 0.2s ease;
-
-      &:hover {
-        color: var(--message-nav-label-hover);
       }
     }
   }

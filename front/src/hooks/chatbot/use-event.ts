@@ -1,6 +1,6 @@
 import { MessageContentType, MessageRole, MessageStatus, type Message, type ToolCall } from '@blueking/chat-x';
 
-import { EventType } from './types';
+import { EventType, type HitlInterruptValue } from './types';
 import { genId, type MessageModule } from './use-message';
 
 export function useEventHandler(msg: MessageModule) {
@@ -170,7 +170,22 @@ export function useEventHandler(msg: MessageModule) {
       case EventType.StateSnapshot:
       case EventType.ActivityDelta:
       case EventType.ActivitySnapshot:
-      case EventType.Custom:
+        break;
+      case EventType.Custom: {
+        const name = event.name as string;
+        if (name === 'hitl.interrupt') {
+          const rawValue = JSON.parse(event.value as string) as HitlInterruptValue;
+          msg.messages.value.push({
+            role: MessageRole.Assistant,
+            content: rawValue as any,
+            id: genId(),
+            messageId: genId(),
+            status: MessageStatus.Complete,
+            __type: 'hitl.interrupt',
+          } as Message);
+        }
+        break;
+      }
       case EventType.Raw:
         break;
       default:

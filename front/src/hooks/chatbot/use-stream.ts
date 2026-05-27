@@ -2,7 +2,7 @@ import { ref } from 'vue';
 import { MessageRole, MessageStatus, type Message } from '@blueking/chat-x';
 
 import * as agentApi from '@/store/chatbot/agent';
-import { EventType } from './types';
+import { EventType, type HitlInterruptValue } from './types';
 import { genId, type MessageModule } from './use-message';
 import type { EventModule } from './use-event';
 
@@ -84,6 +84,80 @@ export function useStream(msg: MessageModule, event: EventModule) {
     msg.messages.value = next;
   };
 
+  const parseHitlInterruptValue = (input: unknown): HitlInterruptValue | null => {
+    let parsed = input;
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch {
+        return null;
+      }
+    }
+
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const raw = parsed as Partial<HitlInterruptValue>;
+    const question = raw.value?.question;
+    const options = raw.value?.options;
+
+    if (typeof question !== 'string' || !Array.isArray(options)) return null;
+
+    const normalizedOptions = options.filter((item): item is string => typeof item === 'string');
+    if (normalizedOptions.length === 0) return null;
+
+    return {
+      checkpoint_id: typeof raw.checkpoint_id === 'string' ? raw.checkpoint_id : '',
+      lineage_id: typeof raw.lineage_id === 'string' ? raw.lineage_id : '',
+      value: {
+        question,
+        options: normalizedOptions,
+      },
+    };
+  };
+
+  const toHistoryMessage = (raw: Record<string, unknown>): Message => {
+    const id = (raw.id as string) || genId();
+    const role = raw.role as string;
+    const base = {
+      id,
+      messageId: (raw.id as string) || genId(),
+      status: MessageStatus.Complete,
+      ...(raw.toolCalls ? { toolCalls: raw.toolCalls } : {}),
+      ...(raw.toolCallId ? { toolCallId: raw.toolCallId, duration: raw.duration ?? 0 } : {}),
+    };
+
+    if (role === 'activity' && raw.activityType === 'CUSTOM') {
+      const content = raw.content as Record<string, unknown>;
+      if (content?.name === 'hitl.interrupt') {
+        const parsed = parseHitlInterruptValue(content.value);
+        if (parsed) {
+          return {
+            role: MessageRole.Assistant,
+            content: parsed as unknown as Message['content'],
+            __type: 'hitl.interrupt',
+            ...base,
+          } as Message;
+        }
+      }
+
+      return {
+        role: MessageRole.Assistant,
+        content: typeof content?.name === 'string' ? `活动消息：${content.name}` : '活动消息',
+        ...base,
+      } as Message;
+    }
+
+    const normalizedRole = (Object.values(MessageRole) as string[]).includes(role)
+      ? (role as MessageRole)
+      : MessageRole.Assistant;
+
+    return {
+      role: normalizedRole,
+      content: (raw.content as Message['content']) ?? '',
+      ...base,
+    } as Message;
+  };
+
   const streamChat = async (userMessages: { role: string; content: string }[]) => {
     const controller = new AbortController();
     abortController = controller;
@@ -162,15 +236,7 @@ export function useStream(msg: MessageModule, event: EventModule) {
         if (e.type === EventType.MessagesSnapshot) {
           const items = (e.messages as Record<string, unknown>[]) || [];
           for (const raw of items) {
-            msg.messages.value.push({
-              role: (raw.role as string) || MessageRole.Assistant,
-              content: (raw.content as string) ?? '',
-              id: (raw.id as string) || genId(),
-              messageId: (raw.id as string) || genId(),
-              status: MessageStatus.Complete,
-              ...(raw.toolCalls ? { toolCalls: raw.toolCalls } : {}),
-              ...(raw.toolCallId ? { toolCallId: raw.toolCallId, duration: raw.duration ?? 0 } : {}),
-            } as Message);
+            msg.messages.value.push(toHistoryMessage(raw));
           }
           // SNAPSHOT 内连续 user 消息（上次被中断 / 连续停止）每条都补占位
           fillSnapshotUserGaps('未响应或被停止');

@@ -1,0 +1,97 @@
+{
+  "id": "feat-agent-chatbot-index",
+  "currentStage": "done",
+  "createdAt": "2026-05-15T08:24:04.730Z",
+  "updatedAt": "2026-05-15T11:14:36.606Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-agent-chatbot-index/prd.md",
+        "kind": "file",
+        "addedAt": "2026-05-15T08:44:14.754Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-agent-chatbot-index/design.md",
+        "kind": "file",
+        "addedAt": "2026-05-15T09:03:04.056Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-agent-chatbot-index/api.md",
+        "kind": "file",
+        "addedAt": "2026-05-15T09:09:48.522Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-agent-chatbot-index/coding.md",
+        "kind": "file",
+        "addedAt": "2026-05-15T09:17:13.988Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-agent-chatbot-index/test.md",
+        "kind": "file",
+        "addedAt": "2026-05-15T09:39:55.517Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-05-15T09:02:05.439Z"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-05-15T09:08:53.841Z"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-05-15T09:16:29.498Z"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-05-15T09:37:15.667Z"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-05-15T11:14:30.343Z"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-05-15T08:24:04.730Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-05-15T09:02:08.330Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-05-15T09:08:56.809Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-05-15T09:16:32.916Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-05-15T09:39:17.667Z"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-05-15T11:14:36.606Z"
+    }
+  ]
+}
