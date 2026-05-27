@@ -410,11 +410,13 @@ func (s *Service) sessionCodeMiddleware(next http.Handler) http.Handler {
 //   - X-Bk-Ticket                          → logics.WithBKTicket
 func bkapiContextMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get(constant.RidKey) == "" {
-			r.Header.Set(constant.RidKey, uuid.UUID())
+		rid := r.Header.Get(constant.RidKey)
+		if rid == "" {
+			rid = uuid.UUID()
+			r.Header.Set(constant.RidKey, rid)
 		}
 
-		ctx := r.Context()
+		ctx := context.WithValue(r.Context(), constant.RidKey, rid)
 		if username := r.Header.Get(constant.UserKey); username != "" {
 			ctx = authlogic.WithBKUsername(ctx, username)
 		}
