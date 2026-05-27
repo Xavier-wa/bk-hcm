@@ -218,6 +218,8 @@ type CvmImage struct {
 	Region    string `json:"region" bson:"region"`
 	ImageId   string `json:"image_id" bson:"image_id"`
 	ImageName string `json:"image_name" bson:"image_name"`
+	Type      string `json:"type,omitempty" bson:"type"`
+	BkBizID   int64  `json:"bk_biz_id,omitempty" bson:"bk_biz_id"`
 }
 
 // GetCvmImageParam get cvm image list request param

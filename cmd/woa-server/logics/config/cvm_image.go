@@ -35,6 +35,9 @@ type CvmImageIf interface {
 	// GetCvmImage get cvm image type config list
 	GetCvmImage(kt *kit.Kit, param *types.GetCvmImageParam) (*types.GetCvmImageResult, error)
 
+	// GetBizCvmImage 业务维度镜像查询，返回公共镜像 + 该业务的私有镜像
+	GetBizCvmImage(kt *kit.Kit, bizID int64, param *types.GetCvmImageParam) (*types.GetCvmImageResult, error)
+
 	// BatchEnableImageCvm enables CVM functionality for images in batch
 	BatchEnableImageCvm(kt *kit.Kit, imageIDs []string) error
 	// BatchDisableImageCvm disables CVM functionality for images in batch
@@ -104,6 +107,88 @@ func (i *cvmImage) GetCvmImage(kt *kit.Kit, param *types.GetCvmImageParam) (*typ
 	}
 
 	return rst, nil
+}
+
+// GetBizCvmImage 业务维度镜像查询，返回公共镜像 + 该业务的私有镜像
+func (i *cvmImage) GetBizCvmImage(kt *kit.Kit, bizID int64, param *types.GetCvmImageParam) (
+	*types.GetCvmImageResult, error) {
+
+	finalFilter := buildBizCvmImageFilter(bizID, param)
+
+	req := &core.ListReq{
+		Filter: finalFilter,
+		Page:   core.NewDefaultBasePage(),
+	}
+
+	imageList := make([]*types.CvmImage, 0)
+	for {
+		images, err := i.client.DataService().TCloudZiyan.ListImage(kt, req)
+		if err != nil {
+			logs.Errorf("failed to list images from data-service, err: %v, bizID: %d, param: %+v, rid: %s",
+				err, bizID, param, kt.Rid)
+			return nil, fmt.Errorf("list images failed, err: %v", err)
+		}
+
+		for _, image := range images.Details {
+			if image == nil {
+				continue
+			}
+			imageList = append(imageList, &types.CvmImage{
+				Region:    image.Region,
+				ImageId:   image.CloudID,
+				ImageName: image.Name,
+				Type:      image.Type,
+				BkBizID:   image.BkBizID,
+			})
+		}
+
+		if len(images.Details) < int(req.Page.Limit) {
+			break
+		}
+		req.Page.Start += uint32(req.Page.Limit)
+	}
+
+	return &types.GetCvmImageResult{
+		Count: int64(len(imageList)),
+		Info:  imageList,
+	}, nil
+}
+
+// buildBizCvmImageFilter 构建业务维度镜像查询条件：公共镜像 + 当前业务的私有镜像
+func buildBizCvmImageFilter(bizID int64, param *types.GetCvmImageParam) *filter.Expression {
+	// 基础条件
+	baseRules := []filter.RuleFactory{
+		tools.RuleEqual("vendor", enumor.TCloudZiyan),
+		tools.RuleJSONEqual("extension.enable_cvm", "true"),
+	}
+
+	// 如果指定了 region，添加 region 过滤
+	if len(param.Region) > 0 {
+		baseRules = append(baseRules, tools.RuleIn("region", param.Region))
+	}
+
+	// 可见性条件：公共镜像(type=PUBLIC_IMAGE) 或 属于当前业务的私有镜像(type=PRIVATE_IMAGE AND bk_biz_id=bizID)
+	visibilityExpr := &filter.Expression{
+		Op: filter.Or,
+		Rules: []filter.RuleFactory{
+			// 公共镜像：所有业务可见
+			tools.RuleEqual("type", enumor.TCloudPublicImage),
+			// 私有镜像：只有绑定了当前业务的才可见
+			&filter.Expression{
+				Op: filter.And,
+				Rules: []filter.RuleFactory{
+					tools.RuleEqual("type", enumor.TCloudPrivateImage),
+					tools.RuleEqual("bk_biz_id", bizID),
+				},
+			},
+		},
+	}
+	baseRules = append(baseRules, visibilityExpr)
+
+	return &filter.Expression{
+		Op:    filter.And,
+		Rules: baseRules,
+	}
 }
 
 // BatchEnableImageCvm enables CVM functionality for images in batch
