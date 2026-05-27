@@ -25,6 +25,7 @@ import (
 
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 
 	"trpc.group/trpc-go/trpc-agent-go/memory"
 	"trpc.group/trpc-go/trpc-agent-go/session"
@@ -49,14 +50,15 @@ func NewLoggingMemoryService(inner memory.Service) memory.Service {
 func (s *loggingMemoryService) AddMemory(ctx context.Context, userKey memory.UserKey,
 	memoryStr string, topics []string, opts ...memory.AddOption) error {
 
-	logs.Infof("[memory:add] user=%q app=%q topics=%v content=%q",
-		userKey.UserID, userKey.AppName, topics, truncate(memoryStr, memoryContentLogLimit))
+	rid := rest.RidFromContext(ctx)
+	logs.Infof("[memory:add] user=%q app=%q topics=%v content=%q, rid: %s",
+		userKey.UserID, userKey.AppName, topics, truncate(memoryStr, memoryContentLogLimit), rid)
 
 	err := s.inner.AddMemory(ctx, userKey, memoryStr, topics, opts...)
 	if err != nil {
-		logs.Errorf("[memory:add] user=%q FAILED: %v", userKey.UserID, err)
+		logs.Errorf("[memory:add] user=%q FAILED: %v, rid: %s", userKey.UserID, err, rid)
 	} else {
-		logs.Infof("[memory:add] user=%q stored OK", userKey.UserID)
+		logs.Infof("[memory:add] user=%q stored OK, rid: %s", userKey.UserID, rid)
 	}
 	return err
 }
@@ -64,32 +66,38 @@ func (s *loggingMemoryService) AddMemory(ctx context.Context, userKey memory.Use
 func (s *loggingMemoryService) UpdateMemory(ctx context.Context, memoryKey memory.Key,
 	memoryStr string, topics []string, opts ...memory.UpdateOption) error {
 
-	logs.Infof("[memory:update] user=%q memoryID=%q topics=%v content=%q",
-		memoryKey.UserID, memoryKey.MemoryID, topics, truncate(memoryStr, memoryContentLogLimit))
+	rid := rest.RidFromContext(ctx)
+	logs.Infof("[memory:update] user=%q memoryID=%q topics=%v content=%q, rid: %s",
+		memoryKey.UserID, memoryKey.MemoryID, topics, truncate(memoryStr, memoryContentLogLimit), rid)
 
 	err := s.inner.UpdateMemory(ctx, memoryKey, memoryStr, topics, opts...)
 	if err != nil {
-		logs.Errorf("[memory:update] user=%q memoryID=%q FAILED: %v", memoryKey.UserID, memoryKey.MemoryID, err)
+		logs.Errorf("[memory:update] user=%q memoryID=%q FAILED: %v, rid: %s", memoryKey.UserID, memoryKey.MemoryID,
+			err, rid)
 	} else {
-		logs.Infof("[memory:update] user=%q memoryID=%q updated OK", memoryKey.UserID, memoryKey.MemoryID)
+		logs.Infof("[memory:update] user=%q memoryID=%q updated OK, rid: %s", memoryKey.UserID, memoryKey.MemoryID,
+			rid)
 	}
 	return err
 }
 
 func (s *loggingMemoryService) DeleteMemory(ctx context.Context, memoryKey memory.Key) error {
-	logs.Infof("[memory:delete] user=%q memoryID=%q", memoryKey.UserID, memoryKey.MemoryID)
+	rid := rest.RidFromContext(ctx)
+	logs.Infof("[memory:delete] user=%q memoryID=%q, rid: %s", memoryKey.UserID, memoryKey.MemoryID, rid)
 	err := s.inner.DeleteMemory(ctx, memoryKey)
 	if err != nil {
-		logs.Errorf("[memory:delete] user=%q memoryID=%q FAILED: %v", memoryKey.UserID, memoryKey.MemoryID, err)
+		logs.Errorf("[memory:delete] user=%q memoryID=%q FAILED: %v, rid: %s", memoryKey.UserID, memoryKey.MemoryID,
+			err, rid)
 	}
 	return err
 }
 
 func (s *loggingMemoryService) ClearMemories(ctx context.Context, userKey memory.UserKey) error {
-	logs.Infof("[memory:clear] user=%q app=%q", userKey.UserID, userKey.AppName)
+	rid := rest.RidFromContext(ctx)
+	logs.Infof("[memory:clear] user=%q app=%q, rid: %s", userKey.UserID, userKey.AppName, rid)
 	err := s.inner.ClearMemories(ctx, userKey)
 	if err != nil {
-		logs.Errorf("[memory:clear] user=%q FAILED: %v", userKey.UserID, err)
+		logs.Errorf("[memory:clear] user=%q FAILED: %v, rid: %s", userKey.UserID, err, rid)
 	}
 	return err
 }
@@ -97,19 +105,20 @@ func (s *loggingMemoryService) ClearMemories(ctx context.Context, userKey memory
 func (s *loggingMemoryService) ReadMemories(ctx context.Context, userKey memory.UserKey,
 	limit int) ([]*memory.Entry, error) {
 
-	logs.Infof("[memory:read] user=%q app=%q limit=%d", userKey.UserID, userKey.AppName, limit)
+	rid := rest.RidFromContext(ctx)
+	logs.Infof("[memory:read] user=%q app=%q limit=%d, rid: %s", userKey.UserID, userKey.AppName, limit, rid)
 
 	entries, err := s.inner.ReadMemories(ctx, userKey, limit)
 	if err != nil {
-		logs.Errorf("[memory:read] user=%q FAILED: %v", userKey.UserID, err)
+		logs.Errorf("[memory:read] user=%q FAILED: %v, rid: %s", userKey.UserID, err, rid)
 		return nil, err
 	}
 
-	logs.Infof("[memory:read] user=%q returned %d entries", userKey.UserID, len(entries))
+	logs.Infof("[memory:read] user=%q returned %d entries, rid: %s", userKey.UserID, len(entries), rid)
 	for i, e := range entries {
-		logs.Infof("[memory:read]   [%d] id=%q kind=%q topics=%v updated=%v content=%q",
+		logs.Infof("[memory:read]   [%d] id=%q kind=%q topics=%v updated=%v content=%q, rid: %s",
 			i, e.ID, e.Memory.Kind, e.Memory.Topics, e.UpdatedAt.Format(constant.TimeStdFormat),
-			truncate(e.Memory.Memory, memoryContentLogLimit))
+			truncate(e.Memory.Memory, memoryContentLogLimit), rid)
 	}
 	return entries, nil
 }
@@ -117,25 +126,27 @@ func (s *loggingMemoryService) ReadMemories(ctx context.Context, userKey memory.
 func (s *loggingMemoryService) SearchMemories(ctx context.Context, userKey memory.UserKey,
 	query string, opts ...memory.SearchOption) ([]*memory.Entry, error) {
 
-	logs.Infof("[memory:search] user=%q app=%q query=%q",
-		userKey.UserID, userKey.AppName, truncate(query, memoryContentLogLimit))
+	rid := rest.RidFromContext(ctx)
+	logs.Infof("[memory:search] user=%q app=%q query=%q, rid: %s",
+		userKey.UserID, userKey.AppName, truncate(query, memoryContentLogLimit), rid)
 
 	entries, err := s.inner.SearchMemories(ctx, userKey, query, opts...)
 	if err != nil {
-		logs.Errorf("[memory:search] user=%q query=%q FAILED: %v", userKey.UserID, truncate(query, 100), err)
+		logs.Errorf("[memory:search] user=%q query=%q FAILED: %v, rid: %s", userKey.UserID, truncate(query, 100),
+			err, rid)
 		return nil, err
 	}
 
-	logs.Infof("[memory:search] user=%q returned %d results for query=%q",
-		userKey.UserID, len(entries), truncate(query, 100))
+	logs.Infof("[memory:search] user=%q returned %d results for query=%q, rid: %s",
+		userKey.UserID, len(entries), truncate(query, 100), rid)
 	for i, e := range entries {
 		scoreInfo := ""
 		if e.Score > 0 {
 			scoreInfo = fmt.Sprintf(" score=%.4f", e.Score)
 		}
-		logs.Infof("[memory:search]   [%d]%s id=%q kind=%q topics=%v content=%q",
+		logs.Infof("[memory:search]   [%d]%s id=%q kind=%q topics=%v content=%q, rid: %s",
 			i, scoreInfo, e.ID, e.Memory.Kind, e.Memory.Topics,
-			truncate(e.Memory.Memory, memoryContentLogLimit))
+			truncate(e.Memory.Memory, memoryContentLogLimit), rid)
 	}
 	return entries, nil
 }
@@ -145,6 +156,7 @@ func (s *loggingMemoryService) Tools() []tool.Tool {
 }
 
 func (s *loggingMemoryService) EnqueueAutoMemoryJob(ctx context.Context, sess *session.Session) error {
+	rid := rest.RidFromContext(ctx)
 	userID := ""
 	appName := ""
 	eventCount := 0
@@ -153,11 +165,11 @@ func (s *loggingMemoryService) EnqueueAutoMemoryJob(ctx context.Context, sess *s
 		appName = sess.AppName
 		eventCount = len(sess.Events)
 	}
-	logs.Infof("[memory:enqueue] user=%q app=%q events=%d", userID, appName, eventCount)
+	logs.Infof("[memory:enqueue] user=%q app=%q events=%d, rid: %s", userID, appName, eventCount, rid)
 
 	err := s.inner.EnqueueAutoMemoryJob(ctx, sess)
 	if err != nil {
-		logs.Errorf("[memory:enqueue] user=%q FAILED: %v", userID, err)
+		logs.Errorf("[memory:enqueue] user=%q FAILED: %v, rid: %s", userID, err, rid)
 	}
 	return err
 }

@@ -29,6 +29,7 @@ import (
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 
 	"trpc.group/trpc-go/trpc-agent-go/agent"
 	"trpc.group/trpc-go/trpc-agent-go/event"
@@ -72,13 +73,14 @@ func NewLazyToolIndex(toolset *MCPToolSet, cfg *cc.AgentDynamicToolLoadingConfig
 // ensureBuild constructs the index on first call. Thread-safe via sync.Once.
 func (l *LazyToolIndex) ensureBuild(ctx context.Context) {
 	l.once.Do(func() {
+		rid := rest.RidFromContext(ctx)
 		var metas []ToolMeta
 		l.mcpToolNames = make(map[string]bool)
 
 		for _, ts := range l.mcpToolSets {
 			tools, err := safeGetTools(ctx, ts)
 			if err != nil {
-				logs.Warnf("dynamic tool loading: skip toolset %q: %v", ts.Name(), err)
+				logs.Warnf("dynamic tool loading: skip toolset %q: %v, rid: %s", ts.Name(), err, rid)
 				continue
 			}
 			prefix := ts.Name()
@@ -100,16 +102,16 @@ func (l *LazyToolIndex) ensureBuild(ctx context.Context) {
 		}
 
 		if len(metas) == 0 {
-			logs.Errorf("dynamic tool loading: no tools extracted from any MCP toolset, index not built")
+			logs.Errorf("dynamic tool loading: no tools extracted from any MCP toolset, index not built, rid: %s", rid)
 			return
 		}
 
 		if err := l.index.Build(ctx, metas); err != nil {
-			logs.Errorf("dynamic tool loading: failed to build index (%d tools): %v", len(metas), err)
+			logs.Errorf("dynamic tool loading: failed to build index (%d tools): %v, rid: %s", len(metas), err, rid)
 			return
 		}
 		l.buildOK = true
-		logs.Infof("dynamic tool loading: tool index built: %d tools indexed", len(metas))
+		logs.Infof("dynamic tool loading: tool index built: %d tools indexed, rid: %s", len(metas), rid)
 	})
 }
 
@@ -139,6 +141,7 @@ type filterCacheEntry struct {
 // per-invocation tool retrieval and caching.
 func MakeDynamicToolFilter(lazy *LazyToolIndex) tool.FilterFunc {
 	return func(ctx context.Context, t tool.Tool) bool {
+		rid := rest.RidFromContext(ctx)
 		toolName := t.Declaration().Name
 
 		// (a) Get Invocation — system error degrades to pass-all.
@@ -192,10 +195,10 @@ func MakeDynamicToolFilter(lazy *LazyToolIndex) tool.FilterFunc {
 			for i, m := range matches {
 				names[i] = m.Name
 			}
-			logs.Infof("dynamic tool filter: query=%q matched %d tools: %v",
-				query, len(matches), names)
+			logs.Infof("dynamic tool filter: query=%q matched %d tools: %v, rid: %s",
+				query, len(matches), names, rid)
 		} else {
-			logs.Infof("dynamic tool filter: query=%q matched 0 tools", query)
+			logs.Infof("dynamic tool filter: query=%q matched 0 tools, rid: %s", query, rid)
 		}
 
 		if !lazy.mcpToolNames[toolName] {

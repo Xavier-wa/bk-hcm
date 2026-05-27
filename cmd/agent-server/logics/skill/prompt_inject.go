@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 
 	"trpc.group/trpc-go/trpc-agent-go/agent"
 	"trpc.group/trpc-go/trpc-agent-go/model"
@@ -35,15 +36,17 @@ import (
 // injects loaded skill bodies and selected docs into the system message before each LLM call.
 func MakeSkillInjectWithModelCallback(agentName string, repo skillpkg.Repository) model.BeforeModelCallbackStructured {
 	return func(ctx context.Context, args *model.BeforeModelArgs) (*model.BeforeModelResult, error) {
+		rid := rest.RidFromContext(ctx)
+
 		if args == nil || args.Request == nil {
-			logs.Warnf("[skill_prompt] args or Request is nil, skip skill inject")
+			logs.Warnf("[skill_prompt] args or Request is nil, skip skill inject, rid: %s", rid)
 			return nil, nil
 		}
 
 		inv, ok := agent.InvocationFromContext(ctx)
 		if !ok || inv == nil || inv.Session == nil {
-			logs.Warnf("[skill_prompt] no invocation or session in context (ok=%v inv=%v session=%v), skip",
-				ok, inv != nil, inv != nil && inv.Session != nil)
+			logs.Warnf("[skill_prompt] no invocation or session in context (ok=%v inv=%v session=%v), skip, rid: %s",
+				ok, inv != nil, inv != nil && inv.Session != nil, rid)
 			return nil, nil
 		}
 
@@ -55,11 +58,11 @@ func MakeSkillInjectWithModelCallback(agentName string, repo skillpkg.Repository
 
 		// Inject loaded skill bodies and selected docs.
 		loadedSkills := collectLoadedSkills(agentName, inv.Session.State)
-		logs.Infof("[skill_prompt] collected %d loaded skills for agent=%s", len(loadedSkills), agentName)
+		logs.Infof("[skill_prompt] collected %d loaded skills for agent=%s, rid: %s", len(loadedSkills), agentName, rid)
 		for _, skillName := range loadedSkills {
 			skill, err := repo.Get(skillName)
 			if err != nil || skill == nil {
-				logs.Warnf("[skill_prompt] failed to get skill %s: %v", skillName, err)
+				logs.Warnf("[skill_prompt] failed to get skill %s: %v, rid: %s", skillName, err, rid)
 				continue
 			}
 
@@ -70,7 +73,7 @@ func MakeSkillInjectWithModelCallback(agentName string, repo skillpkg.Repository
 				builder.WriteString(skill.Body)
 			}
 
-			appendSelectedDocs(&builder, skill, agentName, skillName, inv.Session.State)
+			appendSelectedDocs(&builder, skill, agentName, skillName, inv.Session.State, rid)
 		}
 
 		injectContent := builder.String()
@@ -79,8 +82,8 @@ func MakeSkillInjectWithModelCallback(agentName string, repo skillpkg.Repository
 		}
 
 		args.Request.Messages = mergeSkillContentIntoSystem(args.Request.Messages, injectContent)
-		logs.Infof("[skill_prompt] injected into system prompt, loaded=%d contentLen=%d", len(loadedSkills),
-			len(injectContent))
+		logs.Infof("[skill_prompt] injected into system prompt, loaded=%d contentLen=%d, rid: %s", len(loadedSkills),
+			len(injectContent), rid)
 		return nil, nil
 	}
 }
@@ -120,7 +123,7 @@ func buildAvailableSkillsContent(repo skillpkg.Repository) string {
 }
 
 func appendSelectedDocs(builder *strings.Builder, skill *skillpkg.Skill, agentName, skillName string,
-	state map[string][]byte) {
+	state map[string][]byte, rid string) {
 
 	docsKey := skillpkg.DocsKey(agentName, skillName)
 	docsVal := string(state[docsKey])
@@ -135,7 +138,8 @@ func appendSelectedDocs(builder *strings.Builder, skill *skillpkg.Skill, agentNa
 		}
 	} else {
 		if err := json.Unmarshal([]byte(docsVal), &selectedDocs); err != nil {
-			logs.Warnf("[skill_prompt] failed to unmarshal selected docs for skill %s: %v", skillName, err)
+			logs.Warnf("[skill_prompt] failed to unmarshal selected docs for skill %s: %v, rid: %s", skillName, err,
+				rid)
 			return
 		}
 	}

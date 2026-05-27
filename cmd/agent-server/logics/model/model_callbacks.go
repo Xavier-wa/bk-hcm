@@ -23,6 +23,7 @@ import (
 	"context"
 
 	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 
 	"trpc.group/trpc-go/trpc-agent-go/model"
 )
@@ -84,7 +85,8 @@ func MakeHistoricalToolResultFilter() model.BeforeModelCallbackStructured {
 		}
 		args.Request.Messages = filtered
 
-		logs.Infof("[model] historical tool results filtered: count=%d total_msgs=%d", filteredCount, len(msgs))
+		rid := rest.RidFromContext(ctx)
+		logs.Infof("[model] historical tool results filtered: count=%d total_msgs=%d, rid: %s", filteredCount, len(msgs), rid)
 		return nil, nil
 	}
 }

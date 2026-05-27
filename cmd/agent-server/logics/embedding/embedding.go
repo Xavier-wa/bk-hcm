@@ -30,6 +30,7 @@ import (
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 
 	openaiopt "github.com/openai/openai-go/option"
 	openaiembed "trpc.group/trpc-go/trpc-agent-go/knowledge/embedder/openai"
@@ -72,10 +73,12 @@ func BuildEmbeddingClient(provider *cc.AgentModelProvider, embedCfg *cc.AgentEmb
 	// to diagnose gateway 403/401 etc.
 	embedOpts = append(embedOpts, openaiembed.WithRequestOptions(
 		openaiopt.WithMiddleware(func(r *http.Request, next openaiopt.MiddlewareNext) (*http.Response, error) {
+			rid := rest.RidFromContext(r.Context())
 			resp, err := next(r)
 			if err != nil {
-				logs.Warnf("embedding API: transport error %s %s: %v (api_key_set=%v bk_user=%q model=%q dims=%d)",
-					r.Method, r.URL.String(), err, provider.APIKey, username, embedCfg.Model, embedCfg.Dimensions)
+				logs.Warnf("embedding API: transport error %s %s: %v (api_key_set=%v bk_user=%q model=%q dims=%d),"+
+					" rid: %s", r.Method, r.URL.String(), err, provider.APIKey, username, embedCfg.Model,
+					embedCfg.Dimensions, rid)
 				return resp, err
 			}
 			if resp == nil {
@@ -97,9 +100,9 @@ func BuildEmbeddingClient(provider *cc.AgentModelProvider, embedCfg *cc.AgentEmb
 						}
 					}
 				}
-				logs.Errorf("embedding API: HTTP %s %s %s (api_key_set=%v bk_user=%q model=%q dims=%d) response_body=%q",
-					resp.Status, r.Method, r.URL.String(), provider.APIKey, username, embedCfg.Model,
-					embedCfg.Dimensions, bodyStr)
+				logs.Errorf("embedding API: HTTP %s %s %s (api_key_set=%v bk_user=%q model=%q dims=%d) "+
+					"response_body=%q, rid: %s", resp.Status, r.Method, r.URL.String(), provider.APIKey, username,
+					embedCfg.Model, embedCfg.Dimensions, bodyStr, rid)
 			}
 			return resp, err
 		}),

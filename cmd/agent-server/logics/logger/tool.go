@@ -32,6 +32,7 @@ import (
 
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 
 	"trpc.group/trpc-go/trpc-agent-go/tool"
 	trpcmcp "trpc.group/trpc-go/trpc-mcp-go"
@@ -71,24 +72,26 @@ func ToolLoggerCallback() *tool.Callbacks {
 		ctx context.Context,
 		args *tool.BeforeToolArgs,
 	) (*tool.BeforeToolResult, error) {
+		rid := rest.RidFromContext(ctx)
 		if args == nil {
 			return nil, nil
 		}
-		logs.Infof("[tool] >> %s called: args=%s", args.ToolName, string(args.Arguments))
+		logs.Infof("[tool] >> %s called: args=%s, rid: %s", args.ToolName, string(args.Arguments), rid)
 		return nil, nil
 	})
 	cb.RegisterAfterTool(func(
 		ctx context.Context,
 		args *tool.AfterToolArgs,
 	) (*tool.AfterToolResult, error) {
+		rid := rest.RidFromContext(ctx)
 		if args == nil {
 			return nil, nil
 		}
 		if args.Error != nil {
-			logs.Errorf("[tool] << %s failed: args=%s err=%v", args.ToolName, string(args.Arguments), args.Error)
+			logs.Errorf("[tool] << %s failed: args=%s err=%v, rid: %s", args.ToolName, string(args.Arguments), args.Error, rid)
 		} else {
-			logs.Infof("[tool] << %s succeeded: args=%s result=%s", args.ToolName, string(args.Arguments),
-				resultStr(args.Result))
+			logs.Infof("[tool] << %s succeeded: args=%s result=%s, rid: %s", args.ToolName, string(args.Arguments),
+				resultStr(args.Result), rid)
 		}
 		return nil, nil
 	})
@@ -113,10 +116,11 @@ func NewMCPHTTPLoggingHandler(inner trpcmcp.HTTPReqHandler, toolsetName string) 
 func (h *mcpHTTPRespLoggingHandler) Handle(ctx context.Context, client *http.Client, req *http.Request) (
 	*http.Response, error) {
 
+	rid := rest.RidFromContext(ctx)
 	resp, err := h.inner.Handle(ctx, client, req)
 	if err != nil {
-		logs.Errorf("MCP HTTP toolset=%q %s %s request_headers=%s: transport error: %v",
-			h.toolsetName, req.Method, safeURLStr(req), safeRequestHeadersStr(req), err)
+		logs.Errorf("MCP HTTP toolset=%q %s %s request_headers=%s: transport error: %v, rid: %s",
+			h.toolsetName, req.Method, safeURLStr(req), safeRequestHeadersStr(req), err, rid)
 		return resp, err
 	}
 	if resp.StatusCode < http.StatusBadRequest {
@@ -126,8 +130,8 @@ func (h *mcpHTTPRespLoggingHandler) Handle(ctx context.Context, client *http.Cli
 	bodyBytes, readErr := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
 	if readErr != nil {
-		logs.Errorf("MCP HTTP toolset=%q %s %s request_headers=%s: status=%d read response body failed: %v",
-			h.toolsetName, req.Method, safeURLStr(req), safeRequestHeadersStr(req), resp.StatusCode, readErr)
+		logs.Errorf("MCP HTTP toolset=%q %s %s request_headers=%s: status=%d read response body failed: %v, rid: %s",
+			h.toolsetName, req.Method, safeURLStr(req), safeRequestHeadersStr(req), resp.StatusCode, readErr, rid)
 		resp.Body = io.NopCloser(bytes.NewReader(nil))
 		return resp, err
 	}
@@ -137,9 +141,9 @@ func (h *mcpHTTPRespLoggingHandler) Handle(ctx context.Context, client *http.Cli
 	if len(preview) > constant.DefaultLLMRequestBodyLogLimit {
 		preview = preview[:constant.DefaultLLMRequestBodyLogLimit]
 	}
-	logs.Infof("MCP HTTP toolset=%q %s %s request_headers=%s: status=%d response_body=%s",
+	logs.Infof("MCP HTTP toolset=%q %s %s request_headers=%s: status=%d response_body=%s, rid: %s",
 		h.toolsetName, req.Method, safeURLStr(req), safeRequestHeadersStr(req), resp.StatusCode,
-		strings.TrimSpace(string(preview)))
+		strings.TrimSpace(string(preview)), rid)
 	return resp, err
 }
 

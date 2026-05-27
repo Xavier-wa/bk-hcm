@@ -36,6 +36,9 @@ import (
 	"hcm/pkg/runtime/ctl"
 	"hcm/pkg/runtime/shutdown"
 	"hcm/pkg/serviced"
+
+	"go.opentelemetry.io/otel"
+	trpcmetric "trpc.group/trpc-go/trpc-agent-go/telemetry/metric"
 )
 
 // Run start the agent server
@@ -80,6 +83,18 @@ func (s *agentServer) prepare(opt *options.Option) error {
 	// init metrics
 	network := cc.AgentServer().Network
 	metrics.InitMetrics(net.JoinHostPort(network.BindIP, strconv.Itoa(int(network.Port))))
+
+	// 桥接 OTel metrics 到 Prometheus
+	if err := metrics.InitOTelMetrics(metrics.Register()); err != nil {
+		return fmt.Errorf("init otel metrics failed, err: %v", err)
+	}
+	logs.Infof("otel metrics initialized and bridged to prometheus")
+
+	// initialize trpc-agent-go built-in metrics using the global OTel provider
+	if err := trpcmetric.InitMeterProvider(otel.GetMeterProvider()); err != nil {
+		return fmt.Errorf("init trpc-agent-go metrics failed, err: %v", err)
+	}
+	logs.Infof("trpc-agent-go metrics initialized")
 
 	// new api server discovery client.
 	svcOpt := serviced.NewServiceOption(cc.AgentServerName, cc.AgentServer().Network, opt.Sys)

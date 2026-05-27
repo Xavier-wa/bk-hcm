@@ -29,6 +29,7 @@ import (
 
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 
 	openaiopt "github.com/openai/openai-go/option"
 	"github.com/tidwall/gjson"
@@ -41,11 +42,13 @@ func MakeModelLoggerCallback() model.AfterModelCallbackStructured {
 	const maxLog = 2048
 
 	return func(ctx context.Context, args *model.AfterModelArgs) (*model.AfterModelResult, error) {
+		rid := rest.RidFromContext(ctx)
+
 		if args == nil {
 			return nil, nil
 		}
 		if args.Error != nil {
-			logs.Errorf("[model] LLM call failed: err=%v", args.Error)
+			logs.Errorf("[model] LLM call failed: err=%v, rid: %s", args.Error, rid)
 			return nil, nil
 		}
 		rsp := args.Response
@@ -60,21 +63,21 @@ func MakeModelLoggerCallback() model.AfterModelCallbackStructured {
 		msg := choice.Message
 
 		if msg.ReasoningContent != "" {
-			logs.Infof("[model] LLM reasoning: %s", truncate(msg.ReasoningContent, maxLog))
+			logs.Infof("[model] LLM reasoning: %s, rid: %s", truncate(msg.ReasoningContent, maxLog), rid)
 		}
 		if msg.Content != "" {
-			logs.Infof("[model] LLM content: %s", truncate(msg.Content, maxLog))
+			logs.Infof("[model] LLM content: %s, rid: %s", truncate(msg.Content, maxLog), rid)
 		}
 		if len(msg.ToolCalls) > 0 {
 			for _, tc := range msg.ToolCalls {
-				logs.Infof("[model] LLM tool_call: %s args=%s", tc.Function.Name,
-					truncate(string(tc.Function.Arguments), maxLog))
+				logs.Infof("[model] LLM tool_call: %s args=%s, rid: %s", tc.Function.Name,
+					truncate(string(tc.Function.Arguments), maxLog), rid)
 			}
 		}
 
 		if rsp.Usage.TotalTokens > 0 {
-			logs.Infof("[model] LLM usage: prompt=%d completion=%d total=%d",
-				rsp.Usage.PromptTokens, rsp.Usage.CompletionTokens, rsp.Usage.TotalTokens)
+			logs.Infof("[model] LLM usage: prompt=%d completion=%d total=%d, rid: %s",
+				rsp.Usage.PromptTokens, rsp.Usage.CompletionTokens, rsp.Usage.TotalTokens, rid)
 		}
 		return nil, nil
 	}
@@ -82,6 +85,7 @@ func MakeModelLoggerCallback() model.AfterModelCallbackStructured {
 
 // LLMRequestLogger is an OpenAI middleware that logs request details and estimates input tokens.
 func LLMRequestLogger(r *http.Request, next openaiopt.MiddlewareNext) (*http.Response, error) {
+	rid := rest.RidFromContext(r.Context())
 	logBodyLimit := constant.DefaultLLMRequestBodyLogLimit
 	if r.Body != nil {
 		bodyBytes, err := io.ReadAll(r.Body)
@@ -89,8 +93,8 @@ func LLMRequestLogger(r *http.Request, next openaiopt.MiddlewareNext) (*http.Res
 			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 			body := string(bodyBytes)
 
-			logLLMToolsSummary(body)
-			logLLMTokenConfig(body)
+			logLLMToolsSummary(body, rid)
+			logLLMTokenConfig(body, rid)
 
 			// Estimate input tokens: roughly chars/4 for English, chars/2 for Chinese;
 			// use chars/4 as a conservative lower-bound heuristic for mixed content.
@@ -103,19 +107,19 @@ func LLMRequestLogger(r *http.Request, next openaiopt.MiddlewareNext) (*http.Res
 			if len(body) > logBodyLimit {
 				body = body[:logBodyLimit] + fmt.Sprintf("... (truncated, total %d bytes)", len(bodyBytes))
 			}
-			logs.Infof("LLM request: %s %s body=%s est_input_tokens≈%d", r.Method, r.URL.String(), body, estTokens)
+			logs.Infof("LLM request: %s %s body=%s est_input_tokens≈%d, rid: %s", r.Method, r.URL.String(), body, estTokens, rid)
 		} else {
-			logs.Warnf("LLM request: failed to read body: %v", err)
+			logs.Warnf("LLM request: failed to read body: %v, rid: %s", err, rid)
 		}
 	} else {
-		logs.Infof("LLM request: %s %s (no body)", r.Method, r.URL.String())
+		logs.Infof("LLM request: %s %s (no body), rid: %s", r.Method, r.URL.String(), rid)
 	}
 	return next(r)
 }
 
 // logLLMToolsSummary extracts tool names from the OpenAI request JSON and logs
 // a compact summary so operators can verify dynamic tool filtering at a glance.
-func logLLMToolsSummary(body string) {
+func logLLMToolsSummary(body, rid string) {
 	tools := gjson.Get(body, "tools")
 	if !tools.Exists() {
 		return
@@ -134,13 +138,13 @@ func logLLMToolsSummary(body string) {
 			mcpNames = append(mcpNames, name)
 		}
 	}
-	logs.Infof("LLM request tools: total=%d, mcp=%d %v, framework/skill=%d %v",
-		len(mcpNames)+len(otherNames), len(mcpNames), mcpNames, len(otherNames), otherNames)
+	logs.Infof("LLM request tools: total=%d, mcp=%d %v, framework/skill=%d %v, rid: %s",
+		len(mcpNames)+len(otherNames), len(mcpNames), mcpNames, len(otherNames), otherNames, rid)
 }
 
 // logLLMTokenConfig extracts token budget fields from the OpenAI request JSON
 // to help diagnose max_tokens issues with upstream API gateways.
-func logLLMTokenConfig(body string) {
+func logLLMTokenConfig(body, rid string) {
 	model := gjson.Get(body, "model").String()
 	maxTokens := gjson.Get(body, "max_tokens")
 	maxCompletionTokens := gjson.Get(body, "max_completion_tokens")
@@ -153,8 +157,8 @@ func logLLMTokenConfig(body string) {
 	}
 
 	logs.Infof("LLM request token config: model=%s, messages=%d, input_chars≈%d, stream=%v, "+
-		"max_tokens=%v (present=%v), max_completion_tokens=%v (present=%v)",
+		"max_tokens=%v (present=%v), max_completion_tokens=%v (present=%v), rid: %s",
 		model, msgCount, inputChars, stream.String(),
 		maxTokens.String(), maxTokens.Exists(),
-		maxCompletionTokens.String(), maxCompletionTokens.Exists())
+		maxCompletionTokens.String(), maxCompletionTokens.Exists(), rid)
 }

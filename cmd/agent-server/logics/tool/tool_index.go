@@ -29,6 +29,7 @@ import (
 	"unicode/utf8"
 
 	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 
 	"golang.org/x/sync/errgroup"
 	"trpc.group/trpc-go/trpc-agent-go/knowledge/embedder"
@@ -400,13 +401,14 @@ func (idx *EmbeddingIndex) Build(ctx context.Context, tools []ToolMeta) error {
 // Search embeds the query and returns tools sorted by cosine similarity.
 // Returns nil if the index is empty or the embedding call fails.
 func (idx *EmbeddingIndex) Search(ctx context.Context, query string, topN int, scoreThreshold float64) []ToolMatch {
+	rid := rest.RidFromContext(ctx)
 	if len(idx.vectors) == 0 {
 		return nil
 	}
 
 	queryVec, err := idx.emb.GetEmbedding(ctx, query)
 	if err != nil {
-		logs.Warnf("embedding tool search: GetEmbedding failed: %v", err)
+		logs.Warnf("embedding tool search: GetEmbedding failed: %v, rid: %s", err, rid)
 		return nil
 	}
 	if len(queryVec) == 0 {
@@ -420,8 +422,8 @@ func (idx *EmbeddingIndex) Search(ctx context.Context, query string, topN int, s
 		}
 		score := cosineSimilarity(queryVec, vec)
 		if score < 0 {
-			logs.Warnf("embedding tool search: vector dimension mismatch for tool %s, fall back to full tool set",
-				idx.tools[i].Name)
+			logs.Warnf("embedding tool search: vector dimension mismatch for tool %s, fall back to full tool set, rid: %s",
+				idx.tools[i].Name, rid)
 			return nil
 		}
 		matches = append(matches, ToolMatch{Name: idx.tools[i].Name, Score: score})

@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 
 	"trpc.group/trpc-go/trpc-agent-go/agent"
 	"trpc.group/trpc-go/trpc-agent-go/tool"
@@ -76,6 +77,7 @@ func (t *confirmTool) Declaration() *tool.Declaration {
 
 // Call calls the tool.
 func (t *confirmTool) Call(ctx context.Context, jsonArgs []byte) (any, error) {
+	rid := rest.RidFromContext(ctx)
 	toolName := ""
 	if d := t.inner.Declaration(); d != nil {
 		toolName = d.Name
@@ -83,12 +85,12 @@ func (t *confirmTool) Call(ctx context.Context, jsonArgs []byte) (any, error) {
 
 	lastUserInput := lastUserMessage(ctx)
 	if strings.TrimSpace(lastUserInput) == confirmKeyword {
-		logs.Infof("[tool:confirm] tool=%q user confirmed, proceeding", toolName)
+		logs.Infof("[tool:confirm] tool=%q user confirmed, proceeding, rid: %s", toolName, rid)
 		return t.inner.Call(ctx, jsonArgs)
 	}
 
-	logs.Infof("[tool:confirm] tool=%q blocked, last user input=%q (want %q)",
-		toolName, lastUserInput, confirmKeyword)
+	logs.Infof("[tool:confirm] tool=%q blocked, last user input=%q (want %q), rid: %s",
+		toolName, lastUserInput, confirmKeyword, rid)
 
 	return fmt.Sprintf(
 		"工具 [%s] 需要用户确认后才能执行。请回复「%s」以继续执行此操作。\n在要求用户确认前，先把本次提单的参数通过表格展示给用户",

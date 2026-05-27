@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 
 	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 
 	"trpc.group/trpc-go/trpc-agent-go/tool"
 )
@@ -33,6 +34,7 @@ import (
 // 1. Converting string-ified JSON objects back to actual JSON objects for path_param and body_param
 func MakeParamFixCallbacks() tool.BeforeToolCallbackStructured {
 	return func(ctx context.Context, args *tool.BeforeToolArgs) (*tool.BeforeToolResult, error) {
+		rid := rest.RidFromContext(ctx)
 		if args == nil || len(args.Arguments) == 0 {
 			return nil, nil
 		}
@@ -40,22 +42,22 @@ func MakeParamFixCallbacks() tool.BeforeToolCallbackStructured {
 		if err := json.Unmarshal(args.Arguments, &argMap); err != nil {
 			return nil, nil
 		}
-		modified := fixStringParams(argMap, args.ToolName) || fixNestedParams(argMap, args.ToolName)
+		modified := fixStringParams(argMap, args.ToolName, rid) || fixNestedParams(argMap, args.ToolName, rid)
 		if !modified {
 			return nil, nil
 		}
 		newArgs, err := json.Marshal(argMap)
 		if err != nil {
-			logs.Errorf("[tool:param_fix] %s: failed to marshal modified args: %v", args.ToolName, err)
+			logs.Errorf("[tool:param_fix] %s: failed to marshal modified args: %v, rid: %s", args.ToolName, err, rid)
 			return nil, nil
 		}
-		logs.Infof("[tool:param_fix] %s: parameters fixed successfully", args.ToolName)
+		logs.Infof("[tool:param_fix] %s: parameters fixed successfully, rid: %s", args.ToolName, rid)
 		return &tool.BeforeToolResult{ModifiedArguments: newArgs}, nil
 	}
 }
 
 // fixStringParams fixes path_param and body_param if they are string-encoded JSON objects
-func fixStringParams(argMap map[string]interface{}, toolName string) bool {
+func fixStringParams(argMap map[string]interface{}, toolName, rid string) bool {
 	modified := false
 	for _, field := range []string{"path_param", "body_param"} {
 		if val, ok := argMap[field].(string); ok {
@@ -63,9 +65,9 @@ func fixStringParams(argMap map[string]interface{}, toolName string) bool {
 			if err := json.Unmarshal([]byte(val), &parsed); err == nil {
 				argMap[field] = parsed
 				modified = true
-				logs.Infof("[tool:param_fix] %s: %s converted from string to object", toolName, field)
+				logs.Infof("[tool:param_fix] %s: %s converted from string to object, rid: %s", toolName, field, rid)
 			} else {
-				logs.Warnf("[tool:param_fix] %s: %s is string but not valid JSON: %v", toolName, field, err)
+				logs.Warnf("[tool:param_fix] %s: %s is string but not valid JSON: %v, rid: %s", toolName, field, err, rid)
 			}
 		}
 	}
@@ -73,7 +75,7 @@ func fixStringParams(argMap map[string]interface{}, toolName string) bool {
 }
 
 // fixNestedParams fixes nested string-encoded JSON values within path_param and body_param objects
-func fixNestedParams(argMap map[string]interface{}, toolName string) bool {
+func fixNestedParams(argMap map[string]interface{}, toolName, rid string) bool {
 	modified := false
 	for _, field := range []string{"path_param", "body_param"} {
 		objMap, ok := argMap[field].(map[string]interface{})
@@ -89,7 +91,7 @@ func fixNestedParams(argMap map[string]interface{}, toolName string) bool {
 			if err := json.Unmarshal([]byte(strVal), &parsed); err == nil {
 				objMap[key] = parsed
 				modified = true
-				logs.Infof("[tool:param_fix] %s: %s.%s converted from string to %T", toolName, field, key, parsed)
+				logs.Infof("[tool:param_fix] %s: %s.%s converted from string to %T, rid: %s", toolName, field, key, parsed, rid)
 			}
 		}
 	}
