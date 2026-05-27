@@ -1,16 +1,8 @@
-import Cookies from 'js-cookie';
-
-import http from '@/http';
+import http, { getCommonHeaders } from '@/http';
 
 const getBaseUrl = () => window.PROJECT_CONFIG.BK_HCM_AJAX_URL_PREFIX || '';
 
-const getCsrfToken = () => Cookies.get(`${window.PROJECT_CONFIG.BKPAAS_APP_ID}_csrftoken`) || '';
-
-const sseHeaders = (): Record<string, string> => ({
-  'Content-Type': 'application/json',
-  'X-CSRFToken': getCsrfToken(),
-  'X-REQUESTED-WITH': 'XMLHttpRequest',
-});
+const sseHeaders = (): Record<string, string> => getCommonHeaders();
 
 export const streamChat = (sessionCode: string, messages: { role: string; content: string }[], signal?: AbortSignal) =>
   fetch(`${getBaseUrl()}/api/v1/agent/agui`, {

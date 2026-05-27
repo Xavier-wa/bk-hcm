@@ -18,7 +18,7 @@ interface HttpApi {
   cancelRequest: (requestId: string) => void;
   cancelCache: (requestId: string) => void;
   cancel: (requestId: string) => Promise<any>;
-  download: (config: CombinedRequestConfig) => Promise<void>;
+  download: (config: HttpRequestConfig) => Promise<void>;
   get<T = any>(url: string, config?: object): Promise<T>;
   post<T = any>(url: string, data?: object, config?: object): Promise<T>;
   put<T = any>(url: string, data?: object, config?: object): Promise<T>;
@@ -42,7 +42,8 @@ const axiosInstance: AxiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   (config: any) => {
     if (config.globalHeaders) {
-      config.headers['X-Bkapi-Request-Id'] = uuidv4();
+      const commonHeaders = getCommonHeaders();
+      config.headers['X-Bkapi-Request-Id'] = commonHeaders['X-Bkapi-Request-Id'];
     }
     // 在发起请求前，注入CSRFToken，解决跨域
     injectCSRFTokenToHeaders();
@@ -371,11 +372,42 @@ function getCancelToken() {
 }
 
 /**
+ * 获取 CSRF Token
+ * @returns CSRF Token 值或空字符串
+ */
+export const getCsrfToken = (): string => Cookies.get(`${window.PROJECT_CONFIG.BKPAAS_APP_ID}_csrftoken`) || '';
+
+/**
+ * 获取公共请求头
+ * 包含所有请求都需要的基础头信息:
+ * - Content-Type: application/json
+ * - X-CSRFToken: CSRF 令牌 (仅当存在时添加)
+ * - X-REQUESTED-WITH: XMLHttpRequest
+ * - X-Bkapi-Request-Id: 请求唯一标识(UUID)
+ *
+ * @returns 公共请求头对象
+ */
+export const getCommonHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-REQUESTED-WITH': 'XMLHttpRequest',
+    'X-Bkapi-Request-Id': uuidv4(),
+  };
+
+  const csrfToken = getCsrfToken();
+  if (csrfToken) {
+    headers['X-CSRFToken'] = csrfToken;
+  }
+
+  return headers;
+};
+
+/**
  * 向 http header 注入 CSRFToken，CSRFToken key 值与后端一起协商制定
  */
 export function injectCSRFTokenToHeaders() {
-  const CSRFToken = Cookies.get(`${window.PROJECT_CONFIG.BKPAAS_APP_ID}_csrftoken`);
-  if (CSRFToken !== undefined) {
+  const CSRFToken = getCsrfToken();
+  if (CSRFToken) {
     axiosInstance.defaults.headers.common['X-CSRFToken'] = CSRFToken;
   } else {
     console.warn('Can not find csrftoken in document.cookie');
