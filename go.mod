@@ -18,7 +18,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armsubscriptions v1.0.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/subscription/armsubscription v1.0.0
 	github.com/TencentBlueKing/gopkg v1.1.0
-	github.com/aws/aws-sdk-go v1.44.334
+	github.com/aws/aws-sdk-go v1.55.8
 	github.com/bluele/gcache v0.0.2
 	github.com/coccyx/timeparser v0.0.0-20161029180942-5644122b3667
 	github.com/emicklei/go-restful v2.16.0+incompatible
@@ -141,7 +141,16 @@ require (
 )
 
 require (
+	github.com/aws/aws-sdk-go-v2 v1.41.7
+	github.com/aws/aws-sdk-go-v2/credentials v1.19.16
+	github.com/aws/aws-sdk-go-v2/service/sagemaker v1.246.0
+)
+
+require (
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.5.2 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.23 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.23 // indirect
+	github.com/aws/smithy-go v1.25.1 // indirect
 	github.com/mozillazg/go-httpheader v0.2.1 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.3 // indirect
