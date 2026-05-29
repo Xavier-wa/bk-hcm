@@ -17,24 +17,29 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-// Package capability ...
-package capability
+package skill
 
 import (
-	"hcm/cmd/agent-server/logics"
-	"hcm/pkg/client"
 	"hcm/pkg/criteria/enumor"
-	"hcm/pkg/cron/core"
-	"hcm/pkg/iam/auth"
-
-	"github.com/emicklei/go-restful/v3"
+	"hcm/pkg/criteria/errf"
+	"hcm/pkg/iam/meta"
+	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 )
 
-// Capability defines the service's capability
-type Capability struct {
-	WebService *restful.WebService
-	ClientSet  *client.ClientSet
-	Authorizer auth.Authorizer
-	RunTime    *logics.Runtime
-	Tasks      map[enumor.CronTask]core.Task
+// SyncSkills manually triggers a full incremental skill sync from BKAIDev.
+func (s *service) SyncSkills(cts *rest.Contexts) (interface{}, error) {
+	if err := s.authorizer.AuthorizeWithPerm(cts.Kit,
+		meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Create}}); err != nil {
+		logs.Errorf("agent auth: permission denied, user: %s, err: %v, rid: %s", cts.Kit.User, err, cts.Kit.Rid)
+		return nil, errf.New(errf.PermissionDenied, "permission denied")
+	}
+
+	if err := s.tasks[enumor.CronTaskSyncAgentSkills].Do(cts.Kit); err != nil {
+		logs.Errorf("manual skill sync failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.Aborted, err)
+	}
+
+	logs.Infof("manual skill sync triggered successfully, rid: %s", cts.Kit.Rid)
+	return nil, nil
 }

@@ -17,24 +17,37 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-// Package capability ...
-package capability
+// Package skill provides HTTP handlers for skill management operations.
+package skill
 
 import (
-	"hcm/cmd/agent-server/logics"
-	"hcm/pkg/client"
+	"net/http"
+
+	"hcm/cmd/agent-server/service/capability"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/cron/core"
 	"hcm/pkg/iam/auth"
-
-	"github.com/emicklei/go-restful/v3"
+	"hcm/pkg/rest"
 )
 
-// Capability defines the service's capability
-type Capability struct {
-	WebService *restful.WebService
-	ClientSet  *client.ClientSet
-	Authorizer auth.Authorizer
-	RunTime    *logics.Runtime
-	Tasks      map[enumor.CronTask]core.Task
+type service struct {
+	tasks      map[enumor.CronTask]core.Task
+	authorizer auth.Authorizer
+}
+
+// InitService registers skill management routes onto the WebService.
+// It is a no-op when skill sync cron task is not registered.
+func InitService(c *capability.Capability) {
+	if _, ok := c.Tasks[enumor.CronTaskSyncAgentSkills]; !ok {
+		return
+	}
+
+	s := &service{tasks: c.Tasks, authorizer: c.Authorizer}
+	h := rest.NewHandler()
+	s.initService(h)
+	h.Load(c.WebService)
+}
+
+func (s *service) initService(h *rest.Handler) {
+	h.Add("SyncSkills", http.MethodPost, s.tasks[enumor.CronTaskSyncAgentSkills].GetURL(), s.SyncSkills)
 }

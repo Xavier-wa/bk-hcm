@@ -20,9 +20,11 @@
 package cc
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -1053,12 +1055,77 @@ type AgentMCPToolSet struct {
 	RequireConfirm bool `yaml:"requireConfirm"`
 }
 
-// AgentSkillsConfig configures the AGUI agent's skill repository.
-type AgentSkillsConfig struct {
+// AgentBKAIDevSyncSkillsConfig holds all skill configuration: filesystem paths
+// for the skill repository and BKAIDev-specific sync parameters.
+type AgentBKAIDevSyncSkillsConfig struct {
 	// Root is the primary skills directory (each sub-directory with a SKILL.md is a skill).
+	// Default Root is "./skills".
 	Root string `yaml:"root"`
 	// ExtraDirs lists additional skill directories scanned at lower precedence.
 	ExtraDirs []string `yaml:"extraDirs"`
+	// ArchiveDir stores downloaded skill zip files during sync (separate from Root).
+	// Default ArchiveDir is "./{ROOT}/skill-archive".
+	ArchiveDir string `yaml:"archiveDir"`
+	// StorePath overrides the default localstore file path ({root}/store.json).
+	// Default StorePath is "./{ROOT}/store.json".
+	StorePath string `yaml:"storePath"`
+	// Enabled turns on skill sync from BKAIDev. Default: false.
+	Enabled bool `yaml:"enabled"`
+	// SpaceID is the BKAIDev space identifier (list_app_v1_skills space_id).
+	SpaceID string `yaml:"spaceID"`
+	// SyncInterval is the cron sync interval, e.g. "5m". Default: "5m".
+	SyncInterval string `yaml:"syncInterval"`
+	// TagName is a map of tag filters for filtering skills after listing.
+	// Key is the first-level tag name, value is the second-level tag name (can be empty).
+	// Example: {"status": "enabled", "hcm_agent": "agent1"}
+	// Since ListSkills API does not support array tag_name filtering yet,
+	// we filter skills locally after fetching the full list.
+	TagName map[string]string `yaml:"tagName"`
+	// MaxParallel limits concurrent skill installs. Limit range: [1, 10]. Default: 5.
+	MaxParallel int `yaml:"maxParallel"`
+}
+
+// StoreFile returns the localstore file path, defaulting to {root}/store.json.
+func (c *AgentBKAIDevSyncSkillsConfig) StoreFile() string {
+	return c.StorePath
+}
+
+// trySetDefault fills in zero-value fields with sensible defaults.
+func (c *AgentBKAIDevSyncSkillsConfig) trySetDefault() {
+	if c.MaxParallel <= 0 {
+		c.MaxParallel = 5
+	}
+	if c.SyncInterval == "" {
+		c.SyncInterval = "5m"
+	}
+
+	// c.Root为空默认为当前目录下的skills
+	if strings.TrimSpace(c.Root) == "" {
+		c.Root = "./skills"
+	}
+
+	if c.ArchiveDir == "" {
+		// ArchiveDir 为空则默认为ROOT下面/skill-archive
+		c.ArchiveDir = filepath.Join(strings.TrimSpace(c.Root), "skill-archive")
+	}
+
+	if c.StorePath == "" {
+		// StorePath为空 ROOT为空 则默认为.下面/skill-version.json
+		c.StorePath = filepath.Join(strings.TrimSpace(c.Root), "skill-version.json")
+	}
+}
+
+// Validate checks skill sync settings.
+func (c *AgentBKAIDevSyncSkillsConfig) Validate() error {
+	if c.SpaceID == "" {
+		return errors.New("spaceID is not set")
+	}
+
+	if c.MaxParallel <= 0 || c.MaxParallel > 10 {
+		return errors.New("maxParallel must be between 1 and 10")
+	}
+
+	return nil
 }
 
 // AgentBKAIDevConfig holds BK application credentials used by MCP toolsets
@@ -1108,8 +1175,6 @@ func (s *AgentDynamicToolLoadingConfig) trySetDefault() {
 type AgentToolsConfig struct {
 	// MCPToolSets lists MCP server toolsets to expose to the AGUI agent.
 	MCPToolSets []AgentMCPToolSet `yaml:"mcp"`
-	// Skills configures the filesystem-backed skill repository.
-	Skills *AgentSkillsConfig `yaml:"skills"`
 	// BKAIDev provides BK application credentials for MCP toolsets with type "bkaidev".
 	// When an MCP toolset has type: "bkaidev", the server injects X-Bkapi-Authorization
 	// on every request using these credentials combined with the per-request bk_ticket
@@ -1388,6 +1453,16 @@ type AgentServerSetting struct {
 	Storage   AgentStorage         `yaml:"storage"`
 	Tools     AgentToolsConfig     `yaml:"tools"`
 	AGUI      AgentAGUI            `yaml:"agui"`
+	// Skills holds all skill configuration: filesystem paths and BKAIDev sync parameters.
+	Skills *AgentBKAIDevSyncSkillsConfig `yaml:"skills"`
+	// BKAIDevSyncAPIGateway holds the BKAIDev API gateway credentials shared by all
+	// sync domains (skills, prompts, etc.).
+	BKAIDevSyncAPIGateway ApiGateway `yaml:"bkaidevSyncApiGateway"`
+}
+
+// SkillSyncEnabled reports whether BKAIDev skill sync is turned on.
+func (s *AgentServerSetting) SkillSyncEnabled() bool {
+	return s.Skills != nil && s.Skills.Enabled
 }
 
 // trySetFlagBindIP try set flag bind ip.
@@ -1403,6 +1478,9 @@ func (s *AgentServerSetting) trySetDefault() {
 	s.AGUI.trySetDefault()
 	s.Storage.trySetDefault()
 	s.Tools.trySetDefault()
+	if s.SkillSyncEnabled() {
+		s.Skills.trySetDefault()
+	}
 }
 
 // Validate AgentServerSetting option.
@@ -1417,6 +1495,16 @@ func (s AgentServerSetting) Validate() error {
 
 	if err := s.AGUI.Validate(); err != nil {
 		return err
+	}
+
+	if s.SkillSyncEnabled() {
+		if err := s.BKAIDevSyncAPIGateway.validate(); err != nil {
+			return err
+		}
+
+		if err := s.Skills.Validate(); err != nil {
+			return err
+		}
 	}
 
 	return nil

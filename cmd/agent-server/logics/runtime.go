@@ -41,6 +41,7 @@ import (
 	trpcmodel "trpc.group/trpc-go/trpc-agent-go/model"
 	"trpc.group/trpc-go/trpc-agent-go/runner"
 	"trpc.group/trpc-go/trpc-agent-go/session"
+	skillpkg "trpc.group/trpc-go/trpc-agent-go/skill"
 	trpctool "trpc.group/trpc-go/trpc-agent-go/tool"
 )
 
@@ -52,7 +53,22 @@ type Runtime struct {
 	aguiMemorySvc     memory.Service      // non-nil when MySQL memory backend is configured
 	aguiMCPToolSets   *tool.MCPToolSet    // non-nil when MCP toolsets are configured
 	dynamicToolFilter trpctool.FilterFunc // non-nil when dynamic tool loading is enabled
+	skillMgr          *skill.Manager
+	readiness         *Readiness
 	closeOnce         sync.Once
+}
+
+// Readiness returns agent-server readiness state (skill + prompt sync).
+func (rt *Runtime) Readiness() *Readiness {
+	return rt.readiness
+}
+
+// SkillSyncer returns the BKAIDev skill syncer, or nil when disabled.
+func (rt *Runtime) SkillSyncer() *skill.Syncer {
+	if rt.skillMgr == nil {
+		return nil
+	}
+	return rt.skillMgr.Syncer
 }
 
 // DynamicToolFilter returns the dynamic tool filter function, or nil if not enabled.
@@ -129,18 +145,30 @@ func New() (*Runtime, error) {
 			d.Strategy, d.TopN, d.ScoreThreshold, len(d.ToolTags))
 	}
 
+	// Build Readiness to record the readiness status of the Agent Server
+	readiness := NewReadiness()
+	skillMgr, err := skill.NewManager(readiness)
+	if err != nil {
+		logs.Errorf("build skill manager failed, err: %v", err)
+		return nil, fmt.Errorf("build skill manager: %w", err)
+	}
+
 	runnerOpts := buildRunnerOpts(sessionSvc, memorySvc)
-	agUIRunner, err := newAGUIRunner(defaultMdl, modelsMap, mcpToolSets, runnerOpts)
+	agUIRunner, err := newAGUIRunner(defaultMdl, modelsMap, mcpToolSets, skillMgr, runnerOpts)
 	if err != nil {
 		return nil, fmt.Errorf("build AGUI runner: %w", err)
 	}
-	return &Runtime{
+
+	runtime := &Runtime{
 		AGUIRunner:        agUIRunner,
 		aguiSessionSvc:    sessionSvc,
 		aguiMemorySvc:     memorySvc,
 		aguiMCPToolSets:   mcpToolSets,
 		dynamicToolFilter: dynFilter,
-	}, nil
+		skillMgr:          skillMgr,
+		readiness:         readiness,
+	}
+	return runtime, nil
 }
 
 // buildRunnerOpts assembles runner.Option slice from the provided services.
@@ -157,14 +185,13 @@ func buildRunnerOpts(sessionSvc session.Service, memorySvc memory.Service) []run
 }
 
 func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Model, mcpToolSets *tool.MCPToolSet,
-	runnerOpts []runner.Option) (runner.Runner, error) {
+	skillMgr *skill.Manager, runnerOpts []runner.Option) (runner.Runner, error) {
 
 	aguiCfg := cc.AgentServer().AGUI
 
-	// Build skill repository from configuration.
-	skillRepo, err := skill.BuildSkillRepo()
-	if err != nil {
-		return nil, fmt.Errorf("build skill repo: %w", err)
+	var skillRepo skillpkg.Repository
+	if skillMgr != nil {
+		skillRepo = skillMgr.Repository
 	}
 
 	// When any MCP toolset requires per-request authentication (e.g. type "bkaidev"),
@@ -214,3 +241,4 @@ func (rt *Runtime) Close() error {
 	})
 	return err
 }
+

@@ -17,24 +17,15 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-// Package capability ...
-package capability
+// Package readiness provides types for agent readiness checks.
+package readiness
 
-import (
-	"hcm/cmd/agent-server/logics"
-	"hcm/pkg/client"
-	"hcm/pkg/criteria/enumor"
-	"hcm/pkg/cron/core"
-	"hcm/pkg/iam/auth"
-
-	"github.com/emicklei/go-restful/v3"
-)
-
-// Capability defines the service's capability
-type Capability struct {
-	WebService *restful.WebService
-	ClientSet  *client.ClientSet
-	Authorizer auth.Authorizer
-	RunTime    *logics.Runtime
-	Tasks      map[enumor.CronTask]core.Task
+// AgentReadinessResp is the response body for GET /api/v1/agent/readiness.
+type AgentReadinessResp struct {
+	// Ready reports whether the agent is ready to handle user traffic.
+	Ready bool `json:"ready"`
+	// SkillReady reports whether the initial skill sync has completed.
+	SkillReady bool `json:"skill_ready"`
+	// PromptReady reports whether the initial prompt sync has completed.
+	PromptReady bool `json:"prompt_ready"`
 }

@@ -37,19 +37,26 @@ import (
 
 	"hcm/cmd/agent-server/logics"
 	authlogic "hcm/cmd/agent-server/logics/auth"
+	"hcm/cmd/agent-server/logics/skill"
 	"hcm/cmd/agent-server/service/capability"
 	"hcm/cmd/agent-server/service/memory"
 	"hcm/cmd/agent-server/service/session"
+	skillsvc "hcm/cmd/agent-server/service/skill"
+	"hcm/cmd/agent-server/types/readiness"
 	dsaiagent "hcm/pkg/api/data-service/aiagent"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
+	"hcm/pkg/cron"
+	"hcm/pkg/cron/core"
 	"hcm/pkg/handler"
 	"hcm/pkg/iam/auth"
 	"hcm/pkg/iam/meta"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/metrics"
 	"hcm/pkg/rest"
 	restcli "hcm/pkg/rest/client"
 	"hcm/pkg/runtime/shutdown"
@@ -72,6 +79,7 @@ type Service struct {
 	clientSet  *client.ClientSet
 	resolver   *session.Resolver
 	runTime    *logics.Runtime
+	tasks      map[enumor.CronTask]core.Task
 }
 
 // NewService create a service instance.
@@ -98,12 +106,37 @@ func NewService(sd serviced.ServiceDiscover) (*Service, error) {
 		return nil, fmt.Errorf("init runtime: %v", err)
 	}
 
-	return &Service{
+	svc := &Service{
 		authorizer: authorizer,
 		clientSet:  apiClientSet,
 		resolver:   session.NewResolver(apiClientSet.DataService()),
 		runTime:    rt,
-	}, nil
+	}
+	if err = svc.initCronTasks(); err != nil {
+		return nil, err
+	}
+
+	return svc, nil
+}
+
+func (s *Service) initCronTasks() error {
+	s.tasks = make(map[enumor.CronTask]core.Task)
+
+	if err := cron.Init(context.Background(), metrics.Register()); err != nil {
+		return fmt.Errorf("init cron: %w", err)
+	}
+
+	skillSyncTask, err := skill.RegisterSyncCronTask(s.runTime.SkillSyncer())
+	if err != nil {
+		return err
+	}
+	s.tasks[enumor.CronTaskSyncAgentSkills] = skillSyncTask
+
+	if err = cron.Register([]core.Task{skillSyncTask}); err != nil {
+		return fmt.Errorf("register skill sync cron: %w", err)
+	}
+
+	return nil
 }
 
 // initTLSConfig 初始化TLS配置
@@ -262,6 +295,8 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 	aguiHandler = authMW(aguiHandler)
 	// 注入 BK 用户信息到 context，供 AGUI runner 使用
 	aguiHandler = bkapiContextMiddleware(aguiHandler)
+	// block AGUI until skill/prompt initial sync completes
+	aguiHandler = readinessMiddleware(s.runTime.Readiness(), aguiHandler)
 	// cancel 和 history 路径注册在 aguiServer 内部的 ServeMux 中，
 	// 外部 mux 也必须单独挂载同一个 handler，才能将请求路由进去。
 	mux.Handle(aguiServer.Path(), aguiHandler)
@@ -283,10 +318,17 @@ func (s *Service) apiSet() *restful.Container {
 		ClientSet:  s.clientSet,
 		Authorizer: s.authorizer,
 		RunTime:    s.runTime,
+		Tasks:      s.tasks,
 	}
 
 	memory.InitService(c)
 	session.InitService(c, s.resolver)
+	skillsvc.InitService(c)
+
+	// 提供前端判断 Agent 是否就绪的接口（走 rest.Handler 统一封装 result/code/message/data）
+	readinessH := rest.NewHandler()
+	readinessH.Add("AgentReadiness", http.MethodGet, "/readiness", s.agentReadiness)
+	readinessH.Load(ws)
 
 	return restful.NewContainer().Add(c.WebService)
 }
@@ -498,4 +540,37 @@ func makeRunOptionResolver(allowedModels []string, toolFilter tool.FilterFunc) a
 
 		return opts, nil
 	}
+}
+
+// agentReadiness handles GET /api/v1/agent/readiness.
+// Unlike /healthz (which checks etcd), this reports skill/prompt initial sync status.
+// Envelope is built by rest.Handler (respEntity / respErrorWithEntity), same as other APIs.
+func (s *Service) agentReadiness(cts *rest.Contexts) (interface{}, error) {
+	rd := s.runTime.Readiness()
+	data := readiness.AgentReadinessResp{
+		SkillReady:  rd.SkillReady(),
+		PromptReady: rd.PromptReady(),
+		Ready:       rd.IsReady(),
+	}
+	if !data.Ready {
+		return data, errf.New(errf.UnHealthy, "agent not ready: skill or prompt initial sync has not completed")
+	}
+	return data, nil
+}
+
+// readinessMiddleware wraps an http.Handler and returns 503 with a clear error
+// message until readiness.IsReady() becomes true. The /healthz endpoint is
+// intentionally NOT wrapped by this middleware (it lives on a separate mux path).
+func readinessMiddleware(rd *logics.Readiness, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// agent还未就绪，则返回 UnHealthy
+		if rd != nil && !rd.IsReady() {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			rest.WriteResp(w, rest.NewBaseResp(errf.UnHealthy,
+				"agent not ready: skill initial sync has not completed yet"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

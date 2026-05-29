@@ -27,4 +27,6 @@ const (
 	CronTaskSyncDeviceCapacity CronTask = "sync_device_capacity"
 	// CronTaskRollingMonthlyTerminateNotice 滚服申领单跨月终止通知
 	CronTaskRollingMonthlyTerminateNotice CronTask = "rolling_monthly_terminate_notice"
+	// CronTaskSyncAgentSkills syncs agent-server skills from BKAIDev.
+	CronTaskSyncAgentSkills CronTask = "sync_agent_skills"
 )

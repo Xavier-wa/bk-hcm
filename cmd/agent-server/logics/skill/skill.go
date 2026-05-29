@@ -17,7 +17,8 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-// Package skill provides functionality for loading and managing skill repositories.
+// Package skill provides the skill repository Manager, BKAIDev syncer, and
+// installer for the agent-server. Entry point: NewManager.
 package skill
 
 import (
@@ -30,10 +31,9 @@ import (
 	skillpkg "trpc.group/trpc-go/trpc-agent-go/skill"
 )
 
-// BuildSkillRepo constructs a filesystem-backed skill repository from the given config.
-// Returns nil when cfg is nil or no root directories are configured.
-func BuildSkillRepo() (skillpkg.Repository, error) {
-	cfg := cc.AgentServer().Tools.Skills
+// BuildFSRepo constructs an FSRepository from the configured roots.
+// Returns nil when no roots are configured.
+func BuildFSRepo(cfg *cc.AgentBKAIDevSyncSkillsConfig) (skillpkg.RefreshableRepository, error) {
 	if cfg == nil {
 		return nil, nil
 	}
@@ -51,12 +51,20 @@ func BuildSkillRepo() (skillpkg.Repository, error) {
 		return nil, nil
 	}
 
-	repo, err := skillpkg.NewFSRepository(roots...)
-	if err != nil {
-		return nil, fmt.Errorf("create skill repository: %w", err)
+	if err := ensureDir(roots[0]); err != nil {
+		logs.Errorf("ensure root dir %s failed, err: %v", roots[0], err)
+		return nil, fmt.Errorf("ensure root dir %s: %w", roots[0], err)
 	}
 
-	logs.Infof("AGUI skill repo loaded: root=%q extraDirs=%v skills=%d",
-		cfg.Root, cfg.ExtraDirs, len(repo.Summaries()))
+	if err := ensureDir(cfg.ArchiveDir); err != nil {
+		logs.Errorf("ensure skill archive dir %s failed, err: %v", cfg.ArchiveDir, err)
+		return nil, fmt.Errorf("ensure skill archive dir %s: %w", cfg.ArchiveDir, err)
+	}
+
+	repo, err := skillpkg.NewFSRepository(roots...)
+	if err != nil {
+		return nil, fmt.Errorf("new fs repository: %w", err)
+	}
+	logs.Infof("skill fs repository loaded: roots=%v skills=%d", roots, len(repo.Summaries()))
 	return repo, nil
 }

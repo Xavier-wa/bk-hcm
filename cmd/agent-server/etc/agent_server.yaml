@@ -262,8 +262,29 @@ tools:
     #   list_cvms: ["CVM", "云服务器", "主机"]
     #   query_bill: ["账单", "费用", "计费"]
 
-  # skill 仓库配置。指向包含 SKILL.md 文件的目录，每个子目录为一个 skill。
-  skills:
-    root: "./skills"             # 主 skill 目录
-    # extraDirs:                   # 可选额外目录（优先级低于 root）
-    #   - "/opt/hcm/skills"
+# skill 仓库及同步配置。
+skills:
+  root: "./skills"             # 主 skill 目录（zip 解压目标；每个子目录为一个 skill）
+  archiveDir: "./skills-archive"  # zip 下载缓存目录（仅 BKAIDev 同步时使用）
+  # storePath: ""              # localstore 文件路径，默认 {root}/store.json
+  # extraDirs:                 # 可选额外 skill 目录（优先级低于 root）
+  #   - "/opt/hcm/skills"
+  enabled: false               # 是否启用 BKAIDev 同步（false = 仅使用本地 skills）
+  spaceID: ""                  # BKAIDev 空间 ID（启用同步时必填）
+  syncInterval: "5m"           # 增量同步间隔
+  tagName:
+    # hcm:"" 代表只有一级标签 "hcm"
+    status: "enabled"        # Filter by first-level tag "status" and second-level tag "enabled"
+    hcm_agent: "main_agent"      # Filter by first-level tag "hcm_agent" and second-level tag "main_agent"
+
+  maxParallel: 5               # 最大并发安装数，允许范围为[1-10]
+
+# BKAIDev 同步网关凭证，由 skills / prompts 等同步域共用。
+# 仅在至少一个同步域 enabled: true 时需要配置。
+bkaidevSyncApiGateway:
+  endpoints:
+    - "https://bkapi.example.com"
+  appCode: ""
+  appSecret: ""
+  tls:
+    insecureSkipVerify: false
