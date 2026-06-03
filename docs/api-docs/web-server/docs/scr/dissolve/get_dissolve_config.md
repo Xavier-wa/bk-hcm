@@ -26,7 +26,12 @@ GET /api/v1/woa/dissolve/config
   "message": "ok",
   "data": {
     "host_apply_time": "2024-09-01T12:00:00Z",
-    "approval_limit": 100
+    "approval_limit": 100,
+    "quota_coefficient": 65,
+    "quota_offsets": [
+      {"bk_biz_id": 100001, "offset": 50, "type": "increase", "memo": "特殊业务需求"},
+      {"bk_biz_id": 100002, "offset": 30, "type": "decrease", "memo": "额度回收"}
+    ]
   }
 }
 ```
@@ -41,7 +46,18 @@ GET /api/v1/woa/dissolve/config
 
 #### data
 
-| 参数名称            | 参数类型    | 描述                                          |
-|-----------------|---------|---------------------------------------------|
-| host_apply_time | string  | 统计机房裁撤主机的开始时间                               |
-| approval_limit  | string  | 主机裁撤项目申请自动审批配置，超过比例后，则申请单需要管理员人工审批，范围0-100  |
+| 参数名称            | 参数类型              | 描述                                                          |
+|-------------------|-------------------|------------------------------------------------------------------------------|
+| host_apply_time   | string            | 统计机房裁撤主机的开始时间                                                     |
+| approval_limit    | string            | 主机裁撤项目申请自动审批配置，超过比例后，则申请单需要管理员人工审批，范围0-100     |
+| quota_coefficient | float64           | 配额系数（百分比），用于计算可申请额度，范围1-100，默认值65                          |
+| quota_offsets     | []QuotaOffsetItem | 业务偏移配置数组                                                              |
+
+#### QuotaOffsetItem
+
+| 参数名称     | 参数类型   | 描述                                    |
+|----------|--------|---------------------------------------|
+| bk_biz_id | int64 | 业务ID                                  |
+| offset   | int64  | 偏移值                                   |
+| type     | string | 调整类型：increase=调增，decrease=调减          |
+| memo     | string | 调整原因                                  |

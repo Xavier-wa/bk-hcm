@@ -582,14 +582,28 @@ func (l *logics) ListBizCpuCoreSummary(kt *kit.Kit, bizIDs []int64) (map[int64]d
 		return nil, err
 	}
 
-	// 4.获取统计机房裁撤主机的开始时间
+	// 4. 获取统计机房裁撤主机的开始时间
 	hostApplyTime, err := l.dissolveConfig.GetDissolveHostApplyTime(kt)
 	if err != nil {
 		logs.Errorf("get host apply time failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
 
-	// 5. 组装业务数据
+	// 5. 获取配额系数
+	quotaCoefficient, err := l.dissolveConfig.GetQuotaCoefficient(kt)
+	if err != nil {
+		logs.Errorf("get quota coefficient failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	// 6. 获取偏移配置
+	quotaOffsets, err := l.dissolveConfig.GetQuotaOffsetsMap(kt)
+	if err != nil {
+		logs.Errorf("get quota offsets failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	// 7. 组装业务数据
 	for _, bizID := range bizIDs {
 		totalCpuCore, ok := bizTotalCpuCoreMap[bizID]
 		if !ok {
@@ -603,14 +617,43 @@ func (l *logics) ListBizCpuCoreSummary(kt *kit.Kit, bizIDs []int64) (map[int64]d
 			return nil, fmt.Errorf("biz delivered cpu core is invalid, bizID: %d", bizID)
 		}
 
+		quotaOffset := l.calcQuotaOffset(bizID, quotaOffsets)
+		availableQuota := l.calcAvailableQuota(totalCpuCore, quotaCoefficient, quotaOffset, deliveredCpuCore)
+
 		bizCpuCoreSummaryMap[bizID] = dissolve.CpuCoreSummary{
-			TotalCore:     totalCpuCore,
-			DeliveredCore: deliveredCpuCore,
-			HostApplyTime: cvt.PtrToVal(hostApplyTime),
+			TotalCore:        totalCpuCore,
+			DeliveredCore:    deliveredCpuCore,
+			HostApplyTime:    cvt.PtrToVal(hostApplyTime),
+			QuotaCoefficient: quotaCoefficient,
+			QuotaOffset:      quotaOffset,
+			AvailableQuota:   availableQuota,
 		}
 	}
 
 	return bizCpuCoreSummaryMap, nil
+}
+
+// calcQuotaOffset 计算业务偏移额度
+func (l *logics) calcQuotaOffset(bizID int64, quotaOffsets map[int64]dissolve.QuotaOffsetItem) int64 {
+	offsetItem, exists := quotaOffsets[bizID]
+	if !exists {
+		return 0
+	}
+	if offsetItem.Type == enumor.DissolveQuotaOffsetTypeIncrease {
+		return offsetItem.Offset
+	}
+	return -offsetItem.Offset
+}
+
+// calcAvailableQuota 计算可申请额度: max(0, 裁撤原始核数 × 配额系数/100 + 业务偏移额度 - 已交付核数)
+func (l *logics) calcAvailableQuota(totalCpuCore int64, quotaCoefficient float64,
+	quotaOffset, deliveredCpuCore int64) int64 {
+
+	availableQuota := int64(float64(totalCpuCore)*quotaCoefficient/100) + quotaOffset - deliveredCpuCore
+	if availableQuota < 0 {
+		return 0
+	}
+	return availableQuota
 }
 
 // listBizTotalCore list business dissolve total cpu core.

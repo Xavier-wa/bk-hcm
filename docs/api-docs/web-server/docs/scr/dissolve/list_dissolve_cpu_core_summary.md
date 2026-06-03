@@ -36,7 +36,10 @@ POST /api/v1/woa/dissolve/cpu_core/summary
   "data": {
     "total_core": 100,
     "delivered_core": 50,
-    "host_apply_time": "2024-09-01T12:00:00Z"
+    "host_apply_time": "2024-09-01T12:00:00Z",
+    "quota_coefficient": 65,
+    "quota_offset": 10,
+    "available_quota": 35
   }
 }
 ```
@@ -51,8 +54,11 @@ POST /api/v1/woa/dissolve/cpu_core/summary
 
 #### data
 
-| 参数名称            | 参数类型 | 描述                |
-|-----------------|----------|---------------|
-| total_core      | int      | 裁撤cpu总核心数     |
-| delivered_core  | int      | 裁撤cpu已交付的总核心数 |
-| host_apply_time | string  | 统计机房裁撤主机的开始时间  |
+| 参数名称           | 参数类型   | 描述                                                                |
+|-------------------|----------|------------------------------------------------------------------|
+| total_core        | int      | 裁撤cpu总核心数                                                                   |
+| delivered_core    | int      | 裁撤cpu已交付的总核心数                                                            |
+| host_apply_time   | string   | 统计机房裁撤主机的开始时间                                                          |
+| quota_coefficient | float64  | 配额系数（百分比）                                                                 |
+| quota_offset      | int64    | 业务偏移额度（正数为调增，负数为调减）                                                |
+| available_quota   | int64    | 可申请额度，计算公式：max(0, 裁撤原始核数 × 配额系数/100 + 业务偏移额度 - 已交付核数)    |

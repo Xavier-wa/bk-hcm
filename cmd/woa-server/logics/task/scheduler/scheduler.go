@@ -829,11 +829,15 @@ func checkRequireType(s *scheduler, kit *kit.Kit, order *types.ApplyTicket) (str
 			logs.Errorf("can not find biz dissolve cpu core summary, bizID: %d, rid: %s", order.BkBizId, kit.Rid)
 			return "", false, fmt.Errorf("can not find biz dissolve cpu core summary, bizID: %d", order.BkBizId)
 		}
-		if summary.TotalCore == 0 {
-			logs.Errorf("total core is zero, bizID: %d, rid: %s", order.BkBizId, kit.Rid)
-			return "", false, fmt.Errorf("total core is zero, bizID: %d", order.BkBizId)
+		// 配额额度 = 裁撤原始核数 × 配额系数 / 100 + 业务偏移额度
+		quotaTotal := float64(summary.TotalCore)*summary.QuotaCoefficient/100 + float64(summary.QuotaOffset)
+		if quotaTotal <= 0 {
+			logs.Errorf("quota total is zero or negative, bizID: %d, quotaTotal: %f, rid: %s",
+				order.BkBizId, quotaTotal, kit.Rid)
+			return "", false, fmt.Errorf("quota total is zero or negative, bizID: %d", order.BkBizId)
 		}
-		cur := float64(summary.DeliveredCore) / float64(summary.TotalCore) * 100
+		// 已交付核数占配额额度的比例
+		cur := float64(summary.DeliveredCore) / quotaTotal * 100
 		if cur >= cvt.PtrToVal(approvalLimit) {
 			return fmt.Sprintf("delivery percentage greater than limit, cur: %f, limit: %f", cur,
 				cvt.PtrToVal(approvalLimit)), true, nil
