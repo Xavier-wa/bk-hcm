@@ -20,6 +20,7 @@
 package converters
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -130,7 +131,7 @@ func (c *CvmModifyRecordConverter) ConvertToCreate(source interface{}) (interfac
 		return nil, fmt.Errorf("serialize pre_data_disk failed: %w", err)
 	}
 
-	preZonesJSON, err := convertToJsonField(record.Details.PreData.Zones)
+	preZonesJSON, err := convertStringSliceToJsonField(record.Details.PreData.Zones)
 	if err != nil {
 		return nil, fmt.Errorf("serialize pre_zones failed: %w", err)
 	}
@@ -140,7 +141,7 @@ func (c *CvmModifyRecordConverter) ConvertToCreate(source interface{}) (interfac
 		return nil, fmt.Errorf("serialize cur_data_disk failed: %w", err)
 	}
 
-	curZonesJSON, err := convertToJsonField(record.Details.CurData.Zones)
+	curZonesJSON, err := convertStringSliceToJsonField(record.Details.CurData.Zones)
 	if err != nil {
 		return nil, fmt.Errorf("serialize cur_zones failed: %w", err)
 	}
@@ -195,6 +196,17 @@ func (c *CvmModifyRecordConverter) ConvertToCreate(source interface{}) (interfac
 }
 
 // ConvertToUpdate 转换为更新请求
+func convertStringSliceToJsonField(data []string) (types.JsonField, error) {
+	if data == nil {
+		return types.JsonField("[]"), nil
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return types.JsonField("[]"), err
+	}
+	return types.JsonField(jsonData), nil
+}
+
 func (c *CvmModifyRecordConverter) ConvertToUpdate(source interface{}, target interface{}) (interface{}, error) {
 	record, err := c.normalizeSourceRecord(source)
 	if err != nil {
@@ -213,7 +225,7 @@ func (c *CvmModifyRecordConverter) ConvertToUpdate(source interface{}, target in
 		return nil, fmt.Errorf("serialize pre_data_disk failed: %w", err)
 	}
 
-	preZonesJSON, err := convertToJsonField(record.Details.PreData.Zones)
+	preZonesJSON, err := convertStringSliceToJsonField(record.Details.PreData.Zones)
 	if err != nil {
 		return nil, fmt.Errorf("serialize pre_zones failed: %w", err)
 	}
@@ -223,53 +235,57 @@ func (c *CvmModifyRecordConverter) ConvertToUpdate(source interface{}, target in
 		return nil, fmt.Errorf("serialize cur_data_disk failed: %w", err)
 	}
 
-	curZonesJSON, err := convertToJsonField(record.Details.CurData.Zones)
+	curZonesJSON, err := convertStringSliceToJsonField(record.Details.CurData.Zones)
 	if err != nil {
 		return nil, fmt.Errorf("serialize cur_zones failed: %w", err)
 	}
 
 	req := &cvmapply.ZiyanCvmModifyRecordUpdateReq{
 		ID:         existingRecord.ID,
-		SuborderID: record.SuborderID,
-		BkUsername: record.User,
+		SuborderID: converter.ValToPtr(record.SuborderID),
+		BkUsername: converter.ValToPtr(record.User),
 		// Pre data fields
-		PreTotalNum:       converter.ValToPtr(record.Details.PreData.TotalNum),
-		PreReplicas:       converter.ValToPtr(record.Details.PreData.Replicas),
-		PreRegion:         record.Details.PreData.Region,
-		PreZone:           record.Details.PreData.Zone,
-		PreDeviceType:     record.Details.PreData.DeviceType,
-		PreImageID:        record.Details.PreData.ImageId,
-		PreDiskSize:       converter.ValToPtr(int(record.Details.PreData.DiskSize)),
-		PreDiskType:       record.Details.PreData.DiskType,
-		PreNetworkType:    record.Details.PreData.NetworkType,
-		PreVpc:            record.Details.PreData.Vpc,
-		PreSubnet:         record.Details.PreData.Subnet,
-		PreSystemDiskType: record.Details.PreData.SystemDisk.DiskType,
-		PreSystemDiskSize: converter.ValToPtr(int(record.Details.PreData.SystemDisk.DiskSize)),
-		PreSystemDiskNum:  converter.ValToPtr(int(record.Details.PreData.SystemDisk.DiskNum)),
-		PreDataDisk:       preDataDiskJSON,
-		PreZones:          preZonesJSON,
-		PreResAssign:      converter.ValToPtr(record.Details.PreData.ResAssign),
+		PreTotalNum:          converter.ValToPtr(record.Details.PreData.TotalNum),
+		PreReplicas:          converter.ValToPtr(record.Details.PreData.Replicas),
+		PreRegion:            converter.ValToPtr(record.Details.PreData.Region),
+		PreZone:              converter.ValToPtr(record.Details.PreData.Zone),
+		PreDeviceType:        converter.ValToPtr(record.Details.PreData.DeviceType),
+		PreImageID:           converter.ValToPtr(record.Details.PreData.ImageId),
+		PreDiskSize:          converter.ValToPtr(int(record.Details.PreData.DiskSize)),
+		PreDiskType:          converter.ValToPtr(record.Details.PreData.DiskType),
+		PreNetworkType:       converter.ValToPtr(record.Details.PreData.NetworkType),
+		PreVpc:               converter.ValToPtr(record.Details.PreData.Vpc),
+		PreSubnet:            converter.ValToPtr(record.Details.PreData.Subnet),
+		PreSystemDiskType:    converter.ValToPtr(record.Details.PreData.SystemDisk.DiskType),
+		PreSystemDiskSize:    converter.ValToPtr(int(record.Details.PreData.SystemDisk.DiskSize)),
+		PreSystemDiskNum:     converter.ValToPtr(int(record.Details.PreData.SystemDisk.DiskNum)),
+		PreDataDisk:          converter.ValToPtr(preDataDiskJSON),
+		PreZones:             converter.ValToPtr(preZonesJSON),
+		PreResAssign:         converter.ValToPtr(record.Details.PreData.ResAssign),
+		PreBkAssetID:         converter.ValToPtr(record.Details.PreData.BkAssetID),
+		PreInheritInstanceID: converter.ValToPtr(record.Details.PreData.InheritInstanceID),
 		// Cur data fields
-		CurTotalNum:       converter.ValToPtr(record.Details.CurData.TotalNum),
-		CurReplicas:       converter.ValToPtr(record.Details.CurData.Replicas),
-		CurRegion:         record.Details.CurData.Region,
-		CurZone:           record.Details.CurData.Zone,
-		CurDeviceType:     record.Details.CurData.DeviceType,
-		CurImageID:        record.Details.CurData.ImageId,
-		CurDiskSize:       converter.ValToPtr(int(record.Details.CurData.DiskSize)),
-		CurDiskType:       record.Details.CurData.DiskType,
-		CurNetworkType:    record.Details.CurData.NetworkType,
-		CurVpc:            record.Details.CurData.Vpc,
-		CurSubnet:         record.Details.CurData.Subnet,
-		CurSystemDiskType: record.Details.CurData.SystemDisk.DiskType,
-		CurSystemDiskSize: converter.ValToPtr(int(record.Details.CurData.SystemDisk.DiskSize)),
-		CurSystemDiskNum:  converter.ValToPtr(int(record.Details.CurData.SystemDisk.DiskNum)),
-		CurDataDisk:       curDataDiskJSON,
-		CurZones:          curZonesJSON,
-		CurResAssign:      converter.ValToPtr(record.Details.CurData.ResAssign),
-		Status:            converter.ValToPtr(record.Status),
-		Approver:          record.Approver,
+		CurTotalNum:          converter.ValToPtr(record.Details.CurData.TotalNum),
+		CurReplicas:          converter.ValToPtr(record.Details.CurData.Replicas),
+		CurRegion:            converter.ValToPtr(record.Details.CurData.Region),
+		CurZone:              converter.ValToPtr(record.Details.CurData.Zone),
+		CurDeviceType:        converter.ValToPtr(record.Details.CurData.DeviceType),
+		CurImageID:           converter.ValToPtr(record.Details.CurData.ImageId),
+		CurDiskSize:          converter.ValToPtr(int(record.Details.CurData.DiskSize)),
+		CurDiskType:          converter.ValToPtr(record.Details.CurData.DiskType),
+		CurNetworkType:       converter.ValToPtr(record.Details.CurData.NetworkType),
+		CurVpc:               converter.ValToPtr(record.Details.CurData.Vpc),
+		CurSubnet:            converter.ValToPtr(record.Details.CurData.Subnet),
+		CurSystemDiskType:    converter.ValToPtr(record.Details.CurData.SystemDisk.DiskType),
+		CurSystemDiskSize:    converter.ValToPtr(int(record.Details.CurData.SystemDisk.DiskSize)),
+		CurSystemDiskNum:     converter.ValToPtr(int(record.Details.CurData.SystemDisk.DiskNum)),
+		CurDataDisk:          converter.ValToPtr(curDataDiskJSON),
+		CurZones:             converter.ValToPtr(curZonesJSON),
+		CurResAssign:         converter.ValToPtr(record.Details.CurData.ResAssign),
+		CurBkAssetID:         converter.ValToPtr(record.Details.CurData.BkAssetID),
+		CurInheritInstanceID: converter.ValToPtr(record.Details.CurData.InheritInstanceID),
+		Status:               converter.ValToPtr(record.Status),
+		Approver:             converter.ValToPtr(record.Approver),
 	}
 
 	return req, nil
@@ -359,7 +375,7 @@ func (c *CvmModifyRecordConverter) compareBasicField(record *tasktable.ModifyRec
 	case "status":
 		return record.Status != existingRecord.Status
 	case "approver":
-		return record.Approver != existingRecord.Approver
+		return record.Approver != converter.PtrToVal(existingRecord.Approver)
 	default:
 		return false
 	}
@@ -375,19 +391,19 @@ func (c *CvmModifyRecordConverter) comparePreDataField(record *tasktable.ModifyR
 	case "pre_replicas":
 		return existingRecord.PreReplicas == nil || *existingRecord.PreReplicas != record.Details.PreData.Replicas
 	case "pre_region":
-		return record.Details.PreData.Region != existingRecord.PreRegion
+		return record.Details.PreData.Region != converter.PtrToVal(existingRecord.PreRegion)
 	case "pre_zone":
-		return record.Details.PreData.Zone != existingRecord.PreZone
+		return record.Details.PreData.Zone != converter.PtrToVal(existingRecord.PreZone)
 	case "pre_device_type":
-		return record.Details.PreData.DeviceType != existingRecord.PreDeviceType
+		return record.Details.PreData.DeviceType != converter.PtrToVal(existingRecord.PreDeviceType)
 	case "pre_image_id":
-		return record.Details.PreData.ImageId != existingRecord.PreImageID
+		return record.Details.PreData.ImageId != converter.PtrToVal(existingRecord.PreImageID)
 	case "pre_vpc":
-		return record.Details.PreData.Vpc != existingRecord.PreVpc
+		return record.Details.PreData.Vpc != converter.PtrToVal(existingRecord.PreVpc)
 	case "pre_subnet":
-		return record.Details.PreData.Subnet != existingRecord.PreSubnet
+		return record.Details.PreData.Subnet != converter.PtrToVal(existingRecord.PreSubnet)
 	case "pre_res_assign":
-		return record.Details.PreData.ResAssign != existingRecord.PreResAssign
+		return record.Details.PreData.ResAssign != converter.PtrToVal(existingRecord.PreResAssign)
 	default:
 		return false
 	}
@@ -403,19 +419,19 @@ func (c *CvmModifyRecordConverter) compareCurDataField(record *tasktable.ModifyR
 	case "cur_replicas":
 		return existingRecord.CurReplicas == nil || *existingRecord.CurReplicas != record.Details.CurData.Replicas
 	case "cur_region":
-		return record.Details.CurData.Region != existingRecord.CurRegion
+		return record.Details.CurData.Region != converter.PtrToVal(existingRecord.CurRegion)
 	case "cur_zone":
-		return record.Details.CurData.Zone != existingRecord.CurZone
+		return record.Details.CurData.Zone != converter.PtrToVal(existingRecord.CurZone)
 	case "cur_device_type":
-		return record.Details.CurData.DeviceType != existingRecord.CurDeviceType
+		return record.Details.CurData.DeviceType != converter.PtrToVal(existingRecord.CurDeviceType)
 	case "cur_image_id":
-		return record.Details.CurData.ImageId != existingRecord.CurImageID
+		return record.Details.CurData.ImageId != converter.PtrToVal(existingRecord.CurImageID)
 	case "cur_vpc":
-		return record.Details.CurData.Vpc != existingRecord.CurVpc
+		return record.Details.CurData.Vpc != converter.PtrToVal(existingRecord.CurVpc)
 	case "cur_subnet":
-		return record.Details.CurData.Subnet != existingRecord.CurSubnet
+		return record.Details.CurData.Subnet != converter.PtrToVal(existingRecord.CurSubnet)
 	case "cur_res_assign":
-		return record.Details.CurData.ResAssign != existingRecord.CurResAssign
+		return record.Details.CurData.ResAssign != converter.PtrToVal(existingRecord.CurResAssign)
 	default:
 		return false
 	}

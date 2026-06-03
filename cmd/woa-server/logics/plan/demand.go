@@ -1578,8 +1578,8 @@ func initResourceSpec(sub *cvmapplytable.ZiyanCvmApplySuborder) *tasktypes.Resou
 		DiskSize:          sub.DiskSize,
 		DiskType:          sub.DiskType,
 		NetworkType:       sub.NetworkType,
-		Vpc:               sub.Vpc,
-		Subnet:            sub.Subnet,
+		Vpc:               cvt.PtrToVal(sub.Vpc),
+		Subnet:            cvt.PtrToVal(sub.Subnet),
 		OsType:            sub.OsType,
 		RaidType:          sub.RaidType,
 		Isp:               sub.Isp,
@@ -1587,7 +1587,7 @@ func initResourceSpec(sub *cvmapplytable.ZiyanCvmApplySuborder) *tasktypes.Resou
 		ChargeMonths:      sub.ChargeMonths,
 		InheritInstanceId: sub.InheritInstanceID,
 		BkAssetID:         sub.BkAssetID,
-		ResAssign:         sub.ResAssign,
+		ResAssign:         cvt.PtrToVal(sub.ResAssign),
 		CPUThreadSwitch:   sub.CPUThreadSwitch,
 	}
 }
@@ -1872,10 +1872,14 @@ func (c *Controller) verifyProdDemandsV2(kt *kit.Kit, bkBizID int64, requireType
 // @return prodRemainedPool is the biz in plan and out plan remained resource plan pool.
 // @return prodMaxAvailablePool is the biz in plan and out plan remained max available resource plan pool.
 // NOTE: maxAvailableInPlanPool = totalInPlan * 120% - consumeInPlan, because the special rules of the crp system.
-func (c *Controller) GetProdResRemainPoolMatch(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType) (
-	ResPlanPoolMatch, ResPlanPoolMatch, error) {
+func (c *Controller) GetProdResRemainPoolMatch(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType,
+	suborderID string) (ResPlanPoolMatch, ResPlanPoolMatch, error) {
 
-	return c.getProdResRemainPoolMatch(kt, bkBizID, requireType, nil)
+	var excludeSuborderIDs []string
+	if suborderID != "" {
+		excludeSuborderIDs = []string{suborderID}
+	}
+	return c.getProdResRemainPoolMatch(kt, bkBizID, requireType, excludeSuborderIDs)
 }
 
 func (c *Controller) getProdResRemainPoolMatch(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType,

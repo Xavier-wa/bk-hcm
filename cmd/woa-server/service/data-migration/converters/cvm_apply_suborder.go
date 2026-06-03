@@ -289,8 +289,8 @@ func (c *CvmApplySuborderConverter) buildUpdateRequest(
 		req.DiskSize = cvt.ValToPtr(applyOrder.Spec.DiskSize)
 		req.DiskType = applyOrder.Spec.DiskType
 		req.NetworkType = applyOrder.Spec.NetworkType
-		req.Vpc = applyOrder.Spec.Vpc
-		req.Subnet = applyOrder.Spec.Subnet
+		req.Vpc = cvt.ValToPtr(applyOrder.Spec.Vpc)
+		req.Subnet = cvt.ValToPtr(applyOrder.Spec.Subnet)
 		req.OsType = applyOrder.Spec.OsType
 		req.RaidType = applyOrder.Spec.RaidType
 		req.Isp = applyOrder.Spec.Isp

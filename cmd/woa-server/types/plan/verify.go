@@ -77,6 +77,8 @@ type GetCvmChargeTypeDeviceTypeReq struct {
 	RequireType enumor.RequireType `json:"require_type" validate:"required"`
 	Region      string             `json:"region" validate:"required"`
 	Zone        string             `json:"zone" validate:"omitempty"`
+	// SuborderID 子订单ID，用于预测校验时跳过当前子订单，避免重复计算本单据的预测占用
+	SuborderID string `json:"suborder_id" validate:"omitempty"`
 }
 
 // Validate whether GetCvmChargeTypeDeviceTypeReq is valid.

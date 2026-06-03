@@ -189,8 +189,8 @@ type ZiyanCvmApplySuborderUpdateReq struct {
 	DiskSize          *int64                   `json:"disk_size" validate:"omitempty"`
 	DiskType          enumor.DiskType          `json:"disk_type" validate:"omitempty,max=64"`
 	NetworkType       string                   `json:"network_type" validate:"omitempty,max=64"`
-	Vpc               string                   `json:"vpc" validate:"omitempty,max=64"`
-	Subnet            string                   `json:"subnet" validate:"omitempty,max=64"`
+	Vpc               *string                  `json:"vpc" validate:"omitempty,max=64"`
+	Subnet            *string                  `json:"subnet" validate:"omitempty,max=64"`
 	OsType            string                   `json:"os_type" validate:"omitempty,max=64"`
 	RaidType          string                   `json:"raid_type" validate:"omitempty,max=64"`
 	Isp               string                   `json:"isp" validate:"omitempty,max=64"`

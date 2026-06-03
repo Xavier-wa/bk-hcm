@@ -115,7 +115,7 @@ type Logics interface {
 	GetPlanTypeAvlDeviceTypesV2(kt *kit.Kit, planType enumor.PlanTypeCode, req *ptypes.GetCvmChargeTypeDeviceTypeReq,
 		prodRemainMap map[ResPlanPoolKeyV2]map[string]int64) ([]ptypes.DeviceTypeAvailable, error)
 	// GetProdResRemainPoolMatch get prod res remain pool match.
-	GetProdResRemainPoolMatch(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType) (
+	GetProdResRemainPoolMatch(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType, suborderID string) (
 		ResPlanPoolMatch, ResPlanPoolMatch, error)
 	// AddMatchedPlanDemandExpendLogs add matched plan demand expend logs.
 	AddMatchedPlanDemandExpendLogs(kt *kit.Kit, bkBizID int64, subOrder *ttypes.ApplyOrder,

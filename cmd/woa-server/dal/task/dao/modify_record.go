@@ -16,6 +16,7 @@ package dao
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"hcm/cmd/woa-server/dal/task/table"
@@ -229,7 +230,7 @@ func convertToCreateReq(inst *table.ModifyRecord) (*cvmapplyproto.ZiyanCvmModify
 	if err != nil {
 		return nil, fmt.Errorf("serialize pre_data_disk failed: %w", err)
 	}
-	preZonesJSON, err := convertToJsonField(inst.Details.PreData.Zones)
+	preZonesJSON, err := convertStringSliceToJsonField(inst.Details.PreData.Zones)
 	if err != nil {
 		return nil, fmt.Errorf("serialize pre_zones failed: %w", err)
 	}
@@ -237,7 +238,7 @@ func convertToCreateReq(inst *table.ModifyRecord) (*cvmapplyproto.ZiyanCvmModify
 	if err != nil {
 		return nil, fmt.Errorf("serialize cur_data_disk failed: %w", err)
 	}
-	curZonesJSON, err := convertToJsonField(inst.Details.CurData.Zones)
+	curZonesJSON, err := convertStringSliceToJsonField(inst.Details.CurData.Zones)
 	if err != nil {
 		return nil, fmt.Errorf("serialize cur_zones failed: %w", err)
 	}
@@ -306,6 +307,17 @@ func convertToJsonField(data interface{}) (tabletypes.JsonField, error) {
 	return tabletypes.JsonField(jsonData), nil
 }
 
+func convertStringSliceToJsonField(data []string) (tabletypes.JsonField, error) {
+	if data == nil {
+		return tabletypes.JsonField("[]"), nil
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return tabletypes.JsonField("[]"), err
+	}
+	return tabletypes.JsonField(jsonData), nil
+}
+
 // unmarshalDataDisk unmarshals JSON data to DiskSpec slice
 func unmarshalDataDisk(jsonData tabletypes.JsonField) ([]enumor.DiskSpec, error) {
 	var dataDisk []enumor.DiskSpec
@@ -338,6 +350,12 @@ func unmarshalDataDisk(jsonData tabletypes.JsonField) ([]enumor.DiskSpec, error)
 func unmarshalZones(jsonData tabletypes.JsonField) ([]string, error) {
 	var zones []string
 	if len(jsonData) == 0 {
+		return zones, nil
+	}
+
+	// 兼容历史数据中存储的空 JSON 对象 {}
+	trimmed := strings.TrimSpace(string(jsonData))
+	if trimmed == "{}" {
 		return zones, nil
 	}
 
@@ -381,21 +399,21 @@ func buildPreModifyData(mysqlRecord *cvmapplytable.ZiyanCvmModifyRecord,
 	return &table.ModifyData{
 		TotalNum:          cvt.PtrToVal(mysqlRecord.PreTotalNum),
 		Replicas:          cvt.PtrToVal(mysqlRecord.PreReplicas),
-		Region:            mysqlRecord.PreRegion,
-		Zone:              mysqlRecord.PreZone,
-		DeviceType:        mysqlRecord.PreDeviceType,
-		ImageId:           mysqlRecord.PreImageID,
+		Region:            cvt.PtrToVal(mysqlRecord.PreRegion),
+		Zone:              cvt.PtrToVal(mysqlRecord.PreZone),
+		DeviceType:        cvt.PtrToVal(mysqlRecord.PreDeviceType),
+		ImageId:           cvt.PtrToVal(mysqlRecord.PreImageID),
 		DiskSize:          int64(cvt.PtrToVal(mysqlRecord.PreDiskSize)),
-		DiskType:          mysqlRecord.PreDiskType,
-		NetworkType:       mysqlRecord.PreNetworkType,
-		Vpc:               mysqlRecord.PreVpc,
-		Subnet:            mysqlRecord.PreSubnet,
+		DiskType:          cvt.PtrToVal(mysqlRecord.PreDiskType),
+		NetworkType:       cvt.PtrToVal(mysqlRecord.PreNetworkType),
+		Vpc:               cvt.PtrToVal(mysqlRecord.PreVpc),
+		Subnet:            cvt.PtrToVal(mysqlRecord.PreSubnet),
 		SystemDisk:        preSystemDisk,
 		DataDisk:          preDataDisk,
 		Zones:             preZones,
-		ResAssign:         mysqlRecord.PreResAssign,
-		BkAssetID:         mysqlRecord.PreBkAssetID,
-		InheritInstanceID: mysqlRecord.PreInheritInstanceID,
+		ResAssign:         cvt.PtrToVal(mysqlRecord.PreResAssign),
+		BkAssetID:         cvt.PtrToVal(mysqlRecord.PreBkAssetID),
+		InheritInstanceID: cvt.PtrToVal(mysqlRecord.PreInheritInstanceID),
 	}
 }
 
@@ -405,49 +423,49 @@ func buildCurModifyData(mysqlRecord *cvmapplytable.ZiyanCvmModifyRecord,
 	return &table.ModifyData{
 		TotalNum:          cvt.PtrToVal(mysqlRecord.CurTotalNum),
 		Replicas:          cvt.PtrToVal(mysqlRecord.CurReplicas),
-		Region:            mysqlRecord.CurRegion,
-		Zone:              mysqlRecord.CurZone,
-		DeviceType:        mysqlRecord.CurDeviceType,
-		ImageId:           mysqlRecord.CurImageID,
+		Region:            cvt.PtrToVal(mysqlRecord.CurRegion),
+		Zone:              cvt.PtrToVal(mysqlRecord.CurZone),
+		DeviceType:        cvt.PtrToVal(mysqlRecord.CurDeviceType),
+		ImageId:           cvt.PtrToVal(mysqlRecord.CurImageID),
 		DiskSize:          int64(cvt.PtrToVal(mysqlRecord.CurDiskSize)),
-		DiskType:          mysqlRecord.CurDiskType,
-		NetworkType:       mysqlRecord.CurNetworkType,
-		Vpc:               mysqlRecord.CurVpc,
-		Subnet:            mysqlRecord.CurSubnet,
+		DiskType:          cvt.PtrToVal(mysqlRecord.CurDiskType),
+		NetworkType:       cvt.PtrToVal(mysqlRecord.CurNetworkType),
+		Vpc:               cvt.PtrToVal(mysqlRecord.CurVpc),
+		Subnet:            cvt.PtrToVal(mysqlRecord.CurSubnet),
 		SystemDisk:        curSystemDisk,
 		DataDisk:          curDataDisk,
 		Zones:             curZones,
-		ResAssign:         mysqlRecord.CurResAssign,
-		BkAssetID:         mysqlRecord.CurBkAssetID,
-		InheritInstanceID: mysqlRecord.CurInheritInstanceID,
+		ResAssign:         cvt.PtrToVal(mysqlRecord.CurResAssign),
+		BkAssetID:         cvt.PtrToVal(mysqlRecord.CurBkAssetID),
+		InheritInstanceID: cvt.PtrToVal(mysqlRecord.CurInheritInstanceID),
 	}
 }
 
 // convertMySQLToModifyRecord converts MySQL record to table.ModifyRecord
 func convertMySQLToModifyRecord(mysqlRecord *cvmapplytable.ZiyanCvmModifyRecord) (*table.ModifyRecord, error) {
 	// Unmarshal JSON fields
-	preDataDisk, err := unmarshalDataDisk(mysqlRecord.PreDataDisk)
+	preDataDisk, err := unmarshalDataDisk(cvt.PtrToVal(mysqlRecord.PreDataDisk))
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal pre_data_disk failed: %w", err)
 	}
-	preZones, err := unmarshalZones(mysqlRecord.PreZones)
+	preZones, err := unmarshalZones(cvt.PtrToVal(mysqlRecord.PreZones))
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal pre_zones failed: %w", err)
 	}
-	curDataDisk, err := unmarshalDataDisk(mysqlRecord.CurDataDisk)
+	curDataDisk, err := unmarshalDataDisk(cvt.PtrToVal(mysqlRecord.CurDataDisk))
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal cur_data_disk failed: %w", err)
 	}
-	curZones, err := unmarshalZones(mysqlRecord.CurZones)
+	curZones, err := unmarshalZones(cvt.PtrToVal(mysqlRecord.CurZones))
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal cur_zones failed: %w", err)
 	}
 
 	// Build system disks
 	preSystemDisk := buildSystemDisk(
-		mysqlRecord.PreSystemDiskType, mysqlRecord.PreSystemDiskSize, mysqlRecord.PreSystemDiskNum)
+		cvt.PtrToVal(mysqlRecord.PreSystemDiskType), mysqlRecord.PreSystemDiskSize, mysqlRecord.PreSystemDiskNum)
 	curSystemDisk := buildSystemDisk(
-		mysqlRecord.CurSystemDiskType, mysqlRecord.CurSystemDiskSize, mysqlRecord.CurSystemDiskNum)
+		cvt.PtrToVal(mysqlRecord.CurSystemDiskType), mysqlRecord.CurSystemDiskSize, mysqlRecord.CurSystemDiskNum)
 
 	// Build modify data
 	preData := buildPreModifyData(mysqlRecord, preSystemDisk, preDataDisk, preZones)
@@ -465,8 +483,8 @@ func convertMySQLToModifyRecord(mysqlRecord *cvmapplytable.ZiyanCvmModifyRecord)
 
 	return &table.ModifyRecord{
 		ID:         mysqlRecord.ID,
-		SuborderID: mysqlRecord.SuborderID,
-		User:       mysqlRecord.BkUsername,
+		SuborderID: cvt.PtrToVal(mysqlRecord.SuborderID),
+		User:       cvt.PtrToVal(mysqlRecord.BkUsername),
 		Details: &table.ModifyDetail{
 			PreData: preData,
 			CurData: curData,
@@ -474,6 +492,6 @@ func convertMySQLToModifyRecord(mysqlRecord *cvmapplytable.ZiyanCvmModifyRecord)
 		CreatedAt: createAt,
 		UpdatedAt: updateAt,
 		Status:    mysqlRecord.Status,
-		Approver:  mysqlRecord.Approver,
+		Approver:  cvt.PtrToVal(mysqlRecord.Approver),
 	}, nil
 }

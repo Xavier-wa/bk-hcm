@@ -201,6 +201,7 @@ type scheduler struct {
 	dissolveLogics dissolve.Logics
 	cmsiClient     cmsi.Client
 	apiClientSet   *client.ClientSet
+	planLogics     plan.Logics
 }
 
 // New creates a scheduler
@@ -246,6 +247,7 @@ func New(ctx context.Context, rsLogics rollingserver.Logics, srLogics shortrenta
 		dissolveLogics: dissolveLogics,
 		cmsiClient:     cmsiCli,
 		apiClientSet:   apiClientSet,
+		planLogics:     planLogics,
 	}
 
 	return scheduler, nil
@@ -2588,6 +2590,37 @@ func (s *scheduler) validateModification(kt *kit.Kit, order *types.ApplyOrder, p
 		return err
 	}
 
+	// 预测校验：仅针对常规项目、裁撤项目、短租项目、春节保障
+	if order.RequireType.NeedVerifyResPlan() {
+		if err = s.verifyResPlanForModify(kt, order, param); err != nil {
+			logs.Errorf("res plan verify failed for modify, subOrderID: %s, err: %v, rid: %s",
+				order.SubOrderId, err, kt.Rid)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// verifyResPlanForModify 修改申请单时进行预测校验
+func (s *scheduler) verifyResPlanForModify(kt *kit.Kit, order *types.ApplyOrder, param *types.ModifyApplyReq) error {
+	suborder := types.Suborder{
+		SuborderID:   order.SubOrderId,
+		ResourceType: order.ResourceType,
+		Replicas:     param.Replicas,
+		Spec:         param.Spec,
+	}
+	results, err := s.planLogics.VerifyResPlanDemandV2(kt, order.BkBizId, order.RequireType, []types.Suborder{suborder})
+	if err != nil {
+		logs.Errorf("failed to verify res plan for modify, subOrderID: %s, err: %v, rid: %s",
+			order.SubOrderId, err, kt.Rid)
+		return err
+	}
+	if len(results) > 0 && results[0].VerifyResult == enumor.VerifyResPlanRstFailed {
+		logs.Errorf("res plan verify not passed for modify, subOrderID: %s, reason: %s, rid: %s",
+			order.SubOrderId, results[0].Reason, kt.Rid)
+		return errf.Newf(errf.ResPlanVerifyFailed, "预测校验不通过: %s", results[0].Reason)
+	}
 	return nil
 }
 
@@ -2798,8 +2831,8 @@ func (s *scheduler) modifyOrder(kt *kit.Kit, order *types.ApplyOrder, param *typ
 		DiskSize:          cvt.ValToPtr(param.Spec.DiskSize),
 		DiskType:          param.Spec.DiskType,
 		NetworkType:       param.Spec.NetworkType,
-		Vpc:               param.Spec.Vpc,
-		Subnet:            param.Spec.Subnet,
+		Vpc:               cvt.ValToPtr(param.Spec.Vpc),
+		Subnet:            cvt.ValToPtr(param.Spec.Subnet),
 		FailedZoneIds:     cvt.ValToPtr(tabletypes.JsonField("[]")), // 修改需求重试时需要清空已失败的可用区，也就是全可用区重试
 		ResAssign:         cvt.ValToPtr(param.Spec.ResAssign),
 		Stage:             types.TicketStageRunning,
@@ -2926,7 +2959,7 @@ func (s *scheduler) updateModifyRecordData(kt *kit.Kit, subOrderID string, modif
 
 	update := &cvmapplyproto.ZiyanCvmModifyRecordUpdateReq{
 		Status:   cvt.ValToPtr(status),
-		Approver: kt.User,
+		Approver: cvt.ValToPtr(kt.User),
 	}
 
 	if err := dao.Set().ModifyRecord().UpdateModifyRecord(kt, s.apiClientSet, filterExpr, update); err != nil {
