@@ -1,0 +1,7 @@
+{
+  "ide": ["cursor", "codebuddy"],
+  "lint": {
+    "script": ["prettier --config ./.prettierrc.js --write", "eslint --fix -c ./.eslintrc.js --cache"],
+    "style": "stylelint --fix --cache"
+  }
+}
