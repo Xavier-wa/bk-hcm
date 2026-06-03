@@ -1237,6 +1237,10 @@ resourceSync:
     # 同步库存并发数
     concurrent: 100
   syncLeftIP: 360
+  # CVM机型与物理机机型族映射同步配置
+  syncDeviceTypePhysicalRel:
+    # 同步间隔时间，单位:分钟，默认 1440（每日 1 次）
+    interval: 1440
 
 # Xray故障单平台的配置
 xray:

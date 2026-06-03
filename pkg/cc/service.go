@@ -628,6 +628,7 @@ func (s *WoaServerSetting) trySetDefault() {
 	s.Service.trySetDefault()
 	s.Log.trySetDefault()
 	s.StuckCheck.trySetDefault()
+	s.ResourceSync.SyncDeviceTypePhysicalRel.trySetDefault()
 
 	return
 }

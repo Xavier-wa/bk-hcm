@@ -1077,8 +1077,9 @@ func (c CaiCheCli) Validate() error {
 
 // ResourceSync 自研云-资源同步相关配置
 type ResourceSync struct {
-	SyncCapacity SyncCapacity `yaml:"syncCapacity"`
-	SyncLeftIP   int          `yaml:"syncLeftIP"`
+	SyncCapacity              SyncCapacity              `yaml:"syncCapacity"`
+	SyncLeftIP                int                       `yaml:"syncLeftIP"`
+	SyncDeviceTypePhysicalRel SyncDeviceTypePhysicalRel `yaml:"syncDeviceTypePhysicalRel"`
 }
 
 // Validate ...
@@ -1110,6 +1111,19 @@ func (c SyncCapacity) Validate() error {
 	}
 
 	return nil
+}
+
+// SyncDeviceTypePhysicalRel 自研云-CVM机型与物理机机型族映射同步配置
+type SyncDeviceTypePhysicalRel struct {
+	// Interval 同步周期，单位：分钟。默认 1440（每日 1 次）。
+	Interval int `yaml:"interval"`
+}
+
+// trySetDefault 缺省时回落默认值
+func (c *SyncDeviceTypePhysicalRel) trySetDefault() {
+	if c.Interval <= 0 {
+		c.Interval = 1440
+	}
 }
 
 // StuckCheckCfg stuck check config.

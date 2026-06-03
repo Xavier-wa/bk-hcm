@@ -44,8 +44,8 @@ import (
 	"hcm/cmd/woa-server/logics/task/recoverer"
 	"hcm/cmd/woa-server/logics/task/recycler"
 	"hcm/cmd/woa-server/logics/task/scheduler"
-	taskmodel "hcm/cmd/woa-server/model/task"
 	taskStatistics "hcm/cmd/woa-server/logics/task/statistics"
+	taskmodel "hcm/cmd/woa-server/model/task"
 	"hcm/cmd/woa-server/service/capability"
 	"hcm/cmd/woa-server/service/config"
 	"hcm/cmd/woa-server/service/cvm"
@@ -371,8 +371,8 @@ type mongoComponentSet struct {
 }
 
 // initMongoComponents 初始化涉及MongoDB的逻辑
-func initMongoComponents(dis serviced.ServiceDiscover, sd serviced.State, clients *clientSet, apiClientSet *client.ClientSet,
-	logics *logicSet) (*mongoComponentSet, error) {
+func initMongoComponents(dis serviced.ServiceDiscover, sd serviced.State, clients *clientSet,
+	apiClientSet *client.ClientSet, logics *logicSet) (*mongoComponentSet, error) {
 
 	if !cc.WoaServer().UseMongo {
 		return &mongoComponentSet{}, nil
@@ -705,7 +705,17 @@ func (s *Service) initCronTask() error {
 	}
 	s.tasks[enumor.CronTaskRollingMonthlyTerminateNotice] = rollingMonthlyTerminateNoticeTask
 
-	if err = cron.Register([]croncore.Task{deviceCapacityTask, rollingMonthlyTerminateNoticeTask}); err != nil {
+	syncDeviceTypePhysicalRelTask, err := crontask.NewSyncDeviceTypePhysicalRelTask(s.client, s.thirdCli.CVM, s.sd)
+	if err != nil {
+		logs.Errorf("init sync device type physical rel task failed, err: %v", err)
+		return err
+	}
+	s.tasks[enumor.CronTaskSyncDeviceTypePhysicalRel] = syncDeviceTypePhysicalRelTask
+
+	err = cron.Register([]croncore.Task{
+		deviceCapacityTask, rollingMonthlyTerminateNoticeTask, syncDeviceTypePhysicalRelTask,
+	})
+	if err != nil {
 		logs.Errorf("register cron tasks failed, err: %v", err)
 		return err
 	}

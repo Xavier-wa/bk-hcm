@@ -27,4 +27,6 @@ const (
 	CronTaskSyncDeviceCapacity CronTask = "sync_device_capacity"
 	// CronTaskRollingMonthlyTerminateNotice 滚服申领单跨月终止通知
 	CronTaskRollingMonthlyTerminateNotice CronTask = "rolling_monthly_terminate_notice"
+	// CronTaskSyncDeviceTypePhysicalRel 同步 CVM 机型与物理机机型族映射
+	CronTaskSyncDeviceTypePhysicalRel CronTask = "sync_device_type_physical_rel"
 )

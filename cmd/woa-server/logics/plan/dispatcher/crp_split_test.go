@@ -465,6 +465,10 @@ func (m *mockCRPClient) QueryZoneCityList(_ context.Context, _ http.Header,
 	_ *cvmapi.QueryZoneCityListReq) (*cvmapi.QueryZoneCityListResp, error) {
 	panic("unexpected")
 }
+func (m *mockCRPClient) QueryCvmTypeList(_ *kit.Kit,
+	_ *cvmapi.QueryCvmTypeListParams) (*cvmapi.QueryCvmTypeListResp, error) {
+	panic("unexpected")
+}
 
 // newTestCreator builds a CrpTicketCreator with the provided mock client for unit testing.
 func newTestCreator(cli cvmapi.CVMClientInterface) *CrpTicketCreator {

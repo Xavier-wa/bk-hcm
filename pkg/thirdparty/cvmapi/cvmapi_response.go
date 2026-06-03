@@ -1017,6 +1017,44 @@ type QueryZoneCityListResp struct {
 	Result   []ZoneCityInfo `json:"result"`
 }
 
+// QueryCvmTypeListResp CVM机型与物理机机型族映射查询响应
+type QueryCvmTypeListResp struct {
+	RespMeta `json:",inline"`
+	Result   []CvmTypeItem `json:"result"`
+}
+
+// CvmTypeItem CVM机型与物理机机型族映射项
+type CvmTypeItem struct {
+	// CvmInstanceModel 实例规格，如 "S3.2XLARGE16"
+	CvmInstanceModel string `json:"cvmInstanceModel"`
+	// CvmInstanceGroup 机型族，如 "标准型"
+	CvmInstanceGroup string `json:"cvmInstanceGroup,omitempty"`
+	// CvmInstanceType 实例类型，如 "标准型S3"
+	CvmInstanceType string `json:"cvmInstanceType,omitempty"`
+	// CpuAmount CPU核数
+	CpuAmount int `json:"cpuAmount,omitempty"`
+	// RamAmount 内存量（单位：G）
+	RamAmount int `json:"ramAmount,omitempty"`
+	// DiskBlockNum 磁盘块数量
+	DiskBlockNum int `json:"diskBlockNum,omitempty"`
+	// DiskBlockSize 单个磁盘块大小
+	DiskBlockSize int `json:"diskBlockSize,omitempty"`
+	// GpuType GPU卡型
+	GpuType string `json:"gpuType,omitempty"`
+	// GpuCard GPU卡数
+	GpuCard float64 `json:"gpuCard,omitempty"`
+	// TechnicalClass 技术分类
+	TechnicalClass string `json:"technicalClass,omitempty"`
+	// TechnicalUnit 技术分类单位
+	TechnicalUnit string `json:"technicalUnit,omitempty"`
+	// TechnicalAmount 技术分类量
+	TechnicalAmount float64 `json:"technicalAmount,omitempty"`
+	// DeviceFamily 物理机机型族
+	DeviceFamily string `json:"deviceFamily"`
+	// CoreTypeName 核心类型名称，(小核心/中核心/大核心）
+	CoreTypeName string `json:"coreTypeName,omitempty"`
+}
+
 // ZoneCityInfo CRP可用区与城市映射信息
 type ZoneCityInfo struct {
 	CiyID            int    `json:"ciyId"`

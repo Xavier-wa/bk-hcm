@@ -17,35 +17,28 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package shortrental
+package ressync
 
 import (
-	"hcm/pkg/api/core"
-	"hcm/pkg/dal/dao/tools"
-	"hcm/pkg/kit"
+	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/criteria/errf"
+	"hcm/pkg/iam/meta"
 	"hcm/pkg/logs"
-	"hcm/pkg/tools/slice"
+	"hcm/pkg/rest"
 )
 
-// ListDeviceTypeFamily 根据用户退回机器的机型，在本地表中查询对应的物理机机型族
-func (l *logics) ListDeviceTypeFamily(kt *kit.Kit, deviceTypes []string) (map[string]string, error) {
-	deviceToPhysFamilyMap := make(map[string]string)
-	for _, batch := range slice.Split(deviceTypes, int(core.DefaultMaxPageLimit)) {
-		listReq := &core.ListReq{
-			Filter: tools.ContainersExpression("device_type", batch),
-			Page:   core.NewDefaultBasePage(),
-		}
-
-		rst, err := l.client.DataService().Global.ResourcePlan.ListWoaDeviceTypePhysicalRel(kt, listReq)
-		if err != nil {
-			logs.Errorf("list device type physical rel failed, err: %v, rid: %s", err, kt.Rid)
-			return nil, err
-		}
-
-		for _, item := range rst.Details {
-			deviceToPhysFamilyMap[item.DeviceType] = item.PhysicalDeviceFamily
-		}
+// SyncDeviceTypePhysicalRel 手动触发 CVM 机型与物理机机型族映射同步。
+func (s *service) SyncDeviceTypePhysicalRel(cts *rest.Contexts) (any, error) {
+	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.GlobalConfig, Action: meta.Create}}
+	if err := s.authorizer.AuthorizeWithPerm(cts.Kit, authRes); err != nil {
+		logs.Errorf("no permission to sync device type physical rel, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.PermissionDenied, err)
 	}
 
-	return deviceToPhysFamilyMap, nil
+	if err := s.tasks[enumor.CronTaskSyncDeviceTypePhysicalRel].Do(cts.Kit); err != nil {
+		logs.Errorf("sync device type physical rel failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return nil, nil
 }
