@@ -21,7 +21,11 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 
+	"hcm/cmd/agent-server/logics/agent/hitl"
 	"hcm/cmd/agent-server/logics/logger"
 	"hcm/cmd/agent-server/logics/model"
 	"hcm/cmd/agent-server/logics/skill"
@@ -29,6 +33,8 @@ import (
 	"hcm/cmd/agent-server/logics/tool"
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 	cvt "hcm/pkg/tools/converter"
 
 	"trpc.group/trpc-go/trpc-agent-go/graph"
@@ -38,15 +44,17 @@ import (
 	toolskill "trpc.group/trpc-go/trpc-agent-go/tool/skill"
 )
 
-// BuildGraph constructs a simplified ReAct graph topology with three nodes:
+// BuildGraph constructs a simplified ReAct graph topology with four nodes:
 //
 //	START → llm → ConditionalEdge
-//	  ├─ tool_calls → tool → llm (loop back)
-//	  └─ no tool_calls → fallback → END
+//	  ├─ human_confirm → hitl → llm (loop back)
+//	  ├─ other_tool_calls → tool → llm (loop back)
+//	  └─ no tool_calls → fallback → llm (loop back, interrupt at fallback)
 //
 // The llm node is an LLM Node that decides whether to call tools or respond directly.
-// The tool node executes the tools requested by the LLM.
-// The fallback node is a Function Node that normalizes the final response when no tools are called.
+// The hitl node handles human-in-the-loop interrupts when LLM calls human_confirm.
+// The tool node executes tools when the LLM requests them.
+// The fallback node normalizes the LLM response and interrupts to wait for the next user message.
 func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *tool.MCPToolSet,
 	systemPrompt, instruction, agentName string, modelCfg cc.AgentModelGeneralConfig) (*graph.Graph, error) {
 
@@ -73,29 +81,94 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *too
 	skillTools[constant.SkillLoadToolName] = toolskill.NewLoadTool(skillRepo)
 	skillTools[constant.SkillListDocsToolName] = toolskill.NewListDocsTool(skillRepo)
 	skillTools[constant.SkillSelectDocsToolName] = toolskill.NewSelectDocsTool(skillRepo)
+	// 注册 HITL 工具（纯声明工具，无执行逻辑）
+	skillTools[constant.HumanConfirmToolName] = hitl.GetToolWrapper()
 	// TODO 验证最终加载的 tool 有哪些
 	// 1. LLM Node: decides whether to call tools or respond directly.
 	stateGraph.AddLLMNode("llm", mdl, prompt, skillTools, llmOpts...)
 
-	// 2. Tool Node: executes tools when the LLM requests them.
+	// 2. HITL Node: handles human_confirm tool calls.
+	stateGraph.AddNode("hitl", hitl.GetNode())
+
+	// 3. Tool Node: executes tools when the LLM requests them.
 	toolsOpts := genToolNodeOptions(toolset, agentName)
 	stateGraph.AddToolsNode("tool", skillTools, toolsOpts...)
 
-	// 3. Fallback Node: normalizes output when the LLM does not call any tools.
+	// 4. Fallback Node: normalizes output when the LLM does not call any tools.
 	stateGraph.AddNode("fallback", makeFallbackNode())
 
 	// Set entry point.
 	stateGraph.SetEntryPoint("llm")
 
-	// Configure tool conditional edges.
-	stateGraph.AddToolsConditionalEdges("llm", "tool", "fallback")
-	stateGraph.AddEdge("tool", "llm")
+	// Configure conditional edges with three-way routing:
+	// - human_confirm only → hitl
+	// - other tools → tool
+	// - no tool_calls → fallback
+	stateGraph.AddConditionalEdges("llm", makeRoutingFunc(), map[string]string{
+		"hitl":     "hitl",
+		"tool":     "tool",
+		"fallback": "fallback",
+	})
 
-	// Fallback always leads to END.
-	stateGraph.AddEdge("fallback", graph.End)
-	stateGraph.SetFinishPoint("fallback")
+	// Loop back edges: hitl → llm, tool → llm, fallback → llm
+	stateGraph.AddEdge("hitl", "llm")
+	stateGraph.AddEdge("tool", "llm")
+	stateGraph.AddEdge("fallback", "llm")
 
 	return stateGraph.Compile()
+}
+
+// makeRoutingFunc returns the conditional edge routing function.
+// It implements three-way routing based on tool_calls in the last message:
+//   - Only human_confirm → "hitl"
+//   - human_confirm + other tools → error (R1 boundary case)
+//   - Other tools (no human_confirm) → "tool"
+//   - No tool_calls → "fallback"
+func makeRoutingFunc() func(ctx context.Context, state graph.State) (string, error) {
+	return func(ctx context.Context, state graph.State) (string, error) {
+		rid := rest.RidFromContext(ctx)
+		messages, _ := state[graph.StateKeyMessages].([]trpcmodel.Message)
+		if len(messages) == 0 {
+			return "fallback", nil
+		}
+
+		lastMsg := messages[len(messages)-1]
+
+		// Check if there are tool_calls
+		if len(lastMsg.ToolCalls) == 0 {
+			logs.Infof("routing: no tool_calls, route to fallback, rid: %s", rid)
+			return "fallback", nil
+		}
+
+		// Check tool_calls content
+		hasHumanConfirm := false
+		hasOtherTools := false
+
+		for _, tc := range lastMsg.ToolCalls {
+			logs.Infof("routing: toolCall name=%s, id=%s, rid: %s", tc.Function.Name, tc.ID, rid)
+			if tc.Function.Name == constant.HumanConfirmToolName {
+				hasHumanConfirm = true
+			} else {
+				hasOtherTools = true
+			}
+		}
+		logs.Infof("routing: hasHumanConfirm=%v, hasOtherTools=%v, rid: %s", hasHumanConfirm, hasOtherTools, rid)
+
+		// R1: Multi-tool call boundary case handling
+		if hasHumanConfirm && hasOtherTools {
+			return "", fmt.Errorf("invalid tool calls: human_confirm cannot be combined with other tools")
+		}
+
+		if hasHumanConfirm {
+			// Only human_confirm, route to hitl node
+			logs.Infof("routing: only human_confirm, route to hitl, rid: %s", rid)
+			return "hitl", nil
+		}
+
+		// Other tool calls (no human_confirm)
+		logs.Infof("routing: other tool calls, route to tool, rid: %s", rid)
+		return "tool", nil
+	}
 }
 
 func genLLMNodeOptions(toolset *tool.MCPToolSet, modelCfg cc.AgentModelGeneralConfig) []graph.Option {
@@ -140,15 +213,51 @@ func buildPrompt(systemPrompt, instruction string) string {
 	return prompt
 }
 
-// makeFallbackNode returns a Function Node that extracts the LLM's final response
-// from state and writes it back as the normalized output.
+// makeFallbackNode returns a Function Node that normalizes the LLM response and
+// interrupts to wait for the user's next message before looping back to llm.
 func makeFallbackNode() graph.NodeFunc {
-	return func(_ context.Context, state graph.State) (any, error) {
-		// Extract the last response from the LLM node output.
+	return func(ctx context.Context, state graph.State) (any, error) {
+		rid := rest.RidFromContext(ctx)
 		lastResp, _ := state[graph.StateKeyLastResponse].(string)
 		if lastResp == "" {
 			lastResp = "抱歉，我暂时无法处理您的请求。"
 		}
-		return graph.State{graph.StateKeyLastResponse: lastResp}, nil
+
+		// Interrupt to pause the graph and wait for the next user message.
+		// Without this, fallback → llm would loop indefinitely when LLM keeps
+		// responding without tool calls.
+		// The interrupt key is a hash of the last response to uniquely identify the fallback node.
+		interruptKey := buildFallbackInterruptKey(state, lastResp)
+		resumeValue, err := graph.Interrupt(ctx, state, interruptKey, map[string]any{
+			"last_response": lastResp,
+		})
+		if err != nil {
+			logs.Infof("fallback node: waiting for user input, rid: %s", rid)
+			return graph.State{graph.StateKeyLastResponse: lastResp}, err
+		}
+
+		userInput, ok := resumeValue.(string)
+		if !ok {
+			logs.Errorf("fallback node: invalid resume value type, expected string, got %T, rid: %s", resumeValue, rid)
+			return nil, fmt.Errorf("fallback node: invalid resume value type, expected string, got %T", resumeValue)
+		}
+		logs.Infof("fallback node: resume with user input=%s, rid: %s", userInput, rid)
+
+		return graph.State{
+			graph.StateKeyMessages:     []trpcmodel.Message{{Role: trpcmodel.RoleUser, Content: userInput}},
+			graph.StateKeyLastResponse: lastResp,
+		}, nil
 	}
+}
+
+// buildFallbackInterruptKey builds the interrupt key for the fallback node.
+func buildFallbackInterruptKey(state graph.State, lastResp string) string {
+	messages, _ := state[graph.StateKeyMessages].([]trpcmodel.Message)
+	sum := sha256.Sum256([]byte(lastResp))
+	hash := hex.EncodeToString(sum[:])
+	if len(hash) > constant.FallbackInterruptKeyHashLen {
+		hash = hash[:constant.FallbackInterruptKeyHashLen]
+	}
+	return fmt.Sprintf("%s%s%d%s%s", constant.FallbackInterruptKey, constant.InterruptKeySeparator,
+		len(messages), constant.InterruptKeySeparator, hash)
 }

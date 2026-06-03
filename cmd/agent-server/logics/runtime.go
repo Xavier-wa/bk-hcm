@@ -37,6 +37,7 @@ import (
 
 	_ "github.com/ncruces/go-sqlite3/driver" // import sqlite3 driver, used by memory/sqlitevec
 	trpcagent "trpc.group/trpc-go/trpc-agent-go/agent"
+	"trpc.group/trpc-go/trpc-agent-go/graph"
 	"trpc.group/trpc-go/trpc-agent-go/memory"
 	trpcmodel "trpc.group/trpc-go/trpc-agent-go/model"
 	"trpc.group/trpc-go/trpc-agent-go/runner"
@@ -55,6 +56,7 @@ type Runtime struct {
 	dynamicToolFilter trpctool.FilterFunc // non-nil when dynamic tool loading is enabled
 	skillMgr          *skill.Manager
 	readiness         *Readiness
+	checkpointSaver   graph.CheckpointSaver
 	closeOnce         sync.Once
 }
 
@@ -74,6 +76,12 @@ func (rt *Runtime) SkillSyncer() *skill.Syncer {
 // DynamicToolFilter returns the dynamic tool filter function, or nil if not enabled.
 func (rt *Runtime) DynamicToolFilter() trpctool.FilterFunc {
 	return rt.dynamicToolFilter
+}
+
+// CheckpointSaver returns the checkpoint saver used by the graph agent.
+// Returns nil when checkpoint storage is not configured.
+func (rt *Runtime) CheckpointSaver() graph.CheckpointSaver {
+	return rt.checkpointSaver
 }
 
 // SessionSvc returns the session service used by the AGUI runner.
@@ -99,6 +107,7 @@ func (rt *Runtime) MCPToolSets() *tool.MCPToolSet {
 func New() (*Runtime, error) {
 	aguiCfg := cc.AgentServer().AGUI
 	toolsCfg := cc.AgentServer().Tools
+	storageCfg := cc.AgentServer().Storage
 
 	allowedModels := aguiCfg.AllowedModelNames()
 	// Register operator-supplied context windows for private models so that
@@ -153,8 +162,14 @@ func New() (*Runtime, error) {
 		return nil, fmt.Errorf("build skill manager: %w", err)
 	}
 
+	// Build checkpoint saver for graph agent interrupt/resume support.
+	checkpointSaver, err := agent.BuildCheckpointSaver(storageCfg.Checkpoint)
+	if err != nil {
+		return nil, fmt.Errorf("build checkpoint saver: %w", err)
+	}
+
 	runnerOpts := buildRunnerOpts(sessionSvc, memorySvc)
-	agUIRunner, err := newAGUIRunner(defaultMdl, modelsMap, mcpToolSets, skillMgr, runnerOpts)
+	agUIRunner, err := newAGUIRunner(defaultMdl, modelsMap, mcpToolSets, skillMgr, runnerOpts, checkpointSaver)
 	if err != nil {
 		return nil, fmt.Errorf("build AGUI runner: %w", err)
 	}
@@ -167,6 +182,7 @@ func New() (*Runtime, error) {
 		dynamicToolFilter: dynFilter,
 		skillMgr:          skillMgr,
 		readiness:         readiness,
+		checkpointSaver:   checkpointSaver,
 	}
 	return runtime, nil
 }
@@ -185,7 +201,7 @@ func buildRunnerOpts(sessionSvc session.Service, memorySvc memory.Service) []run
 }
 
 func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Model, mcpToolSets *tool.MCPToolSet,
-	skillMgr *skill.Manager, runnerOpts []runner.Option) (runner.Runner, error) {
+	skillMgr *skill.Manager, runnerOpts []runner.Option, checkpointSaver graph.CheckpointSaver) (runner.Runner, error) {
 
 	aguiCfg := cc.AgentServer().AGUI
 
@@ -208,7 +224,7 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 		if err != nil {
 			return nil, fmt.Errorf("build graph: %w", err)
 		}
-		agt, err = agent.NewGraphAgent(aguiCfg.AppName, compiledGraph, cc.AgentServer().Storage.Checkpoint)
+		agt, err = agent.NewGraphAgent(aguiCfg.AppName, compiledGraph, checkpointSaver)
 		if err != nil {
 			return nil, fmt.Errorf("create graph agent: %w", err)
 		}
@@ -235,10 +251,16 @@ func (rt *Runtime) Close() error {
 				logs.Warnf("close AGUI session service: %v", cerr)
 			}
 		}
-		if cerr := rt.aguiMCPToolSets.Close(); cerr != nil {
-			logs.Warnf("close AGUI MCP toolsets: %v", cerr)
+		if rt.aguiMCPToolSets != nil {
+			if cerr := rt.aguiMCPToolSets.Close(); cerr != nil {
+				logs.Warnf("close AGUI MCP toolsets: %v", cerr)
+			}
+		}
+		if rt.checkpointSaver != nil {
+			if cerr := rt.checkpointSaver.Close(); cerr != nil {
+				logs.Warnf("close checkpoint saver: %v", cerr)
+			}
 		}
 	})
 	return err
 }
-

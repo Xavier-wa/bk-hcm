@@ -38,6 +38,7 @@ import (
 	"hcm/cmd/agent-server/logics"
 	authlogic "hcm/cmd/agent-server/logics/auth"
 	"hcm/cmd/agent-server/logics/skill"
+	aguievent "hcm/cmd/agent-server/service/agui-event"
 	"hcm/cmd/agent-server/service/capability"
 	"hcm/cmd/agent-server/service/memory"
 	"hcm/cmd/agent-server/service/session"
@@ -66,6 +67,7 @@ import (
 
 	"github.com/emicklei/go-restful/v3"
 	"trpc.group/trpc-go/trpc-agent-go/agent"
+	"trpc.group/trpc-go/trpc-agent-go/graph"
 	"trpc.group/trpc-go/trpc-agent-go/server/agui"
 	"trpc.group/trpc-go/trpc-agent-go/server/agui/adapter"
 	aguirunner "trpc.group/trpc-go/trpc-agent-go/server/agui/runner"
@@ -253,10 +255,14 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 		agui.WithPostRunFinalizationTimeout(20 * time.Second),
 		// 展示思考内容
 		agui.WithReasoningContentEnabled(svcCfg.Model.DisplayReasoning),
+		// 开启 graph interrupt 事件流，使 AGUI 前端能感知中断状态
+		agui.WithGraphNodeInterruptActivityEnabled(true),
 		agui.WithAGUIRunnerOptions(
 			aguirunner.WithUserIDResolver(resolveAGUIUserID),
 			aguirunner.WithRunOptionResolver(
-				makeRunOptionResolver(svcCfg.AllowedModelNames(), s.runTime.DynamicToolFilter())),
+				makeRunOptionResolver(s.runTime.CheckpointSaver(), svcCfg.AllowedModelNames(),
+					s.runTime.DynamicToolFilter())),
+			aguirunner.WithTranslatorFactory(aguievent.NewCustomTranslator),
 			// Auto-cancel the LLM call when the SSE connection drops (client disconnects).
 			// NOTE: When ctx ends, the request stops immediately, so recorded conversation events may be incomplete.
 			// aguirunner.WithCancelOnContextDoneEnabled(true),
@@ -506,21 +512,33 @@ func resolveAGUIUserID(ctx context.Context, _ *adapter.RunAgentInput) (string, e
 	return "anonymous", nil
 }
 
-// makeRunOptionResolver returns an AG-UI RunOptionResolver that handles both
-// per-request model selection and dynamic tool filtering.
+// makeRunOptionResolver returns an AG-UI RunOptionResolver that handles model
+// selection, dynamic tool filtering, and automatic checkpoint resume.
 //
 // Model selection: reads "modelName" from forwardedProps and translates it into
 // agent.WithModelName. Rejects unknown models with an error.
 //
 // Tool filtering: when toolFilter is non-nil, injects agent.WithToolFilter so
 // that each Run performs index-based tool retrieval.
-func makeRunOptionResolver(allowedModels []string, toolFilter tool.FilterFunc) aguirunner.RunOptionResolver {
+func makeRunOptionResolver(saver graph.CheckpointSaver, allowedModels []string,
+	toolFilter tool.FilterFunc) aguirunner.RunOptionResolver {
+
 	allowed := make(map[string]struct{}, len(allowedModels))
 	for _, m := range allowedModels {
 		allowed[m] = struct{}{}
 	}
-	return func(_ context.Context, input *adapter.RunAgentInput) ([]agent.RunOption, error) {
+	return func(ctx context.Context, input *adapter.RunAgentInput) ([]agent.RunOption, error) {
 		var opts []agent.RunOption
+
+		// 1. Bind lineageID to threadID so checkpoints can be queried by thread.
+		runtimeState := map[string]any{
+			graph.CfgKeyLineageID: input.ThreadID,
+		}
+
+		// 2. Auto-detect interrupted checkpoint and prepare resume.
+		runtimeState = tryPrepareAutoResume(saver, ctx, input, runtimeState)
+
+		opts = append(opts, agent.WithRuntimeState(runtimeState))
 
 		// Model selection.
 		if props, ok := input.ForwardedProps.(map[string]any); ok {
@@ -540,6 +558,48 @@ func makeRunOptionResolver(allowedModels []string, toolFilter tool.FilterFunc) a
 
 		return opts, nil
 	}
+}
+
+// tryPrepareAutoResume checks if the thread has an interrupted checkpoint and, if
+// so, injects the checkpointID and the latest user message as the resume value
+// into runtimeState so the graph continues from the interrupt point.
+//
+// Auto-resume: binds lineageID to threadID so checkpoints are queryable by
+// thread. On each run, checks whether the thread has an interrupted checkpoint;
+// if so, automatically injects the checkpointID and the latest user message as
+// the resume value so the graph continues from the interrupt point.
+func tryPrepareAutoResume(saver graph.CheckpointSaver, ctx context.Context, input *adapter.RunAgentInput,
+	runtimeState map[string]any) map[string]any {
+
+	rid := rest.RidFromContext(ctx)
+	if saver == nil {
+		return runtimeState
+	}
+	cm := graph.NewCheckpointManager(saver)
+	tuple, err := cm.Latest(ctx, input.ThreadID, "")
+	if err != nil {
+		logs.Warnf("auto-resume: failed to get latest checkpoint for thread=%s: %v, rid: %s", input.ThreadID, err, rid)
+		return runtimeState
+	}
+
+	if tuple != nil && tuple.Checkpoint != nil && tuple.Checkpoint.IsInterrupted() {
+		// Thread was interrupted; resume from the latest checkpoint.
+		runtimeState[graph.CfgKeyCheckpointID] = tuple.Checkpoint.ID
+
+		// Use the latest user message as the resume value.
+		if len(input.Messages) > 0 {
+			lastMsg := input.Messages[len(input.Messages)-1]
+			if lastMsg.Role == "user" && lastMsg.Content != "" {
+				// NOTE: mergeInitialStateNonInternal skips keys starting with "_",
+				// so we must use StateKeyCommand (processed by processResumeCommand)
+				// instead of writing ResumeChannel directly.
+				runtimeState[graph.StateKeyCommand] = graph.NewResumeCommand().WithResume(lastMsg.Content)
+				logs.Infof("auto-resume: set resume value from user message: %s, rid: %s", lastMsg.Content, rid)
+			}
+		}
+	}
+
+	return runtimeState
 }
 
 // agentReadiness handles GET /api/v1/agent/readiness.

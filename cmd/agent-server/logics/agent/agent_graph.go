@@ -34,16 +34,13 @@ import (
 )
 
 // NewGraphAgent creates a graphagent.GraphAgent from a compiled graph.
-// It configures a checkpoint saver for interrupt/resume support based on the
-// provided configuration (inmemory or sqlite).
-func NewGraphAgent(name string, compiledGraph *graph.Graph, cfg cc.AgentCheckpointStorage) (agent.Agent, error) {
+// The caller is responsible for providing a checkpoint saver (e.g. via BuildCheckpointSaver).
+func NewGraphAgent(name string, compiledGraph *graph.Graph, saver graph.CheckpointSaver) (agent.Agent, error) {
 	if compiledGraph == nil {
 		return nil, fmt.Errorf("compiled graph is nil")
 	}
-
-	saver, err := buildCheckpointSaver(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("build checkpoint saver: %w", err)
+	if saver == nil {
+		return nil, fmt.Errorf("checkpoint saver is nil")
 	}
 
 	gagent, err := graphagent.New(
@@ -60,9 +57,9 @@ func NewGraphAgent(name string, compiledGraph *graph.Graph, cfg cc.AgentCheckpoi
 	return gagent, nil
 }
 
-// buildCheckpointSaver creates a CheckpointSaver based on the configuration.
+// BuildCheckpointSaver creates a CheckpointSaver based on the configuration.
 // Supported backends: "inmemory", "sqlite".
-func buildCheckpointSaver(cfg cc.AgentCheckpointStorage) (graph.CheckpointSaver, error) {
+func BuildCheckpointSaver(cfg cc.AgentCheckpointStorage) (graph.CheckpointSaver, error) {
 	switch cfg.Backend {
 	case enumor.GraphCheckpointBackendSQLite:
 		db, err := sql.Open("sqlite3", cfg.DBPath)

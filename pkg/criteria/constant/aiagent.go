@@ -77,6 +77,9 @@ const (
 	// SessionIncrContentCountTimeout is the timeout of the session incr content count.
 	SessionIncrContentCountTimeout = 5 * time.Second
 
+	// SessionStateUpdateConcurrentWait is the wait time of the session state update to avoid concurrent update.
+	SessionStateUpdateConcurrentWait = 300 * time.Millisecond
+
 	// ApproxRunesPerToken matches the default in model.SimpleTokenCounter.
 	ApproxRunesPerToken = 4.0
 )
@@ -92,4 +95,23 @@ const (
 
 	// AvailableSkillsInjected is the session state key for the available skills injected.
 	AvailableSkillsInjected = "available_skills_injected"
+)
+
+// HITL (Human-in-the-Loop) constants
+const (
+	// HumanConfirmToolName is the name of the human confirmation tool.
+	// LLM calls this tool when it needs user confirmation or choice.
+	HumanConfirmToolName = "human_confirm"
+
+	// HITLInterruptKey is the key used for graph.Interrupt in HITL flow.
+	// This key is used to identify the interrupt in ResumeMap.
+	HITLInterruptKey = "human_confirm"
+	// InterruptKeySeparator separates interrupt key parts.
+	InterruptKeySeparator = ":"
+
+	// FallbackInterruptKey is the key used for graph.Interrupt in fallback flow.
+	// When LLM responds without tool calls, fallback pauses here until the user sends the next message.
+	FallbackInterruptKey = "fallback"
+	// FallbackInterruptKeyHashLen is the short hash length used in fallback interrupt key.
+	FallbackInterruptKeyHashLen = 16
 )
