@@ -1,7 +1,7 @@
 ---
-description: bkui-vue3 组件使用规范 - 合理利用 MCP 文档确保正确使用组件
+description: "bkui-vue3（蓝鲸 BK UI）组件使用规范与 MCP 文档查询指引。当任务涉及以下任一情况时必须主动读取本规则：(1) 使用、配置或修改任意 bk- 开头的组件——bk-table、bk-table-column、bk-form、bk-form-item、bk-input、bk-select、bk-cascader、bk-dialog、bk-sideslider、bk-tree、bk-upload、bk-button、bk-checkbox、bk-radio、bk-tab、bk-popover、bk-loading 等；(2) 写表格列定义、column.render、表格多选、全选、行禁用、useTableSelection；(3) 不确定 bkui 组件的 prop / 事件 / 插槽 / 类型 / 默认值时（应通过 MCP 工具 get-component / get-components-batch / get-component-list 查询，而不是猜测）；(4) 想通过覆盖样式实现某个交互效果时（先确认是否有内置 prop）；(5) 用户提到\"bk 组件\"\"蓝鲸组件\"\"BK UI\"\"bkui\"\"组件 API 文档\"\"组件 prop\"\"组件事件\"等。"
 globs: ["front/**/*.vue", "front/**/*.tsx"]
-alwaysApply: true
+alwaysApply: false
 ---
 
 # bkui-vue3 组件使用规范

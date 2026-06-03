@@ -1,3 +1,12 @@
+---
+description: "权限系统/鉴权改造必读规范。当任务涉及以下任一情况时必须主动读取本规则：(1) 新增、修改、迁移任何权限相关代码——包括按钮鉴权、按钮禁用与权限申请、操作权限、视图权限、路由权限、页面访问权限、403 / 无权限页面；(2) 代码中出现或需要使用 useVerify、authVerifyData、handleAuth、permissionAction、useGlobalPermissionDialog、useResourceAccountStore、PermissionDialog、HcmAuth、hcm-auth、auth-symbols、AUTH_*、IAuthSign、meta.auth、view-auth、getAuthSignByBusinessId 等符号；(3) 用户提到\"权限\"\"鉴权\"\"无权限\"\"权限申请\"\"权限弹窗\"\"按钮置灰\"\"按钮禁用\"\"403\"\"权限校验\"\"权限标识\"\"权限符号\"\"useVerify 迁移\"\"HcmAuth 迁移\"等；(4) 给某个页面/按钮加权限、改权限符号、修复权限失效、为详情页/列表页接入权限。"
+globs:
+  - 'front/**/*.vue'
+  - 'front/**/*.ts'
+  - 'front/**/*.tsx'
+alwaysApply: false
+---
+
 # 权限系统迁移规范
 
 ## 背景

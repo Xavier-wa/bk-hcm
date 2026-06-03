@@ -1,9 +1,10 @@
 ---
-description: MongoDB 到 MySQL 接口迁移的前端适配指南
+description: "MongoDB 到 MySQL 接口迁移的前端适配规范。当任务涉及以下任一情况时必须主动读取本规则：(1) SCR / WOA / scrConfig / useTable 接口的请求或响应字段适配、接口迁移、接口字段对齐；(2) 代码中出现或需要修改 filter 结构、condition / op、rule / rules、operator、equal/not_equal/greater/less 等长名运算符或 eq/neq/gt/gte/lt/lte/in/nin 短名运算符；(3) 涉及 page 参数（start、limit、enable_count、count、sort、order、legacy、pageEnableCountKey）、分页计数、count 与数据双请求拆分；(4) 时间字段适配——create_at → created_at、update_at → updated_at、ISO 8601 时间格式、dayjs().toISOString()；(5) 字段提升（如 bk_biz_id → bk_biz_ids 从 filter 移到顶层）；(6) 用户提到\"接口迁移\"\"Mongo 转 MySQL\"\"分页参数\"\"filter 结构\"\"接口报错 page is required\"\"count is enabled\"\"列表查询不工作\"\"排序参数\"\"接口适配\"等；(7) 修改 use-scr-columns、scrConfig、列表页查询参数、轮询请求、批量导出 rollRequest、store 中内联请求等。"
 globs:
   - 'front/**/*.vue'
   - 'front/**/*.ts'
   - 'front/**/*.tsx'
+alwaysApply: false
 ---
 
 # MongoDB → MySQL 接口迁移前端适配

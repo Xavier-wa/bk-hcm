@@ -1,0 +1,104 @@
+{
+  "id": "feat-cvmapply-retry",
+  "title": "CVM申请-修改需求重试优化",
+  "currentStage": "done",
+  "createdAt": "2026-06-02T09:34:28.259Z",
+  "updatedAt": "2026-06-03T02:39:40.589Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvmapply-retry/prd.md",
+        "kind": "file",
+        "addedAt": "2026-06-02T09:52:09.179Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvmapply-retry/design.md",
+        "kind": "file",
+        "addedAt": "2026-06-02T09:52:46.226Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvmapply-retry/api.md",
+        "kind": "file",
+        "addedAt": "2026-06-02T09:53:13.946Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvmapply-retry/coding.md",
+        "kind": "file",
+        "addedAt": "2026-06-02T09:54:02.018Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvmapply-retry/test.md",
+        "kind": "file",
+        "addedAt": "2026-06-02T09:56:03.319Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-06-02T09:52:20.366Z",
+      "note": "需求明确：修改申请页机型选择弹窗请求接口需补充 suborder_id 参数"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-06-02T09:52:47.915Z",
+      "note": "无 UI 改动，纯接口字段补充"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-06-02T09:53:20.330Z",
+      "note": "接口变更明确：新增可选 suborder_id 参数"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-06-02T09:54:02.819Z",
+      "note": "实施方案清晰，4个文件改动，向后兼容"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-06-03T02:39:36.495Z",
+      "note": "P0/P1 全部验证通过，功能正常"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-06-02T09:34:28.259Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-06-02T09:52:27.734Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-06-02T09:52:52.962Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-06-02T09:53:24.712Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-06-02T09:56:09.838Z"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-06-03T02:39:40.589Z"
+    }
+  ],
+  "branch": "feat-cvmapply-retry"
+}

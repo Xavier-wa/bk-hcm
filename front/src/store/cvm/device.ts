@@ -145,6 +145,7 @@ export const useCvmDeviceStore = defineStore('cvm-device', () => {
     require_type: RequirementType;
     region: string;
     zone?: string;
+    suborder_id?: string;
   }) => {
     chargeTypeDeviceTypeListLoading.value = true;
     try {

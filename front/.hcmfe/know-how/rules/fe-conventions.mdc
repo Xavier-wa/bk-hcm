@@ -1,11 +1,12 @@
 ---
-description: 前端项目约定 - 代码规范和最佳实践
+description: "前端代码规范与最佳实践（必读）—— 当修改、创建、重构、优化前端代码时必须遵循的规范。包括：Vue 组件结构顺序、组件命名规范（PascalCase vs kebab-case）、CSS 类命名、文件命名（kebab-case）、Vue 3 组合式 API 最佳实践（script setup、defineProps、defineModel、useTemplateRef）、禁止使用工具类 class 设置间距等。涉及关键词：最佳实践、代码规范、代码风格、代码质量、重构、优化、命名规范、组件规范。"
 globs:
   - "front/**/*.vue"
   - "front/**/*.ts"
   - "front/**/*.tsx"
-alwaysApply: true
+alwaysApply: false
 ---
+
 
 # 前端项目约定
 
@@ -167,3 +168,151 @@ get-components-batch { names: ["form", "input", "select"] }
 ```
 
 **原因**：工具类 class 缺乏语义、不易维护，且在 scoped 样式中容易产生冲突。
+
+---
+
+## 6. 文件和目录命名规范
+
+AI Agent 在创建任何新文件或目录时，必须遵循**小写字母 + 短横线（kebab-case）**命名规范。
+
+**适用范围**：`front/src/` 目录下所有由 AI 生成的新文件和目录。
+
+**正确示例**：
+```
+front/src/views/recycle-server-room/quota-offset/render-row.vue  ✅
+front/src/views/account-manage/index.vue                        ✅
+```
+
+**错误示例**：
+```
+recycleServerRoom/     ❌ 驼峰命名
+quota_offset/          ❌ 下划线
+ZiyanScr/              ❌ 包含大写字母
+renderRow.vue          ❌ 驼峰命名
+RenderRow.vue          ❌ 大驼峰命名
+```
+
+**AI Agent 执行规则**：
+1. 创建文件/目录前，检查命名是否为 kebab-case
+2. 多单词组合使用短横线连接（如 `recycle-server-room`）
+3. 避免模糊缩写，使用清晰的全称或通用缩写（如 `api`、`ui`）
+4. 禁止使用 camelCase、PascalCase、snake_case 命名文件或目录
+
+---
+
+## 7. Vue 3 + TypeScript 组合式 API 最佳实践
+
+### 7.1 基本规范
+
+- 必须使用 `<script setup lang="ts">`，禁止 Options API
+- 优先使用编译器宏（无需手动导入）
+
+### 7.2 模板引用
+
+使用 `useTemplateRef<T>()` 获取引用，禁止 `ref<Component | null>()` 和 `this.$refs`：
+
+```vue
+<script setup lang="ts">
+import MyDialog from './my-dialog.vue';
+const dialogRef = useTemplateRef<InstanceType<typeof MyDialog>>('dialog');
+const inputRef = useTemplateRef<HTMLInputElement>('input');
+dialogRef.value?.open();
+</script>
+<template>
+  <MyDialog ref="dialog" />
+  <input ref="input" />
+</template>
+```
+
+### 7.3 Props / Emits / v-model
+
+```vue
+<script setup lang="ts">
+// Props：泛型 + withDefaults
+const props = withDefaults(defineProps<{
+  data: Record<string, unknown>;
+  title?: string;
+}>(), { title: '' });
+
+// Emits：泛型语法
+const emit = defineEmits<{
+  (e: 'change', data: Record<string, unknown>): void;
+}>();
+
+// v-model：defineModel（Vue 3.3+）
+const modelValue = defineModel<string>();
+const visible = defineModel<boolean>('visible', { required: true });
+</script>
+```
+
+### 7.4 响应式数据
+
+优先 `ref()` 而非 `reactive()`（类型推断更友好，解构不丢失响应性）：
+
+```vue
+<script setup lang="ts">
+const count = ref(0);
+const user = ref<User | null>(null);
+const filteredList = computed(() => list.value.filter(i => i.status === 'active'));
+</script>
+```
+
+### 7.5 监听与副作用
+
+```vue
+<script setup lang="ts">
+// watch：显式指定监听源
+watch(count, (val) => { /* ... */ });
+watch(() => [count.value, user.value?.name], ([a, b]) => { /* ... */ });
+watch(count, handler, { immediate: true });
+watch(() => user.value, handler, { deep: true });
+
+// watchEffect：自动收集依赖
+watchEffect(() => { console.log(count.value, user.value?.name); });
+
+// 清理副作用
+watchEffect((onCleanup) => {
+  const timer = setInterval(() => {}, 1000);
+  onCleanup(() => clearInterval(timer));
+});
+
+// watchPostEffect：DOM 更新后执行
+watchPostEffect(() => { document.querySelector('.el')?.clientHeight; });
+</script>
+```
+
+### 7.6 useAttrs / useSlots / defineExpose
+
+```vue
+<script setup lang="ts">
+const attrs = useAttrs();           // 获取透传属性
+const slots = useSlots();           // 获取插槽
+defineExpose({ open, close });      // 暴露方法给父组件
+</script>
+```
+
+### 7.7 异步组件
+
+```vue
+<script setup lang="ts">
+const HeavyChart = defineAsyncComponent(() => import('./heavy-chart.vue'));
+</script>
+```
+
+### 7.8 AI Agent 执行规则
+
+编写 Vue 组件时必须遵循：
+
+1. 使用 `<script setup lang="ts">`，禁止 Options API
+2. 引用用 `useTemplateRef<T>()`，禁止 `ref()` / `this.$refs`
+3. Props 用泛型 `defineProps<T>()`，禁止运行时声明
+4. v-model 用 `defineModel<T>()`，禁止手动 `update:modelValue`
+5. 响应式优先 `ref()`，避免 `reactive()`
+6. 复杂逻辑用 `computed()`，禁止写在模板中
+7. 暴露方法用 `defineExpose()`
+8. 大型组件用 `defineAsyncComponent` 懒加载
+9. 精确监听用 `watch()`，自动依赖用 `watchEffect()`
+10. DOM 更新后用 `watchPostEffect()`
+11. 透传属性用 `useAttrs()`，插槽用 `useSlots()`
+12. 清理副作用用 `onCleanup`
+13. 避免不必要的深度监听，优先 getter `() => obj.prop`

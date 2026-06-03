@@ -1,6 +1,11 @@
 ---
-description: 前端菜单路由架构规范 —— 新模块创建或老模块改造时的路由、菜单、权限定义原则
-alwaysApply: true
+description: "前端菜单与路由架构规范。当任务涉及以下任一情况时必须主动读取本规则：(1) 新建模块、新增页面、新增菜单项、新增路由、添加二级/三级页面、增加详情页/创建页/列表页；(2) 改造或调整已有模块的路由结构、菜单结构、菜单分组、菜单显隐、面包屑、页签高亮（activeKey）；(3) 代码中需要创建或修改 route-config.ts、menu-service.ts、auth-service.ts、menu-symbol.ts、auth-symbols.ts、views/index.ts、router/meta.ts、Meta 类、entry-biz.vue / entry-rsc.vue / entry-srv.vue；(4) 涉及一级视图划分——业务（business / bizId）、工作台（service）、资源运营（resource），跨视图复用模块（同一模块在多个视图下出现）；(5) 用户提到\"加菜单\"\"加路由\"\"新建页面\"\"新增模块\"\"模块改造\"\"路由跳转的 name\"\"菜单不显示\"\"菜单高亮不对\"\"面包屑\"\"useWhereAmI\"\"业务视角与资源视角\"\"路由 Symbol\"\"meta.auth.view\" 等；(6) 路由权限 / 视图权限的定义（meta.auth.view、view-auth.ts、预鉴权配置）。"
+globs:
+  - 'front/**/route-config/**'
+  - 'front/**/menu-service/**'
+  - 'front/**/router/**'
+  - 'front/**/views/**'
+alwaysApply: false
 ---
 
 # 菜单路由架构规范

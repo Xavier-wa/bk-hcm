@@ -33,7 +33,7 @@ const selectedId = computed({
     const selectedItem = optionList.value.find((item) => item.id === val);
     emit('change', selectedItem);
     // 接口入参vpc_id, select值为id, 此处做转换
-    model.value = selectedItem?.vpc_id;
+    model.value = selectedItem?.vpc_id ?? '';
   },
 });
 
