@@ -208,7 +208,7 @@ export default defineComponent({
     const suborders = ref([]);
     const subordersOriginal = ref([]);
 
-    const dissolveSummary = ref<ICpuCoreSummary>({ total_core: 0, delivered_core: 0 });
+    const dissolveSummary = ref<ICpuCoreSummary>({ total_core: 0, delivered_core: 0, available_quota: 0 });
 
     const cloudMachineList = computed(() => {
       return suborders.value
@@ -506,9 +506,7 @@ export default defineComponent({
                       </div>
                       <div>
                         裁撤可申领核数：
-                        <span>
-                          {Math.max(dissolveSummary.value.total_core - dissolveSummary.value.delivered_core, 0)}
-                        </span>
+                        <span>{dissolveSummary.value.available_quota}</span>
                       </div>
                     </div>
                   )}
