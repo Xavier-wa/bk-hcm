@@ -37,7 +37,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// Client defines the BKAIDev Skill API operations used by the agent-server skill syncer.
+// Client defines the BKAIDev API operations used by the agent-server skill and prompt syncers.
 type Client interface {
 	// ListSkills calls list_app_v1_skills.
 	ListSkills(kt *kit.Kit, req *ListSkillsReq) ([]SkillListItem, error)
@@ -47,6 +47,10 @@ type Client interface {
 	GetSkillDownloadURL(kt *kit.Kit, req *GetSkillDownloadURLReq) (*SkillDownloadResult, error)
 	// ListSkillVersions calls retrieve_app_v1_skills_versions.
 	ListSkillVersions(kt *kit.Kit, req *ListSkillVersionsReq) ([]SkillVersionItem, error)
+	// ListPrompts calls list_app_v1_prompts.
+	ListPrompts(kt *kit.Kit, req *ListPromptsReq) (*ListPromptsResp, error)
+	// RetrievePrompt calls retrieve_app_v1_prompts.
+	RetrievePrompt(kt *kit.Kit, req *RetrievePromptReq) (*PromptDetail, error)
 }
 
 // NewClient initializes a BKAIDev skill API gateway client.
@@ -79,16 +83,16 @@ func NewClient(cfg *cc.ApiGateway, reg prometheus.Registerer) (Client, error) {
 		MetricOpts: client.MetricOption{Register: reg},
 	}
 
-	return &skillClient{
+	return &bkaidevClient{
 		config: cfg,
 		client: rest.NewClient(cap, "/"),
 	}, nil
 }
 
-var _ Client = (*skillClient)(nil)
+var _ Client = (*bkaidevClient)(nil)
 
-// skillClient implements Client.
-type skillClient struct {
+// bkaidevClient implements Client.
+type bkaidevClient struct {
 	config *cc.ApiGateway
 	client rest.ClientInterface
 }
@@ -116,8 +120,8 @@ func (r *bkaidevResp[T]) errorMessage() string {
 }
 
 // BKAIDevApiGatewayGet performs a GET request against BKAIDev skill APIs with the dedicated response envelope.
-func BKAIDevApiGatewayGet[T any](c *skillClient, kt *kit.Kit, params map[string]string, url string, urlParams ...any) (
-	T, error) {
+func BKAIDevApiGatewayGet[T any](c *bkaidevClient, kt *kit.Kit, params map[string]string, url string,
+	urlParams ...any) (T, error) {
 
 	var zero T
 
@@ -143,7 +147,7 @@ func BKAIDevApiGatewayGet[T any](c *skillClient, kt *kit.Kit, params map[string]
 	return resp.Data, nil
 }
 
-func (c *skillClient) authHeader(kt *kit.Kit) http.Header {
+func (c *bkaidevClient) authHeader(kt *kit.Kit) http.Header {
 	user := kt.User
 	if len(c.config.User) > 0 {
 		user = c.config.User
@@ -158,7 +162,7 @@ func (c *skillClient) authHeader(kt *kit.Kit) http.Header {
 }
 
 // ListSkills calls list_app_v1_skills and returns the skill list.
-func (c *skillClient) ListSkills(kt *kit.Kit, req *ListSkillsReq) ([]SkillListItem, error) {
+func (c *bkaidevClient) ListSkills(kt *kit.Kit, req *ListSkillsReq) ([]SkillListItem, error) {
 	if err := req.Validate(); err != nil {
 		logs.Errorf("validate list skills request failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
@@ -176,7 +180,7 @@ func (c *skillClient) ListSkills(kt *kit.Kit, req *ListSkillsReq) ([]SkillListIt
 }
 
 // RetrieveSkill calls retrieve_app_v1_skills and returns the full skill detail.
-func (c *skillClient) RetrieveSkill(kt *kit.Kit, req *RetrieveSkillReq) (*SkillDetail, error) {
+func (c *bkaidevClient) RetrieveSkill(kt *kit.Kit, req *RetrieveSkillReq) (*SkillDetail, error) {
 	if err := req.Validate(); err != nil {
 		logs.Errorf("validate retrieve skills request failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
@@ -191,7 +195,7 @@ func (c *skillClient) RetrieveSkill(kt *kit.Kit, req *RetrieveSkillReq) (*SkillD
 }
 
 // GetSkillDownloadURL calls retrieve_app_v1_skills_download.
-func (c *skillClient) GetSkillDownloadURL(kt *kit.Kit, req *GetSkillDownloadURLReq) (*SkillDownloadResult, error) {
+func (c *bkaidevClient) GetSkillDownloadURL(kt *kit.Kit, req *GetSkillDownloadURLReq) (*SkillDownloadResult, error) {
 	if err := req.Validate(); err != nil {
 		logs.Errorf("get skill download url request failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
@@ -206,7 +210,7 @@ func (c *skillClient) GetSkillDownloadURL(kt *kit.Kit, req *GetSkillDownloadURLR
 }
 
 // ListSkillVersions calls retrieve_app_v1_skills_versions.
-func (c *skillClient) ListSkillVersions(kt *kit.Kit, req *ListSkillVersionsReq) ([]SkillVersionItem, error) {
+func (c *bkaidevClient) ListSkillVersions(kt *kit.Kit, req *ListSkillVersionsReq) ([]SkillVersionItem, error) {
 	if err := req.Validate(); err != nil {
 		logs.Errorf("validate get skill download url request failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, errf.Newf(errf.InvalidParameter, "validate get skill download url request failed: %v", err)

@@ -31,6 +31,8 @@ import (
 
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/criteria/errf"
+	"hcm/pkg/logs"
 )
 
 var (
@@ -1198,28 +1200,102 @@ func (s AgentToolsConfig) NeedToRefreshToolSetsOnRun() bool {
 	return false
 }
 
-// AgentPromptConfig configures the prompt files loaded into the AGUI agent.
-// Both fields accept absolute paths or paths relative to the process working directory.
+// AgentPromptEntry configures a single BKAIDev-hosted prompt entry.
+type AgentPromptEntry struct {
+	// ID is the prompt_id on the BKAIDev platform used to retrieve content.
+	ID int `yaml:"id"`
+	// Code is the local key used to retrieve content from PromptStore.
+	// 建议BKAIDev平台的prompt_code对应
+	Code string `yaml:"code"`
+	// Required: if true, the initial sync of this prompt must succeed before the agent
+	// is marked prompt-ready. Non-required failures are logged as warnings and skipped.
+	Required bool `yaml:"required"`
+}
+
+// AgentPromptConfig configures agent prompts: local file mode or BKAIDev sync mode.
+// When Enabled is true, BKAIDev sync mode is active and the file fields are ignored.
+// Gateway credentials are shared via AgentServerSetting.BKAIDevSyncAPIGateway.
 type AgentPromptConfig struct {
 	// SystemPromptFile is the path to a Markdown/text file whose content becomes the
-	// GlobalInstruction (system_prompt). It is prepended to every LLM request and
-	// is ideal for fixed identity definitions and hard constraints.
-	// Empty means no system prompt is injected.
+	// GlobalInstruction. Prepended to every LLM request.
 	SystemPromptFile string `yaml:"systemPromptFile"`
 	// InstructionFile is the path to a Markdown/text file whose content becomes the
-	// Instruction. It is appended to every LLM request and supports {user:xxx}
-	// state-injection placeholders for dynamic per-user context.
-	// Empty means no instruction is injected.
+	// Instruction. Appended to every LLM request.
 	InstructionFile string `yaml:"instructionFile"`
-	// SystemPrompt is the system prompt content.
+	// SystemPrompt is the system prompt content loaded from SystemPromptFile at startup.
 	SystemPrompt string
-	// Instruction is the instruction content.
+	// Instruction is the instruction content loaded from InstructionFile at startup.
 	Instruction string
+
+	// BKAIDev sync mode fields (ignored when Enabled=false).
+	// Enabled turns on BKAIDev prompt sync. When true, file fields above are ignored.
+	Enabled bool `yaml:"enabled"`
+	// SpaceID is the BKAIDev space identifier.
+	SpaceID string `yaml:"spaceID"`
+	// SyncInterval is the cron sync interval, e.g. "5m". Default: "5m".
+	SyncInterval string `yaml:"syncInterval"`
+	// StorePath is the local store file path that persists prompt content and MD5
+	// across restarts. Default: "prompt-store.json".
+	StorePath string `yaml:"storePath"`
+	// Entries is the list of prompts to sync from BKAIDev.
+	Entries []AgentPromptEntry `yaml:"entries"`
+}
+
+// BKAIDevSyncEnabled reports whether BKAIDev prompt sync is enabled.
+func (s *AgentPromptConfig) BKAIDevSyncEnabled() bool {
+	return s.Enabled
 }
 
 func (s *AgentPromptConfig) trySetDefault() {
+	if s.BKAIDevSyncEnabled() {
+		if s.SyncInterval == "" {
+			s.SyncInterval = "5m"
+		}
+		if s.StorePath == "" {
+			s.StorePath = "prompt-store.json"
+		}
+		// 远程模式下不加载文件，内容由 Syncer 异步填充
+		return
+	}
 	s.SystemPrompt = loadPromptFile(s.SystemPromptFile)
 	s.Instruction = loadPromptFile(s.InstructionFile)
+}
+
+// Validate validates the agent prompt config.
+func (s AgentPromptConfig) Validate() error {
+	if !s.BKAIDevSyncEnabled() {
+		if s.SystemPrompt == "" {
+			return errors.New("SystemPrompt is required for local file mode")
+		}
+		return nil
+	}
+
+	if s.SpaceID == "" {
+		return errors.New("spaceID is not set")
+	}
+	names := make(map[string]struct{}, len(s.Entries))
+	for i, p := range s.Entries {
+		if p.ID <= 0 {
+			logs.Warnf("prompts[%d]: id must be positive, id: %d", i, p.ID)
+			if !p.Required {
+				continue
+			}
+			return errf.Newf(errf.InvalidParameter, "prompts[%d]: id must be positive", i)
+		}
+		if p.Code == "" {
+			logs.Warnf("prompts[%d]: name must not be empty, id: %d", i, p.ID)
+			if !p.Required {
+				continue
+			}
+			return errf.Newf(errf.InvalidParameter, "prompts[%d]: name must not be empty, id: %d", i, p.ID)
+		}
+		if _, dup := names[p.Code]; dup {
+			logs.Warnf("prompts[%d]: duplicate name %s skip, id: %d", i, p.Code, p.ID)
+			continue
+		}
+		names[p.Code] = struct{}{}
+	}
+	return nil
 }
 
 // loadPromptFile reads a prompt text file and returns its trimmed content.
@@ -1384,8 +1460,6 @@ type AgentAGUI struct {
 	AllowedModels []AgentModelConfig `yaml:"allowedModels"`
 	// Model is the model config for the AGUI agent.
 	Model AgentModelGeneralConfig `yaml:"model"`
-	// Prompt configures the prompt files (system_prompt and instruction) for the AGUI agent.
-	Prompt AgentPromptConfig `yaml:"prompt"`
 }
 
 // Validate validates the agent AGUI configuration.
@@ -1397,7 +1471,6 @@ func (a *AgentAGUI) Validate() error {
 }
 
 func (a *AgentAGUI) trySetDefault() {
-	a.Prompt.trySetDefault()
 	a.Model.trySetDefault()
 }
 
@@ -1455,6 +1528,8 @@ type AgentServerSetting struct {
 	AGUI      AgentAGUI            `yaml:"agui"`
 	// Skills holds all skill configuration: filesystem paths and BKAIDev sync parameters.
 	Skills *AgentBKAIDevSyncSkillsConfig `yaml:"skills"`
+	// Prompt configures prompt files or BKAIDev-hosted prompt sync.
+	Prompt AgentPromptConfig `yaml:"prompt"`
 	// BKAIDevSyncAPIGateway holds the BKAIDev API gateway credentials shared by all
 	// sync domains (skills, prompts, etc.).
 	BKAIDevSyncAPIGateway ApiGateway `yaml:"bkaidevSyncApiGateway"`
@@ -1463,6 +1538,11 @@ type AgentServerSetting struct {
 // SkillSyncEnabled reports whether BKAIDev skill sync is turned on.
 func (s *AgentServerSetting) SkillSyncEnabled() bool {
 	return s.Skills != nil && s.Skills.Enabled
+}
+
+// PromptSyncEnabled reports whether BKAIDev prompt sync is turned on.
+func (s *AgentServerSetting) PromptSyncEnabled() bool {
+	return s.Prompt.BKAIDevSyncEnabled()
 }
 
 // trySetFlagBindIP try set flag bind ip.
@@ -1481,6 +1561,7 @@ func (s *AgentServerSetting) trySetDefault() {
 	if s.SkillSyncEnabled() {
 		s.Skills.trySetDefault()
 	}
+	s.Prompt.trySetDefault()
 }
 
 // Validate AgentServerSetting option.
@@ -1497,14 +1578,20 @@ func (s AgentServerSetting) Validate() error {
 		return err
 	}
 
-	if s.SkillSyncEnabled() {
+	if s.SkillSyncEnabled() || s.PromptSyncEnabled() {
 		if err := s.BKAIDevSyncAPIGateway.validate(); err != nil {
 			return err
 		}
+	}
 
+	if s.SkillSyncEnabled() {
 		if err := s.Skills.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if err := s.Prompt.Validate(); err != nil {
+		return fmt.Errorf("prompt: %w", err)
 	}
 
 	return nil

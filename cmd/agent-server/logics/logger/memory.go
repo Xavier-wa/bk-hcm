@@ -26,6 +26,7 @@ import (
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
+	"hcm/pkg/tools/util"
 
 	"trpc.group/trpc-go/trpc-agent-go/memory"
 	"trpc.group/trpc-go/trpc-agent-go/session"
@@ -52,7 +53,7 @@ func (s *loggingMemoryService) AddMemory(ctx context.Context, userKey memory.Use
 
 	rid := rest.RidFromContext(ctx)
 	logs.Infof("[memory:add] user=%q app=%q topics=%v content=%q, rid: %s",
-		userKey.UserID, userKey.AppName, topics, truncate(memoryStr, memoryContentLogLimit), rid)
+		userKey.UserID, userKey.AppName, topics, util.Truncate(memoryStr, memoryContentLogLimit), rid)
 
 	err := s.inner.AddMemory(ctx, userKey, memoryStr, topics, opts...)
 	if err != nil {
@@ -68,7 +69,7 @@ func (s *loggingMemoryService) UpdateMemory(ctx context.Context, memoryKey memor
 
 	rid := rest.RidFromContext(ctx)
 	logs.Infof("[memory:update] user=%q memoryID=%q topics=%v content=%q, rid: %s",
-		memoryKey.UserID, memoryKey.MemoryID, topics, truncate(memoryStr, memoryContentLogLimit), rid)
+		memoryKey.UserID, memoryKey.MemoryID, topics, util.Truncate(memoryStr, memoryContentLogLimit), rid)
 
 	err := s.inner.UpdateMemory(ctx, memoryKey, memoryStr, topics, opts...)
 	if err != nil {
@@ -118,7 +119,7 @@ func (s *loggingMemoryService) ReadMemories(ctx context.Context, userKey memory.
 	for i, e := range entries {
 		logs.Infof("[memory:read]   [%d] id=%q kind=%q topics=%v updated=%v content=%q, rid: %s",
 			i, e.ID, e.Memory.Kind, e.Memory.Topics, e.UpdatedAt.Format(constant.TimeStdFormat),
-			truncate(e.Memory.Memory, memoryContentLogLimit), rid)
+			util.Truncate(e.Memory.Memory, memoryContentLogLimit), rid)
 	}
 	return entries, nil
 }
@@ -128,17 +129,17 @@ func (s *loggingMemoryService) SearchMemories(ctx context.Context, userKey memor
 
 	rid := rest.RidFromContext(ctx)
 	logs.Infof("[memory:search] user=%q app=%q query=%q, rid: %s",
-		userKey.UserID, userKey.AppName, truncate(query, memoryContentLogLimit), rid)
+		userKey.UserID, userKey.AppName, util.Truncate(query, memoryContentLogLimit), rid)
 
 	entries, err := s.inner.SearchMemories(ctx, userKey, query, opts...)
 	if err != nil {
-		logs.Errorf("[memory:search] user=%q query=%q FAILED: %v, rid: %s", userKey.UserID, truncate(query, 100),
+		logs.Errorf("[memory:search] user=%q query=%q FAILED: %v, rid: %s", userKey.UserID, util.Truncate(query, 100),
 			err, rid)
 		return nil, err
 	}
 
 	logs.Infof("[memory:search] user=%q returned %d results for query=%q, rid: %s",
-		userKey.UserID, len(entries), truncate(query, 100), rid)
+		userKey.UserID, len(entries), util.Truncate(query, 100), rid)
 	for i, e := range entries {
 		scoreInfo := ""
 		if e.Score > 0 {
@@ -146,7 +147,7 @@ func (s *loggingMemoryService) SearchMemories(ctx context.Context, userKey memor
 		}
 		logs.Infof("[memory:search]   [%d]%s id=%q kind=%q topics=%v content=%q, rid: %s",
 			i, scoreInfo, e.ID, e.Memory.Kind, e.Memory.Topics,
-			truncate(e.Memory.Memory, memoryContentLogLimit), rid)
+			util.Truncate(e.Memory.Memory, memoryContentLogLimit), rid)
 	}
 	return entries, nil
 }
@@ -176,11 +177,4 @@ func (s *loggingMemoryService) EnqueueAutoMemoryJob(ctx context.Context, sess *s
 
 func (s *loggingMemoryService) Close() error {
 	return s.inner.Close()
-}
-
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + fmt.Sprintf("... (%d chars total)", len(s))
 }

@@ -159,15 +159,6 @@ agui:
     stream: true       # true=流式输出，每个 token 单独推送一个 TEXT_MESSAGE_CONTENT SSE 事件（逐字打字机效果）
     mode: graph
 
-  # prompt 配置 Agent 的系统提示词和任务指令，均从文件加载。
-  # 支持绝对路径或相对路径（相对于进程工作目录，通常为项目根目录）。
-  # 文件内容支持 {user:xxx} 占位符（从 user_states 注入用户级状态变量）。
-  prompt:
-    # systemPromptFile：GlobalInstruction，强制置顶。适合写固定的身份定义和安全约束。
-    systemPromptFile: "cmd/agent-server/etc/prompts/system_prompt.md"
-    # instructionFile：Instruction，追加在请求末尾。适合写任务说明和动态占位符。
-    instructionFile: "cmd/agent-server/etc/prompts/instruction.md"
-
   # allowedModels 配置允许使用的模型及其上下文窗口大小（tokens）。
   # contextWindow 用于框架的 Token Tailoring（自动裁剪超长对话），
   # 设为 0 则使用框架内置查表值（私有模型未收录时默认 8192）。
@@ -279,7 +270,44 @@ skills:
 
   maxParallel: 5               # 最大并发安装数，允许范围为[1-10]
 
-# BKAIDev 同步网关凭证，由 skills / prompts 等同步域共用。
+
+# prompt 配置 Agent 的系统提示词和任务指令，支持两种模式（互斥）：
+#
+# 【文件模式（默认）】从本地文件加载，进程启动时一次性读入，变更需重启服务。
+#   支持绝对路径或相对路径（相对于进程工作目录，通常为项目根目录）。
+#   文件内容支持 {user:xxx} 占位符（从 user_states 注入用户级状态变量）。
+#
+# 【BKAIDev 托管模式】通过 enabled=true 开启，从 BKAIDev 平台按 prompt_id 获取内容，
+#   首次同步完成后服务才就绪（promptReady），支持定时增量同步（以 content MD5 作为版本）；
+#   开启后 systemPromptFile / instructionFile 配置被忽略。
+#   每次 LLM 调用前通过 BeforeModel callback 热替换系统消息，无需重启即可生效。
+#
+# prompt 配置：本地文件模式或 BKAIDev 托管同步模式（二选一）。
+# 同步模式下 systemPromptFile / instructionFile 被忽略，内容由 Syncer 异步拉取并热更新。
+# 网关凭证由顶层 bkaidevSyncApiGateway 共用，无需在此重复配置。
+prompt:
+  # 本地文件模式（默认）：从本地文件加载 prompt，服务启动时立即生效。
+  # 开启 BKAIDev 同步后（enabled: true）这两个字段被忽略。
+  systemPromptFile: "cmd/agent-server/etc/prompts/system_prompt.md"
+  instructionFile: "cmd/agent-server/etc/prompts/instruction.md"
+
+  # BKAIDev 托管同步模式：开启后从平台实时拉取并热更新，网关复用顶层 bkaidevSyncApiGateway。
+  enabled: false
+  spaceID: ""              # BKAIDev 空间 ID（启用时必填）
+  syncInterval: "5m"       # 增量同步间隔（默认 5m）
+  storePath: "prompt-store.json"  # 本地持久化路径，重启后无需等待同步即可服务
+  entries:
+    - id: 1                # BKAIDev 平台上的 prompt_id（必须 > 0）
+      code: system_prompt  # 对应 SystemPromptKey，注入为 LLM system message
+      required: true       # true=同步失败阻止服务就绪
+    - id: 2
+      code: instruction    # 对应 InstructionKey，追加在 system message 之后
+      required: true
+    - id: 3
+      code: memory_extract_prompt  # 对应 MemoryExtractPromptKey，供 memory extractor 使用
+      required: false
+
+# BKAIDev 同步网关凭证，由 skills / prompt 等同步域共用。
 # 仅在至少一个同步域 enabled: true 时需要配置。
 bkaidevSyncApiGateway:
   endpoints:

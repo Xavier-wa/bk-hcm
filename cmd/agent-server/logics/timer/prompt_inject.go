@@ -27,6 +27,7 @@ import (
 
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 
 	"trpc.group/trpc-go/trpc-agent-go/model"
 )
@@ -35,8 +36,9 @@ import (
 // injects the current time into the system message before each LLM call.
 func MakeTimeInjectCallback() model.BeforeModelCallbackStructured {
 	return func(ctx context.Context, args *model.BeforeModelArgs) (*model.BeforeModelResult, error) {
+		rid := rest.RidFromContext(ctx)
 		if args == nil || args.Request == nil {
-			logs.Warnf("[timer] args or Request is nil, skip time inject")
+			logs.Warnf("[timer] args or Request is nil, skip time inject, rid: %s", rid)
 			return nil, nil
 		}
 
@@ -44,7 +46,7 @@ func MakeTimeInjectCallback() model.BeforeModelCallbackStructured {
 		timeContent := fmt.Sprintf("The current time is: %s", currentTime)
 
 		args.Request.Messages = mergeTimeContentIntoSystem(args.Request.Messages, timeContent)
-		logs.Infof("[timer] injected current time into system prompt: %s", currentTime)
+		logs.Infof("[timer] injected current time into system prompt: %s, rid: %s", currentTime, rid)
 		return nil, nil
 	}
 }

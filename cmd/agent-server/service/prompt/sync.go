@@ -17,18 +17,22 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package enumor
+package prompt
 
-// CronTask 定时任务
-type CronTask string
-
-const (
-	// CronTaskSyncDeviceCapacity 同步主机库存
-	CronTaskSyncDeviceCapacity CronTask = "sync_device_capacity"
-	// CronTaskRollingMonthlyTerminateNotice 滚服申领单跨月终止通知
-	CronTaskRollingMonthlyTerminateNotice CronTask = "rolling_monthly_terminate_notice"
-	// CronTaskSyncAgentSkills syncs agent-server skills from BKAIDev.
-	CronTaskSyncAgentSkills CronTask = "sync_agent_skills"
-	// CronTaskSyncAgentPrompts syncs agent-server prompts from BKAIDev.
-	CronTaskSyncAgentPrompts CronTask = "sync_agent_prompts"
+import (
+	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/criteria/errf"
+	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 )
+
+// SyncPrompts manually triggers a full incremental prompt sync from BKAIDev.
+func (s *service) SyncPrompts(cts *rest.Contexts) (interface{}, error) {
+	if err := s.tasks[enumor.CronTaskSyncAgentPrompts].Do(cts.Kit); err != nil {
+		logs.Errorf("manual prompt sync failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.Aborted, err)
+	}
+
+	logs.Infof("manual prompt sync triggered successfully, rid: %s", cts.Kit.Rid)
+	return nil, nil
+}

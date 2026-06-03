@@ -27,6 +27,7 @@ import (
 
 	"hcm/cmd/agent-server/logics/agent"
 	"hcm/cmd/agent-server/logics/model"
+	"hcm/cmd/agent-server/logics/prompt"
 	"hcm/cmd/agent-server/logics/skill"
 	"hcm/cmd/agent-server/logics/storage"
 	"hcm/cmd/agent-server/logics/tool"
@@ -55,6 +56,7 @@ type Runtime struct {
 	aguiMCPToolSets   *tool.MCPToolSet    // non-nil when MCP toolsets are configured
 	dynamicToolFilter trpctool.FilterFunc // non-nil when dynamic tool loading is enabled
 	skillMgr          *skill.Manager
+	promptMgr         *prompt.Manager
 	readiness         *Readiness
 	checkpointSaver   graph.CheckpointSaver
 	closeOnce         sync.Once
@@ -71,6 +73,22 @@ func (rt *Runtime) SkillSyncer() *skill.Syncer {
 		return nil
 	}
 	return rt.skillMgr.Syncer
+}
+
+// PromptSyncer returns the BKAIDev prompt syncer, or nil when disabled.
+func (rt *Runtime) PromptSyncer() *prompt.Syncer {
+	if rt.promptMgr == nil {
+		return nil
+	}
+	return rt.promptMgr.Syncer
+}
+
+// PromptStore returns the prompt store for agent callback injection.
+func (rt *Runtime) PromptStore() *prompt.Store {
+	if rt.promptMgr == nil {
+		return nil
+	}
+	return rt.promptMgr.Store
 }
 
 // DynamicToolFilter returns the dynamic tool filter function, or nil if not enabled.
@@ -117,6 +135,20 @@ func New() (*Runtime, error) {
 		logs.Infof("registered custom model context windows: %v", cw)
 	}
 
+	// Build Readiness to record the readiness status of the Agent Server
+	readiness := NewReadiness()
+	skillMgr, err := skill.NewManager(readiness)
+	if err != nil {
+		logs.Errorf("build skill manager failed, err: %v", err)
+		return nil, fmt.Errorf("build skill manager: %w", err)
+	}
+
+	promptMgr, err := prompt.NewManager(readiness)
+	if err != nil {
+		logs.Errorf("build prompt manager failed, err: %v", err)
+		return nil, fmt.Errorf("build prompt manager: %w", err)
+	}
+
 	// Build one model instance per allowed model name.
 	// Each model is associated with its provider's gateway config; models without
 	// an explicit provider use the default "bkaidev" provider.
@@ -134,7 +166,7 @@ func New() (*Runtime, error) {
 		return nil, fmt.Errorf("resolve default provider: %w, provider name: %s", err,
 			constant.DefaultProviderName)
 	}
-	sessionSvc, memorySvc, err := storage.BuildStorageServices(defaultMdl, aidevGW)
+	sessionSvc, memorySvc, err := storage.BuildStorageServices(defaultMdl, aidevGW, promptMgr.Store)
 	if err != nil {
 		return nil, err
 	}
@@ -153,15 +185,6 @@ func New() (*Runtime, error) {
 		logs.Infof("dynamic tool loading: enabled (strategy=%s, topN=%d, scoreThreshold=%.2f, tags=%d)",
 			d.Strategy, d.TopN, d.ScoreThreshold, len(d.ToolTags))
 	}
-
-	// Build Readiness to record the readiness status of the Agent Server
-	readiness := NewReadiness()
-	skillMgr, err := skill.NewManager(readiness)
-	if err != nil {
-		logs.Errorf("build skill manager failed, err: %v", err)
-		return nil, fmt.Errorf("build skill manager: %w", err)
-	}
-
 	// Build checkpoint saver for graph agent interrupt/resume support.
 	checkpointSaver, err := agent.BuildCheckpointSaver(storageCfg.Checkpoint)
 	if err != nil {
@@ -169,7 +192,8 @@ func New() (*Runtime, error) {
 	}
 
 	runnerOpts := buildRunnerOpts(sessionSvc, memorySvc)
-	agUIRunner, err := newAGUIRunner(defaultMdl, modelsMap, mcpToolSets, skillMgr, runnerOpts, checkpointSaver)
+	agUIRunner, err := newAGUIRunner(defaultMdl, modelsMap, mcpToolSets, skillMgr, promptMgr.Store, runnerOpts,
+		checkpointSaver)
 	if err != nil {
 		return nil, fmt.Errorf("build AGUI runner: %w", err)
 	}
@@ -181,6 +205,7 @@ func New() (*Runtime, error) {
 		aguiMCPToolSets:   mcpToolSets,
 		dynamicToolFilter: dynFilter,
 		skillMgr:          skillMgr,
+		promptMgr:         promptMgr,
 		readiness:         readiness,
 		checkpointSaver:   checkpointSaver,
 	}
@@ -201,7 +226,8 @@ func buildRunnerOpts(sessionSvc session.Service, memorySvc memory.Service) []run
 }
 
 func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Model, mcpToolSets *tool.MCPToolSet,
-	skillMgr *skill.Manager, runnerOpts []runner.Option, checkpointSaver graph.CheckpointSaver) (runner.Runner, error) {
+	skillMgr *skill.Manager, promptStore *prompt.Store, runnerOpts []runner.Option,
+	checkpointSaver graph.CheckpointSaver) (runner.Runner, error) {
 
 	aguiCfg := cc.AgentServer().AGUI
 
@@ -220,7 +246,7 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 	switch aguiCfg.Model.Mode {
 	case enumor.AgentModeGraph:
 		compiledGraph, err := agent.BuildGraph(defaultMdl, skillRepo, mcpToolSets,
-			aguiCfg.Prompt.SystemPrompt, aguiCfg.Prompt.Instruction, aguiCfg.AppName, aguiCfg.Model)
+			aguiCfg.AppName, aguiCfg.Model, promptStore)
 		if err != nil {
 			return nil, fmt.Errorf("build graph: %w", err)
 		}
@@ -229,8 +255,10 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 			return nil, fmt.Errorf("create graph agent: %w", err)
 		}
 	default:
+		promptCfg := cc.AgentServer().Prompt
 		agt = agent.NewLLMAgent(defaultMdl, modelsMap, aguiCfg.Model,
-			aguiCfg.Prompt.SystemPrompt, aguiCfg.Prompt.Instruction, skillRepo, mcpToolSets.TS, refreshOnRun)
+			promptCfg.SystemPrompt, promptCfg.Instruction, skillRepo, mcpToolSets.TS,
+			refreshOnRun, promptStore)
 	}
 
 	return runner.NewRunner(aguiCfg.AppName, agt, runnerOpts...), nil

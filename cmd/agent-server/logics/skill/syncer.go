@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"hcm/pkg/cc"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/cron/core"
@@ -92,7 +93,7 @@ func (s *Syncer) listSkillsReq() *bkaidev.ListSkillsReq {
 		SpaceID: s.cfg.SpaceID,
 		// TODO:AIDEV接口暂时不支持多个tag查询，所以策略是拉下来以后再过滤
 		// 代表只拉取该空间下的skill
-		GroupType: "space",
+		GroupType: constant.BKAIDEVGroupTypeSpace,
 	}
 }
 
@@ -115,8 +116,6 @@ func (s *Syncer) SyncSkills(kt *kit.Kit) error {
 
 	added, removed, updated := s.diffSkills(remoteItems)
 
-	changed := false
-
 	if len(added)+len(updated) > 0 {
 		toInstall := make([]bkaidev.SkillListItem, 0, len(added)+len(updated))
 		for _, key := range append(added, updated...) {
@@ -126,28 +125,24 @@ func (s *Syncer) SyncSkills(kt *kit.Kit) error {
 			logs.Errorf("parallel install failed, err: %v, rid: %s", installErr, kt.Rid)
 			return errf.Newf(errf.Aborted, "parallel install failed, err: %v", installErr)
 		}
-		changed = true
 	}
 
 	for _, name := range removed {
 		if err = s.removeSkill(kt, name); err != nil {
 			logs.Errorf("remove skill %s failed, err: %v, rid: %s", name, err, kt.Rid)
 			return errf.Newf(errf.Aborted, "remove skill %s failed, err: %v", name, err)
-		} else {
-			changed = true
 		}
 	}
 
-	if changed {
-		if err = s.repo.Refresh(); err != nil {
-			logs.Errorf("repo refresh after sync failed, err: %v, rid: %s", err, kt.Rid)
-			return fmt.Errorf("repo refresh after sync: %w", err)
-		}
-
-		logs.Infof("skill incremental sync done: added=%d updated=%d removed=%d, rid: %s",
-			len(added), len(updated), len(removed), kt.Rid)
-		s.readiness.MarkSkillReady()
+	if err = s.repo.Refresh(); err != nil {
+		logs.Errorf("repo refresh after sync failed, err: %v, rid: %s", err, kt.Rid)
+		return fmt.Errorf("repo refresh after sync: %w", err)
 	}
+
+	logs.Infof("skill incremental sync done: added=%d updated=%d removed=%d, rid: %s",
+		len(added), len(updated), len(removed), kt.Rid)
+
+	s.readiness.MarkSkillReady()
 
 	return nil
 }
@@ -215,9 +210,6 @@ func (s *Syncer) diffSkills(remote map[string]bkaidev.SkillListItem) (added, rem
 
 // ParseSyncInterval parses cfg.SyncInterval into a time.Duration.
 func ParseSyncInterval(cfg *cc.AgentBKAIDevSyncSkillsConfig) (time.Duration, error) {
-	if cfg == nil || cfg.SyncInterval == "" {
-		return 5 * time.Minute, nil
-	}
 	d, err := time.ParseDuration(cfg.SyncInterval)
 	if err != nil {
 		return 0, fmt.Errorf("invalid skill sync interval %q: %w", cfg.SyncInterval, err)
@@ -232,11 +224,6 @@ func ParseSyncInterval(cfg *cc.AgentBKAIDevSyncSkillsConfig) (time.Duration, err
 type SyncCronTask struct {
 	syncer   *Syncer
 	interval time.Duration
-}
-
-// NewSyncCronTask creates a SyncCronTask.
-func NewSyncCronTask(syncer *Syncer, interval time.Duration) *SyncCronTask {
-	return &SyncCronTask{syncer: syncer, interval: interval}
 }
 
 // Name returns the cron task identifier.
@@ -262,9 +249,9 @@ func (t *SyncCronTask) GetURL() string {
 	return SyncSkillsURL
 }
 
-// RegisterSyncCronTask registers the skill sync cron task when BKAIDev sync is enabled.
+// NewSyncCronTask registers the skill sync cron task when BKAIDev sync is enabled.
 // Returns nil when syncer is nil or sync is not configured.
-func RegisterSyncCronTask(syncer *Syncer) (core.Task, error) {
+func NewSyncCronTask(syncer *Syncer) (core.Task, error) {
 	if syncer == nil {
 		logs.Warnf("syncer is nil, skip register skill sync cron task")
 		return nil, nil
@@ -277,13 +264,11 @@ func RegisterSyncCronTask(syncer *Syncer) (core.Task, error) {
 
 	interval, err := ParseSyncInterval(srvCfg.Skills)
 	if err != nil {
-		return nil, fmt.Errorf("parse skill sync interval: %w", err)
+		return nil, fmt.Errorf("parse skill sync interval: %v", err)
 	}
 
-	task := NewSyncCronTask(syncer, interval)
+	return &SyncCronTask{syncer: syncer, interval: interval}, nil
 
-	logs.Infof("registered skill sync cron task, interval=%s", interval)
-	return task, nil
 }
 
 // convertTagNamesToMap converts skillTagNames from [][]string to map[string]string for easy comparison.

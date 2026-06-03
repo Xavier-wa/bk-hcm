@@ -23,6 +23,7 @@ package agent
 import (
 	"hcm/cmd/agent-server/logics/logger"
 	"hcm/cmd/agent-server/logics/model"
+	"hcm/cmd/agent-server/logics/prompt"
 	"hcm/cmd/agent-server/logics/tool"
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
@@ -39,14 +40,15 @@ import (
 // NewLLMAgent assembles the AGUI llm agent.
 // defaultMdl is the fallback model used when no per-request model name is specified.
 // modelsMap registers all models that can be selected per-request via agent.WithModelName.
-// systemPrompt is the GlobalInstruction content (prepended to every LLM request).
-// instruction is the per-request task instruction content (appended to every LLM request).
+// systemPrompt is the static GlobalInstruction content from config (may be overridden at runtime by promptStore).
+// instruction is the static per-request task instruction content from config.
 // skillRepo is the optional skill repository for progressive skill loading (may be nil).
 // toolSets contains ToolSet instances (e.g. MCP server toolsets).
 // refreshOnRun controls whether toolset tool lists are resolved lazily per-run.
+// promptStore provides live prompt content injected via BeforeModel callback (may be nil).
 func NewLLMAgent(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Model, modelCfg cc.AgentModelGeneralConfig,
 	systemPrompt, instruction string, skillRepo skillpkg.Repository, toolSets []trpctool.ToolSet,
-	refreshOnRun bool) trpcagent.Agent {
+	refreshOnRun bool, promptStore *prompt.Store) trpcagent.Agent {
 
 	generationConfig := trpcmodel.GenerationConfig{
 		MaxTokens:   cvt.ValToPtr(modelCfg.MaxTokens),
@@ -100,6 +102,10 @@ func NewLLMAgent(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mode
 	modelCb := trpcmodel.NewCallbacks()
 	modelCb.AfterModel = append(modelCb.AfterModel, logger.MakeModelLoggerCallback())
 	modelCb.BeforeModel = append(modelCb.BeforeModel, model.MakeHistoricalToolResultFilter())
+	// 远程 prompt 注入系统提示词（优先于其他要入System的提示词，如time）
+	if promptStore != nil {
+		modelCb.BeforeModel = append(modelCb.BeforeModel, prompt.MakeSystemPromptReplaceCallback(promptStore))
+	}
 	opts = append(opts, llmagent.WithModelCallbacks(modelCb))
 
 	logs.Infof("AGUI agent: models=%d skills=%v toolSets=%d refreshToolSetsOnRun=%v systemPrompt=%v instruction=%v",

@@ -28,9 +28,11 @@ import (
 
 	"hcm/cmd/agent-server/logics/auth"
 	"hcm/cmd/agent-server/logics/logger"
+	"hcm/cmd/agent-server/logics/prompt"
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
+	"hcm/pkg/tools/util"
 
 	openaiopt "github.com/openai/openai-go/option"
 	openaiembed "trpc.group/trpc-go/trpc-agent-go/knowledge/embedder/openai"
@@ -42,16 +44,16 @@ import (
 )
 
 // buildMemoryService constructs the appropriate memory.Service based on the resolved backend.
-func buildMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model, aidevGW *cc.AgentModelProvider) (
-	memory.Service, error) {
+func buildMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model, aidevGW *cc.AgentModelProvider,
+	promptStore *prompt.Store) (memory.Service, error) {
 
 	backend := cfg.ResolveMemoryBackend()
 
 	switch backend {
 	case "mysql":
-		return buildMySQLMemoryService(cfg, mdl)
+		return buildMySQLMemoryService(cfg, mdl, promptStore)
 	case "sqlitevec":
-		return buildSQLiteVecMemoryService(cfg, mdl, aidevGW)
+		return buildSQLiteVecMemoryService(cfg, mdl, aidevGW, promptStore)
 	case "":
 		logs.Infof("AGUI memory backend: disabled (no backend configured)")
 		return nil, nil
@@ -61,7 +63,9 @@ func buildMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model, aidevGW *cc.
 }
 
 // buildMySQLMemoryService constructs a MySQL-backed memory service.
-func buildMySQLMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model) (memory.Service, error) {
+func buildMySQLMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model,
+	promptStore *prompt.Store) (memory.Service, error) {
+
 	dsn := strings.TrimSpace(cfg.DSN)
 	if dsn == "" {
 		return nil, fmt.Errorf("memory backend=mysql requires DSN")
@@ -80,7 +84,7 @@ func buildMySQLMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model) (memory
 		opts = append(opts, memmysql.WithMaxResults(cfg.MaxSearchResults))
 	}
 	if cfg.AutoExtract && mdl != nil {
-		opts = append(opts, memmysql.WithExtractor(buildMemoryExtractor(cfg, mdl)))
+		opts = append(opts, memmysql.WithExtractor(buildMemoryExtractor(cfg, mdl, promptStore)))
 		logs.Infof("AGUI memory auto-extract: enabled (policy=%q, messages=%d, interval=%s)",
 			cfg.AutoExtractPolicy, cfg.AutoExtractMessages, cfg.AutoExtractInterval)
 	}
@@ -98,8 +102,8 @@ func buildMySQLMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model) (memory
 //
 // Full request URL: {gatewayCfg.BaseURL}/embeddings
 // (path suffix appended by the OpenAI Go SDK automatically)
-func buildSQLiteVecMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model, aidevGW *cc.AgentModelProvider) (
-	memory.Service, error) {
+func buildSQLiteVecMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model, aidevGW *cc.AgentModelProvider,
+	promptStore *prompt.Store) (memory.Service, error) {
 
 	dbPath := strings.TrimSpace(cfg.DBPath)
 	if dbPath == "" {
@@ -166,7 +170,7 @@ func buildSQLiteVecMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model, aid
 		svcOpts = append(svcOpts, memsqlitevec.WithIndexDimension(embedCfg.Dimensions))
 	}
 	if cfg.AutoExtract && mdl != nil {
-		svcOpts = append(svcOpts, memsqlitevec.WithExtractor(buildMemoryExtractor(cfg, mdl)))
+		svcOpts = append(svcOpts, memsqlitevec.WithExtractor(buildMemoryExtractor(cfg, mdl, promptStore)))
 		logs.Infof("AGUI memory auto-extract: enabled (policy=%q, messages=%d, interval=%s)",
 			cfg.AutoExtractPolicy, cfg.AutoExtractMessages, cfg.AutoExtractInterval)
 	}
@@ -184,7 +188,15 @@ func buildSQLiteVecMemoryService(cfg cc.AgentMemoryStorage, mdl model.Model, aid
 // buildMemoryExtractor constructs a MemoryExtractor from the given config.
 // Checkers are combined according to AutoExtractPolicy ("any" = OR, "all" = AND).
 // When no checker is configured the extractor runs after every Run.
-func buildMemoryExtractor(cfg cc.AgentMemoryStorage, mdl model.Model) extractor.MemoryExtractor {
+//
+// When promptStore is provided, a BeforeModel callback is registered in the
+// extractor's model callback pipeline. On every extraction LLM call the callback
+// reads MemoryExtractKey from the store and replaces the system message. This is
+// the same mechanism used by the graph agent for system-prompt hot-reload, and
+// avoids any concurrency issues with SetPrompt.
+func buildMemoryExtractor(cfg cc.AgentMemoryStorage, mdl model.Model,
+	promptStore *prompt.Store) extractor.MemoryExtractor {
+
 	var checkers []extractor.Checker
 	if cfg.AutoExtractMessages > 0 {
 		checkers = append(checkers, extractor.CheckMessageThreshold(cfg.AutoExtractMessages))
@@ -206,15 +218,34 @@ func buildMemoryExtractor(cfg cc.AgentMemoryStorage, mdl model.Model) extractor.
 			opts = append(opts, extractor.WithCheckersAny(checkers...))
 		}
 	}
-	if cfg.ExtractPrompt != "" {
-		opts = append(opts, extractor.WithPrompt(cfg.ExtractPrompt))
-		logs.Infof("AGUI memory extract prompt: custom (%d bytes)", len(cfg.ExtractPrompt))
+
+	// Set the extract prompt as a baseline. Priority: prompt store > static config.
+	// The MakeMemoryExtractReplaceCallback registered below overrides the system
+	// message on every extraction LLM call, so this baseline is a fallback for
+	// the first call when the store has not yet been populated by a sync cycle.
+	baselinePrompt := cfg.ExtractPrompt
+	if promptStore != nil {
+		if e, ok := promptStore.Get(constant.MemoryExtractPromptKey); ok && e.Content != "" {
+			baselinePrompt = e.Content
+			logs.Infof("AGUI memory extract prompt from prompt store, %d bytes,preview=%s",
+				len(e.Content), util.TruncateRune(e.Content, prompt.PromptContentMaxRuneLength))
+		}
+	}
+	if baselinePrompt != "" {
+		opts = append(opts, extractor.WithPrompt(baselinePrompt))
 	}
 
-	// Inject model logger into extractor so that AfterModel callbacks fire for
-	// LLM calls made by the background memory extraction worker (which bypasses
-	// the Agent-level callback pipeline).
+	// Build the model callback pipeline for the extractor.
 	modelCb := model.NewCallbacks()
+	// Hot-reload: read MemoryExtractKey from store on every extraction LLM call
+	// and replace the system message. Falls through to the extractor's built-in
+	// prompt when the store has no content for that key.
+	if promptStore != nil {
+		modelCb.BeforeModel = append(modelCb.BeforeModel,
+			prompt.MakeMemoryExtractReplaceCallback(promptStore))
+	}
+	// Inject model logger so AfterModel callbacks fire for background extraction
+	// calls that bypass the agent-level callback pipeline.
 	modelCb.AfterModel = append(modelCb.AfterModel, logger.MakeModelLoggerCallback())
 	opts = append(opts, extractor.WithModelCallbacks(modelCb))
 

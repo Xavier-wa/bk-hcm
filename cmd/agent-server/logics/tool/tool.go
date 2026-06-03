@@ -32,6 +32,7 @@ import (
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 
 	"trpc.group/trpc-go/trpc-agent-go/tool"
 	"trpc.group/trpc-go/trpc-agent-go/tool/mcp"
@@ -133,15 +134,16 @@ func buildOneMCPToolSet(cfg cc.AgentMCPToolSet) (tool.ToolSet, error) {
 				cfg.Name, appCode)
 			opts = append(opts, mcp.WithMCPOptions(
 				trpcmcp.WithHTTPBeforeRequest(func(ctx context.Context, req *http.Request) error {
+					rid := rest.RidFromContext(ctx)
 					ticket := auth.BKTicketFromContext(ctx)
 					if ticket != "" {
 						req.Header.Set(constant.BKGWAuthKey,
 							auth.BKApiAuthHeaderValue(appCode, appSecret, auth.BKUsernameFromContext(ctx), ticket))
-						logs.Infof("bkaidev MCP hook: injected auth header for %s %s",
-							req.Method, req.URL.Path)
+						logs.Infof("bkaidev MCP hook: injected auth header for %s %s, rid: %s",
+							req.Method, req.URL.Path, rid)
 					} else {
 						logs.Warnf("bkaidev MCP hook: no bk_ticket in context for %s %s, "+
-							"skipping auth header injection", req.Method, req.URL.Path)
+							"skipping auth header injection, rid: %s", req.Method, req.URL.Path, rid)
 					}
 					return nil
 				}),

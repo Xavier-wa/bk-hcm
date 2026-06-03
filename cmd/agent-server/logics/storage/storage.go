@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"hcm/cmd/agent-server/logics/logger"
+	"hcm/cmd/agent-server/logics/prompt"
 	"hcm/pkg/cc"
 	"hcm/pkg/logs"
 
@@ -38,7 +39,12 @@ import (
 // returning nil for each service when its backend is not configured.
 // mdl is used by the session summarizer and memory extractor; it may be nil
 // (in which case summary/extraction is silently disabled even if configured).
-func BuildStorageServices(mdl model.Model, aidevGW *cc.AgentModelProvider) (session.Service, memory.Service, error) {
+// promptStore is optional; when provided, a BeforeModel callback is registered in
+// the extractor's model pipeline that reads MemoryExtractKey on every LLM call,
+// enabling prompt hot-reload without any extra synchronization.
+func BuildStorageServices(mdl model.Model, aidevGW *cc.AgentModelProvider, promptStore *prompt.Store) (
+	session.Service, memory.Service, error) {
+
 	cfg := cc.AgentServer().Storage
 
 	var sessionSvc session.Service
@@ -64,7 +70,7 @@ func BuildStorageServices(mdl model.Model, aidevGW *cc.AgentModelProvider) (sess
 		logs.Infof("AGUI session backend: inmemory (no DSN configured)")
 	}
 
-	memorySvc, err := buildMemoryService(cfg.Memory, mdl, aidevGW)
+	memorySvc, err := buildMemoryService(cfg.Memory, mdl, aidevGW, promptStore)
 	if err != nil {
 		if sessionSvc != nil {
 			_ = sessionSvc.Close()

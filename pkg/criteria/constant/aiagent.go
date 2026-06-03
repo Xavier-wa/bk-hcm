@@ -115,3 +115,19 @@ const (
 	// FallbackInterruptKeyHashLen is the short hash length used in fallback interrupt key.
 	FallbackInterruptKeyHashLen = 16
 )
+
+// bkaidev
+const (
+	// BKAIDEVGroupTypeSpace is the space group type for bkaidev api.
+	BKAIDEVGroupTypeSpace = "space"
+)
+
+// prompt-key
+const (
+	// SystemPromptKey is the well-known prompt key injected as the LLM system message.
+	SystemPromptKey = "system_prompt"
+	// InstructionKey is the ll-known prompt key appended after the system message.
+	InstructionKey = "instruction"
+	// MemoryExtractPromptKey is the well-known prompt key used by the memory extractor.
+	MemoryExtractPromptKey = "memory_extract_prompt"
+)

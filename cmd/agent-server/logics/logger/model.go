@@ -30,6 +30,7 @@ import (
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
+	"hcm/pkg/tools/util"
 
 	openaiopt "github.com/openai/openai-go/option"
 	"github.com/tidwall/gjson"
@@ -63,15 +64,15 @@ func MakeModelLoggerCallback() model.AfterModelCallbackStructured {
 		msg := choice.Message
 
 		if msg.ReasoningContent != "" {
-			logs.Infof("[model] LLM reasoning: %s, rid: %s", truncate(msg.ReasoningContent, maxLog), rid)
+			logs.Infof("[model] LLM reasoning: %s, rid: %s", util.Truncate(msg.ReasoningContent, maxLog), rid)
 		}
 		if msg.Content != "" {
-			logs.Infof("[model] LLM content: %s, rid: %s", truncate(msg.Content, maxLog), rid)
+			logs.Infof("[model] LLM content: %s, rid: %s", util.Truncate(msg.Content, maxLog), rid)
 		}
 		if len(msg.ToolCalls) > 0 {
 			for _, tc := range msg.ToolCalls {
 				logs.Infof("[model] LLM tool_call: %s args=%s, rid: %s", tc.Function.Name,
-					truncate(string(tc.Function.Arguments), maxLog), rid)
+					util.Truncate(string(tc.Function.Arguments), maxLog), rid)
 			}
 		}
 

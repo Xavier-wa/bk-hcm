@@ -17,18 +17,35 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package enumor
+// Package prompt provides HTTP handlers for prompt management operations.
+package prompt
 
-// CronTask 定时任务
-type CronTask string
+import (
+	"net/http"
 
-const (
-	// CronTaskSyncDeviceCapacity 同步主机库存
-	CronTaskSyncDeviceCapacity CronTask = "sync_device_capacity"
-	// CronTaskRollingMonthlyTerminateNotice 滚服申领单跨月终止通知
-	CronTaskRollingMonthlyTerminateNotice CronTask = "rolling_monthly_terminate_notice"
-	// CronTaskSyncAgentSkills syncs agent-server skills from BKAIDev.
-	CronTaskSyncAgentSkills CronTask = "sync_agent_skills"
-	// CronTaskSyncAgentPrompts syncs agent-server prompts from BKAIDev.
-	CronTaskSyncAgentPrompts CronTask = "sync_agent_prompts"
+	"hcm/cmd/agent-server/service/capability"
+	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/cron/core"
+	"hcm/pkg/rest"
 )
+
+type service struct {
+	tasks map[enumor.CronTask]core.Task
+}
+
+// InitService registers prompt management routes onto the WebService.
+// It is a no-op when prompt sync cron task is not registered.
+func InitService(c *capability.Capability) {
+	if _, ok := c.Tasks[enumor.CronTaskSyncAgentPrompts]; !ok {
+		return
+	}
+
+	s := &service{tasks: c.Tasks}
+	h := rest.NewHandler()
+	s.initService(h)
+	h.Load(c.WebService)
+}
+
+func (s *service) initService(h *rest.Handler) {
+	h.Add("SyncPrompts", http.MethodPost, s.tasks[enumor.CronTaskSyncAgentPrompts].GetURL(), s.SyncPrompts)
+}

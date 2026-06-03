@@ -19,7 +19,9 @@
 
 package logics
 
-import "sync/atomic"
+import (
+	"sync/atomic"
+)
 
 // Readiness tracks whether agent-server is ready to serve AGUI traffic.
 // Two independent conditions must both be satisfied:
@@ -32,12 +34,10 @@ type Readiness struct {
 }
 
 // NewReadiness creates a Readiness instance.
-// promptReady is initialised to true because prompt remote sync is not
-// implemented in this change; call MarkPromptReady explicitly when that feature lands.
+// Both skillReady and promptReady start as false; each is set to true once
+// its corresponding initial sync completes (or is skipped when sync is disabled).
 func NewReadiness() *Readiness {
-	r := &Readiness{}
-	r.promptReady.Store(true) //TODO: 实现 prompt remote sync 后，需要修改为 false
-	return r
+	return &Readiness{}
 }
 
 // MarkSkillReady records that the initial skill sync has completed.

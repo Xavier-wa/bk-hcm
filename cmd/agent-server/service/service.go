@@ -37,10 +37,12 @@ import (
 
 	"hcm/cmd/agent-server/logics"
 	authlogic "hcm/cmd/agent-server/logics/auth"
+	"hcm/cmd/agent-server/logics/prompt"
 	"hcm/cmd/agent-server/logics/skill"
 	aguievent "hcm/cmd/agent-server/service/agui-event"
 	"hcm/cmd/agent-server/service/capability"
 	"hcm/cmd/agent-server/service/memory"
+	promptsvc "hcm/cmd/agent-server/service/prompt"
 	"hcm/cmd/agent-server/service/session"
 	skillsvc "hcm/cmd/agent-server/service/skill"
 	"hcm/cmd/agent-server/types/readiness"
@@ -128,13 +130,28 @@ func (s *Service) initCronTasks() error {
 		return fmt.Errorf("init cron: %w", err)
 	}
 
-	skillSyncTask, err := skill.RegisterSyncCronTask(s.runTime.SkillSyncer())
+	tasks := make([]core.Task, 0)
+	skillSyncTask, err := skill.NewSyncCronTask(s.runTime.SkillSyncer())
 	if err != nil {
+		logs.Errorf("init skill sync cron task failed, err: %v", err)
 		return err
 	}
-	s.tasks[enumor.CronTaskSyncAgentSkills] = skillSyncTask
+	if skillSyncTask != nil {
+		s.tasks[enumor.CronTaskSyncAgentSkills] = skillSyncTask
+		tasks = append(tasks, skillSyncTask)
+	}
 
-	if err = cron.Register([]core.Task{skillSyncTask}); err != nil {
+	promptTask, err := prompt.NewSyncCronTask(s.runTime.PromptSyncer())
+	if err != nil {
+		logs.Errorf("init prompt sync cron task failed, err: %v", err)
+		return err
+	}
+	if promptTask != nil {
+		s.tasks[enumor.CronTaskSyncAgentPrompts] = promptTask
+		tasks = append(tasks, promptTask)
+	}
+
+	if err = cron.Register(tasks); err != nil {
 		return fmt.Errorf("register skill sync cron: %w", err)
 	}
 
@@ -330,10 +347,10 @@ func (s *Service) apiSet() *restful.Container {
 	memory.InitService(c)
 	session.InitService(c, s.resolver)
 	skillsvc.InitService(c)
-
+	promptsvc.InitService(c)
 	// 提供前端判断 Agent 是否就绪的接口（走 rest.Handler 统一封装 result/code/message/data）
 	readinessH := rest.NewHandler()
-	readinessH.Add("AgentReadiness", http.MethodGet, "/readiness", s.agentReadiness)
+	readinessH.Add("AgentReadiness", http.MethodGet, "/readiness", s.AgentReadiness)
 	readinessH.Load(ws)
 
 	return restful.NewContainer().Add(c.WebService)
@@ -605,7 +622,7 @@ func tryPrepareAutoResume(saver graph.CheckpointSaver, ctx context.Context, inpu
 // agentReadiness handles GET /api/v1/agent/readiness.
 // Unlike /healthz (which checks etcd), this reports skill/prompt initial sync status.
 // Envelope is built by rest.Handler (respEntity / respErrorWithEntity), same as other APIs.
-func (s *Service) agentReadiness(cts *rest.Contexts) (interface{}, error) {
+func (s *Service) AgentReadiness(cts *rest.Contexts) (interface{}, error) {
 	rd := s.runTime.Readiness()
 	data := readiness.AgentReadinessResp{
 		SkillReady:  rd.SkillReady(),
@@ -628,7 +645,7 @@ func readinessMiddleware(rd *logics.Readiness, next http.Handler) http.Handler {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			rest.WriteResp(w, rest.NewBaseResp(errf.UnHealthy,
-				"agent not ready: skill initial sync has not completed yet"))
+				"agent is not ready: initial sync of skill or prompt has not completed yet"))
 			return
 		}
 		next.ServeHTTP(w, r)

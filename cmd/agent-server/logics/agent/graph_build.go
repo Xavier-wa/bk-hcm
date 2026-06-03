@@ -28,6 +28,7 @@ import (
 	"hcm/cmd/agent-server/logics/agent/hitl"
 	"hcm/cmd/agent-server/logics/logger"
 	"hcm/cmd/agent-server/logics/model"
+	"hcm/cmd/agent-server/logics/prompt"
 	"hcm/cmd/agent-server/logics/skill"
 	"hcm/cmd/agent-server/logics/timer"
 	"hcm/cmd/agent-server/logics/tool"
@@ -56,13 +57,12 @@ import (
 // The tool node executes tools when the LLM requests them.
 // The fallback node normalizes the LLM response and interrupts to wait for the next user message.
 func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *tool.MCPToolSet,
-	systemPrompt, instruction, agentName string, modelCfg cc.AgentModelGeneralConfig) (*graph.Graph, error) {
+	agentName string, modelCfg cc.AgentModelGeneralConfig, promptStore *prompt.Store) (*graph.Graph, error) {
 
 	schema := graph.MessagesStateSchema()
 	stateGraph := graph.NewStateGraph(schema)
 
-	// Build the combined prompt from external prompt sources.
-	prompt := buildPrompt(systemPrompt, instruction)
+	staticPrompt := resolveStaticPrompt(promptStore)
 	llmOpts := genLLMNodeOptions(toolset, modelCfg)
 
 	// 构建 LLM 调用 callback
@@ -70,6 +70,10 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *too
 	modelCb.AfterModel = append(modelCb.AfterModel, logger.MakeModelLoggerCallback())
 	// 历史工具调用结果优化，减少 LLM 上下文长度
 	modelCb.BeforeModel = append(modelCb.BeforeModel, model.MakeHistoricalToolResultFilter())
+	// 远程 prompt 注入系统提示词（优先于其他要入System的提示词，如skill,time）
+	if promptStore != nil {
+		modelCb.BeforeModel = append(modelCb.BeforeModel, prompt.MakeSystemPromptReplaceCallback(promptStore))
+	}
 	// 技能上下文注入
 	modelCb.BeforeModel = append(modelCb.BeforeModel, skill.MakeSkillInjectWithModelCallback(agentName, skillRepo))
 	// 当前时间注入
@@ -85,7 +89,7 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *too
 	skillTools[constant.HumanConfirmToolName] = hitl.GetToolWrapper()
 	// TODO 验证最终加载的 tool 有哪些
 	// 1. LLM Node: decides whether to call tools or respond directly.
-	stateGraph.AddLLMNode("llm", mdl, prompt, skillTools, llmOpts...)
+	stateGraph.AddLLMNode("llm", mdl, staticPrompt, skillTools, llmOpts...)
 
 	// 2. HITL Node: handles human_confirm tool calls.
 	stateGraph.AddNode("hitl", hitl.GetNode())
@@ -260,4 +264,19 @@ func buildFallbackInterruptKey(state graph.State, lastResp string) string {
 	}
 	return fmt.Sprintf("%s%s%d%s%s", constant.FallbackInterruptKey, constant.InterruptKeySeparator,
 		len(messages), constant.InterruptKeySeparator, hash)
+}
+
+// resolveStaticPrompt returns the system prompt to pass to AddLLMNode.
+// It prefers Store content (populated by local-file or BKAIDev sync),
+// falling back to raw cc config values only when the store has no system prompt yet.
+func resolveStaticPrompt(store *prompt.Store) string {
+	if store != nil {
+		sp, _ := store.Get(constant.SystemPromptKey)
+		inst, _ := store.Get(constant.InstructionKey)
+		if p := prompt.BuildSystemPrompt(sp.Content, inst.Content); p != "" {
+			return p
+		}
+	}
+	promptCfg := cc.AgentServer().Prompt
+	return prompt.BuildSystemPrompt(promptCfg.SystemPrompt, promptCfg.Instruction)
 }

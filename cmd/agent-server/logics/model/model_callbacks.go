@@ -43,6 +43,7 @@ const historicalToolResultPlaceholder = "[historical result omitted]"
 // message) are always preserved in full so the model can act on them.
 func MakeHistoricalToolResultFilter() model.BeforeModelCallbackStructured {
 	return func(ctx context.Context, args *model.BeforeModelArgs) (*model.BeforeModelResult, error) {
+		rid := rest.RidFromContext(ctx)
 		if args == nil || args.Request == nil {
 			return nil, nil
 		}
@@ -85,8 +86,8 @@ func MakeHistoricalToolResultFilter() model.BeforeModelCallbackStructured {
 		}
 		args.Request.Messages = filtered
 
-		rid := rest.RidFromContext(ctx)
-		logs.Infof("[model] historical tool results filtered: count=%d total_msgs=%d, rid: %s", filteredCount, len(msgs), rid)
+		logs.Infof("[model] historical tool results filtered: count=%d total_msgs=%d, rid: %s", filteredCount,
+			len(msgs), rid)
 		return nil, nil
 	}
 }

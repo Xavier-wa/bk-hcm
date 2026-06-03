@@ -131,7 +131,12 @@ func (s *Store[T]) snapshot() map[string]T {
 }
 
 // writeToDisk atomically persists the given map to s.path.
+// When s.path is empty the store operates in memory-only mode and writes are skipped.
 func (s *Store[T]) writeToDisk(m map[string]T) error {
+	if s.path == "" {
+		return nil
+	}
+
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal localstore: %w", err)
