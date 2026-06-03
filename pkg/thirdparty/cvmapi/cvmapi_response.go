@@ -102,7 +102,7 @@ type InstanceQueryRst struct {
 // InstanceItem cvm instance info
 type InstanceItem struct {
 	InstanceId      string                `json:"instanceId"`
-	InstanceStatus  enumor.InstanceStatus `json:"instanceStatus"` // PENDING:创建中 RUNNING:成功创建 SHUTDOWN:关机待回收
+	InstanceStatus  enumor.InstanceStatus `json:"instanceStatus"`
 	AssetId         string                `json:"instanceAssetId"`
 	LanIp           string                `json:"lanIp"`
 	WanIp           string                `json:"wanIp"`

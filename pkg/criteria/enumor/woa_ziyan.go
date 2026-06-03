@@ -519,8 +519,14 @@ const (
 type InstanceStatus string
 
 const (
+	// CvmInstanceStatusPending CVM实例-创建中
+	CvmInstanceStatusPending = "PENDING"
 	// CvmInstanceStatusRunning CVM实例-运行中
 	CvmInstanceStatusRunning = "RUNNING"
+	// CvmInstanceStatusStopped CVM实例-关机
+	CvmInstanceStatusStopped = "STOPPED"
+	// CvmInstanceStatusShutDown CVM实例-关机待回收
+	CvmInstanceStatusShutDown = "SHUTDOWN"
 )
 
 // CvmModifyRecordStatus is cvm modify record status
