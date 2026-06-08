@@ -1,0 +1,142 @@
+---
+description: 路由跳转规范 - 必须使用 routerAction 封装，禁止直接调用 vue-router 实例方法
+globs:
+  - "front/**/*.vue"
+  - "front/**/*.ts"
+  - "front/**/*.tsx"
+alwaysApply: true
+---
+
+# 路由跳转规范
+
+## 核心原则
+
+**严禁直接使用 `router.push`、`router.replace`、`router.back` 等 vue-router 实例方法进行路由跳转**。所有路由跳转必须通过 `routerAction` 封装对象完成，以确保历史记录管理、权限守卫和统一行为的一致性。
+
+## 禁止直接调用 vue-router 方法
+
+以下用法**一律禁止**：
+
+```typescript
+// ❌ 禁止：直接调用 router.push
+import router from '@/router';
+router.push({ name: MENU_XXX });
+
+// ❌ 禁止：直接调用 router.replace
+router.replace({ name: MENU_XXX });
+
+// ❌ 禁止：直接调用 router.back 或 router.go
+router.back();
+router.go(-1);
+
+// ❌ 禁止：通过 useRouter 获取实例后调用
+import { useRouter } from 'vue-router';
+const router = useRouter();
+router.push({ name: MENU_XXX });
+```
+
+## 正确做法：使用 routerAction
+
+统一使用 `@/router/utils/action.ts` 导出的 `routerAction` 对象：
+
+```typescript
+// ✅ 正确：导入 routerAction
+import routerAction from '@/router/utils/action';
+```
+
+### 1. 普通跳转（push）
+
+```typescript
+// ✅ 正确：使用 routerAction.redirect 进行普通跳转
+routerAction.redirect({
+  name: MENU_SERVICE_TICKET_DETAILS,
+  query: {
+    id: result.id,
+    type: 'account',
+  },
+});
+```
+
+### 2. 替换当前历史记录（replace）
+
+```typescript
+// ✅ 正确：使用 replace 选项
+routerAction.redirect(
+  {
+    name: MENU_XXX,
+    query: { id: '123' },
+  },
+  { replace: true }
+);
+```
+
+### 3. 后退
+
+```typescript
+// ✅ 正确：使用 routerAction.back
+routerAction.back();
+```
+
+### 4. 新窗口打开
+
+```typescript
+// ✅ 正确：使用 routerAction.open
+routerAction.open({
+  name: MENU_XXX,
+  params: { id: '123' },
+});
+```
+
+### 5. 带历史记录标记的跳转（history）
+
+用于需要支持「返回回到当前页」的场景：
+
+```typescript
+// ✅ 正确：使用 history 选项，目标页调用 back() 可返回
+routerAction.redirect(
+  {
+    name: MENU_XXX_CREATE,
+  },
+  { history: true }
+);
+```
+
+### 6. 页面刷新跳转（reload）
+
+```typescript
+// ✅ 正确：使用 reload 选项，跳转后刷新页面
+routerAction.redirect(
+  {
+    name: MENU_XXX,
+  },
+  { reload: true }
+);
+```
+
+## routerAction API 说明
+
+| 方法 | 参数 | 说明 |
+|------|------|------|
+| `redirect(to, options?)` | `to: RouteLocationRaw`, `options?: IRedirectOptions` | 统一跳转方法，支持 push/replace/history/back/reload 等模式 |
+| `back()` | 无 | 后退，支持 history 模式下的智能返回 |
+| `open(to)` | `to: RouteLocationRaw` | 新窗口打开路由 |
+
+### IRedirectOptions
+
+```typescript
+interface IRedirectOptions {
+  history?: boolean;  // 是否将当前页记入历史栈，供目标页返回
+  back?: boolean;     // 是否从历史记录中移除当前页（配合 back() 使用）
+  reload?: boolean;   // 跳转后是否刷新页面
+  replace?: boolean;  // 是否使用 replace 而非 push
+}
+```
+
+## 原因说明
+
+`routerAction` 在 `router.push` / `router.replace` 之上封装了以下能力：
+
+1. **历史记录管理**：通过 `HistoryStorage` 维护自定义历史栈，支持 `history` 和 `back` 模式下的智能返回
+2. **标志参数注入**：自动在 query 中注入 `_f` 标志，用于识别 history 模式
+3. **统一行为**：所有跳转收敛到一处，便于后续扩展（如跳转前权限检查、埋点等）
+4. **避免直接使用全局 router 实例**：减少与 vue-router 实现的耦合

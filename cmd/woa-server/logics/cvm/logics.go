@@ -46,6 +46,7 @@ import (
 	"hcm/pkg/thirdparty/cvmapi"
 	"hcm/pkg/tools/metadata"
 	"hcm/pkg/tools/times"
+	cvt "hcm/pkg/tools/converter"
 )
 
 // Logics provides management interface for operations of model and instance and related resources like association
@@ -324,8 +325,8 @@ func buildOrderSpec(kt *kit.Kit, item *cvmapplytable.ZiyanCvmApplySuborder) (*ty
 		DiskSize:          item.DiskSize,
 		DiskType:          item.DiskType,
 		NetworkType:       item.NetworkType,
-		Vpc:               item.Vpc,
-		Subnet:            item.Subnet,
+		Vpc:               cvt.PtrToVal(item.Vpc),
+		Subnet:            cvt.PtrToVal(item.Subnet),
 		ChargeType:        item.ChargeType,
 		ChargeMonths:      item.ChargeMonths,
 		InheritInstanceId: item.InheritInstanceID,

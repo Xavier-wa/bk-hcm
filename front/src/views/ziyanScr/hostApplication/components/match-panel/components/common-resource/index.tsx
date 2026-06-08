@@ -257,7 +257,7 @@ export default defineComponent({
         <div class={classes['filter-container']}>
           <Form model={formModel} class={classes['scr-form-wrapper']}>
             <FormItem label='资源类型'>
-              <bk-select v-model={formModel.resource_type} onChange={onResourceTypeChange}>
+              <bk-select v-model={formModel.resource_type} onChange={onResourceTypeChange} filterable>
                 {options.value.map((opt) => (
                   <bk-option key={opt.value} value={opt.value} label={opt.label} />
                 ))}
@@ -304,7 +304,7 @@ export default defineComponent({
               <Input type='textarea' v-model={formModel.ips} />
             </FormItem>
             <FormItem label='计费模式'>
-              <bk-select v-model={formModel.spec.instance_charge_type}>
+              <bk-select v-model={formModel.spec.instance_charge_type} filterable>
                 {Object.entries(INSTANCE_CHARGE_MAP).map(([value, label]) => (
                   <bk-option key={value} value={value} label={label} />
                 ))}

@@ -641,6 +641,7 @@ const handleCancel = () => {
                   :class="{ 'field-modified': isFieldModified(field) }"
                   :style="isFieldModified(field) ? { '--input-bg': '#fdf4e8' } : {}"
                   @clear="formData[field.key] = ''"
+                  filterable
                 >
                   <bk-option v-for="opt in field.options" :key="opt" :value="opt" :label="String(opt)" />
                 </bk-select>

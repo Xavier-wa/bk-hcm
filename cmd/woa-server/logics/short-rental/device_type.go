@@ -28,9 +28,7 @@ import (
 )
 
 // ListDeviceTypeFamily 根据用户退回机器的机型，在本地表中查询对应的物理机机型族
-// TODO 后续待CRP提供接口获取物理机机型族
 func (l *logics) ListDeviceTypeFamily(kt *kit.Kit, deviceTypes []string) (map[string]string, error) {
-
 	deviceToPhysFamilyMap := make(map[string]string)
 	for _, batch := range slice.Split(deviceTypes, int(core.DefaultMaxPageLimit)) {
 		listReq := &core.ListReq{

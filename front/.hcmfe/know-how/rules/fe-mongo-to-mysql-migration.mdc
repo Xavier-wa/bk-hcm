@@ -1,0 +1,260 @@
+---
+description: "MongoDB 到 MySQL 接口迁移的前端适配规范。当任务涉及以下任一情况时必须主动读取本规则：(1) SCR / WOA / scrConfig / useTable 接口的请求或响应字段适配、接口迁移、接口字段对齐；(2) 代码中出现或需要修改 filter 结构、condition / op、rule / rules、operator、equal/not_equal/greater/less 等长名运算符或 eq/neq/gt/gte/lt/lte/in/nin 短名运算符；(3) 涉及 page 参数（start、limit、enable_count、count、sort、order、legacy、pageEnableCountKey）、分页计数、count 与数据双请求拆分；(4) 时间字段适配——create_at → created_at、update_at → updated_at、ISO 8601 时间格式、dayjs().toISOString()；(5) 字段提升（如 bk_biz_id → bk_biz_ids 从 filter 移到顶层）；(6) 用户提到\"接口迁移\"\"Mongo 转 MySQL\"\"分页参数\"\"filter 结构\"\"接口报错 page is required\"\"count is enabled\"\"列表查询不工作\"\"排序参数\"\"接口适配\"等；(7) 修改 use-scr-columns、scrConfig、列表页查询参数、轮询请求、批量导出 rollRequest、store 中内联请求等。"
+globs:
+  - 'front/**/*.vue'
+  - 'front/**/*.ts'
+  - 'front/**/*.tsx'
+alwaysApply: false
+---
+
+# MongoDB → MySQL 接口迁移前端适配
+
+## 背景
+
+后端部分 SCR/WOA 接口从 MongoDB 迁移到 MySQL，导致请求参数和响应格式发生系统性变化。前端需要逐接口适配。
+
+## 变化对照表
+
+### 1. Filter 结构
+
+| 维度 | MongoDB（旧） | MySQL（新） |
+|------|----------|----------|
+| 外层逻辑运算符 key | `condition` | `op` |
+| 外层逻辑运算符 value | `'AND'` / `'OR'` | `'and'` / `'or'` |
+| 规则列表 key | `rule`（单数） | `rules`（复数） |
+| 规则内运算符 key | `operator` | `op` |
+| 运算符命名风格 | 长名称 | 短名称 |
+
+**运算符映射**：
+
+| MongoDB（长名称） | MySQL（短名称） |
+|-------------|----------|
+| `equal` | `eq` |
+| `not_equal` | `neq` |
+| `in` | `in` |
+| `not_in` | `nin` |
+| `greater` | `gt` |
+| `greater_or_equal` | `gte` |
+| `less` | `lt` |
+| `less_or_equal` | `lte` |
+| `datetime_greater_or_equal` | `gte` |
+| `datetime_less_or_equal` | `lte` |
+
+**示例**：
+
+```typescript
+// MongoDB 风格
+{
+  condition: 'AND',
+  rule: [
+    { field: 'status', operator: 'equal', value: 1 },
+    { field: 'updated_at', operator: 'datetime_greater_or_equal', value: '2026-01-01' },
+  ],
+}
+
+// MySQL 风格
+{
+  op: 'and',
+  rules: [
+    { field: 'status', op: 'eq', value: 1 },
+    { field: 'updated_at', op: 'gte', value: '2026-01-01' },
+  ],
+}
+```
+
+### 2. Page 参数
+
+| 维度 | MongoDB（旧） | MySQL（新） |
+|------|----------|----------|
+| 是否计数 key | `enable_count` | `count` |
+| 排序格式 | `sort: "field:-1"` | `sort: "field"` + `order: "DESC"` |
+
+**示例**：
+
+```typescript
+// MongoDB 风格
+{ start: 0, limit: 10, enable_count: false, sort: 'create_at:-1' }
+
+// MySQL 风格
+{ start: 0, limit: 10, count: false, sort: 'created_at', order: 'DESC' }
+```
+
+### 3. 时间字段命名
+
+| MongoDB | MySQL |
+|---------|-------|
+| `create_at` | `created_at` |
+| `update_at` | `updated_at` |
+
+**注意**：时间字段名是否变更取决于具体接口的 API 文档，有的接口即使迁移到 MySQL 仍保留 `create_at`，以接口文档为准。
+
+### 4. 参数提升（filter 内 → 顶层）
+
+部分字段从 filter rules 中移到了请求体顶层参数，以接口文档为准。
+
+**常见示例**：`bk_biz_id` → `bk_biz_ids`
+
+```typescript
+// MongoDB 风格：bk_biz_id 在 filter 内
+{
+  filter: {
+    condition: 'AND',
+    rule: [
+      { field: 'bk_biz_id', operator: 'in', value: [213] },
+      { field: 'status', operator: 'equal', value: 1 },
+    ],
+  },
+}
+
+// MySQL 风格：bk_biz_ids 提升到顶层
+{
+  bk_biz_ids: [213],
+  filter: {
+    op: 'and',
+    rules: [
+      { field: 'status', op: 'eq', value: 1 },
+    ],
+  },
+}
+```
+
+**注意**：业务视图下（URL 路径已含 `bizs/{bk_biz_id}`），部分接口文档标注 `bk_biz_ids` 可不传。
+
+### 5. 时间值格式
+
+filter 中的时间类型字段值，从 `'YYYY-MM-DD'` 或 `'YYYY-MM-DD HH:mm:ss'` 改为 **ISO 8601** 格式。
+
+```typescript
+// MongoDB 风格
+{ field: 'updated_at', operator: 'datetime_greater_or_equal', value: '2026-01-01' }
+
+// MySQL 风格
+{ field: 'updated_at', op: 'gte', value: dayjs('2026-01-01').toISOString() }
+// → value: "2025-12-31T16:00:00.000Z"（UTC）
+```
+
+对于日期范围查询，结束日期应取当日末尾：
+```typescript
+{ field: 'updated_at', op: 'lte', value: dayjs(endDate).endOf('day').toISOString() }
+```
+
+### 6. Page 参数变为必传
+
+MySQL 迁移后 `page` 参数变为**强制必传**，缺失会报 `"page is required"`。即使是不需要分页的简单查询（如按 ID 查询少量记录），也必须传 `page`：
+
+```typescript
+page: { start: 0, limit: 500, count: false, sort: 'created_at', order: 'DESC' }
+```
+
+### 6.1 count 与数据必须分两次请求
+
+**这是 MongoDB → MySQL 迁移最关键的行为差异之一。**
+
+- **MongoDB**：`enable_count: true` 可以和 `limit: N` 同时使用，一次请求同时返回数据和总数
+- **MySQL**：`count: true` 是**纯计数请求**，必须 `limit: 0`，否则报 `"count is enabled, page.limit should be 0"`
+
+因此需要远程分页的列表，必须发**两个并行请求**：
+
+```typescript
+const [detailsRes, countRes] = await Promise.all([
+  fetchApi(id, { limit: pagination.limit, start: pagination.start, count: false, sort: 'created_at', order: 'DESC' }, status),
+  fetchApi(id, { limit: 0, start: 0, count: true }, status),
+]);
+list.value = detailsRes.data.info;
+pagination.count = countRes.data?.count;
+```
+
+**`useTable` 已内置此逻辑**（见 `plugin-handler/bcc/useTable.ts`），通过 `[false, true].map(isCount => ...)` 自动拆分。绕过 `useTable` 的手动调用必须自行实现双请求。
+
+### 6.2 不要给原本没用的参数强行加上
+
+判断依据是**原有调用是否传了该参数**，而非后端是否支持。原本没传 `filter` 就不加 `filter`。
+
+**注意**：`page` 参数在 MySQL 迁移后通常是强制必传的，即使原本没有分页交互，也需要加上 `page`（用 `limit: 500` 兜底全量加载）。但 `filter` 不同——如果原本没用 filter，不要凭空加空 filter。
+
+**已确认的接口**：`task/find/apply/record/modify`（变更记录）— 不需要 filter，但需要 page。
+
+### 7. 状态字段类型
+
+MongoDB 下 status 可能为字符串枚举（如 `'INIT'`、`'RUNNING'`），迁移到 MySQL 后可能变为整数类型。前端如果有基于字符串字面量的条件渲染逻辑（如颜色映射），需要同步调整。
+
+## useTable hook 适配方法
+
+项目中大部分列表页通过 `useTable` + `scrConfig` 发请求。page 参数由 `plugin-handler/bcc/useTable.ts` 中的 `fetchData` 构建，有两个关键配置项：
+
+### sortOption.legacy
+
+控制排序参数格式。默认 `true`（MongoDB 风格），需改为 `false`。
+
+```typescript
+// ❌ MongoDB 风格（legacy: true，默认值）
+// 发送: sort: "create_at:-1"
+sortOption: { sort: 'create_at', order: 'DESC' }
+
+// ✅ MySQL 风格（legacy: false）
+// 发送: sort: "created_at", order: "DESC"
+sortOption: { sort: 'created_at', order: 'DESC', legacy: false }
+```
+
+### scrConfig.pageEnableCountKey
+
+控制 count 参数的 key 名。默认 `'enable_count'`，需改为 `'count'`。
+
+```typescript
+// ❌ MongoDB 风格（默认）
+// 发送: enable_count: true
+scrConfig: () => ({
+  url: '/api/v1/woa/xxx',
+  payload: buildFilterPayload(),
+})
+
+// ✅ MySQL 风格
+// 发送: count: true
+scrConfig: () => ({
+  url: '/api/v1/woa/xxx',
+  payload: buildFilterPayload(),
+  pageEnableCountKey: 'count',
+})
+```
+
+## 适配 Checklist
+
+拿到接口迁移需求后，按以下步骤逐一检查：
+
+1. **阅读 API 文档**：确认请求/响应的具体格式，不同接口的变化可能不完全一致
+2. **Filter 结构**：`condition` → `op`、`rule` → `rules`、运算符长名 → 短名
+3. **参数提升**：确认是否有字段从 filter 移到顶层（如 `bk_biz_id` → `bk_biz_ids`）
+4. **时间值格式**：filter 中的时间值从 `'YYYY-MM-DD'` 改为 ISO 8601（`dayjs(val).toISOString()`）
+5. **Page 参数**：`enable_count` → `count`（通过 `pageEnableCountKey`），page 变为必传，且必须包含 `sort` + `order`。**count 和数据必须分两次请求**（`count: true` 时 `limit` 必须为 0）
+6. **Sort 格式**：`legacy: false`，拆分为 `sort` + `order`
+7. **时间字段名**：确认是否从 `create_at` 改为 `created_at`（以文档为准）
+8. **响应数据路径**：确认 `dataPath` 是否变化（如 `data.details` vs `data.info`）
+9. **状态字段类型**：确认 status 是否从 string 变为 int，检查前端渲染逻辑
+10. **列定义**：检查 `use-scr-columns.tsx` 中对应列的字段名和渲染逻辑是否需要同步更新
+
+## 逐调用点检查（重要）
+
+找到一个接口的所有前端调用点后，**每个调用点**都必须完整检查以下项目，不能只改 filter 就跳过其余：
+
+| 检查项 | 说明 |
+|--------|------|
+| filter 格式 | `op`/`rules`/短名运算符 |
+| 参数提升 | `bk_biz_id` 等是否从 filter 移到顶层 |
+| 时间值 ISO | filter 中的时间值是否转为 ISO 格式 |
+| page 参数 | 是否存在且格式正确（`count` 而非 `enable_count`，含 `sort` + `order`） |
+| sort 格式 | 拆分为 `sort` + `order`（非合并字符串） |
+
+### 常见的绕过 useTable 的调用路径
+
+以下场景不经过 `useTable.fetchData`，**不会自动附带 page 参数**，必须手动添加：
+
+- **直接 `http.post`**：如 `getDeliveredHostField` 等查询辅助数据的函数
+- **`useTimeoutPoll` 轮询**：如 `pollProduceOrderList`，手动构建请求参数
+- **`rollRequest` 导出**：批量导出函数，有独立的 `pageEnableCountKey` 配置
+- **store 中的 API 调用**：`store/ziyanScr.ts` 等 store 文件中的内联 filter 和 page
+
+## 注意事项
+
+- **不要使用 `simple-query-builder.js`**：该工具已废弃（见 `fe-deprecated.mdc`），直接构建 filter 对象
+- **不要给原本没有 filter 的接口凭空加 filter**：如果迁移前的调用就没有传 `filter`，只需补 `page`，不要为了"对齐格式"而新增空 filter
+- **以 API 文档为准**：同一批迁移的接口之间也可能存在差异，务必逐接口核对

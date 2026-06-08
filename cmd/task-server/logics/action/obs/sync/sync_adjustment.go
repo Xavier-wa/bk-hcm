@@ -481,7 +481,11 @@ func (act SyncAdjustmentAction) convertZenlayer(kt *kit.Kit, adjItems []*bill.Ad
 
 func (act SyncAdjustmentAction) cleanHuawei(kt *kit.Kit, adjOpt *AdjustmentOption) error {
 
-	deleteFilter := tools.ExpressionAnd(tools.RuleEqual("set_index", adjustmentSetIndex))
+	deleteFilter := tools.ExpressionAnd(
+		tools.RuleEqual("set_index", adjustmentSetIndex),
+		tools.RuleEqual("bill_year", adjOpt.BillYear),
+		tools.RuleEqual("bill_month", adjOpt.BillMonth),
+	)
 	countOpt := &typesdao.ListOption{
 		Filter: deleteFilter,
 		Page:   core.NewCountPage(),
@@ -517,7 +521,11 @@ func (act SyncAdjustmentAction) cleanHuawei(kt *kit.Kit, adjOpt *AdjustmentOptio
 }
 func (act SyncAdjustmentAction) cleanAws(kt *kit.Kit, adjOpt *AdjustmentOption) error {
 
-	deleteFilter := tools.ExpressionAnd(tools.RuleEqual("set_index", adjustmentSetIndex))
+	deleteFilter := tools.ExpressionAnd(
+		tools.RuleEqual("set_index", adjustmentSetIndex),
+		tools.RuleEqual("bill_year", adjOpt.BillYear),
+		tools.RuleEqual("bill_month", adjOpt.BillMonth),
+	)
 	countOpt := &typesdao.ListOption{
 		Filter: deleteFilter,
 		Page:   core.NewCountPage(),
@@ -553,7 +561,10 @@ func (act SyncAdjustmentAction) cleanAws(kt *kit.Kit, adjOpt *AdjustmentOption) 
 }
 func (act SyncAdjustmentAction) cleanGcp(kt *kit.Kit, adjOpt *AdjustmentOption) error {
 
-	deleteFilter := tools.ExpressionAnd(tools.RuleEqual("set_index", adjustmentSetIndex))
+	deleteFilter := tools.ExpressionAnd(
+		tools.RuleEqual("set_index", adjustmentSetIndex),
+		tools.RuleEqual("bill_year", adjOpt.BillYear),
+		tools.RuleEqual("bill_month", adjOpt.BillMonth))
 	countOpt := &typesdao.ListOption{
 		Filter: deleteFilter,
 		Page:   core.NewCountPage(),
@@ -590,7 +601,11 @@ func (act SyncAdjustmentAction) cleanGcp(kt *kit.Kit, adjOpt *AdjustmentOption) 
 
 func (act SyncAdjustmentAction) cleanZenlayer(kt *kit.Kit, adjOpt *AdjustmentOption) error {
 
-	deleteFilter := tools.ExpressionAnd(tools.RuleEqual("set_index", adjustmentSetIndex))
+	deleteFilter := tools.ExpressionAnd(
+		tools.RuleEqual("set_index", adjustmentSetIndex),
+		tools.RuleEqual("bill_year", adjOpt.BillYear),
+		tools.RuleEqual("bill_month", adjOpt.BillMonth),
+	)
 	countOpt := &typesdao.ListOption{
 		Filter: deleteFilter,
 		Page:   core.NewCountPage(),

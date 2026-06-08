@@ -171,7 +171,7 @@ export default defineComponent({
           property: 'http_check_method',
           span: 12,
           content: () => (
-            <Select v-model={formData.http_check_method} clearable={false}>
+            <Select v-model={formData.http_check_method} clearable={false} filterable>
               {['HEAD', 'GET'].map((v) => (
                 <Option name={v} id={v} key={v} />
               ))}
@@ -184,7 +184,7 @@ export default defineComponent({
           property: 'http_code',
           span: 12,
           content: () => (
-            <Select v-model={formData.http_code} clearable={false} multiple multiple-mode='tag'>
+            <Select v-model={formData.http_code} clearable={false} multiple multiple-mode='tag' filterable>
               {[
                 {
                   name: '1xx',
@@ -219,7 +219,7 @@ export default defineComponent({
         property: 'http_version',
         span: 12,
         content: () => (
-          <Select v-model={formData.http_version} clearable={false}>
+          <Select v-model={formData.http_version} clearable={false} filterable>
             {[
               {
                 name: 'HTTP/1.0',
@@ -241,7 +241,7 @@ export default defineComponent({
         property: 'context_type',
         span: 12,
         content: () => (
-          <Select v-model={formData.context_type} clearable={false}>
+          <Select v-model={formData.context_type} clearable={false} filterable>
             {[
               {
                 name: '十六进制',

@@ -106,7 +106,7 @@ onMounted(() => {
             clearable
             ext-popover-cls="date-picker-popover-custom"
             placeholder="请选择开始使用预测时间"
-            @open-change="(v:boolean) => (alwaysShow = v)"
+            @open-change="(v: boolean) => (alwaysShow = v)"
           />
         </bk-form-item>
       </bk-form>

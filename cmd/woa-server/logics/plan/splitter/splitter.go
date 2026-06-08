@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 
+	"hcm/cmd/woa-server/logics/plan/demand-time"
 	"hcm/cmd/woa-server/logics/plan/fetcher"
 	"hcm/cmd/woa-server/types/device"
 	ptypes "hcm/cmd/woa-server/types/plan"
@@ -52,6 +53,7 @@ type SubTicketSplitter struct {
 	crpCli      cvmapi.CVMClientInterface
 	resFetcher  fetcher.Fetcher
 	deviceTypes *device.DeviceTypesMap
+	demandTime  demandtime.DemandTime
 
 	// adjustAbleDemands 记录每个本地预测需求对应的，CRP中可修改的原有预测
 	adjustAbleDemands map[string][]*cvmapi.CvmCbsPlanQueryItem
@@ -85,6 +87,7 @@ func New(dao dao.Set, cli *client.ClientSet, crpCli cvmapi.CVMClientInterface, r
 		crpCli:      crpCli,
 		resFetcher:  resFetcher,
 		deviceTypes: deviceMap,
+		demandTime:  demandtime.NewDemandTimeFromTable(cli),
 
 		adjustAbleDemands:    make(map[string][]*cvmapi.CvmCbsPlanQueryItem),
 		adjCRPDemandsRst:     make(map[string]*AdjustAbleRemainObj),

@@ -18,12 +18,17 @@ import { GLOBAL_BIZS_KEY } from '@/common/constant';
 import { debounce } from 'lodash';
 import StatusText from './components/status-text.vue';
 import { TicketStatus, TicketByIdResult } from '@/typings/resourcePlan';
+import routerAction from '@/router/utils/action';
+import { MENU_BUSINESS_RESOURCE_PLAN_CVM_MODIFY } from '@/constants/menu-symbol';
 
 interface Props {
   ticketStatus: TicketStatus; // 主单状态
   demands?: TicketByIdResult['demands']; // 主单需求列表，用于批量审批
+  isModifiable?: boolean; // 是否展示「修改需求」按钮
 }
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  isModifiable: false,
+});
 // 补全类型泛型
 const emits = defineEmits<{
   retryTicket: [];
@@ -267,10 +272,9 @@ const successMsg = computed(() => {
 const hasFailedTicket = computed(() => {
   return tableData.value.some((item) => item.status === 'failed');
 });
-// 是否禁止终止按钮
-const terminatedBtnDisabled = computed(
-  () => !(props.ticketStatus === 'failed' || props.ticketStatus === 'partial_failed'),
-);
+// 是否禁止终止按钮: failed / partial_failed / rejected / partial_rejected 四种状态下可终止
+const TERMINATABLE_STATUSES: TicketStatus[] = ['failed', 'partial_failed', 'rejected', 'partial_rejected'];
+const terminatedBtnDisabled = computed(() => !TERMINATABLE_STATUSES.includes(props.ticketStatus));
 
 // 方法
 const handleFailedTicket = () => {
@@ -332,8 +336,20 @@ watch(
   { immediate: true },
 );
 
+// 跳转到修改页 (覆盖修改主单)
+const handleModify = () => {
+  routerAction.redirect({
+    name: MENU_BUSINESS_RESOURCE_PLAN_CVM_MODIFY,
+    query: {
+      id: route.query?.id as string,
+      [GLOBAL_BIZS_KEY]: bizId.value,
+    },
+  });
+};
+
 defineExpose({
   getData: triggerApi,
+  tableData,
 });
 </script>
 
@@ -373,6 +389,9 @@ defineExpose({
         @click="handleBatchApproval"
       >
         {{ t('批量审批') }}
+      </bk-button>
+      <bk-button v-if="isModifiable" style="margin-left: 21px" @click="handleModify">
+        {{ t('修改需求') }}
       </bk-button>
     </template>
     <bk-loading :loading="isLoading">

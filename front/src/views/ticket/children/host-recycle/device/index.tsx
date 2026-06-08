@@ -212,7 +212,7 @@ export default defineComponent({
             {
               title: t('机型'),
               content: (
-                <Select v-model={formModel.device_type} multiple clearable placeholder={t('请选择机型')}>
+                <Select v-model={formModel.device_type} multiple clearable filterable placeholder={t('请选择机型')}>
                   {deviceTypeList.value.map((item) => {
                     return <Select.Option key={item} name={item} id={item} />;
                   })}
@@ -222,7 +222,7 @@ export default defineComponent({
             {
               title: t('地域'),
               content: (
-                <Select v-model={formModel.bk_zone_name} multiple clearable placeholder={t('请选择地域')}>
+                <Select v-model={formModel.bk_zone_name} multiple clearable filterable placeholder={t('请选择地域')}>
                   {bkZoneNameList.value.map((item) => {
                     return <Select.Option key={item} name={item} id={item} />;
                   })}
@@ -232,7 +232,7 @@ export default defineComponent({
             {
               title: t('园区'),
               content: (
-                <Select v-model={formModel.sub_zone} multiple clearable placeholder={t('请选择园区')}>
+                <Select v-model={formModel.sub_zone} multiple clearable filterable placeholder={t('请选择园区')}>
                   {subZoneList.value.map((item) => {
                     return <Select.Option key={item} name={item} id={item} />;
                   })}
@@ -242,7 +242,7 @@ export default defineComponent({
             {
               title: t('状态'),
               content: (
-                <Select v-model={formModel.stage} multiple clearable placeholder={t('请选择状态')}>
+                <Select v-model={formModel.stage} multiple clearable filterable placeholder={t('请选择状态')}>
                   {stageList.value.map(({ stage, description }) => {
                     return <Select.Option key={stage} name={description} id={stage} />;
                   })}

@@ -147,7 +147,7 @@ export default defineComponent({
                 />
               </Form.FormItem>
               <Form.FormItem label={'币种'} required property='currency'>
-                <Select v-model={formModel.currency}>
+                <Select v-model={formModel.currency} filterable>
                   {BILLS_CURRENCY.map(({ name, id }) => (
                     <Option name={name} id={id} key={id} />
                   ))}

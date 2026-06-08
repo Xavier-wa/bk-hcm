@@ -1,0 +1,57 @@
+{
+  "id": "feat-resplan-cvm-reqmodify-shortrental-patch",
+  "title": "短租 patch - 修改需求回填字段修复",
+  "currentStage": "done",
+  "createdAt": "2026-05-21T13:07:44.332Z",
+  "updatedAt": "2026-05-22T02:32:42.699Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-resplan-cvm-reqmodify-shortrental-patch/coding.md",
+        "kind": "file",
+        "addedAt": "2026-05-22T02:32:01.879Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-resplan-cvm-reqmodify-shortrental-patch/test.md",
+        "kind": "file",
+        "addedAt": "2026-05-22T02:32:36.733Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-05-22T02:32:05.581Z"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-05-22T02:32:38.914Z"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-05-21T13:07:44.332Z"
+    },
+    {
+      "from": "prd",
+      "to": "coding",
+      "at": "2026-05-21T13:09:11.647Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-05-22T02:32:32.975Z"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-05-22T02:32:42.698Z"
+    }
+  ],
+  "requirementId": "req-resource-plan-2027-cvm-budget",
+  "branch": "feat-resplan-cvm-reqmodify-shortrental-patch"
+}

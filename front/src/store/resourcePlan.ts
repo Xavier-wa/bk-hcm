@@ -7,6 +7,7 @@ import {
   IBizResourcesTicketsResult,
   ResourcePlanTicketByIdResult,
   IPlanTicket,
+  IPlanTicketOverwrite,
   IOpProductsResult,
   IPlanProductsResult,
   IBizsByOpProductResult,
@@ -56,6 +57,18 @@ export const useResourcePlanStore = defineStore('resourcePlanStore', {
     },
     createBizPlan(data: IPlanTicket, bk_biz_id: number): { data: { id: string } } {
       return http.post(`/api/v1/woa/bizs/${bk_biz_id}/plans/resources/tickets/create`, data);
+    },
+    // 覆盖修改资源预测主单, 适用于驳回/失败/已撤销等可覆盖状态
+    overwriteBizPlan(
+      bk_biz_id: number,
+      ticket_id: string,
+      data: IPlanTicketOverwrite,
+    ): Promise<{ code: number; message: string; data: null }> {
+      return http.post(`/api/v1/woa/bizs/${bk_biz_id}/plans/resources/tickets/${ticket_id}/overwrite`, data);
+    },
+    // 查询非本年度预测提报截止日期; 未配置时 data.deadline 为空字符串, 此时不做截止限制
+    getReportDeadline(): Promise<{ code: number; message: string; data: { deadline: string } }> {
+      return http.get('/api/v1/woa/plans/resources/tickets/report_deadline');
     },
     getBizOrgRelation(bizId: number) {
       return http.get(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/bizs/${bizId}/org/relation`);

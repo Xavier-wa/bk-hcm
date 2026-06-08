@@ -105,6 +105,9 @@ func (d *device) BatchCreateDeviceType(kt *kit.Kit, req *protocloud.DeviceTypeBa
 		logs.Errorf("failed to validate create device type parameter, err: %v, rid: %s", err, kt.Rid)
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
+	// 去除字符串的前后空格
+	req.TrimSpace()
+
 	for i := range req.DeviceTypes {
 		req.DeviceTypes[i].Source = enumor.DeviceTypeSourceManually
 	}
@@ -249,6 +252,7 @@ func (d *device) ListCvmInstanceInfoByDeviceTypes(kt *kit.Kit, deviceTypes []str
 			deviceTypeMap[detail.DeviceType] = types.DeviceTypeCpuItem{
 				DeviceType:      detail.DeviceType,
 				CPUAmount:       detail.CpuCore,
+				GpuAmount:       detail.GpuAmount,
 				DeviceGroup:     detail.DeviceFamily,
 				CoreType:        detail.CoreType,
 				TechnicalClass:  detail.TechnicalClass,

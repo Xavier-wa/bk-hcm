@@ -50,6 +50,7 @@ import (
 	"hcm/pkg/thirdparty/cvmapi"
 	"hcm/pkg/tools/concurrence"
 	cvt "hcm/pkg/tools/converter"
+	"hcm/pkg/tools/maps"
 	"hcm/pkg/tools/slice"
 	"hcm/pkg/tools/times"
 
@@ -1375,11 +1376,18 @@ func (c *Controller) listAllPlanDemandsByBkBizID(kt *kit.Kit, bkBizID int64, sta
 func (c *Controller) GetProdResConsumePoolV2(kt *kit.Kit, bkBizIDs []int64, startDay, endDay time.Time) (
 	ResPlanConsumePool, error) {
 
+	return c.getProdResConsumePoolV2(kt, bkBizIDs, startDay, endDay, nil)
+}
+
+func (c *Controller) getProdResConsumePoolV2(kt *kit.Kit, bkBizIDs []int64, startDay, endDay time.Time,
+	excludeSuborderIDs []string) (ResPlanConsumePool, error) {
+
 	// list apply order from db by bk biz id.
-	subOrders, err := c.listApplyOrder(kt, bkBizIDs, startDay, endDay)
+	subOrders, err := c.listApplyOrder(kt, bkBizIDs, startDay, endDay, excludeSuborderIDs)
 	if err != nil {
-		logs.Errorf("failed to list apply order details, err: %v, bkBizIDs: %v, startDay: %s, endDay: %s, rid: %s",
-			err, bkBizIDs, startDay.Format(constant.TimeStdFormat), endDay.Format(constant.TimeStdFormat), kt.Rid)
+		logs.Errorf("failed to list apply order details, err: %v, bkBizIDs: %v, startDay: %s, endDay: %s, "+
+			"excludeSuborderIDs: %v, rid: %s", err, bkBizIDs, startDay.Format(constant.TimeStdFormat),
+			endDay.Format(constant.TimeStdFormat), excludeSuborderIDs, kt.Rid)
 		return nil, err
 	}
 
@@ -1425,20 +1433,23 @@ func (c *Controller) GetProdResConsumePoolV2(kt *kit.Kit, bkBizIDs []int64, star
 }
 
 // listApplyOrder list apply order from db by bk biz ids.
-func (c *Controller) listApplyOrder(kt *kit.Kit, bkBizIDs []int64, startDay, endDay time.Time) (
-	[]*tasktypes.ApplyOrder, error) {
+func (c *Controller) listApplyOrder(kt *kit.Kit, bkBizIDs []int64, startDay, endDay time.Time,
+	excludeSuborderIDs []string) ([]*tasktypes.ApplyOrder, error) {
 
 	result := make([]*tasktypes.ApplyOrder, 0)
 	batches := slice.Split(bkBizIDs, int(core.DefaultMaxPageLimit))
 	for _, batch := range batches {
-		filterExpr := tools.ExpressionAnd(
+		filterRules := []*filter.AtomRule{
 			tools.RuleIn("bk_biz_id", batch),
 			tools.RuleGreaterThanEqual("created_at", startDay.Format(constant.TimeStdFormat)),
 			tools.RuleLessThanEqual("created_at", endDay.Format(constant.TimeStdFormat)),
-		)
+		}
+		for _, excludeBatch := range slice.Split(excludeSuborderIDs, int(core.DefaultMaxPageLimit)) {
+			filterRules = append(filterRules, tools.RuleNotIn("suborder_id", excludeBatch))
+		}
 
 		listReq := &cvmapplyproto.ZiyanCvmApplySuborderListReq{
-			Filter: filterExpr,
+			Filter: tools.ExpressionAnd(filterRules...),
 			Page:   core.NewDefaultBasePage(),
 		}
 
@@ -1567,8 +1578,8 @@ func initResourceSpec(sub *cvmapplytable.ZiyanCvmApplySuborder) *tasktypes.Resou
 		DiskSize:          sub.DiskSize,
 		DiskType:          sub.DiskType,
 		NetworkType:       sub.NetworkType,
-		Vpc:               sub.Vpc,
-		Subnet:            sub.Subnet,
+		Vpc:               cvt.PtrToVal(sub.Vpc),
+		Subnet:            cvt.PtrToVal(sub.Subnet),
 		OsType:            sub.OsType,
 		RaidType:          sub.RaidType,
 		Isp:               sub.Isp,
@@ -1576,13 +1587,14 @@ func initResourceSpec(sub *cvmapplytable.ZiyanCvmApplySuborder) *tasktypes.Resou
 		ChargeMonths:      sub.ChargeMonths,
 		InheritInstanceId: sub.InheritInstanceID,
 		BkAssetID:         sub.BkAssetID,
-		ResAssign:         sub.ResAssign,
+		ResAssign:         cvt.PtrToVal(sub.ResAssign),
 		CPUThreadSwitch:   sub.CPUThreadSwitch,
 	}
 }
 
 // parseResourceSpecFields parse fields for ResourceSpec
-func parseResourceSpecFields(kt *kit.Kit, sub *cvmapplytable.ZiyanCvmApplySuborder, spec *tasktypes.ResourceSpec) error {
+func parseResourceSpecFields(kt *kit.Kit, sub *cvmapplytable.ZiyanCvmApplySuborder,
+	spec *tasktypes.ResourceSpec) error {
 	if err := parseJSONField(sub.SystemDisk, &spec.SystemDisk); err != nil {
 		logs.Errorf("failed to parse system disk, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID, kt.Rid)
 		return err
@@ -1625,15 +1637,17 @@ func parseTime(kt *kit.Kit, t tabletypes.Time) (time.Time, error) {
 func (c *Controller) getApplyOrderConsumePoolMapV2(kt *kit.Kit, subOrders []*tasktypes.ApplyOrder) (
 	ResPlanConsumePool, error) {
 
+	// 查询子单"已生产"核心数，覆盖未交付但已生产成功的主机，避免因仅按 DeliveredCore 计算导致用户卡在交付前重复提单造成超额申领
+	productedCoreMap, err := c.batchCalcSuborderProductedCore(kt, subOrders)
+	if err != nil {
+		logs.Errorf("batch calc producted core failed, err: %v, suborder count: %d, rid: %s",
+			err, len(subOrders), kt.Rid)
+		return nil, err
+	}
+
 	orderConsumePoolMap := make(ResPlanConsumePool)
 	for _, subOrderInfo := range subOrders {
-		// TODO 目前预测只关注CVM类型的主机 + 升降配主机
-		if subOrderInfo.ResourceType != tasktypes.ResourceTypeCvm &&
-			subOrderInfo.ResourceType != tasktypes.ResourceTypeUpgradeCvm {
-			continue
-		}
-		// 如果项目类型是常规，则RequireType也需要是对应的常规项目
-		if subOrderInfo.ObsProject == enumor.ObsProjectNormal && subOrderInfo.RequireType != enumor.RequireTypeRegular {
+		if !shouldCountApplyOrderConsumePool(subOrderInfo) {
 			continue
 		}
 
@@ -1644,72 +1658,184 @@ func (c *Controller) getApplyOrderConsumePoolMapV2(kt *kit.Kit, subOrders []*tas
 			return nil, err
 		}
 
-		var planType enumor.PlanTypeCode
-		switch subOrderInfo.ResourceType {
-		case tasktypes.ResourceTypeUpgradeCvm:
-			// 升降配需要忽略预测内外
-			planType = ""
-		default:
-			planType, err = c.GetPlanTypeByChargeType(subOrderInfo.Spec.ChargeType)
-			if err != nil {
-				logs.Errorf("failed to get plan type by charge type, err: %v, subOrder: %+v, rid: %s", err,
-					*subOrderInfo, kt.Rid)
-				return nil, err
-			}
+		planType, err := c.getApplyOrderPlanType(subOrderInfo)
+		if err != nil {
+			logs.Errorf("failed to get plan type by charge type, err: %v, subOrder: %+v, rid: %s", err,
+				*subOrderInfo, kt.Rid)
+			return nil, err
 		}
 
-		// 兼容历史单据，CVM申领单依然使用spec进行计算
 		if subOrderInfo.Spec != nil {
-			consumePoolKey := ResPlanPoolKeyV2{
-				PlanType:      planType,
-				AvailableTime: NewAvailableTime(demandYear, demandMonth),
-				DeviceType:    subOrderInfo.Spec.DeviceType,
-				ObsProject:    subOrderInfo.ObsProject,
-				BkBizID:       subOrderInfo.BkBizId,
-				DemandClass:   enumor.DemandClassCVM,
-				RegionID:      subOrderInfo.Spec.Region,
-			}
-			// 机房裁撤需要忽略预测内、预测外 --story=121848852
-			if subOrderInfo.RequireType == enumor.RequireTypeDissolve {
-				consumePoolKey.PlanType = ""
-			}
-			// 交付的核心数量(消耗预测CRP的核心数)
-			consumeCpuCore := int64(subOrderInfo.DeliveredCore)
-			orderConsumePoolMap[consumePoolKey] += consumeCpuCore
+			addSpecApplyOrderConsumePool(kt, orderConsumePoolMap, subOrderInfo, planType, demandYear, demandMonth,
+				productedCoreMap[subOrderInfo.SubOrderId])
 			continue
 		}
 
-		for _, expendPlan := range subOrderInfo.PlanExpendGroup {
-			consumePoolKey := ResPlanPoolKeyV2{
-				PlanType:      planType,
-				AvailableTime: NewAvailableTime(demandYear, demandMonth),
-				DeviceType:    expendPlan.DeviceType,
-				ObsProject:    subOrderInfo.ObsProject,
-				BkBizID:       subOrderInfo.BkBizId,
-				DemandClass:   enumor.DemandClassCVM,
-				RegionID:      expendPlan.Region,
-			}
-			// 机房裁撤需要忽略预测内、预测外 --story=121848852
-			if subOrderInfo.RequireType == enumor.RequireTypeDissolve {
-				consumePoolKey.PlanType = ""
-			}
-			// 交付的核心数量(消耗预测CRP的核心数)
-			consumeCpuCore := expendPlan.CPUCore
-			orderConsumePoolMap[consumePoolKey] += consumeCpuCore
-		}
+		addPlanExpendApplyOrderConsumePool(orderConsumePoolMap, subOrderInfo, planType, demandYear, demandMonth)
 	}
 
 	return orderConsumePoolMap, nil
+}
+
+func shouldCountApplyOrderConsumePool(sub *tasktypes.ApplyOrder) bool {
+	// TODO 目前预测只关注CVM类型的主机 + 升降配主机
+	if sub.ResourceType != tasktypes.ResourceTypeCvm && sub.ResourceType != tasktypes.ResourceTypeUpgradeCvm {
+		return false
+	}
+	// 如果项目类型是常规，则RequireType也需要是对应的常规项目
+	return sub.ObsProject != enumor.ObsProjectNormal || sub.RequireType == enumor.RequireTypeRegular
+}
+
+func (c *Controller) getApplyOrderPlanType(sub *tasktypes.ApplyOrder) (enumor.PlanTypeCode, error) {
+	if sub.ResourceType == tasktypes.ResourceTypeUpgradeCvm {
+		// 升降配需要忽略预测内外
+		return "", nil
+	}
+	return c.GetPlanTypeByChargeType(sub.Spec.ChargeType)
+}
+
+func addSpecApplyOrderConsumePool(kt *kit.Kit, poolMap ResPlanConsumePool, sub *tasktypes.ApplyOrder,
+	planType enumor.PlanTypeCode, demandYear int, demandMonth time.Month, productedCore int64) {
+
+	consumePoolKey := ResPlanPoolKeyV2{
+		PlanType:      planType,
+		AvailableTime: NewAvailableTime(demandYear, demandMonth),
+		DeviceType:    sub.Spec.DeviceType,
+		ObsProject:    sub.ObsProject,
+		BkBizID:       sub.BkBizId,
+		DemandClass:   enumor.DemandClassCVM,
+		RegionID:      sub.Spec.Region,
+	}
+	// 机房裁撤需要忽略预测内、预测外 --story=121848852
+	if sub.RequireType == enumor.RequireTypeDissolve {
+		consumePoolKey.PlanType = ""
+	}
+	// 占用预测核心数 = max(AppliedCore, 已生产核心数)，终止单据按已生产核心数
+	consumeCpuCore := calcSuborderConsumeCore(sub, productedCore)
+	logs.V(2).Infof("calc cvm suborder consume core, suborderID: %s, stage: %s, status: %s, applied: %d, "+
+		"delivered: %d, producteCore: %d, consumeCore: %d, rid: %s",
+		sub.SubOrderId, sub.Stage, sub.Status, sub.AppliedCore, sub.DeliveredCore, productedCore, consumeCpuCore, kt.Rid)
+	if consumeCpuCore <= 0 {
+		return
+	}
+	poolMap[consumePoolKey] += consumeCpuCore
+}
+
+func addPlanExpendApplyOrderConsumePool(poolMap ResPlanConsumePool, sub *tasktypes.ApplyOrder,
+	planType enumor.PlanTypeCode, demandYear int, demandMonth time.Month) {
+
+	for _, expendPlan := range sub.PlanExpendGroup {
+		consumePoolKey := ResPlanPoolKeyV2{
+			PlanType:      planType,
+			AvailableTime: NewAvailableTime(demandYear, demandMonth),
+			DeviceType:    expendPlan.DeviceType,
+			ObsProject:    sub.ObsProject,
+			BkBizID:       sub.BkBizId,
+			DemandClass:   enumor.DemandClassCVM,
+			RegionID:      expendPlan.Region,
+		}
+		// 机房裁撤需要忽略预测内、预测外 --story=121848852
+		if sub.RequireType == enumor.RequireTypeDissolve {
+			consumePoolKey.PlanType = ""
+		}
+		poolMap[consumePoolKey] += expendPlan.CPUCore
+	}
+}
+
+// calcSuborderConsumeCore 计算单个 CVM 子单对预测额度的实际占用核心数。
+//
+// 规则：
+//   - 终止单据：占用 = 已生产核心数（剩余不会再生产，但已生产的不会自动退还）
+//   - 活跃单据：占用 = max(AppliedCore, 已生产核心数)，AppliedCore 覆盖"卡在交付前重复提单"场景，
+//     已生产核心数兜底极少数手工补录超 AppliedCore 情形
+//
+// productedCore 由 batchCalcSuborderProductedCore 一次性预算好后传入，避免逐单查询。
+func calcSuborderConsumeCore(sub *tasktypes.ApplyOrder, productedCore int64) int64 {
+	// 若单据已终止，返回"已生产核心数"
+	if sub.IsSuborderTerminated() {
+		return productedCore
+	}
+
+	return max(int64(sub.AppliedCore), productedCore)
+}
+
+// batchCalcSuborderProductedCore 批量计算子单"已生产成功"主机的总 CPU 核心数。
+//
+// "已生产" 的判定：ziyan_cvm_device_info 表中存在该子单关联的设备记录（不区分是否已交付/初始化）。
+// 这与 scheduler.calProductDeviceTypeCountMap(devices, false) 的语义保持一致。
+//
+// 性能：
+//   - 仅对普通 CVM 的 Spec 分支、升降配子单查询（PlanExpendGroup 分支不需要）
+//   - subOrderIDs IN(...) 单次查询设备表，按 DefaultMaxPageLimit 分批
+//   - 机型 CPU 核数从 Controller 已加载的 deviceTypesMap 缓存中读取，无额外查询
+func (c *Controller) batchCalcSuborderProductedCore(kt *kit.Kit, subOrders []*tasktypes.ApplyOrder) (
+	map[string]int64, error) {
+
+	subOrderIDs := make([]string, 0, len(subOrders))
+	for _, sub := range subOrders {
+		// 普通 CVM 仅 Spec 分支需要补齐已生产核心数；升降配不依赖 Spec，按子单查询 device_info。
+		if (sub.ResourceType == tasktypes.ResourceTypeCvm && sub.Spec != nil) ||
+			sub.ResourceType == tasktypes.ResourceTypeUpgradeCvm {
+			subOrderIDs = append(subOrderIDs, sub.SubOrderId)
+		}
+	}
+	result := make(map[string]int64, len(subOrderIDs))
+	if len(subOrderIDs) == 0 {
+		return result, nil
+	}
+
+	deviceTypeMap, err := c.deviceTypesMap.GetDeviceTypes(kt)
+	if err != nil {
+		logs.Errorf("batch calc suborder get device types failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	for _, batch := range slice.Split(subOrderIDs, int(core.DefaultMaxPageLimit)) {
+		listReq := &cvmapplyproto.ZiyanCvmDeviceInfoListReq{
+			Filter: tools.ExpressionAnd(tools.RuleIn("suborder_id", batch)),
+			Page:   core.NewDefaultBasePage(),
+			Fields: []string{"suborder_id", "device_type"},
+		}
+		for {
+			resp, err := c.client.DataService().TCloudZiyan.ZiyanCvmDeviceInfo.List(kt.Ctx, kt.Header(), listReq)
+			if err != nil {
+				logs.Errorf("list tcloud-ziyan cvm device info failed, err: %v, suborder_count: %d, rid: %s",
+					err, len(batch), kt.Rid)
+				return nil, err
+			}
+			for _, dev := range resp.Details {
+				deviceInfo, ok := deviceTypeMap[dev.DeviceType]
+				if !ok {
+					logs.Warnf("batch calc suborder device type %s not found in cache, suborderID: %s, rid: %s",
+						dev.DeviceType, dev.SuborderID, kt.Rid)
+					continue
+				}
+				result[dev.SuborderID] += deviceInfo.CpuCore
+			}
+			if len(resp.Details) < int(listReq.Page.Limit) {
+				break
+			}
+			listReq.Page.Start += uint32(listReq.Page.Limit)
+		}
+	}
+
+	return result, nil
 }
 
 // VerifyProdDemandsV2 verify whether the needs of biz can be satisfied.
 func (c *Controller) VerifyProdDemandsV2(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType,
 	needs []VerifyResPlanElemV2) ([]VerifyResPlanResElem, error) {
 
-	prodRemain, prodMaxAvailable, err := c.GetProdResRemainPoolMatch(kt, bkBizID, requireType)
+	return c.verifyProdDemandsV2(kt, bkBizID, requireType, needs, nil)
+}
+
+func (c *Controller) verifyProdDemandsV2(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType,
+	needs []VerifyResPlanElemV2, excludeSuborderIDs []string) ([]VerifyResPlanResElem, error) {
+
+	prodRemain, prodMaxAvailable, err := c.getProdResRemainPoolMatch(kt, bkBizID, requireType, excludeSuborderIDs)
 	if err != nil {
-		logs.Errorf("failed to get product resource remain pool match, bkBizID: %d, err: %v, rid: %s",
-			bkBizID, err, kt.Rid)
+		logs.Errorf("failed to get product resource remain pool match, bkBizID: %d, excludeSuborderIDs: %v, "+
+			"err: %v, rid: %s", bkBizID, excludeSuborderIDs, err, kt.Rid)
 		return nil, err
 	}
 
@@ -1734,8 +1860,9 @@ func (c *Controller) VerifyProdDemandsV2(kt *kit.Kit, bkBizID int64, requireType
 			}
 		}
 	}
-	logs.Infof("verify prod demands v2 end, bkBizID: %d, needs: %+v, prodRemain: %+v, prodMaxAvailable: %+v, "+
-		"result: %+v, rid: %s", bkBizID, needs, prodRemain, prodMaxAvailable, result, kt.Rid)
+	logs.Infof("verify prod demands v2 end, bkBizID: %d, excludeSuborderIDs: %v, needs: %+v, prodRemain: %+v, "+
+		"prodMaxAvailable: %+v, result: %+v, rid: %s", bkBizID, excludeSuborderIDs, needs, prodRemain,
+		prodMaxAvailable, result, kt.Rid)
 
 	return result, nil
 }
@@ -1745,10 +1872,20 @@ func (c *Controller) VerifyProdDemandsV2(kt *kit.Kit, bkBizID int64, requireType
 // @return prodRemainedPool is the biz in plan and out plan remained resource plan pool.
 // @return prodMaxAvailablePool is the biz in plan and out plan remained max available resource plan pool.
 // NOTE: maxAvailableInPlanPool = totalInPlan * 120% - consumeInPlan, because the special rules of the crp system.
-func (c *Controller) GetProdResRemainPoolMatch(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType) (
-	ResPlanPoolMatch, ResPlanPoolMatch, error) {
+func (c *Controller) GetProdResRemainPoolMatch(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType,
+	suborderID string) (ResPlanPoolMatch, ResPlanPoolMatch, error) {
 
-	prodPlanPool, prodConsumePool, err := c.getCurrMonthPlanConsumePool(kt, bkBizID, requireType)
+	var excludeSuborderIDs []string
+	if suborderID != "" {
+		excludeSuborderIDs = []string{suborderID}
+	}
+	return c.getProdResRemainPoolMatch(kt, bkBizID, requireType, excludeSuborderIDs)
+}
+
+func (c *Controller) getProdResRemainPoolMatch(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType,
+	excludeSuborderIDs []string) (ResPlanPoolMatch, ResPlanPoolMatch, error) {
+
+	prodPlanPool, prodConsumePool, err := c.getCurrMonthPlanConsumePool(kt, bkBizID, requireType, excludeSuborderIDs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1806,8 +1943,8 @@ func deepCopyPlanPool(src ResPlanPoolMatch) ResPlanPoolMatch {
 	return dst
 }
 
-func (c *Controller) getCurrMonthPlanConsumePool(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType) (
-	ResPlanPoolMatch, ResPlanConsumePool, error) {
+func (c *Controller) getCurrMonthPlanConsumePool(kt *kit.Kit, bkBizID int64, requireType enumor.RequireType,
+	excludeSuborderIDs []string) (ResPlanPoolMatch, ResPlanConsumePool, error) {
 
 	nowDemandYear, nowDemandMonth, err := c.demandTime.GetDemandYearMonth(kt, time.Now())
 	if err != nil {
@@ -1825,9 +1962,10 @@ func (c *Controller) getCurrMonthPlanConsumePool(kt *kit.Kit, bkBizID int64, req
 	}
 
 	// get biz resource consume pool.
-	prodConsumePool, err := c.GetProdResConsumePoolV2(kt, []int64{bkBizID}, startDay, endDay)
+	prodConsumePool, err := c.getProdResConsumePoolV2(kt, []int64{bkBizID}, startDay, endDay, excludeSuborderIDs)
 	if err != nil {
-		logs.Errorf("failed to get biz resource consume pool v2, bkBizID: %d, err: %v, rid: %s", bkBizID, err, kt.Rid)
+		logs.Errorf("failed to get biz resource consume pool v2, bkBizID: %d, excludeSuborderIDs: %v, "+
+			"err: %v, rid: %s", bkBizID, excludeSuborderIDs, err, kt.Rid)
 		return nil, nil, err
 	}
 
@@ -2069,7 +2207,8 @@ func (c *Controller) SyncBudgetOperatorByTime(kt *kit.Kit, start, end time.Time)
 
 	demands, err := c.collectBudgetOperatorDemands(kt, start, end)
 	if err != nil {
-		logs.Errorf("collect budget operator demands failed, err: %v, start: %v, end: %v, rid: %s", err, start, end, kt.Rid)
+		logs.Errorf("collect budget operator demands failed, err: %v, start: %v, end: %v, rid: %s", err, start, end,
+			kt.Rid)
 		return resp, err
 	}
 
@@ -2129,7 +2268,36 @@ func groupBudgetDemands(demands []budgetDemand) map[string]*demandGroup {
 // batchFetchBudgetOperatorCandidates 批量获取所有分组的预算提报人候选
 func (c *Controller) batchFetchBudgetOperatorCandidates(kt *kit.Kit,
 	groups map[string]*demandGroup) (map[string]string, error) {
-	// 收集所有唯一的 OpProductID 和 Year
+	years, opProductIDs := collectDistinctYearsAndOpIDs(groups)
+	if len(years) == 0 {
+		return nil, nil
+	}
+
+	candidateCache := make(map[string]string)
+	const maxYearsPerBatch = 20
+
+	for i := 0; i < len(years); i += maxYearsPerBatch {
+		end := i + maxYearsPerBatch
+		if end > len(years) {
+			end = len(years)
+		}
+		batchYears := years[i:end]
+
+		resp, err := c.callFinOpsAPIWithRetry(kt, batchYears, opProductIDs)
+		if err != nil {
+			logs.Errorf("batch get budget declaration operator from finops failed, "+
+				"err: %v, years: %v, op_product_ids: %v, rid: %s", err, batchYears, opProductIDs, kt.Rid)
+			return nil, err
+		}
+
+		buildCandidateCache(kt, resp, candidateCache)
+	}
+
+	return candidateCache, nil
+}
+
+// collectDistinctYearsAndOpIDs 收集并去重年份和运营产品ID
+func collectDistinctYearsAndOpIDs(groups map[string]*demandGroup) ([]int, []int64) {
 	opProductYearSet := make(map[int64]map[int]bool)
 	for _, group := range groups {
 		if _, exists := opProductYearSet[group.OpProductID]; !exists {
@@ -2138,50 +2306,51 @@ func (c *Controller) batchFetchBudgetOperatorCandidates(kt *kit.Kit,
 		opProductYearSet[group.OpProductID][group.Year] = true
 	}
 
-	// 构建批量查询参数
-	var years []int
-	var opProductIDs []int64
+	yearSet := make(map[int]bool)
+	opIDSet := make(map[int64]bool)
 	for opID, yearMap := range opProductYearSet {
+		opIDSet[opID] = true
 		for year := range yearMap {
-			years = append(years, year)
-			opProductIDs = append(opProductIDs, opID)
+			yearSet[year] = true
 		}
 	}
 
-	if len(years) == 0 {
-		return nil, nil
-	}
+	return maps.Keys(yearSet), maps.Keys(opIDSet)
+}
 
+// callFinOpsAPIWithRetry 带重试地调用 FinOps API
+func (c *Controller) callFinOpsAPIWithRetry(kt *kit.Kit, years []int, opProductIDs []int64) (
+	*finops.GetBudgetDeclarationOperatorResult, error) {
 	param := &finops.GetBudgetDeclarationOperatorParam{
 		Years:        years,
 		OpProductIDs: opProductIDs,
 	}
 
-	// 批量调用 FinOps API（带重试）
 	var resp *finops.GetBudgetDeclarationOperatorResult
 	var err error
-	for i := 0; i < 3; i++ {
+	for retry := 0; retry < 3; retry++ {
 		resp, err = c.finOpsCli.GetBudgetDeclarationOperator(kt, param)
 		if err == nil {
 			break
 		}
+		logs.Warnf("get budget declaration operator from finops failed, retry: %d, err: %v, rid: %s",
+			retry, err, kt.Rid)
 		time.Sleep(time.Second)
 	}
-	if err != nil {
-		logs.Errorf("batch get budget declaration operator from finops failed, "+
-			"err: %v, years: %v, op_product_ids: %v, rid: %s", err, years, opProductIDs, kt.Rid)
-		return nil, err
-	}
 
-	// 构建缓存：key=opID-year, value=candidate
-	candidateCache := make(map[string]string)
+	return resp, err
+}
+
+// buildCandidateCache 从 FinOps 响应构建候选人缓存
+func buildCandidateCache(kt *kit.Kit, resp *finops.GetBudgetDeclarationOperatorResult,
+	candidateCache map[string]string) {
+
 	for _, item := range resp.Items {
 		for _, comp := range item.Composition {
 			key := fmt.Sprintf("%d-%d", comp.OpProductID, item.Year)
 			logs.Infof("processing budget operator, op_product_id: %d, year: %d, creators: %v, committers: %v, rid: %s",
 				comp.OpProductID, item.Year, comp.Creators, comp.Committers, kt.Rid)
 
-			// 提取第一个有效的候选人
 			candidates := deduplicateBudgetOperatorCandidates(comp.Creators, comp.Committers)
 			for _, operator := range candidates {
 				candidateCache[key] = operator
@@ -2190,8 +2359,6 @@ func (c *Controller) batchFetchBudgetOperatorCandidates(kt *kit.Kit,
 			}
 		}
 	}
-
-	return candidateCache, nil
 }
 
 func (c *Controller) collectBudgetOperatorDemands(kt *kit.Kit, start, end time.Time) ([]budgetDemand, error) {

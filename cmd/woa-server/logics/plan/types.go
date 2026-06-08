@@ -25,6 +25,7 @@ import (
 	"time"
 
 	mtypes "hcm/cmd/woa-server/types/meta"
+	ptypes "hcm/cmd/woa-server/types/plan"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	rpt "hcm/pkg/dal/table/resource-plan/res-plan-ticket"
@@ -37,8 +38,12 @@ type CreateResPlanTicketReq struct {
 	TicketType  enumor.RPTicketType `json:"ticket_type" validate:"required"`
 	DemandClass enumor.DemandClass  `json:"demand_class" validate:"required"`
 	BizOrgRel   mtypes.BizOrgRel    `json:"biz_org_rel" validate:"required"`
-	Demands     rpt.ResPlanDemands  `json:"demands" validate:"required"`
-	Remark      string              `json:"remark" validate:"omitempty"`
+	// Demands is pre-built table demands for adjust/delete/transfer tickets.
+	// TODO could be removed after all tickets are migrated to create_demands.
+	Demands rpt.ResPlanDemands `json:"demands" validate:"omitempty"`
+	// CreateDemands is API create demand requests for add ticket; built into Demands in CreateResPlanTicket.
+	CreateDemands []ptypes.CreateResPlanDemandReq `json:"create_demands" validate:"omitempty"`
+	Remark        string                          `json:"remark" validate:"omitempty"`
 }
 
 // Validate whether CreateResPlanTicketReq is valid.
@@ -51,17 +56,22 @@ func (r *CreateResPlanTicketReq) Validate() error {
 		return err
 	}
 
+	if err := r.DemandClass.Validate(); err != nil {
+		return err
+	}
+
 	switch r.TicketType {
 	case enumor.RPTicketTypeAdd:
-		for _, demand := range r.Demands {
-			if demand.Original != nil {
-				return errors.New("original demand of add ticket should be empty")
-			}
-
-			if demand.Updated == nil {
-				return errors.New("updated demand of add ticket can not be empty")
+		// Add ticket use create_demands to build table demands.
+		if len(r.CreateDemands) == 0 {
+			return errors.New("create_demands is required for add ticket")
+		}
+		for _, demand := range r.CreateDemands {
+			if err := demand.Validate(); err != nil {
+				return err
 			}
 		}
+		return nil
 	case enumor.RPTicketTypeAdjust:
 		for _, demand := range r.Demands {
 			if demand.Original == nil {
@@ -86,8 +96,8 @@ func (r *CreateResPlanTicketReq) Validate() error {
 		return fmt.Errorf("unsupported resource plan ticket type: %s", r.TicketType)
 	}
 
-	if err := r.DemandClass.Validate(); err != nil {
-		return err
+	if len(r.Demands) == 0 {
+		return errors.New("demands is required")
 	}
 
 	for _, demand := range r.Demands {

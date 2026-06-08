@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	demandtime "hcm/cmd/woa-server/logics/plan/demand-time"
 	ptypes "hcm/cmd/woa-server/types/plan"
 	"hcm/pkg/api/core"
 	rpproto "hcm/pkg/api/data-service/resource-plan"
@@ -51,7 +52,6 @@ import (
 	"hcm/pkg/tools/times"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/shopspring/decimal"
 )
 
 // CreateResPlanTicket create resource plan ticket.
@@ -59,6 +59,14 @@ func (c *Controller) CreateResPlanTicket(kt *kit.Kit, req *CreateResPlanTicketRe
 	if err := req.Validate(); err != nil {
 		logs.Errorf("failed to validate create resource plan ticket request, err: %v, rid: %s", err, kt.Rid)
 		return "", err
+	}
+
+	if len(req.CreateDemands) > 0 {
+		demands, err := c.buildDemandsFromCreateReq(kt, req.DemandClass, req.CreateDemands)
+		if err != nil {
+			return "", err
+		}
+		req.Demands = demands
 	}
 
 	// construct resource plan ticket.
@@ -114,40 +122,9 @@ func (c *Controller) CreateResPlanTicket(kt *kit.Kit, req *CreateResPlanTicketRe
 func (c *Controller) constructResPlanTicket(kt *kit.Kit, req *CreateResPlanTicketReq, applicant string) (
 	*rpt.ResPlanTicketTable, error) {
 
-	var originalOs, updatedOs decimal.Decimal
-	var originalCpuCore, originalMemory, originalDiskSize int64
-	var updatedCpuCore, updatedMemory, updatedDiskSize int64
-	for _, demand := range req.Demands {
-		if demand.Original != nil {
-			originalOs = originalOs.Add((*demand.Original).Cvm.Os.Decimal)
-			originalCpuCore += (*demand.Original).Cvm.CpuCore
-			originalMemory += (*demand.Original).Cvm.Memory
-			originalDiskSize += (*demand.Original).Cbs.DiskSize
-		}
-
-		if demand.Updated != nil {
-			// 期望交付时间的预测需求月和其自然月必须一致，否则需要选择该周的其他时间
-			et, err := times.ParseDay(demand.Updated.ExpectTime)
-			if err != nil {
-				logs.Errorf("failed to parse expect time, err: %v, expect_time: %s, rid: %s", err,
-					demand.Updated.ExpectTime, kt.Rid)
-				return nil, err
-			}
-			isCross, err := c.demandTime.IsDayCrossMonth(kt, et)
-			if err != nil {
-				logs.Errorf("failed to check if expect time is cross month, err: %v, expect_time: %s, rid: %s",
-					err, et.String(), kt.Rid)
-				return nil, err
-			}
-			if isCross {
-				return nil, fmt.Errorf("expect_time should not be cross month, expect_time: %s",
-					demand.Updated.ExpectTime)
-			}
-			updatedOs = updatedOs.Add((*demand.Updated).Cvm.Os.Decimal)
-			updatedCpuCore += (*demand.Updated).Cvm.CpuCore
-			updatedMemory += (*demand.Updated).Cvm.Memory
-			updatedDiskSize += (*demand.Updated).Cbs.DiskSize
-		}
+	summary, err := c.validateAndSummarizeDemands(kt, req.Demands, true)
+	if err != nil {
+		return nil, err
 	}
 
 	demandsJson, err := tabletypes.NewJsonField(req.Demands)
@@ -168,14 +145,14 @@ func (c *Controller) constructResPlanTicket(kt *kit.Kit, req *CreateResPlanTicke
 		VirtualDeptID:    req.BizOrgRel.VirtualDeptID,
 		VirtualDeptName:  req.BizOrgRel.VirtualDeptName,
 		DemandClass:      req.DemandClass,
-		OriginalOS:       originalOs.InexactFloat64(),
-		OriginalCpuCore:  originalCpuCore,
-		OriginalMemory:   originalMemory,
-		OriginalDiskSize: originalDiskSize,
-		UpdatedOS:        updatedOs.InexactFloat64(),
-		UpdatedCpuCore:   updatedCpuCore,
-		UpdatedMemory:    updatedMemory,
-		UpdatedDiskSize:  updatedDiskSize,
+		OriginalOS:       summary.OriginalOS,
+		OriginalCpuCore:  summary.OriginalCPUCore,
+		OriginalMemory:   summary.OriginalMemory,
+		OriginalDiskSize: summary.OriginalDiskSize,
+		UpdatedOS:        summary.UpdatedOS,
+		UpdatedCpuCore:   summary.UpdatedCPUCore,
+		UpdatedMemory:    summary.UpdatedMemory,
+		UpdatedDiskSize:  summary.UpdatedDiskSize,
 		Remark:           req.Remark,
 		Creator:          applicant,
 		Reviser:          applicant,
@@ -666,7 +643,166 @@ func (c *Controller) GetResPlanTicketStatusByBiz(kt *kit.Kit, ticketID string, b
 	return result, nil
 }
 
-// TerminateResPlanFailedTicket 终止失败的预测单据
+// OverwriteResPlanTicket 覆盖被驳回的资源预测单据并重试
+func (c *Controller) OverwriteResPlanTicket(kt *kit.Kit, ticketID string,
+	req *ptypes.OverwriteResPlanTicketReq) error {
+
+	ticket, err := c.resFetcher.GetTicketInfo(kt, ticketID)
+	if err != nil {
+		logs.Errorf("failed to get ticket info, err: %v, ticket id: %s, rid: %s", err, ticketID, kt.Rid)
+		return err
+	}
+
+	if !ticket.Status.IsOverwritable() {
+		logs.Errorf("ticket status is %s, can't modify, ticket id: %s, rid: %s", ticket.Status, ticketID, kt.Rid)
+		return fmt.Errorf("ticket status is %s, can't modify", ticket.Status)
+	}
+
+	hasDone, err := c.hasDoneSubTickets(kt, ticketID)
+	if err != nil {
+		logs.Errorf("failed to check done sub tickets, err: %v, ticket id: %s, rid: %s", err, ticketID, kt.Rid)
+		return err
+	}
+	if hasDone {
+		logs.Errorf("ticket has done sub tickets, can't modify, ticket id: %s, rid: %s", ticketID, kt.Rid)
+		return errors.New("ticket has done sub tickets, can't modify")
+	}
+
+	ticketUpdate, err := c.buildOverwriteResPlanTicketUpdateModel(kt, ticket, req)
+	if err != nil {
+		logs.Errorf("failed to build overwrite ticket update model, err: %v, ticket id: %s, rid: %s",
+			err, ticketID, kt.Rid)
+		return err
+	}
+
+	overwriteReq := &rpproto.OverwriteResPlanTicketReq{
+		TicketID: ticketID,
+		Ticket:   toResPlanTicketUpdateReq(ticketUpdate),
+	}
+	if err = c.client.DataService().Global.ResourcePlan.OverwriteResPlanTicket(kt, overwriteReq); err != nil {
+		logs.Errorf("failed to overwrite res plan ticket, err: %v, ticket id: %s, rid: %s", err, ticketID, kt.Rid)
+		return err
+	}
+
+	return nil
+}
+
+func (c *Controller) buildOverwriteResPlanTicketUpdateModel(kt *kit.Kit, ticket *ptypes.TicketInfo,
+	req *ptypes.OverwriteResPlanTicketReq) (*rpt.ResPlanTicketTable, error) {
+
+	updateModel := &rpt.ResPlanTicketTable{
+		Remark:      cvt.PtrToVal(req.Remark),
+		DemandClass: cvt.PtrToVal(req.DemandClass),
+		SubmittedAt: time.Now().Format(constant.DateTimeLayout),
+	}
+	if len(req.Demands) == 0 {
+		return updateModel, nil
+	}
+
+	demandClass := ticket.DemandClass
+	if req.DemandClass != nil {
+		demandClass = *req.DemandClass
+	}
+
+	demands, summary, err := c.buildAndValidateDemandsFromCreateReq(kt, demandClass, req.Demands)
+	if err != nil {
+		return nil, err
+	}
+
+	demandsJson, err := tabletypes.NewJsonField(demands)
+	if err != nil {
+		return nil, err
+	}
+
+	updateModel.Demands = demandsJson
+	updateModel.DemandClass = demandClass
+	updateModel.OriginalOS = summary.OriginalOS
+	updateModel.OriginalCpuCore = summary.OriginalCPUCore
+	updateModel.OriginalMemory = summary.OriginalMemory
+	updateModel.OriginalDiskSize = summary.OriginalDiskSize
+	updateModel.UpdatedOS = summary.UpdatedOS
+	updateModel.UpdatedCpuCore = summary.UpdatedCPUCore
+	updateModel.UpdatedMemory = summary.UpdatedMemory
+	updateModel.UpdatedDiskSize = summary.UpdatedDiskSize
+
+	return updateModel, nil
+}
+
+func (c *Controller) validateNonCurrentYearReportDeadline(kt *kit.Kit, demands rpt.ResPlanDemands) error {
+	if !demandtime.ContainsNonCurrentYearDemand(demands) {
+		return nil
+	}
+
+	config, exist, err := c.getResPlanGlobalConfigByKey(kt, constant.ResPlanNonCurrentYearReportDeadlineConfigKey)
+	if err != nil {
+		logs.Errorf("failed to get non current year report deadline config, err: %v, rid: %s", err, kt.Rid)
+		return err
+	}
+	if !exist {
+		return nil
+	}
+
+	deadline, err := parseResPlanDeadlineConfigValue(config.ConfigValue, c.location)
+	if err != nil {
+		logs.Errorf("failed to parse non current year report deadline, err: %v, rid: %s", err, kt.Rid)
+		return errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	// deadline 按配置时区解析后再与 time.Now() 比较绝对时间。
+	if time.Now().After(deadline) {
+		return errf.Newf(errf.InvalidParameter,
+			"已错过跨年预测提报截止时间 %s，无法提交非本年度预测需求",
+			deadline.Format(constant.DateTimeLayout))
+	}
+
+	return nil
+}
+
+func parseResPlanDeadlineConfigValue(configValue tabletypes.JsonField, loc *time.Location) (time.Time, error) {
+	var deadlineStr string
+	if err := json.Unmarshal([]byte(configValue), &deadlineStr); err != nil {
+		return time.Time{}, err
+	}
+	return times.ParseDateTimeInLocation(constant.DateTimeLayout, deadlineStr, loc)
+}
+
+func toResPlanTicketUpdateReq(model *rpt.ResPlanTicketTable) rpproto.ResPlanTicketUpdateReq {
+	updateReq := rpproto.ResPlanTicketUpdateReq{
+		Remark:           model.Remark,
+		DemandClass:      model.DemandClass,
+		SubmittedAt:      model.SubmittedAt,
+		OriginalOS:       model.OriginalOS,
+		OriginalCPUCore:  model.OriginalCpuCore,
+		OriginalMemory:   model.OriginalMemory,
+		OriginalDiskSize: model.OriginalDiskSize,
+		UpdatedOS:        model.UpdatedOS,
+		UpdatedCPUCore:   model.UpdatedCpuCore,
+		UpdatedMemory:    model.UpdatedMemory,
+		UpdatedDiskSize:  model.UpdatedDiskSize,
+	}
+	if !model.Demands.IsEmpty() {
+		updateReq.Demands = &model.Demands
+	}
+
+	return updateReq
+}
+
+// hasDoneSubTickets 检查是否存在 status = done 的子单
+func (c *Controller) hasDoneSubTickets(kt *kit.Kit, ticketID string) (bool, error) {
+	listReq := &ptypes.ListResPlanSubTicketReq{
+		TicketID: ticketID,
+		Statuses: []enumor.RPSubTicketStatus{enumor.RPSubTicketStatusDone},
+		Page:     core.NewCountPage(),
+	}
+	rst, err := c.resFetcher.ListResPlanSubTicket(kt, listReq)
+	if err != nil {
+		logs.Errorf("failed to list sub tickets, err: %v, ticket id: %s, rid: %s", err, ticketID, kt.Rid)
+		return false, err
+	}
+	return rst.Count > 0, nil
+}
+
+// TerminateResPlanFailedTicket 终止失败的预测单据（支持失败、部分失败、审批驳回、部分审批驳回）
 func (c *Controller) TerminateResPlanFailedTicket(kt *kit.Kit, ticketID string) error {
 	// 1. 获取主单信息
 	ticket, err := c.resFetcher.GetTicketInfo(kt, ticketID)
@@ -675,10 +811,8 @@ func (c *Controller) TerminateResPlanFailedTicket(kt *kit.Kit, ticketID string) 
 		return err
 	}
 
-	// 2. 仅失败、部分失败的单据可以终止
-	switch ticket.Status {
-	case enumor.RPTicketStatusFailed, enumor.RPTicketStatusPartialFailed:
-	default:
+	// 2. 仅失败、部分失败、审批驳回、部分审批驳回的单据可以终止
+	if !ticket.Status.IsNonFinalState() {
 		logs.Errorf("ticket status is %s, can't terminate, ticket id: %s, rid: %s", ticket.Status, ticketID,
 			kt.Rid)
 		return fmt.Errorf("ticket status is %s, can't terminate", ticket.Status)

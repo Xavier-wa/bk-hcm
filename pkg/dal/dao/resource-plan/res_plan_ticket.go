@@ -47,7 +47,7 @@ import (
 // ResPlanTicketInterface only used for resource plan ticket interface.
 type ResPlanTicketInterface interface {
 	CreateWithTx(kt *kit.Kit, tx *sqlx.Tx, models []rpt.ResPlanTicketTable) ([]string, error)
-	Update(kt *kit.Kit, expr *filter.Expression, model *rpt.ResPlanTicketTable) error
+	UpdateWithTx(kt *kit.Kit, tx *sqlx.Tx, expr *filter.Expression, model *rpt.ResPlanTicketTable) error
 	List(kt *kit.Kit, opt *types.ListOption) (*rtypes.RPTicketListResult, error)
 	DeleteWithTx(kt *kit.Kit, tx *sqlx.Tx, expr *filter.Expression) error
 	// ListWithStatus list resource plan ticket with corresponding status.
@@ -93,8 +93,9 @@ func (d ResPlanTicketDao) CreateWithTx(kt *kit.Kit, tx *sqlx.Tx, models []rpt.Re
 	return ids, nil
 }
 
-// Update update resource plan ticket.
-func (d ResPlanTicketDao) Update(kt *kit.Kit, filterExpr *filter.Expression, model *rpt.ResPlanTicketTable) error {
+// UpdateWithTx update resource plan ticket with tx.
+func (d ResPlanTicketDao) UpdateWithTx(kt *kit.Kit, tx *sqlx.Tx, filterExpr *filter.Expression,
+	model *rpt.ResPlanTicketTable) error {
 	if filterExpr == nil {
 		return errf.New(errf.InvalidParameter, "filter expr is nil")
 	}
@@ -116,23 +117,16 @@ func (d ResPlanTicketDao) Update(kt *kit.Kit, filterExpr *filter.Expression, mod
 
 	sql := fmt.Sprintf(`UPDATE %s %s %s`, model.TableName(), setExpr, whereExpr)
 
-	_, err = d.Orm.AutoTxn(kt, func(txn *sqlx.Tx, opt *orm.TxnOption) (interface{}, error) {
-		effected, err := d.Orm.Txn(txn).Update(kt.Ctx, sql, tools.MapMerge(toUpdate, whereValue))
-		if err != nil {
-			logs.ErrorJson("update resource plan ticket failed, filter: %v, err: %v, rid: %v",
-				filterExpr, err, kt.Rid)
-			return nil, err
-		}
-
-		if effected == 0 {
-			logs.ErrorJson("update resource plan ticket, but record not found, filter: %v, rid: %v",
-				filterExpr, kt.Rid)
-		}
-
-		return nil, nil
-	})
+	effected, err := d.Orm.Txn(tx).Update(kt.Ctx, sql, tools.MapMerge(toUpdate, whereValue))
 	if err != nil {
+		logs.ErrorJson("update resource plan ticket in txn failed, filter: %v, err: %v, rid: %v",
+			filterExpr, err, kt.Rid)
 		return err
+	}
+
+	if effected == 0 {
+		logs.ErrorJson("update resource plan ticket, but record not found, filter: %v, rid: %v",
+			filterExpr, kt.Rid)
 	}
 
 	return nil

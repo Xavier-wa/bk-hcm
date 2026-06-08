@@ -16,7 +16,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 
 	"hcm/cmd/woa-server/logics/plan"
 	ptypes "hcm/cmd/woa-server/types/plan"
@@ -31,7 +30,6 @@ import (
 	rpdaotypes "hcm/pkg/dal/dao/types/resource-plan"
 	rpst "hcm/pkg/dal/table/resource-plan/res-plan-sub-ticket"
 	rpt "hcm/pkg/dal/table/resource-plan/res-plan-ticket"
-	tabletypes "hcm/pkg/dal/table/types"
 	"hcm/pkg/iam/meta"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
@@ -177,57 +175,6 @@ func (s *service) validateResPlanTicket(req *ptypes.CreateResPlanTicketReq, bkBi
 
 // createResPlanTicket create resource plan ticket.
 func (s *service) createResPlanTicket(kt *kit.Kit, bkBizID int64, req *ptypes.CreateResPlanTicketReq) (string, error) {
-	// get create resource plan ticket needed zoneMap, regionAreaMap and deviceTypeMap.
-	zoneMap, regionAreaMap, deviceTypeMap, err := s.planController.Fetch().GetMetaMaps(kt)
-	if err != nil {
-		logs.Errorf("get meta maps failed, err: %v, rid: %s", err, kt.Rid)
-		return "", err
-	}
-
-	// convert request demands to demands defined in resource plan ticket table.
-	demands := make(rpt.ResPlanDemands, len(req.Demands))
-	for idx, demand := range req.Demands {
-		demands[idx] = rpt.ResPlanDemand{
-			DemandClass: req.DemandClass,
-			Updated: &rpt.UpdatedRPDemandItem{
-				ObsProject:     demand.ObsProject,
-				ExpectTime:     demand.ExpectTime,
-				ReturnPlanTime: demand.ReturnPlanTime,
-				ZoneID:         demand.ZoneID,
-				ZoneName:       zoneMap[demand.ZoneID],
-				RegionID:       demand.RegionID,
-				RegionName:     regionAreaMap[demand.RegionID].RegionName,
-				AreaName:       regionAreaMap[demand.RegionID].AreaName,
-				DemandSource:   demand.DemandSource,
-				Remark:         demand.Remark,
-			},
-		}
-
-		if slices.Contains(demand.DemandResTypes, enumor.DemandResTypeCVM) {
-			deviceType := demand.Cvm.DeviceType
-			demands[idx].Updated.Cvm = rpt.Cvm{
-				ResMode:        demand.Cvm.ResMode,
-				DeviceType:     deviceType,
-				DeviceClass:    deviceTypeMap[deviceType].DeviceClass,
-				DeviceFamily:   deviceTypeMap[deviceType].DeviceFamily,
-				TechnicalClass: deviceTypeMap[deviceType].TechnicalClass,
-				CoreType:       string(deviceTypeMap[deviceType].CoreType),
-				Os:             tabletypes.Decimal{Decimal: cvt.PtrToVal(demand.Cvm.Os)},
-				CpuCore:        cvt.PtrToVal(demand.Cvm.CpuCore),
-				Memory:         cvt.PtrToVal(demand.Cvm.Memory),
-			}
-		}
-
-		if slices.Contains(demand.DemandResTypes, enumor.DemandResTypeCBS) {
-			demands[idx].Updated.Cbs = rpt.Cbs{
-				DiskType:     demand.Cbs.DiskType,
-				DiskTypeName: demand.Cbs.DiskType.Name(),
-				DiskIo:       cvt.PtrToVal(demand.Cbs.DiskIo),
-				DiskSize:     cvt.PtrToVal(demand.Cbs.DiskSize),
-			}
-		}
-	}
-
 	// get biz org relation.
 	bizOrgRel, err := s.bizLogics.GetBizOrgRel(kt, bkBizID)
 	if err != nil {
@@ -236,11 +183,11 @@ func (s *service) createResPlanTicket(kt *kit.Kit, bkBizID int64, req *ptypes.Cr
 	}
 
 	logicsReq := &plan.CreateResPlanTicketReq{
-		TicketType:  enumor.RPTicketTypeAdd,
-		DemandClass: req.DemandClass,
-		BizOrgRel:   *bizOrgRel,
-		Demands:     demands,
-		Remark:      req.Remark,
+		TicketType:    enumor.RPTicketTypeAdd,
+		DemandClass:   req.DemandClass,
+		BizOrgRel:     *bizOrgRel,
+		CreateDemands: req.Demands,
+		Remark:        req.Remark,
 	}
 
 	ticketID, err := s.planController.CreateResPlanTicket(kt, logicsReq)
@@ -591,7 +538,44 @@ func (s *service) RetryBizResPlanTicket(cts *rest.Contexts) (any, error) {
 	return nil, nil
 }
 
-// TerminateResPlanTicket 终止失败的资源预测单，审批中的单据不可终止
+// OverwriteResPlanTicket 业务下 覆盖被驳回的资源预测单据并重试
+func (s *service) OverwriteResPlanTicket(cts *rest.Contexts) (any, error) {
+	bkBizID, err := cts.PathParameter("bk_biz_id").Int64()
+	if err != nil {
+		return nil, err
+	}
+
+	ticketID := cts.PathParameter("ticket_id").String()
+	if len(ticketID) == 0 {
+		return nil, errf.NewFromErr(errf.InvalidParameter, errors.New("ticket id can not be empty"))
+	}
+
+	req := new(ptypes.OverwriteResPlanTicketReq)
+	if err = cts.DecodeInto(req); err != nil {
+		logs.Errorf("failed to decode overwrite res plan ticket request, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err = req.Validate(); err != nil {
+		logs.Errorf("failed to validate overwrite res plan ticket request, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	// authorize biz access.
+	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.Biz, Action: meta.Access}, BizID: bkBizID}
+	if err = s.authorizer.AuthorizeWithPerm(cts.Kit, authRes); err != nil {
+		return nil, err
+	}
+
+	if err := s.planController.OverwriteResPlanTicket(cts.Kit, ticketID, req); err != nil {
+		logs.Errorf("failed to overwrite res plan ticket, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+// TerminateResPlanTicket 终止失败的资源预测单，支持失败、部分失败、审批驳回、部分审批驳回的单据
 func (s *service) TerminateResPlanTicket(cts *rest.Contexts) (any, error) {
 	ticketID := cts.PathParameter("ticket_id").String()
 	if len(ticketID) == 0 {
@@ -612,7 +596,7 @@ func (s *service) TerminateResPlanTicket(cts *rest.Contexts) (any, error) {
 	return nil, nil
 }
 
-// TerminateBizResPlanTicket 业务下 终止失败的资源预测单，审批中的单据不可终止
+// TerminateBizResPlanTicket 业务下 终止失败的资源预测单，支持失败、部分失败、审批驳回、部分审批驳回的单据
 func (s *service) TerminateBizResPlanTicket(cts *rest.Contexts) (any, error) {
 	bkBizID, err := cts.PathParameter("bk_biz_id").Int64()
 	if err != nil {
@@ -873,4 +857,46 @@ func (s *service) processCrpTicketAudit(kt *kit.Kit, subTickets []*rpst.ResPlanS
 	}
 
 	return result, nil
+}
+
+// GetResPlanTicketReportDeadline gets non-current-year demand report deadline config.
+func (s *service) GetResPlanTicketReportDeadline(cts *rest.Contexts) (interface{}, error) {
+	// 本接口无需鉴权
+	result, err := s.planController.GetNonCurrentYearReportDeadline(cts.Kit)
+	if err != nil {
+		logs.Errorf("get non current year report deadline failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// UpsertResPlanTicketReportDeadline upserts non-current-year demand report deadline config.
+func (s *service) UpsertResPlanTicketReportDeadline(cts *rest.Contexts) (interface{}, error) {
+	err := s.authorizer.AuthorizeWithPerm(cts.Kit,
+		meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.ZiYanResPlan, Action: meta.Update}})
+	if err != nil {
+		logs.Errorf("upsert non current year report deadline config auth failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	req := new(ptypes.UpsertResPlanNonCurrentYearReportDeadlineReq)
+	if err = cts.DecodeInto(req); err != nil {
+		logs.Errorf("upsert non current year report deadline decode request failed, err: %v, rid: %s",
+			err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err = req.Validate(); err != nil {
+		logs.Errorf("upsert non current year report deadline validate request failed, err: %v, rid: %s",
+			err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	if err = s.planController.UpsertNonCurrentYearReportDeadline(cts.Kit, req); err != nil {
+		logs.Errorf("upsert non current year report deadline failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return nil, nil
 }

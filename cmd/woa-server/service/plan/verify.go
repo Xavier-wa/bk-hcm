@@ -89,7 +89,8 @@ func (s *service) GetCvmChargeTypeDeviceTypeV2(cts *rest.Contexts) (any, error) 
 	}
 
 	// get biz remained resource plan.
-	_, prodMaxAvailable, err := s.planController.GetProdResRemainPoolMatch(cts.Kit, req.BkBizID, req.RequireType)
+	_, prodMaxAvailable, err := s.planController.GetProdResRemainPoolMatch(cts.Kit, req.BkBizID, req.RequireType,
+		req.SuborderID)
 	if err != nil {
 		logs.Errorf("failed to get biz remained resource plan v2, err: %v, req: %+v, rid: %s",
 			err, cvt.PtrToVal(req), cts.Kit.Rid)

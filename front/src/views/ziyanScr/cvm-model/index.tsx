@@ -6,30 +6,31 @@ import apiService from '@/api/scrApi';
 import useSelection from '@/views/resource/resource-manage/hooks/use-selection';
 import AreaSelector from '../hostApplication/components/AreaSelector';
 import ZoneSelector from '../hostApplication/components/ZoneSelector';
+import { type IDeviceFamilyItem } from '@/store/config/device-family';
+import HcmFormDeviceFamily from '@/components/form/device-family.vue';
 import CreateDevice from './CreateDevice/index';
 import DevicetypeSelector from '@/views/ziyanScr/components/devicetype-selector/index.vue';
 import { VendorEnum } from '@/common/constant';
 import './index.scss';
 import useColumns from '@/views/resource/resource-manage/hooks/use-scr-columns';
+
 const { FormItem } = Form;
 export default defineComponent({
   name: 'AllhostInventoryManager',
   setup() {
     const { columns } = useColumns('cvmModel');
     const { selections, handleSelectionChange } = useSelection();
-    const deviceGroups = ['标准型', '高IO型', '大数据型', '计算型'];
     const filter = ref({
       region: [],
       zone: [],
       device_type: [],
-      device_family: deviceGroups && [deviceGroups[0]],
+      device_family: [],
       cpu_core: '',
       memory: '',
       disable: undefined as string | boolean | undefined,
       generation_type: [],
     });
     const options = ref({
-      device_families: deviceGroups,
       device_types: [],
       generation_types: ['存量', '采购'],
       regions: [],
@@ -52,13 +53,32 @@ export default defineComponent({
     const batchEditForm = ref({
       disable: 0,
     });
-    const queryRules = ref(
+
+    // 选中的机型族
+    const selectedDeviceFamily = ref<IDeviceFamilyItem[]>([]);
+
+    const filterDeviceFamily = computed(() => {
+      return selectedDeviceFamily.value.flatMap((item) =>
+        item.children?.length ? item.children?.map((child) => child.id) : [item.id],
+      );
+    });
+
+    const queryRules = computed(() =>
       [
         { field: 'vendor', op: 'eq', value: VendorEnum.ZIYAN },
         filter.value.region.length && { field: 'region', op: 'in', value: filter.value.region },
         filter.value.zone.length && { field: 'zone', op: 'in', value: filter.value.zone },
-        filter.value.device_family.length && { field: 'device_family', op: 'in', value: filter.value.device_family },
+        filterDeviceFamily.value.length && {
+          field: 'device_family',
+          op: 'in',
+          value: filterDeviceFamily.value,
+        },
         filter.value.device_type.length && { field: 'device_type', op: 'in', value: filter.value.device_type },
+        filter.value.generation_type.length && {
+          field: 'generation_type',
+          op: 'in',
+          value: filter.value.generation_type,
+        },
         filter.value.cpu_core && { field: 'cpu_core', op: 'eq', value: filter.value.cpu_core },
         filter.value.memory && { field: 'memory', op: 'eq', value: filter.value.memory },
         filter.value.disable !== undefined &&
@@ -113,7 +133,7 @@ export default defineComponent({
         region: [],
         zone: [],
         device_type: [],
-        device_family: deviceGroups && [deviceGroups[0]],
+        device_family: [],
         cpu_core: '',
         memory: '',
         disable: undefined,
@@ -121,12 +141,14 @@ export default defineComponent({
       };
       deviceConfigDisabled.value = false;
       deviceTypeDisabled.value = false;
+      selectedDeviceFamily.value = [];
       filterDevices();
     };
-    const handleDeviceFamilyChange = () => {
+    const handleDeviceFamilyChange = (items: IDeviceFamilyItem[]) => {
       filter.value.cpu_core = '';
       filter.value.memory = '';
       filter.value.device_type = [];
+      selectedDeviceFamily.value = items;
     };
     const batchUpdates = () => {
       batchEditDialogVisible.value = true;
@@ -164,23 +186,6 @@ export default defineComponent({
       };
     };
     const filterDevices = () => {
-      queryRules.value = [
-        { field: 'vendor', op: 'eq', value: VendorEnum.ZIYAN },
-        filter.value.region.length && { field: 'region', op: 'in', value: filter.value.region },
-        filter.value.zone.length && { field: 'zone', op: 'in', value: filter.value.zone },
-        filter.value.device_family.length && { field: 'device_family', op: 'in', value: filter.value.device_family },
-        filter.value.device_type.length && { field: 'device_type', op: 'in', value: filter.value.device_type },
-        filter.value.generation_type.length && {
-          field: 'generation_type',
-          op: 'in',
-          value: filter.value.generation_type,
-        },
-        filter.value.cpu_core && { field: 'cpu_core', op: 'eq', value: filter.value.cpu_core },
-        filter.value.memory && { field: 'memory', op: 'eq', value: filter.value.memory },
-        filter.value.disable !== undefined &&
-          filter.value.disable !== '' && { field: 'disable', op: 'eq', value: filter.value.disable },
-      ].filter(Boolean);
-
       loadResources();
     };
     const handleDeviceTypeChange = () => {
@@ -198,12 +203,12 @@ export default defineComponent({
     });
 
     const cvmDevicetypeParams = computed(() => {
-      const { region, zone, device_family, cpu_core, memory, disable } = filter.value;
+      const { region, zone, cpu_core, memory, disable } = filter.value;
       return {
         vendor: VendorEnum.ZIYAN,
         region,
         zone,
-        device_family,
+        device_family: filterDeviceFamily.value,
         cpu: cpu_core,
         mem: memory,
         disable: disable !== undefined && disable !== '' ? Boolean(disable) : undefined,
@@ -235,17 +240,14 @@ export default defineComponent({
                 }}></ZoneSelector>
             </FormItem>
             <FormItem label='实例族'>
-              <bk-select
+              <HcmFormDeviceFamily
                 v-model={filter.value.device_family}
                 filterable
                 multiple
                 clearable
                 collapse-tags
-                onChange={handleDeviceFamilyChange}>
-                {options.value.device_families.map((item) => (
-                  <bk-option key={item} value={item} label={item}></bk-option>
-                ))}
-              </bk-select>
+                onChange={handleDeviceFamilyChange}
+              />
             </FormItem>
             <FormItem label='机型'>
               <DevicetypeSelector
@@ -336,7 +338,8 @@ export default defineComponent({
                 v-model={batchEditForm.value.disable}
                 style='width: 250px'
                 clearable={false}
-                allowEmptyValues={[false, 0]}>
+                allowEmptyValues={[false, 0]}
+                filterable>
                 {[
                   {
                     value: 0,

@@ -15,12 +15,13 @@ export const useDeviceTypePlan = (params: {
   bizId: Ref<number | string>;
   region: Ref<string>;
   requireType: Ref<RequirementType>;
+  suborderId?: Ref<string>;
 }) => {
   const cvmDeviceStore = useCvmDeviceStore();
 
   const availableDeviceTypeMap = ref<AvailableDeviceTypeMap>(new Map());
 
-  const { bizId, region, requireType } = params;
+  const { bizId, region, requireType, suborderId } = params;
 
   watchEffect(async () => {
     // 非预测需求类型，不获取机型的预测数据
@@ -41,6 +42,7 @@ export const useDeviceTypePlan = (params: {
       bk_biz_id: Number(params.bizId.value),
       require_type: params.requireType.value,
       region: params.region.value,
+      ...(suborderId?.value ? { suborder_id: suborderId.value } : {}),
     });
 
     list.forEach(({ charge_type, device_types }) => {

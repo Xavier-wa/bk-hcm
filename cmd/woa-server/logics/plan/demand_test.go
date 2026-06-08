@@ -23,7 +23,9 @@ import (
 	"testing"
 	"time"
 
+	tasktypes "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
 )
 
 func TestDeduplicateBudgetOperatorCandidates(t *testing.T) {
@@ -222,6 +224,132 @@ func TestGroupBudgetDemands(t *testing.T) {
 			}
 			if tt.checkFunc != nil {
 				tt.checkFunc(t, groups)
+			}
+		})
+	}
+}
+
+func TestIsSuborderTerminated(t *testing.T) {
+	tests := []struct {
+		name   string
+		stage  enumor.TicketStage
+		status enumor.ApplyStatus
+		want   bool
+	}{
+		{"备货中-未终止", enumor.TicketStageRunning, enumor.ApplyStatusMatching, false},
+		{"待匹配-未终止", enumor.TicketStageRunning, enumor.ApplyStatusWaitForMatch, false},
+		{"已完成-未终止", enumor.TicketStageDone, enumor.ApplyStatusDone, false},
+		{"暂停-未终止", enumor.TicketStageRunning, enumor.ApplyStatusPaused, false},
+		{"备货异常-未终止", enumor.TicketStageSuspend, enumor.ApplyStatusMatching, false},
+		{"Status 运行中", enumor.TicketStageRunning, enumor.ApplyStatusTerminate, false},
+		{"Status 运行中", enumor.TicketStageRunning, enumor.ApplyStatusGracefulTerminate, false},
+
+		{"Stage 终止", enumor.TicketStageTerminate, enumor.ApplyStatusMatching, true},
+		{"Stage 和 Status 均终止", enumor.TicketStageTerminate, enumor.ApplyStatusTerminate, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sub := tasktypes.ApplyOrder{Stage: tt.stage, Status: tt.status}
+			if got := sub.IsSuborderTerminated(); got != tt.want {
+				t.Errorf("IsSuborderTerminated() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCalcSuborderConsumeCore(t *testing.T) {
+	tests := []struct {
+		name          string
+		stage         enumor.TicketStage
+		status        enumor.ApplyStatus
+		appliedCore   uint
+		productedCore int64
+		want          int64
+	}{
+		{
+			name:          "活跃-待匹配-未生产-按申请",
+			stage:         enumor.TicketStageRunning,
+			status:        enumor.ApplyStatusWaitForMatch,
+			appliedCore:   100,
+			productedCore: 0,
+			want:          100,
+		},
+		{
+			name:          "活跃-生产中-部分已生产-按申请",
+			stage:         enumor.TicketStageRunning,
+			status:        enumor.ApplyStatusMatching,
+			appliedCore:   100,
+			productedCore: 30,
+			want:          100,
+		},
+		{
+			name:          "活跃-已完成-按申请",
+			stage:         enumor.TicketStageDone,
+			status:        enumor.ApplyStatusDone,
+			appliedCore:   100,
+			productedCore: 100,
+			want:          100,
+		},
+		{
+			name:          "活跃-已生产超出申请-按已生产兜底",
+			stage:         enumor.TicketStageRunning,
+			status:        enumor.ApplyStatusMatching,
+			appliedCore:   100,
+			productedCore: 120,
+			want:          120,
+		},
+		{
+			name:          "终止-Stage TERMINATE-按已生产",
+			stage:         enumor.TicketStageTerminate,
+			status:        enumor.ApplyStatusTerminate,
+			appliedCore:   100,
+			productedCore: 50,
+			want:          50,
+		},
+		{
+			name:          "终止-Status TERMINATE-按已生产",
+			stage:         enumor.TicketStageRunning,
+			status:        enumor.ApplyStatusTerminate,
+			appliedCore:   100,
+			productedCore: 50,
+			want:          50,
+		},
+		{
+			name:          "终止-优雅终止-按已生产",
+			stage:         enumor.TicketStageRunning,
+			status:        enumor.ApplyStatusGracefulTerminate,
+			appliedCore:   100,
+			productedCore: 50,
+			want:          50,
+		},
+		{
+			name:          "终止-未生产任何主机-占用为0",
+			stage:         enumor.TicketStageTerminate,
+			status:        enumor.ApplyStatusTerminate,
+			appliedCore:   100,
+			productedCore: 0,
+			want:          0,
+		},
+		{
+			name:          "终止-需求案例-申请10台生产5台-按5台占用",
+			stage:         enumor.TicketStageTerminate,
+			status:        enumor.ApplyStatusTerminate,
+			appliedCore:   80, // 10台 * 8核
+			productedCore: 40, // 5台 * 8核
+			want:          40,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sub := &tasktypes.ApplyOrder{
+				Stage:       tt.stage,
+				Status:      tt.status,
+				AppliedCore: tt.appliedCore,
+			}
+			if got := calcSuborderConsumeCore(sub, tt.productedCore); got != tt.want {
+				t.Errorf("calcSuborderConsumeCore() = %d, want %d", got, tt.want)
 			}
 		})
 	}

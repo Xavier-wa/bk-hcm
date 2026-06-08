@@ -19,6 +19,7 @@ export interface ICvmDeviceCreateModel {
   disable?: boolean;
   region: string;
   generation_type: '存量' | '采购';
+  gpu_amount?: number;
 }
 
 export default defineComponent({
@@ -64,6 +65,7 @@ export default defineComponent({
       device_type_class: 'CommonType',
       technical_class: '',
       generation_type: '存量',
+      gpu_amount: undefined,
     });
     const selectedZones = ref<Array<{ value: string; label: string; region: string }>>([]);
 
@@ -102,17 +104,18 @@ export default defineComponent({
           const zones = regionToZones.get(r) || [];
           for (const z of zones) {
             deviceTypes.push({
-              device_type: formModel.device_type,
-              device_class: formModel.device_class,
-              device_family: formModel.device_family,
+              device_type: formModel.device_type?.trim(),
+              device_class: formModel.device_class?.trim(),
+              device_family: formModel.device_family?.trim(),
               core_type: formModel.core_type,
               cpu_core: formModel.cpu_core,
               memory: formModel.memory,
               device_type_class: formModel.device_type_class,
-              technical_class: formModel.technical_class,
+              technical_class: formModel.technical_class?.trim(),
               region: r,
               zone: z,
               generation_type: formModel.generation_type,
+              gpu_amount: formModel.gpu_amount,
             });
           }
         }
@@ -165,7 +168,13 @@ export default defineComponent({
                 />
               </bk-form-item>
               <bk-form-item label='实例族' property='device_family' required>
-                <hcm-form-enum v-model={formModel.device_family} option={deviceFamilyOptions} class='i-form-control' />
+                <hcm-form-enum
+                  v-model={formModel.device_family}
+                  option={deviceFamilyOptions}
+                  allowCreate={true}
+                  placeholder='请选择，如手动输入请在完成后按回车确定'
+                  class='i-form-control'
+                />
               </bk-form-item>
               <bk-form-item label='机型' property='device_type' required>
                 <bk-input v-model={formModel.device_type} class='i-form-control' />
@@ -198,6 +207,15 @@ export default defineComponent({
               </bk-form-item>
               <bk-form-item label='内存(G)' property='memory' required>
                 <bk-input type='number' v-model={formModel.memory} min={0} class='i-form-control' />
+              </bk-form-item>
+              <bk-form-item label='GPU卡数' property='gpu_amount'>
+                <hcm-form-number
+                  type='number'
+                  v-model={formModel.gpu_amount}
+                  min={0}
+                  precision={3}
+                  class='i-form-control'
+                />
               </bk-form-item>
             </bk-form>
           ),

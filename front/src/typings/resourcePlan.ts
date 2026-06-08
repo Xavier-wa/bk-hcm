@@ -96,35 +96,54 @@ export interface TicketByIdResult {
     crp_sn: string;
     crp_url: string;
   };
-  demands: {
-    original_info: TicketDemands;
-    updated_info: TicketDemands;
-    demand_class: string;
-  }[];
+  demands: TicketDemandItem[];
+}
+
+/** 单据详情 demands[i] */
+export interface TicketDemandItem {
+  demand_class: string;
+  /** 新增单为 null；调整单为调整前快照 */
+  original_info: TicketDemands | null;
+  updated_info: TicketDemands;
 }
 
 export interface TicketDemands {
   obs_project: string;
   expect_time: string;
+  /** 短租项目退回日期，YYYY-MM-DD */
+  return_plan_time?: string;
   region_id: string;
-  zone_id: string;
-  demand_res_types: string[];
-  cvm: {
-    res_mode: string;
-    device_family: string;
-    device_type: string;
-    device_class: string;
-    cpu_core: number;
-    memory: number;
-    res_pool: string;
-    core_type: string;
-  };
-  cbs: {
-    disk_type: string;
-    disk_type_name: string;
-    disk_io: number;
-    disk_size: number;
-  };
+  region_name?: string;
+  zone_id?: string;
+  zone_name?: string;
+  area_name?: string;
+  demand_source?: string;
+  remark?: string;
+  /** 部分单据（如新增驳回）updated_info 可能不下发，需由 cvm/cbs 推断 */
+  demand_res_types?: string[];
+  cvm?: TicketDemandCvm;
+  cbs?: TicketDemandCbs;
+}
+
+export interface TicketDemandCvm {
+  res_mode?: string;
+  device_family?: string;
+  device_type?: string;
+  device_class?: string;
+  technical_class?: string;
+  /** 接口可能为数字或字符串（如 "1"） */
+  os?: string | number;
+  cpu_core?: number;
+  memory?: number;
+  res_pool?: string;
+  core_type?: string;
+}
+
+export interface TicketDemandCbs {
+  disk_type?: string;
+  disk_type_name?: string;
+  disk_io?: number;
+  disk_size?: number;
 }
 
 export interface TicketBaseInfo {
@@ -139,6 +158,7 @@ export interface TicketBaseInfo {
   plan_product_name: string;
   virtual_dept_id: number;
   virtual_dept_name: string;
+  demand_class?: string;
   remark: string;
   submitted_at: string;
 }
@@ -187,6 +207,13 @@ export interface IPlanTicket {
   demand_class: string;
   demands: IPlanTicketDemand[];
   remark: string;
+}
+
+// 覆盖修改主单请求体, 字段全部可选, bizId/ticketId 在 URL 路径
+export interface IPlanTicketOverwrite {
+  demand_class?: string;
+  demands?: IPlanTicketDemand[];
+  remark?: string;
 }
 
 export interface IPlanTicketDemand {
@@ -252,6 +279,7 @@ export interface IDeviceType {
   memory: number;
   device_class: string;
   device_family: string;
+  gpu_amount: number;
 }
 
 export interface IDiskType {

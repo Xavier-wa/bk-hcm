@@ -394,6 +394,15 @@ resPlan:
   adminAuditor: []
   crpOverLimitContact: ["demo"]
 
+# 申领机型推荐离线统计配置
+applyRecommend:
+  # 任务执行间隔，单位:分钟
+  interval: 720
+  # 统计回溯天数
+  lookbackDays: 90
+  # 每分组保留 Top-K 推荐条数
+  maxRows: 5
+
 # 开启自研云资源同步服务,单位:分钟
 resourceSync:
   syncCapacity:
@@ -402,6 +411,10 @@ resourceSync:
     # 同步库存并发数
     concurrent: 100
   syncLeftIP: 360
+  # CVM机型与物理机机型族映射同步配置
+  syncDeviceTypePhysicalRel:
+    # 同步间隔时间，单位:分钟，默认 1440（每日 1 次）
+    interval: 1440
 
 # defines bkdbm related settings.
 bkdbm:
@@ -439,6 +452,8 @@ stuckCheck:
     # 关注 [now-maxTime,now-minTime] 的单据
     minTime: 24h
     maxTime: 336h
+    cvmDelayTime: 360h
+    pmDelayTime: 24h
 
 # 主机回收通知配置
 recycleNotice:

@@ -222,6 +222,14 @@ func (b *ResourcePlanClient) DeleteResPlanWeek(kt *kit.Kit, req *dataproto.Batch
 		b.client, rest.DELETE, kt, req, "/res_plans/res_plan_weeks/batch")
 }
 
+// --- res plan ticket ---
+
+// OverwriteResPlanTicket overwrites resource plan ticket and resets related sub tickets and status.
+func (b *ResourcePlanClient) OverwriteResPlanTicket(kt *kit.Kit, req *rpproto.OverwriteResPlanTicketReq) error {
+	return common.RequestNoResp[rpproto.OverwriteResPlanTicketReq](
+		b.client, rest.POST, kt, req, "/res_plans/res_plan_tickets/overwrite")
+}
+
 // --- res plan sub ticket ---
 
 // ListResPlanSubTicket list resource plan sub ticket

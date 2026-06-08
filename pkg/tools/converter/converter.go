@@ -229,3 +229,13 @@ func StrNilPtr(s string) *string {
 	}
 	return &s
 }
+
+// Int64PtrToInt32Ptr converts *int64 to *int32. return nil if source == nil.
+func Int64PtrToInt32Ptr(source *int64) *int32 {
+	if source == nil {
+		return nil
+	}
+
+	target := int32(*source)
+	return &target
+}

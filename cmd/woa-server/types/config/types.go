@@ -218,6 +218,8 @@ type CvmImage struct {
 	Region    string `json:"region" bson:"region"`
 	ImageId   string `json:"image_id" bson:"image_id"`
 	ImageName string `json:"image_name" bson:"image_name"`
+	Type      string `json:"type,omitempty" bson:"type"`
+	BkBizID   int64  `json:"bk_biz_id,omitempty" bson:"bk_biz_id"`
 }
 
 // GetCvmImageParam get cvm image list request param
@@ -591,6 +593,7 @@ var Description = map[string]string{
 type DeviceTypeCpuItem struct {
 	DeviceType      string                   `json:"device_type"`       // 机型
 	CPUAmount       int64                    `json:"cpu_amount"`        // CPU数量
+	GpuAmount       float64                  `json:"gpu_amount"`        // GPU卡数
 	DeviceGroup     string                   `json:"device_group"`      // 机型族
 	CoreType        enumor.CoreType          `json:"core_type"`         // 机型核心类型
 	TechnicalClass  string                   `json:"technical_class"`   // 技术分类

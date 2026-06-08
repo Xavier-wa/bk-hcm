@@ -698,7 +698,10 @@ func (s *service) verifyBizDissolveQuota(kt *kit.Kit, input *types.ApplyReq) err
 		logs.Errorf("can not find biz dissolve cpu core summary, bizID: %d, rid: %s", bizID, kt.Rid)
 		return fmt.Errorf("can not find biz dissolve cpu core summary, bizID: %d", bizID)
 	}
-	dissolveQuota := summary.TotalCore - summary.DeliveredCore
+
+	// 使用新公式计算的可申请额度
+	// 可申请额度 = max(0, 裁撤原始核数 × 配额系数 + 业务偏移额度 - 已交付核数)
+	dissolveQuota := summary.AvailableQuota
 
 	// 计算当前单据申请的CPU核数
 	var appliedCore int64
@@ -708,10 +711,13 @@ func (s *service) verifyBizDissolveQuota(kt *kit.Kit, input *types.ApplyReq) err
 
 	// 判断申请的额度是否大于可申请额度
 	if appliedCore > dissolveQuota {
-		logs.Errorf("applied cpu core more than biz dissolve quota, applied: %d, quota: %d, bizID: %d, rid: %s",
-			appliedCore, dissolveQuota, bizID, kt.Rid)
-		return fmt.Errorf("申请的CPU核数超过机房裁撤可申请额度, 申请CPU核数: %d, 可申请额度: %d", appliedCore,
-			dissolveQuota)
+		logs.Errorf("applied cpu core more than biz dissolve quota, applied: %d, quota: %d, bizID: %d, "+
+			"total: %d, coefficient: %.0f%%, offset: %d, delivered: %d, rid: %s",
+			appliedCore, dissolveQuota, bizID, summary.TotalCore, summary.QuotaCoefficient,
+			summary.QuotaOffset, summary.DeliveredCore, kt.Rid)
+		return fmt.Errorf("申请的CPU核数超过机房裁撤可申请额度, 申请CPU核数: %d, 可申请额度: %d (裁撤原始核数: %d × 配额系数: %.0f%% + 偏移额度: %d - 已交付核数: %d)",
+			appliedCore, dissolveQuota, summary.TotalCore, summary.QuotaCoefficient,
+			summary.QuotaOffset, summary.DeliveredCore)
 	}
 
 	return nil

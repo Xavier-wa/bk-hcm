@@ -22,6 +22,7 @@ package demandtime
 import (
 	"errors"
 	"math"
+	"strconv"
 	"time"
 
 	"hcm/pkg/api/core"
@@ -30,6 +31,7 @@ import (
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/dal/dao/tools"
+	rpt "hcm/pkg/dal/table/resource-plan/res-plan-ticket"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/tools/times"
@@ -69,6 +71,8 @@ type DemandTime interface {
 // DemandTimeFromTable is the implementation of DemandTime.
 type DemandTimeFromTable struct {
 	client *client.ClientSet
+	// testListResPlanWeek is used in unit tests to stub ListResPlanWeek responses.
+	testListResPlanWeek func(kt *kit.Kit, req *rpproto.ResPlanWeekListReq) (*rpproto.ResPlanWeekListResult, error)
 }
 
 // NewDemandTimeFromTable ...
@@ -76,6 +80,15 @@ func NewDemandTimeFromTable(client *client.ClientSet) DemandTime {
 	return &DemandTimeFromTable{
 		client: client,
 	}
+}
+
+func (d DemandTimeFromTable) listResPlanWeek(kt *kit.Kit, req *rpproto.ResPlanWeekListReq) (
+	*rpproto.ResPlanWeekListResult, error) {
+
+	if d.testListResPlanWeek != nil {
+		return d.testListResPlanWeek(kt, req)
+	}
+	return d.client.DataService().Global.ResourcePlan.ListResPlanWeek(kt, req)
 }
 
 // GetDemandYearMonthWeek returns the year, month and week of the month based on the input time from a demand
@@ -104,7 +117,7 @@ func (d DemandTimeFromTable) GetDemandYearMonthWeek(kt *kit.Kit, t time.Time) (D
 		},
 	}
 
-	rst, err := d.client.DataService().Global.ResourcePlan.ListResPlanWeek(kt, listReq)
+	rst, err := d.listResPlanWeek(kt, listReq)
 	if err != nil {
 		logs.Errorf("failed to list res plan week, err: %v, demand_time: %d, rid: %s", err, timeCompactInt,
 			kt.Rid)
@@ -147,7 +160,7 @@ func (d DemandTimeFromTable) GetDemandYearMonth(kt *kit.Kit, t time.Time) (int, 
 		},
 	}
 
-	rst, err := d.client.DataService().Global.ResourcePlan.ListResPlanWeek(kt, listReq)
+	rst, err := d.listResPlanWeek(kt, listReq)
 	if err != nil {
 		logs.Errorf("failed to list res plan week, err: %v, demand_time: %d, rid: %s", err, timeCompactInt,
 			kt.Rid)
@@ -232,7 +245,7 @@ func (d DemandTimeFromTable) getDemandMonthStartEnd(kt *kit.Kit, year int, month
 		},
 	}
 
-	rst, err := d.client.DataService().Global.ResourcePlan.ListResPlanWeek(kt, listReq)
+	rst, err := d.listResPlanWeek(kt, listReq)
 	if err != nil {
 		logs.Errorf("failed to list res plan week, err: %v, year: %d, month: %d, rid: %s", err, year, month,
 			kt.Rid)
@@ -331,4 +344,42 @@ func (d DemandTimeFromTable) GetDemandStatusByExpectTime(kt *kit.Kit, expectTime
 	}
 
 	return enumor.DemandStatusCanApply, demandRange, nil
+}
+
+// ContainsNonCurrentYearDemand checks whether demands contain expect_time not in the current calendar year.
+func ContainsNonCurrentYearDemand(demands rpt.ResPlanDemands) bool {
+	currentYear := time.Now().Year()
+	for _, demand := range demands {
+		if containsNonCurrentYearInDemand(&demand, currentYear) {
+			return true
+		}
+	}
+	return false
+}
+
+// ContainsNonCurrentYearDemandPtrs checks whether pointer demands contain expect_time not in the current year.
+func ContainsNonCurrentYearDemandPtrs(demands []*rpt.ResPlanDemand) bool {
+	currentYear := time.Now().Year()
+	for _, demand := range demands {
+		if demand != nil && containsNonCurrentYearInDemand(demand, currentYear) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsNonCurrentYearInDemand(demand *rpt.ResPlanDemand, currentYear int) bool {
+	if demand.Original != nil && demand.Original.ExpectTime != "" {
+		year, err := strconv.Atoi(demand.Original.ExpectTime[:4])
+		if err == nil && year != currentYear {
+			return true
+		}
+	}
+	if demand.Updated != nil && demand.Updated.ExpectTime != "" {
+		year, err := strconv.Atoi(demand.Updated.ExpectTime[:4])
+		if err == nil && year != currentYear {
+			return true
+		}
+	}
+	return false
 }

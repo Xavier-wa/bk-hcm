@@ -86,4 +86,5 @@ func bizService(h *rest.Handler, s *service) {
 	h.Add("CheckBizHostDissolveStatus", http.MethodPost, "/dissolve/hosts/status/check", s.CheckBizHostDissolveStatus)
 	h.Add("ListBizDissolveCpuCoreSummary", http.MethodPost, "/dissolve/cpu_core/summary",
 		s.ListBizDissolveCpuCoreSummary)
+	h.Add("UpdateBizDissolveQuotaOffset", http.MethodPut, "/dissolve/quota/offset", s.UpdateBizDissolveQuotaOffset)
 }

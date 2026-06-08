@@ -4,7 +4,7 @@ import { Form } from 'bkui-vue';
 import InputWithValidate from '@/components/input-with-validate/index.vue';
 
 import { useI18n } from 'vue-i18n';
-import { useWhereAmI, Senarios } from '@/hooks/useWhereAmI';
+
 import { timeFormatter } from '@/common/util';
 import { INSTANCE_CHARGE_MAP } from '@/common/constant';
 import http from '@/http';
@@ -16,7 +16,7 @@ const model = defineModel<string>();
 
 const props = defineProps<{
   region: string;
-  bizs?: number | string;
+  requireType: number;
 }>();
 
 const emit = defineEmits<{
@@ -37,7 +37,6 @@ export interface RollingServerHost {
 }
 
 const { t } = useI18n();
-const { whereAmI, getBizsId } = useWhereAmI();
 const { getMonthName } = useCvmChargeType();
 
 const formItem = useTemplateRef('formItem');
@@ -51,11 +50,10 @@ const checkRollingSeverHost = (bk_asset_id: string) => {
   return new Promise(async (resolve, reject) => {
     isCheckLoading.value = true;
     try {
-      const { region, bizs } = props;
-      const bk_biz_id = Senarios.service === whereAmI.value ? bizs : getBizsId();
+      const { region, requireType } = props;
       const res = await http.post(
-        '/api/v1/woa/task/check/rolling_server/host',
-        { bk_biz_id, bk_asset_id, region },
+        '/api/v1/woa/task/check/apply/order/host',
+        { require_type: requireType, bk_asset_id, region },
         { globalError: false },
       );
       if (res.code === 0) {

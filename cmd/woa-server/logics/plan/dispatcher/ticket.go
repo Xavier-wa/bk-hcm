@@ -29,6 +29,7 @@ import (
 	rpproto "hcm/pkg/api/data-service/resource-plan"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/dal/dao/orm"
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/dal/dao/types"
 	rpts "hcm/pkg/dal/table/resource-plan/res-plan-ticket-status"
@@ -36,6 +37,8 @@ import (
 	"hcm/pkg/logs"
 	"hcm/pkg/thirdparty/api-gateway/itsm"
 	"hcm/pkg/tools/times"
+
+	"github.com/jmoiron/sqlx"
 )
 
 // listAndWatchTickets list and watch tickets
@@ -44,6 +47,11 @@ func (d *Dispatcher) listAndWatchTickets() error {
 	if !d.sd.IsMaster() {
 		// pop all pending orders
 		d.ticketQueue.Clear()
+		// 清理处理中记录，避免主节点切换后残留
+		d.processingTickets.Range(func(key, value any) bool {
+			d.processingTickets.Delete(key)
+			return true
+		})
 		return nil
 	}
 
@@ -135,6 +143,18 @@ func (d *Dispatcher) dealTicket() error {
 
 	// check the status of the ticket
 	kt := core.NewBackendKit()
+
+	// 并发控制：如果该单据正在处理中，跳过本次执行
+	if _, loaded := d.processingTickets.LoadOrStore(tkID, struct{}{}); loaded {
+		logs.Warnf("ticket %s is already being processed, skip, rid: %s", tkID, kt.Rid)
+		return nil
+	}
+	// 处理完成后释放锁
+	defer func() {
+		d.processingTickets.Delete(tkID)
+		logs.Infof("ticket %s processing completed and releasing lock, rid: %s", tkID, kt.Rid)
+	}()
+
 	logs.Infof("ready to handle ticket %s, rid: %s", tkID, kt.Rid)
 	tkInfo, err := d.resFetcher.GetTicketInfo(kt, tkID)
 	if err != nil {
@@ -363,7 +383,11 @@ func (d *Dispatcher) itsmTicketInCRPState(status *itsm.GetTicketStatusResp) bool
 // updateTicketStatus update ticket status.
 func (d *Dispatcher) updateTicketStatus(kt *kit.Kit, ticket *rpts.ResPlanTicketStatusTable) error {
 	expr := tools.EqualExpression("ticket_id", ticket.TicketID)
-	if err := d.dao.ResPlanTicketStatus().Update(kt, expr, ticket); err != nil {
+	_, err := d.dao.Txn().AutoTxn(kt, func(txn *sqlx.Tx, opt *orm.TxnOption) (interface{}, error) {
+		err := d.dao.ResPlanTicketStatus().UpdateWithTx(kt, txn, expr, ticket)
+		return nil, err
+	})
+	if err != nil {
 		logs.Errorf("failed to update resource plan ticket status, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}

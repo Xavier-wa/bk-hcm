@@ -190,6 +190,8 @@ const (
 	CvmCbsPlanConfirmOrderMethod = "confirmOrderForIEG"
 	// CvmQueryZoneCityListMethod 查询可用区与城市映射接口
 	CvmQueryZoneCityListMethod = "queryZoneCityList"
+	// QueryCvmTypeListMethod CVM机型与物理机机型族映射查询接口
+	QueryCvmTypeListMethod = "queryCvmTypeList"
 )
 
 // CVMCli yunti client options

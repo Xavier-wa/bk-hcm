@@ -19,6 +19,8 @@ import { useGlobalPermissionDialog } from '@/store/useGlobalPermissionDialog';
 import { ITimeRange } from '@/typings/plan';
 import { GLOBAL_BIZS_KEY } from '@/common/constant';
 import useCvmChargeType from '@/views/ziyanScr/hooks/use-cvm-charge-type';
+import { MENU_BUSINESS_RESOURCE_PLAN_CVM } from '@/constants/menu-symbol';
+import useDeadlineRestrict from '@/views/business/resource-plan/use-deadline-restrict';
 
 const { DropdownMenu, DropdownItem } = Dropdown;
 
@@ -56,6 +58,17 @@ export default defineComponent({
 
     const { authVerifyData, handleAuth } = useVerify();
     const globalPermissionDialog = useGlobalPermissionDialog();
+
+    // 截止期限制: 评审期内, 期望到货日期 >= 非本年起始日的行禁用所有行内 + 批量操作
+    const { shouldDisableRow, nonCurrentYearLabel } = useDeadlineRestrict();
+    const deadlineDisabledTip = computed(() =>
+      t('预算评审期间，期望到货日期为 {year} 及之后的非本年预测已锁定操作', { year: nonCurrentYearLabel }),
+    );
+    const batchDeadlineDisabledTip = computed(() =>
+      t('所选包含 {year} 及之后的非本年预测，评审期内已锁定操作；请取消勾选后再批量操作', {
+        year: nonCurrentYearLabel,
+      }),
+    );
     const operationMap = {
       [OperationActions.SERVICE_ADJUST]: {
         label: t('调整'),
@@ -93,6 +106,9 @@ export default defineComponent({
     const currentRowsData = ref<IListResourcesDemandsItem[]>([]);
 
     const selection = computed<IListResourcesDemandsItem[]>(() => tableRef.value?.getSelection?.() || []);
+    const hasNonCurrentYearInSelection = computed(() =>
+      selection.value.some((row) => shouldDisableRow(row.expect_time)),
+    );
     const tableColumns = computed(() => {
       const newColumns = props.isBiz ? columns.slice(2) : columns.slice(0, -1);
       return [
@@ -133,6 +149,7 @@ export default defineComponent({
           minWidth: 100,
           isDefaultShow: true,
           render: ({ data }: { data: IListResourcesDemandsItem }) => {
+            const isRowDeadlineLocked = shouldDisableRow(data.expect_time);
             return (
               <div class={cssModule['operation-column']}>
                 <Button
@@ -144,16 +161,20 @@ export default defineComponent({
                       : undefined
                   }`}
                   disabled={
+                    isRowDeadlineLocked ||
                     data.status !== ResourcesDemandsStatus.CAN_APPLY ||
                     !['常规项目', '短租项目', '2026春节保障', '2026机房裁撤'].includes(data.obs_project)
                   }
+                  v-bk-tooltips={{ content: deadlineDisabledTip.value, disabled: !isRowDeadlineLocked }}
                   onClick={() => handleApply(data)}>
                   一键申领
                 </Button>
-                <Dropdown trigger='click' disabled={!isRowSelectEnable({ row: data })}>
+                <Dropdown trigger='click' disabled={isRowDeadlineLocked || !isRowSelectEnable({ row: data })}>
                   {{
                     default: () => (
-                      <div class={cssModule['more-action']}>
+                      <div
+                        class={cssModule['more-action']}
+                        v-bk-tooltips={{ content: deadlineDisabledTip.value, disabled: !isRowDeadlineLocked }}>
                         <i class={'hcm-icon bkhcm-icon-more-fill'}></i>
                       </div>
                     ),
@@ -250,7 +271,7 @@ export default defineComponent({
     };
 
     const handleToBizPage = (bizId: number) => {
-      router.push({ name: 'bizResourcePlanList', query: { [GLOBAL_BIZS_KEY]: bizId, ...route.query } });
+      router.push({ name: MENU_BUSINESS_RESOURCE_PLAN_CVM, query: { [GLOBAL_BIZS_KEY]: bizId, ...route.query } });
     };
 
     const handleCancel = () => {
@@ -341,7 +362,11 @@ export default defineComponent({
                       : undefined
                   }`}
                   onClick={() => handleToAdjust(selection.value)}
-                  disabled={!selection.value.length}>
+                  disabled={!selection.value.length || hasNonCurrentYearInSelection.value}
+                  v-bk-tooltips={{
+                    content: batchDeadlineDisabledTip.value,
+                    disabled: !hasNonCurrentYearInSelection.value,
+                  }}>
                   {t('批量调整')}
                 </Button>
                 <Button
@@ -351,7 +376,11 @@ export default defineComponent({
                       : undefined
                   }`}
                   onClick={handleCancel}
-                  disabled={!selection.value.length}>
+                  disabled={!selection.value.length || hasNonCurrentYearInSelection.value}
+                  v-bk-tooltips={{
+                    content: batchDeadlineDisabledTip.value,
+                    disabled: !hasNonCurrentYearInSelection.value,
+                  }}>
                   {t('批量取消')}
                 </Button>
               </>

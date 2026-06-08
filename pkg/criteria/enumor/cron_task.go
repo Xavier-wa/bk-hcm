@@ -27,6 +27,11 @@ const (
 	CronTaskSyncDeviceCapacity CronTask = "sync_device_capacity"
 	// CronTaskRollingMonthlyTerminateNotice 滚服申领单跨月终止通知
 	CronTaskRollingMonthlyTerminateNotice CronTask = "rolling_monthly_terminate_notice"
+	// CronTaskSyncDeviceTypePhysicalRel 同步 CVM 机型与物理机机型族映射
+	CronTaskSyncDeviceTypePhysicalRel CronTask = "sync_device_type_physical_rel"
+	// CronTaskApplyRecommendOffline 申领机型推荐离线统计
+	CronTaskApplyRecommendOffline CronTask = "apply_recommend_offline"
+
 	// CronTaskSyncAgentSkills syncs agent-server skills from BKAIDev.
 	CronTaskSyncAgentSkills CronTask = "sync_agent_skills"
 	// CronTaskSyncAgentPrompts syncs agent-server prompts from BKAIDev.

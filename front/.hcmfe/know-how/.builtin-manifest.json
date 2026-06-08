@@ -1,0 +1,60 @@
+{
+  "resources": [
+    {
+      "type": "skills",
+      "name": "page-detail"
+    },
+    {
+      "type": "skills",
+      "name": "page-form"
+    },
+    {
+      "type": "skills",
+      "name": "page-list"
+    },
+    {
+      "type": "skills",
+      "name": "test-checklist"
+    },
+    {
+      "type": "rules",
+      "name": "fe-auth-migration.mdc"
+    },
+    {
+      "type": "rules",
+      "name": "fe-bkui-usage.mdc"
+    },
+    {
+      "type": "rules",
+      "name": "fe-code-quality-mindset.mdc"
+    },
+    {
+      "type": "rules",
+      "name": "fe-conventions.mdc"
+    },
+    {
+      "type": "rules",
+      "name": "fe-deprecated.mdc"
+    },
+    {
+      "type": "rules",
+      "name": "fe-menu-route-architecture.mdc"
+    },
+    {
+      "type": "rules",
+      "name": "fe-mongo-to-mysql-migration.mdc"
+    },
+    {
+      "type": "rules",
+      "name": "fe-router-action.mdc"
+    },
+    {
+      "type": "commands",
+      "name": "cherry-pick-pr.md"
+    },
+    {
+      "type": "commands",
+      "name": "update-env.md"
+    }
+  ]
+}

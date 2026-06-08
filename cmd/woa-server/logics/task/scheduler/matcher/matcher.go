@@ -92,7 +92,7 @@ func New(ctx context.Context, rsLogics rollingserver.Logics, thirdCli *thirdpart
 	}
 
 	// TODO: get worker num from config
-	go matcher.Run(20)
+	go matcher.Run(60)
 
 	return matcher, nil
 }
@@ -147,14 +147,15 @@ func (m *Matcher) runWorker() error {
 
 	// check generate record status
 	if generateRecord.Status != types.GenerateStatusSuccess {
-		logs.Infof("generate record %s is not done yet, need not match, status: %d, rid: %s",
-			generateID, generateRecord.Status, kt.Rid)
+		logs.Infof("generate record %s is not done yet, need not match, subOrderID: %s, status: %d, rid: %s",
+			generateID, generateRecord.SubOrderId, generateRecord.Status, kt.Rid)
 		return nil
 	}
 
 	// check generate record matched or not
 	if generateRecord.IsMatched == true {
-		logs.Infof("generate record %s is matched, need not match again, rid: %s", generateID, kt.Rid)
+		logs.Infof("generate record %s is matched, need not match again, subOrderID: %s, rid: %s",
+			generateID, generateRecord.SubOrderId, kt.Rid)
 		return nil
 	}
 
@@ -223,8 +224,8 @@ func (m *Matcher) matchHandler(kt *kit.Kit, genRecord *types.GenerateRecord) err
 
 	// check order status
 	if applyOrder.Status != types.ApplyStatusMatching && applyOrder.Status != types.ApplyStatusGracefulTerminate {
-		logs.Infof("apply order %s cannot match for status not Matching, status: %s, rid: %s", genRecord.SubOrderId,
-			applyOrder.Status, kt.Rid)
+		logs.Infof("apply order %s cannot match for status not Matching, generateID: %s, status: %s, rid: %s",
+			genRecord.SubOrderId, genRecord.GenerateId, applyOrder.Status, kt.Rid)
 		return fmt.Errorf("apply order %s cannot match for status not Matching, status: %s", genRecord.SubOrderId,
 			applyOrder.Status)
 	}
@@ -236,7 +237,8 @@ func (m *Matcher) matchHandler(kt *kit.Kit, genRecord *types.GenerateRecord) err
 
 	// match device
 	if err = m.matchDevice(kt, applyOrder, genRecord.GenerateId); err != nil {
-		logs.Errorf("failed to match device, order id: %s, err: %v, rid: %s", genRecord.SubOrderId, err, kt.Rid)
+		logs.Errorf("failed to match device, order id: %s, generateID: %s, err: %v, rid: %s", genRecord.SubOrderId,
+			genRecord.GenerateId, err, kt.Rid)
 		return err
 	}
 
@@ -783,12 +785,34 @@ func (m *Matcher) initDevice(kt *kit.Kit, info *types.DeviceInfo) (*types.Device
 	}
 
 	// create init record
-	if err = record.CreateInitRecord(kt, info.SubOrderId, info.Ip); err != nil {
-		logs.Errorf("host %s failed to initialize, err: %v, rid: %s", info.Ip, err, kt.Rid)
+	created, err := record.CreateInitRecord(kt, info.SubOrderId, info.Ip)
+	if err != nil {
+		logs.Errorf("create init task record failed, subOrderID: %s, ip: %s, err: %v, rid: %s",
+			info.SubOrderId, info.Ip, err, kt.Rid)
 		return nil, fmt.Errorf("host %s failed to initialize, err: %v", info.Ip, err)
 	}
 
-	// 创建初始化任务
+	// 记录已存在：可能是上次失败重试，也可能是其他协程并发抢先创建，仅当当前状态为 Failed 时才继续重试发起新的 sops 任务；
+	// 其余状态(Init/Handling/Success)说明已有其他协程在处理或已完成，直接复用现有任务信息返回，避免重复创建 sops 任务。
+	if !created {
+		cur := initRecord
+		if cur == nil {
+			// race: validate 时还没有记录，但 CreateInitRecord 时已存在，重新读取最新状态
+			cur, err = record.GetInitRecord(kt, info.SubOrderId, info.Ip)
+			if err != nil {
+				logs.Errorf("failed to get init record after duplicated create, subOrderID: %s, ip: %s, err: %v, "+
+					"rid: %s", info.SubOrderId, info.Ip, err, kt.Rid)
+				return nil, fmt.Errorf("host %s failed to initialize, err: %v", info.Ip, err)
+			}
+		}
+		if cur.Status != types.InitStatusFailed {
+			logs.Infof("init record already exists, skip creating new sops task, subOrderID: %s, ip: %s, status: %d, "+
+				"rid: %s", info.SubOrderId, info.Ip, cur.Status, kt.Rid)
+			return &types.DeviceInitMsg{Device: info, JobUrl: cur.TaskLink, JobID: cur.TaskId, BizID: bkBizID}, nil
+		}
+	}
+
+	// 创建初始化任务（新建场景 或 已存在 Failed 重试场景）
 	return m.createInitTask(kt, info, bkBizID, hostInfo)
 }
 

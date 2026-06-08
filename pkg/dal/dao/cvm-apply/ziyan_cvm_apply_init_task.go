@@ -85,6 +85,12 @@ func (d ZiyanCvmApplyInitTaskDao) CreateWithTx(kt *kit.Kit, tx *sqlx.Tx, models 
 
 	err = d.Orm.Txn(tx).BulkInsert(kt.Ctx, sql, models)
 	if err != nil {
+		// 命中 (suborder_id, ip) 唯一索引时返回 RecordDuplicated，由上层做幂等处理
+		if em := errf.GetMySQLDuplicated(err); em != nil {
+			logs.Warnf("insert table %s hit duplicated key, err: %v, em: %v, rid: %s",
+				models[0].TableName(), err, em, kt.Rid)
+			return nil, errf.New(errf.RecordDuplicated, em.Message)
+		}
 		logs.Errorf("insert table %s failed, err: %v, rid: %s", models[0].TableName(), err, kt.Rid)
 		return nil, fmt.Errorf("insert table %s failed, err: %v", models[0].TableName(), err)
 	}

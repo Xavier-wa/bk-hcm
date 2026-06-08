@@ -74,6 +74,7 @@ watch(model, () => formItem?.validate('change'), { deep: true });
       :popover-options="{ boundary: 'parent' }"
       class="form-control"
       @change="handleDiskTypeChange"
+      filterable
     >
       <bk-option
         v-for="type in cvmSystemDiskList"

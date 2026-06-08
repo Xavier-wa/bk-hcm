@@ -76,10 +76,12 @@ import (
 	sync "hcm/cmd/data-service/service/cloud/sync"
 	"hcm/cmd/data-service/service/cloud/zone"
 	"hcm/cmd/data-service/service/cos"
+	"hcm/cmd/data-service/service/cvm-apply/cvm-apply-biz-recommend"
 	"hcm/cmd/data-service/service/cvm-apply/cvm-apply-init-task"
 	"hcm/cmd/data-service/service/cvm-apply/cvm-apply-order"
 	"hcm/cmd/data-service/service/cvm-apply/cvm-apply-step"
 	"hcm/cmd/data-service/service/cvm-apply/cvm-apply-suborder"
+	"hcm/cmd/data-service/service/cvm-apply/cvm-apply-user-recommend"
 	"hcm/cmd/data-service/service/cvm-apply/cvm-deliver-record"
 	"hcm/cmd/data-service/service/cvm-apply/cvm-device-info"
 	"hcm/cmd/data-service/service/cvm-apply/cvm-generate-record"
@@ -342,6 +344,8 @@ func (s *Service) apiSet() *restful.Container {
 	cvmdeviceinfo.InitService(capability)
 	cvmdeliverrecord.InitService(capability)
 	cvmmodifyrecord.InitService(capability)
+	cvmapplyuserrecommend.InitService(capability)
+	cvmapplybizrecommend.InitService(capability)
 
 	return restful.NewContainer().Add(capability.WebService)
 }

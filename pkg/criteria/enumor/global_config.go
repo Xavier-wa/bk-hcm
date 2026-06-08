@@ -20,6 +20,7 @@
 package enumor
 
 import (
+	"fmt"
 	"strconv"
 )
 
@@ -62,7 +63,31 @@ const (
 	GlobalConfigDissolveHostApplyTime GlobalConfigResDissolveKey = "dissolve_host_apply_time"
 	// GlobalConfigDissolveApprovalLimit resource dissolve approval limit
 	GlobalConfigDissolveApprovalLimit GlobalConfigResDissolveKey = "dissolve_host_approval_limit"
+	// GlobalConfigDissolveQuotaCoefficient 裁撤配额系数
+	GlobalConfigDissolveQuotaCoefficient GlobalConfigResDissolveKey = "dissolve_quota_coefficient"
+	// GlobalConfigDissolveQuotaOffsets 业务裁撤偏移额度配置
+	GlobalConfigDissolveQuotaOffsets GlobalConfigResDissolveKey = "dissolve_quota_offsets"
 )
+
+// DissolveQuotaOffsetType 裁撤配额偏移类型
+type DissolveQuotaOffsetType string
+
+const (
+	// DissolveQuotaOffsetTypeIncrease 裁撤配额调增
+	DissolveQuotaOffsetTypeIncrease DissolveQuotaOffsetType = "increase"
+	// DissolveQuotaOffsetTypeDecrease 裁撤配额调减
+	DissolveQuotaOffsetTypeDecrease DissolveQuotaOffsetType = "decrease"
+)
+
+// Validate the DissolveQuotaOffsetType is valid or not
+func (t DissolveQuotaOffsetType) Validate() error {
+	switch t {
+	case DissolveQuotaOffsetTypeIncrease, DissolveQuotaOffsetTypeDecrease:
+	default:
+		return fmt.Errorf("unsupported dissolve quota offset type: %s", t)
+	}
+	return nil
+}
 
 // GlobalConfigKeyClbBandPkgRecommend resource global config key for clb bandwidth package recommend
 type GlobalConfigKeyClbBandPkgRecommend string

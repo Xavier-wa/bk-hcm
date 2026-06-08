@@ -201,8 +201,8 @@ func buildApplyOrderResourceSpec(row *cvmapplytable.ZiyanCvmApplySuborder, faile
 		DiskSize:          row.DiskSize,
 		DiskType:          row.DiskType,
 		NetworkType:       row.NetworkType,
-		Vpc:               row.Vpc,
-		Subnet:            row.Subnet,
+		Vpc:               cvt.PtrToVal(row.Vpc),
+		Subnet:            cvt.PtrToVal(row.Subnet),
 		OsType:            row.OsType,
 		RaidType:          row.RaidType,
 		Isp:               row.Isp,
@@ -214,7 +214,7 @@ func buildApplyOrderResourceSpec(row *cvmapplytable.ZiyanCvmApplySuborder, faile
 		SystemDisk:        systemDisk,
 		DataDisk:          dataDisk,
 		Zones:             zones,
-		ResAssign:         row.ResAssign,
+		ResAssign:         cvt.PtrToVal(row.ResAssign),
 		CPUThreadSwitch:   row.CPUThreadSwitch,
 	}
 }
@@ -369,20 +369,26 @@ func buildMongoModifyRecord(source interface{}) (interface{}, error) {
 	}
 
 	preData, err := buildModifyDataFromRow(
-		row.PreTotalNum, row.PreReplicas, row.PreRegion, row.PreZone, row.PreDeviceType, row.PreImageID,
-		row.PreDiskSize, row.PreDiskType, row.PreNetworkType, row.PreVpc, row.PreSubnet,
-		row.PreSystemDiskType, row.PreSystemDiskSize, row.PreSystemDiskNum, row.PreDataDisk, row.PreZones,
-		row.PreResAssign, row.PreBkAssetID, row.PreInheritInstanceID,
+		row.PreTotalNum, row.PreReplicas, cvt.PtrToVal(row.PreRegion), cvt.PtrToVal(row.PreZone),
+		cvt.PtrToVal(row.PreDeviceType), cvt.PtrToVal(row.PreImageID),
+		row.PreDiskSize, cvt.PtrToVal(row.PreDiskType), cvt.PtrToVal(row.PreNetworkType),
+		cvt.PtrToVal(row.PreVpc), cvt.PtrToVal(row.PreSubnet),
+		cvt.PtrToVal(row.PreSystemDiskType), row.PreSystemDiskSize, row.PreSystemDiskNum,
+		cvt.PtrToVal(row.PreDataDisk), cvt.PtrToVal(row.PreZones),
+		cvt.PtrToVal(row.PreResAssign), cvt.PtrToVal(row.PreBkAssetID), cvt.PtrToVal(row.PreInheritInstanceID),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("build pre_data failed: %w", err)
 	}
 
 	curData, err := buildModifyDataFromRow(
-		row.CurTotalNum, row.CurReplicas, row.CurRegion, row.CurZone, row.CurDeviceType, row.CurImageID,
-		row.CurDiskSize, row.CurDiskType, row.CurNetworkType, row.CurVpc, row.CurSubnet,
-		row.CurSystemDiskType, row.CurSystemDiskSize, row.CurSystemDiskNum, row.CurDataDisk, row.CurZones,
-		row.CurResAssign, row.CurBkAssetID, row.CurInheritInstanceID,
+		row.CurTotalNum, row.CurReplicas, cvt.PtrToVal(row.CurRegion), cvt.PtrToVal(row.CurZone),
+		cvt.PtrToVal(row.CurDeviceType), cvt.PtrToVal(row.CurImageID),
+		row.CurDiskSize, cvt.PtrToVal(row.CurDiskType), cvt.PtrToVal(row.CurNetworkType),
+		cvt.PtrToVal(row.CurVpc), cvt.PtrToVal(row.CurSubnet),
+		cvt.PtrToVal(row.CurSystemDiskType), row.CurSystemDiskSize, row.CurSystemDiskNum,
+		cvt.PtrToVal(row.CurDataDisk), cvt.PtrToVal(row.CurZones),
+		cvt.PtrToVal(row.CurResAssign), cvt.PtrToVal(row.CurBkAssetID), cvt.PtrToVal(row.CurInheritInstanceID),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("build cur_data failed: %w", err)
@@ -390,8 +396,8 @@ func buildMongoModifyRecord(source interface{}) (interface{}, error) {
 
 	return &tasktable.ModifyRecord{
 		ID:         row.ID,
-		SuborderID: row.SuborderID,
-		User:       row.BkUsername,
+		SuborderID: cvt.PtrToVal(row.SuborderID),
+		User:       cvt.PtrToVal(row.BkUsername),
 		Details: &tasktable.ModifyDetail{
 			PreData: preData,
 			CurData: curData,
@@ -399,7 +405,7 @@ func buildMongoModifyRecord(source interface{}) (interface{}, error) {
 		CreatedAt: parseTableTime(row.CreatedAt),
 		UpdatedAt: parseTableTime(row.UpdatedAt),
 		Status:    row.Status,
-		Approver:  row.Approver,
+		Approver:  cvt.PtrToVal(row.Approver),
 	}, nil
 }
 

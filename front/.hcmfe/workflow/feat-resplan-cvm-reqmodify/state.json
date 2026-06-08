@@ -1,0 +1,100 @@
+{
+  "id": "feat-resplan-cvm-reqmodify",
+  "title": "资源预测-2027 CVM 预算提报 - 首迭代",
+  "currentStage": "done",
+  "createdAt": "2026-05-19T07:35:25.661Z",
+  "updatedAt": "2026-05-20T09:13:40.033Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-resplan-cvm-reqmodify/prd.md",
+        "kind": "file",
+        "addedAt": "2026-05-19T07:48:41.945Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-resplan-cvm-reqmodify/design.md",
+        "kind": "file",
+        "addedAt": "2026-05-19T08:52:53.375Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-resplan-cvm-reqmodify/api.md",
+        "kind": "file",
+        "addedAt": "2026-05-19T09:21:05.623Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-resplan-cvm-reqmodify/coding.md",
+        "kind": "file",
+        "addedAt": "2026-05-19T09:54:26.014Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-resplan-cvm-reqmodify/test.md",
+        "kind": "file",
+        "addedAt": "2026-05-20T07:47:03.278Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-05-19T09:51:49.795Z"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-05-19T09:51:50.862Z"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-05-19T09:51:54.096Z"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-05-19T11:50:48.216Z"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-05-20T09:13:39.938Z"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-05-19T07:35:25.661Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-05-19T08:47:23.230Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-05-19T09:02:39.119Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-05-19T09:52:02.115Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-05-20T07:45:35.350Z"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-05-20T09:13:40.032Z"
+    }
+  ],
+  "requirementId": "req-resource-plan-2027-cvm-budget",
+  "branch": "feat-resplan-cvm-reqmodify"
+}

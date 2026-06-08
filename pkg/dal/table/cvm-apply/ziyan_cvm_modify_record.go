@@ -27,6 +27,7 @@ import (
 	"hcm/pkg/dal/table"
 	"hcm/pkg/dal/table/types"
 	"hcm/pkg/dal/table/utils"
+	cvt "hcm/pkg/tools/converter"
 )
 
 // ZiyanCvmModifyRecordColumns defines ziyan_cvm_modify_record's columns.
@@ -86,89 +87,89 @@ type ZiyanCvmModifyRecord struct {
 	// ID 主键ID
 	ID string `db:"id" json:"id"`
 	// SuborderID 子订单ID
-	SuborderID string `db:"suborder_id" json:"suborder_id" validate:"max=64"`
+	SuborderID *string `db:"suborder_id" json:"suborder_id" validate:"omitempty,max=64"`
 	// BkUsername 蓝鲸用户名
-	BkUsername string `db:"bk_username" json:"bk_username" validate:"max=64"`
+	BkUsername *string `db:"bk_username" json:"bk_username" validate:"omitempty,max=64"`
 	// PreTotalNum 修改前-总数量
 	PreTotalNum *uint `db:"pre_total_num" json:"pre_total_num"`
 	// PreReplicas 修改前-副本数
 	PreReplicas *uint `db:"pre_replicas" json:"pre_replicas"`
 	// PreRegion 修改前-地域
-	PreRegion string `db:"pre_region" json:"pre_region" validate:"max=64"`
+	PreRegion *string `db:"pre_region" json:"pre_region" validate:"omitempty,max=64"`
 	// PreZone 修改前-可用区
-	PreZone string `db:"pre_zone" json:"pre_zone" validate:"max=64"`
+	PreZone *string `db:"pre_zone" json:"pre_zone" validate:"omitempty,max=64"`
 	// PreDeviceType 修改前-机型
-	PreDeviceType string `db:"pre_device_type" json:"pre_device_type" validate:"max=64"`
+	PreDeviceType *string `db:"pre_device_type" json:"pre_device_type" validate:"omitempty,max=64"`
 	// PreImageID 修改前-镜像ID
-	PreImageID string `db:"pre_image_id" json:"pre_image_id" validate:"max=64"`
+	PreImageID *string `db:"pre_image_id" json:"pre_image_id" validate:"omitempty,max=64"`
 	// PreDiskSize 修改前-磁盘大小
 	PreDiskSize *int `db:"pre_disk_size" json:"pre_disk_size"`
 	// PreDiskType 修改前-磁盘类型
-	PreDiskType enumor.DiskType `db:"pre_disk_type" json:"pre_disk_type" validate:"max=32"`
+	PreDiskType *enumor.DiskType `db:"pre_disk_type" json:"pre_disk_type" validate:"omitempty,max=32"`
 	// PreNetworkType 修改前-网络类型
-	PreNetworkType string `db:"pre_network_type" json:"pre_network_type" validate:"max=32"`
+	PreNetworkType *string `db:"pre_network_type" json:"pre_network_type" validate:"omitempty,max=32"`
 	// PreVpc 修改前-VPC
-	PreVpc string `db:"pre_vpc" json:"pre_vpc" validate:"max=64"`
+	PreVpc *string `db:"pre_vpc" json:"pre_vpc" validate:"omitempty,max=64"`
 	// PreSubnet 修改前-子网
-	PreSubnet string `db:"pre_subnet" json:"pre_subnet" validate:"max=64"`
+	PreSubnet *string `db:"pre_subnet" json:"pre_subnet" validate:"omitempty,max=64"`
 	// PreSystemDiskType 修改前-系统盘类型
-	PreSystemDiskType enumor.DiskType `db:"pre_system_disk_type" json:"pre_system_disk_type" validate:"max=32"`
+	PreSystemDiskType *enumor.DiskType `db:"pre_system_disk_type" json:"pre_system_disk_type" validate:"omitempty,max=32"`
 	// PreSystemDiskSize 修改前-系统盘大小
 	PreSystemDiskSize *int `db:"pre_system_disk_size" json:"pre_system_disk_size"`
 	// PreSystemDiskNum 修改前-系统盘数量
 	PreSystemDiskNum *int `db:"pre_system_disk_num" json:"pre_system_disk_num"`
 	// PreDataDisk 修改前-数据盘配置（JSON数组）
-	PreDataDisk types.JsonField `db:"pre_data_disk" json:"pre_data_disk"`
+	PreDataDisk *types.JsonField `db:"pre_data_disk" json:"pre_data_disk"`
 	// PreZones 修改前-可用区列表（JSON数组）
-	PreZones types.JsonField `db:"pre_zones" json:"pre_zones"`
+	PreZones *types.JsonField `db:"pre_zones" json:"pre_zones"`
 	// PreResAssign 修改前-资源分配方式
-	PreResAssign enumor.ResAssign `db:"pre_res_assign" json:"pre_res_assign"`
+	PreResAssign *enumor.ResAssign `db:"pre_res_assign" json:"pre_res_assign"`
 	// PreBkAssetID 修改前-继承主机的固资号
-	PreBkAssetID string `db:"pre_bk_asset_id" json:"pre_bk_asset_id" validate:"max=64"`
+	PreBkAssetID *string `db:"pre_bk_asset_id" json:"pre_bk_asset_id" validate:"omitempty,max=64"`
 	// PreInheritInstanceID 修改前-被继承云主机实例ID
-	PreInheritInstanceID string `db:"pre_inherit_instance_id" json:"pre_inherit_instance_id" validate:"max=64"`
+	PreInheritInstanceID *string `db:"pre_inherit_instance_id" json:"pre_inherit_instance_id" validate:"omitempty,max=64"`
 	// CurTotalNum 修改后-总数量
 	CurTotalNum *uint `db:"cur_total_num" json:"cur_total_num"`
 	// CurReplicas 修改后-副本数
 	CurReplicas *uint `db:"cur_replicas" json:"cur_replicas"`
 	// CurRegion 修改后-地域
-	CurRegion string `db:"cur_region" json:"cur_region" validate:"max=64"`
+	CurRegion *string `db:"cur_region" json:"cur_region" validate:"omitempty,max=64"`
 	// CurZone 修改后-可用区
-	CurZone string `db:"cur_zone" json:"cur_zone" validate:"max=64"`
+	CurZone *string `db:"cur_zone" json:"cur_zone" validate:"omitempty,max=64"`
 	// CurDeviceType 修改后-机型
-	CurDeviceType string `db:"cur_device_type" json:"cur_device_type" validate:"max=64"`
+	CurDeviceType *string `db:"cur_device_type" json:"cur_device_type" validate:"omitempty,max=64"`
 	// CurImageID 修改后-镜像ID
-	CurImageID string `db:"cur_image_id" json:"cur_image_id" validate:"max=64"`
+	CurImageID *string `db:"cur_image_id" json:"cur_image_id" validate:"omitempty,max=64"`
 	// CurDiskSize 修改后-磁盘大小
 	CurDiskSize *int `db:"cur_disk_size" json:"cur_disk_size"`
 	// CurDiskType 修改后-磁盘类型
-	CurDiskType enumor.DiskType `db:"cur_disk_type" json:"cur_disk_type" validate:"max=32"`
+	CurDiskType *enumor.DiskType `db:"cur_disk_type" json:"cur_disk_type" validate:"omitempty,max=32"`
 	// CurNetworkType 修改后-网络类型
-	CurNetworkType string `db:"cur_network_type" json:"cur_network_type" validate:"max=32"`
+	CurNetworkType *string `db:"cur_network_type" json:"cur_network_type" validate:"omitempty,max=32"`
 	// CurVpc 修改后-VPC
-	CurVpc string `db:"cur_vpc" json:"cur_vpc" validate:"max=64"`
+	CurVpc *string `db:"cur_vpc" json:"cur_vpc" validate:"omitempty,max=64"`
 	// CurSubnet 修改后-子网
-	CurSubnet string `db:"cur_subnet" json:"cur_subnet" validate:"max=64"`
+	CurSubnet *string `db:"cur_subnet" json:"cur_subnet" validate:"omitempty,max=64"`
 	// CurSystemDiskType 修改后-系统盘类型
-	CurSystemDiskType enumor.DiskType `db:"cur_system_disk_type" json:"cur_system_disk_type" validate:"max=32"`
+	CurSystemDiskType *enumor.DiskType `db:"cur_system_disk_type" json:"cur_system_disk_type" validate:"omitempty,max=32"`
 	// CurSystemDiskSize 修改后-系统盘大小
 	CurSystemDiskSize *int `db:"cur_system_disk_size" json:"cur_system_disk_size"`
 	// CurSystemDiskNum 修改后-系统盘数量
 	CurSystemDiskNum *int `db:"cur_system_disk_num" json:"cur_system_disk_num"`
 	// CurDataDisk 修改后-数据盘配置（JSON数组）
-	CurDataDisk types.JsonField `db:"cur_data_disk" json:"cur_data_disk"`
+	CurDataDisk *types.JsonField `db:"cur_data_disk" json:"cur_data_disk"`
 	// CurZones 修改后-可用区列表（JSON数组）
-	CurZones types.JsonField `db:"cur_zones" json:"cur_zones"`
+	CurZones *types.JsonField `db:"cur_zones" json:"cur_zones"`
 	// CurResAssign 修改后-资源分配方式
-	CurResAssign enumor.ResAssign `db:"cur_res_assign" json:"cur_res_assign"`
+	CurResAssign *enumor.ResAssign `db:"cur_res_assign" json:"cur_res_assign"`
 	// CurBkAssetID 修改后-继承主机的固资号
-	CurBkAssetID string `db:"cur_bk_asset_id" json:"cur_bk_asset_id" validate:"max=64"`
+	CurBkAssetID *string `db:"cur_bk_asset_id" json:"cur_bk_asset_id" validate:"omitempty,max=64"`
 	// CurInheritInstanceID 修改后-被继承云主机实例ID
-	CurInheritInstanceID string `db:"cur_inherit_instance_id" json:"cur_inherit_instance_id" validate:"max=64"`
+	CurInheritInstanceID *string `db:"cur_inherit_instance_id" json:"cur_inherit_instance_id" validate:"omitempty,max=64"`
 	// Status 状态：0-待审批, 1-已审批, 2-审批失败, 3-已拒绝, 4-审批超时/作废
 	Status enumor.CvmModifyRecordStatus `db:"status" json:"status"`
 	// Approver 审批人
-	Approver string `db:"approver" json:"approver" validate:"max=64"`
+	Approver *string `db:"approver" json:"approver" validate:"omitempty,max=64"`
 	// CreatedAt 创建时间（毫秒精度）
 	CreatedAt types.Time `db:"created_at" json:"created_at"`
 	// UpdatedAt 更新时间（毫秒精度）
@@ -182,7 +183,7 @@ func (z *ZiyanCvmModifyRecord) TableName() table.Name {
 
 // InsertValidate validate insert
 func (z *ZiyanCvmModifyRecord) InsertValidate() error {
-	if len(z.SuborderID) == 0 {
+	if z.SuborderID == nil || len(cvt.PtrToVal(z.SuborderID)) == 0 {
 		return errors.New("suborder_id is required")
 	}
 	return validator.Validate.Struct(z)

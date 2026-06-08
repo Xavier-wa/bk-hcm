@@ -25,15 +25,18 @@ import (
 	"errors"
 	"time"
 
+	model "hcm/cmd/woa-server/types/dissolve"
 	"hcm/pkg/api/core"
 	cgconf "hcm/pkg/api/core/global-config"
 	datagconf "hcm/pkg/api/data-service/global_config"
 	"hcm/pkg/client"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/dal/dao/tools"
 	globalconf "hcm/pkg/dal/table/global-config"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/tools/converter"
 )
 
 // Config provides interface for operations of dissolve config.
@@ -42,6 +45,16 @@ type Config interface {
 	UpsertDissolveHostApplyTime(kt *kit.Kit, time *time.Time) error
 	GetApprovalLimit(kt *kit.Kit) (*float64, error)
 	UpsertApprovalLimit(kt *kit.Kit, approveLimit *float64) error
+	// 配额系数相关
+	GetQuotaCoefficient(kt *kit.Kit) (float64, error)
+	UpsertQuotaCoefficient(kt *kit.Kit, coefficient float64) error
+	// 偏移配置相关
+	GetQuotaOffsets(kt *kit.Kit) ([]model.QuotaOffsetItem, error)
+	GetQuotaOffsetsMap(kt *kit.Kit) (map[int64]model.QuotaOffsetItem, error)
+	UpsertQuotaOffsets(kt *kit.Kit, offsets []model.QuotaOffsetItem) error
+	// 单业务偏移修改
+	UpdateBizDissolveQuotaOffset(kt *kit.Kit, bizID int64,
+		req *model.UpdateDissolveQuotaOffsetReq) (*model.UpdateDissolveQuotaOffsetResp, error)
 }
 
 type logics struct {
@@ -163,4 +176,130 @@ func (l *logics) GetApprovalLimit(kt *kit.Kit) (*float64, error) {
 // UpsertApprovalLimit upsert approval limit.
 func (l *logics) UpsertApprovalLimit(kt *kit.Kit, approvalLimit *float64) error {
 	return l.upsertDissolveConfig(kt, enumor.GlobalConfigDissolveApprovalLimit, approvalLimit)
+}
+
+// GetQuotaCoefficient get quota coefficient, returns default value 65 if not configured.
+func (l *logics) GetQuotaCoefficient(kt *kit.Kit) (float64, error) {
+	config, exist, err := l.getDissolveConfigByKey(kt, enumor.GlobalConfigDissolveQuotaCoefficient)
+	if err != nil {
+		logs.Errorf("failed to get dissolve quota coefficient config, err: %v, rid: %s", err, kt.Rid)
+		return 0, err
+	}
+	if !exist {
+		// 未配置时返回默认值
+		return constant.DissolveDefaultQuotaCoefficient, nil
+	}
+
+	var coefficient float64
+	if err = json.Unmarshal([]byte(config.ConfigValue), &coefficient); err != nil {
+		logs.Errorf("failed to unmarshal quota coefficient, err: %v, value: %s, rid: %s", err, config.ConfigValue, kt.Rid)
+		return 0, err
+	}
+
+	return coefficient, nil
+}
+
+// UpsertQuotaCoefficient upsert quota coefficient.
+func (l *logics) UpsertQuotaCoefficient(kt *kit.Kit, coefficient float64) error {
+	return l.upsertDissolveConfig(kt, enumor.GlobalConfigDissolveQuotaCoefficient, coefficient)
+}
+
+// GetQuotaOffsets get quota offsets as array, returns empty array if not configured.
+func (l *logics) GetQuotaOffsets(kt *kit.Kit) ([]model.QuotaOffsetItem, error) {
+	offsetsMap, err := l.GetQuotaOffsetsMap(kt)
+	if err != nil {
+		return nil, err
+	}
+
+	// 转换为数组
+	offsets := converter.MapToSlice(offsetsMap, func(bizID int64, item model.QuotaOffsetItem) model.QuotaOffsetItem {
+		item.BkBizID = bizID
+		return item
+	})
+
+	return offsets, nil
+}
+
+// GetQuotaOffsetsMap get quota offsets as map for internal use, returns empty map if not configured.
+func (l *logics) GetQuotaOffsetsMap(kt *kit.Kit) (map[int64]model.QuotaOffsetItem, error) {
+	offsets := make(map[int64]model.QuotaOffsetItem)
+
+	config, exist, err := l.getDissolveConfigByKey(kt, enumor.GlobalConfigDissolveQuotaOffsets)
+	if err != nil {
+		logs.Errorf("failed to get dissolve quota offsets config, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+	if !exist {
+		// 未配置时返回空map
+		return offsets, nil
+	}
+
+	if err = json.Unmarshal([]byte(config.ConfigValue), &offsets); err != nil {
+		logs.Errorf("failed to unmarshal quota offsets, err: %v, value: %s, rid: %s", err, config.ConfigValue, kt.Rid)
+		return nil, err
+	}
+
+	return offsets, nil
+}
+
+// UpsertQuotaOffsets upsert quota offsets.
+func (l *logics) UpsertQuotaOffsets(kt *kit.Kit, offsets []model.QuotaOffsetItem) error {
+	// 转换为 map 存储
+	offsetsMap := converter.SliceToMap(offsets, func(item model.QuotaOffsetItem) (int64, model.QuotaOffsetItem) {
+		return item.BkBizID, model.QuotaOffsetItem{
+			Offset: item.Offset,
+			Type:   item.Type,
+			Memo:   item.Memo,
+		}
+	})
+	return l.upsertDissolveConfig(kt, enumor.GlobalConfigDissolveQuotaOffsets, offsetsMap)
+}
+
+// UpdateBizDissolveQuotaOffset update single business quota offset.
+func (l *logics) UpdateBizDissolveQuotaOffset(kt *kit.Kit, bizID int64,
+	req *model.UpdateDissolveQuotaOffsetReq) (*model.UpdateDissolveQuotaOffsetResp, error) {
+
+	// 获取当前偏移配置（使用 map 方法便于查找和更新）
+	offsetsMap, err := l.GetQuotaOffsetsMap(kt)
+	if err != nil {
+		logs.Errorf("failed to get quota offsets, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	// 记录修改前的偏移值
+	var beforeOffset int64
+	if existing, ok := offsetsMap[bizID]; ok {
+		beforeOffset = existing.SignedOffset()
+	}
+
+	// 更新偏移配置
+	offsetsMap[bizID] = model.QuotaOffsetItem{
+		Offset: converter.PtrToVal(req.Offset),
+		Type:   req.Type,
+		Memo:   req.Memo,
+	}
+
+	// 转换为数组保存
+	offsets := converter.MapToSlice(offsetsMap, func(bizID int64, item model.QuotaOffsetItem) model.QuotaOffsetItem {
+		item.BkBizID = bizID
+		return item
+	})
+
+	// 保存偏移配置
+	if err = l.UpsertQuotaOffsets(kt, offsets); err != nil {
+		logs.Errorf("failed to upsert quota offsets, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	// 计算修改后的偏移值（用于响应）
+	afterOffset := req.SignedOffset()
+
+	logs.Infof("updated quota offset for biz %d, before: %d, after: %d, operator: %s, rid: %s",
+		bizID, beforeOffset, afterOffset, kt.User, kt.Rid)
+
+	return &model.UpdateDissolveQuotaOffsetResp{
+		BkBizID:      bizID,
+		BeforeOffset: beforeOffset,
+		AfterOffset:  afterOffset,
+	}, nil
 }

@@ -37,6 +37,7 @@ export interface ICvmDevicetypeItem {
   memory: number; // 原 ram_amount
   core_type: string; // 核心类型，枚举值：小核心、中核心、大核心
   device_class: string;
+  gpu_amount: number;
   technical_class?: string;
   [k: string]: any;
 }
@@ -144,6 +145,7 @@ export const useCvmDeviceStore = defineStore('cvm-device', () => {
     require_type: RequirementType;
     region: string;
     zone?: string;
+    suborder_id?: string;
   }) => {
     chargeTypeDeviceTypeListLoading.value = true;
     try {

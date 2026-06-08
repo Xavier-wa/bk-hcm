@@ -26,24 +26,26 @@ import (
 // Client 腾讯自研云api客户端
 type Client struct {
 	*restClient
-	Account       *AccountClient
-	Region        *RegionClient
-	Vpc           *VpcClient
-	Subnet        *SubnetClient
-	Zone          *ZoneClient
-	SecurityGroup *SecurityGroupClient
-	LoadBalancer  *LoadBalancerClient
-	Cvm           *CvmClient
-	DeviceType    *DeviceTypeClient
-	Dissolve      *DissolveClient
-	ZiyanCvmApplyOrder      *ZiyanCvmApplyOrderClient
-	ZiyanCvmApplySuborder   *ZiyanCvmApplySuborderClient
-	ZiyanCvmApplyStep       *ZiyanCvmApplyStepClient
-	ZiyanCvmGenerateRecord  *ZiyanCvmGenerateRecordClient
-	ZiyanCvmApplyInitTask   *ZiyanCvmApplyInitTaskClient
-	ZiyanCvmDeviceInfo      *ZiyanCvmDeviceInfoClient
-	ZiyanCvmDeliverRecord   *ZiyanCvmDeliverRecordClient
-	ZiyanCvmModifyRecord    *ZiyanCvmModifyRecordClient
+	Account                    *AccountClient
+	Region                     *RegionClient
+	Vpc                        *VpcClient
+	Subnet                     *SubnetClient
+	Zone                       *ZoneClient
+	SecurityGroup              *SecurityGroupClient
+	LoadBalancer               *LoadBalancerClient
+	Cvm                        *CvmClient
+	DeviceType                 *DeviceTypeClient
+	Dissolve                   *DissolveClient
+	ZiyanCvmApplyOrder         *ZiyanCvmApplyOrderClient
+	ZiyanCvmApplySuborder      *ZiyanCvmApplySuborderClient
+	ZiyanCvmApplyStep          *ZiyanCvmApplyStepClient
+	ZiyanCvmGenerateRecord     *ZiyanCvmGenerateRecordClient
+	ZiyanCvmApplyInitTask      *ZiyanCvmApplyInitTaskClient
+	ZiyanCvmDeviceInfo         *ZiyanCvmDeviceInfoClient
+	ZiyanCvmDeliverRecord      *ZiyanCvmDeliverRecordClient
+	ZiyanCvmModifyRecord       *ZiyanCvmModifyRecordClient
+	ZiyanCvmApplyUserRecommend *ZiyanCvmApplyUserRecommendClient
+	ZiyanCvmApplyBizRecommend  *ZiyanCvmApplyBizRecommendClient
 }
 
 type restClient struct {
@@ -53,24 +55,26 @@ type restClient struct {
 // NewClient create a new tcloud api client.
 func NewClient(client rest.ClientInterface) *Client {
 	return &Client{
-		restClient:    &restClient{client: client},
-		Account:       NewAccountClient(client),
-		Vpc:           NewVpcClient(client),
-		Subnet:        NewSubnetClient(client),
-		Region:        NewRegionClient(client),
-		Zone:          NewZoneClient(client),
-		SecurityGroup: NewCloudSecurityGroupClient(client),
-		LoadBalancer:  NewLoadBalancerClient(client),
-		Cvm:           NewCloudCvmClient(client),
-		DeviceType:    NewDeviceTypeClient(client),
-		Dissolve:      NewDissolveClient(client),
-		ZiyanCvmApplyOrder:      NewZiyanCvmApplyOrderClient(client),
-		ZiyanCvmApplySuborder:   NewZiyanCvmApplySuborderClient(client),
-		ZiyanCvmApplyStep:       NewZiyanCvmApplyStepClient(client),
-		ZiyanCvmGenerateRecord:  NewZiyanCvmGenerateRecordClient(client),
-		ZiyanCvmApplyInitTask:   NewZiyanCvmApplyInitTaskClient(client),
-		ZiyanCvmDeviceInfo:      NewZiyanCvmDeviceInfoClient(client),
-		ZiyanCvmDeliverRecord:   NewZiyanCvmDeliverRecordClient(client),
-		ZiyanCvmModifyRecord:    NewZiyanCvmModifyRecordClient(client),
+		restClient:                 &restClient{client: client},
+		Account:                    NewAccountClient(client),
+		Vpc:                        NewVpcClient(client),
+		Subnet:                     NewSubnetClient(client),
+		Region:                     NewRegionClient(client),
+		Zone:                       NewZoneClient(client),
+		SecurityGroup:              NewCloudSecurityGroupClient(client),
+		LoadBalancer:               NewLoadBalancerClient(client),
+		Cvm:                        NewCloudCvmClient(client),
+		DeviceType:                 NewDeviceTypeClient(client),
+		Dissolve:                   NewDissolveClient(client),
+		ZiyanCvmApplyOrder:         NewZiyanCvmApplyOrderClient(client),
+		ZiyanCvmApplySuborder:      NewZiyanCvmApplySuborderClient(client),
+		ZiyanCvmApplyStep:          NewZiyanCvmApplyStepClient(client),
+		ZiyanCvmGenerateRecord:     NewZiyanCvmGenerateRecordClient(client),
+		ZiyanCvmApplyInitTask:      NewZiyanCvmApplyInitTaskClient(client),
+		ZiyanCvmDeviceInfo:         NewZiyanCvmDeviceInfoClient(client),
+		ZiyanCvmDeliverRecord:      NewZiyanCvmDeliverRecordClient(client),
+		ZiyanCvmModifyRecord:       NewZiyanCvmModifyRecordClient(client),
+		ZiyanCvmApplyUserRecommend: NewZiyanCvmApplyUserRecommendClient(client),
+		ZiyanCvmApplyBizRecommend:  NewZiyanCvmApplyBizRecommendClient(client),
 	}
 }

@@ -192,6 +192,7 @@ func (act *RootAccountSummaryAction) countMainAccount(
 	expressions := []*filter.AtomRule{
 		tools.RuleEqual("parent_account_id", opt.RootAccountID),
 		tools.RuleEqual("vendor", opt.Vendor),
+		tools.RuleEqual("status", enumor.MainAccountStatusRUNNING),
 	}
 	result, err := actcli.GetDataService().Global.MainAccount.List(kt, &core.ListReq{
 		Filter: tools.ExpressionAnd(expressions...),

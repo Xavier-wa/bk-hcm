@@ -21,6 +21,7 @@ import (
 	"unicode/utf8"
 
 	"hcm/pkg/api/core"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	"hcm/pkg/dal/dao/tools"
@@ -748,6 +749,41 @@ func (r *ListPendingResPlanTicketReq) Validate() error {
 	return r.SubmittedAt.Validate()
 }
 
+// OverwriteResPlanTicketReq is overwritten resource plan ticket request.
+type OverwriteResPlanTicketReq struct {
+	DemandClass *enumor.DemandClass      `json:"demand_class" validate:"omitempty"`
+	Demands     []CreateResPlanDemandReq `json:"demands" validate:"omitempty"`
+	Remark      *string                  `json:"remark" validate:"omitempty"`
+}
+
+// Validate whether OverwriteResPlanTicketReq is valid.
+func (r *OverwriteResPlanTicketReq) Validate() error {
+	if err := validator.Validate.Struct(r); err != nil {
+		return err
+	}
+
+	if r.DemandClass != nil {
+		if err := r.DemandClass.Validate(); err != nil {
+			return err
+		}
+	}
+
+	for _, demand := range r.Demands {
+		if err := demand.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if r.Remark != nil {
+		lenRemark := utf8.RuneCountInString(*r.Remark)
+		if lenRemark < 20 || lenRemark > 1024 {
+			return errors.New("len remark should be >= 20 and < 1024")
+		}
+	}
+
+	return nil
+}
+
 // ListResPlanTicketData 返回数据
 type ListResPlanTicketData struct {
 	Tickets []ResPlanTicket `json:"tickets"`
@@ -761,4 +797,32 @@ type ResPlanTicket struct {
 	User          string               `json:"user"`
 	ApprovalState enumor.ApprovalState `json:"approval_state"`
 	SubmittedAt   string               `json:"submitted_at"`
+}
+
+// GetResPlanNonCurrentYearReportDeadlineResp is get non-current-year report deadline response.
+type GetResPlanNonCurrentYearReportDeadlineResp struct {
+	// Deadline non-current-year demand report deadline, format YYYY-MM-DD HH:MM:SS.
+	Deadline string `json:"deadline"`
+}
+
+// UpsertResPlanNonCurrentYearReportDeadlineReq is upsert non-current-year report deadline request.
+type UpsertResPlanNonCurrentYearReportDeadlineReq struct {
+	// Deadline non-current-year demand report deadline, format YYYY-MM-DD HH:MM:SS.
+	// Empty string means delete the config.
+	Deadline string `json:"deadline"`
+}
+
+// Validate UpsertResPlanNonCurrentYearReportDeadlineReq.
+func (r *UpsertResPlanNonCurrentYearReportDeadlineReq) Validate() error {
+	if err := validator.Validate.Struct(r); err != nil {
+		return err
+	}
+
+	// 允许更新为空值（清空 deadline）
+	if r.Deadline == "" {
+		return nil
+	}
+
+	_, err := times.ParseDateTime(constant.DateTimeLayout, r.Deadline)
+	return err
 }

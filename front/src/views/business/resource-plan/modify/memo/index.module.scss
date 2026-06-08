@@ -1,0 +1,12 @@
+.home {
+  margin: 0 28px 8px;
+  width: 864px;
+
+  :global(.bk-textarea) {
+    height: 200px;
+
+    textarea {
+      height: 100%;
+    }
+  }
+}

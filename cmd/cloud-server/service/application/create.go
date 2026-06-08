@@ -536,7 +536,8 @@ func (a *applicationSvc) CreateForUpdateMainAccount(cts *rest.Contexts) (interfa
 	handler := updatemainaccount.NewApplicationOfUpdateMainAccount(a.getHandlerOption(cts), a.authorizer, req)
 
 	// authorize
-	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.MainAccount, Action: meta.Update}}
+	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.MainAccount, Action: meta.Update,
+		ResourceID: req.ID}}
 	err = a.authorizer.AuthorizeWithPerm(cts.Kit, authRes)
 	if err != nil {
 		return nil, err

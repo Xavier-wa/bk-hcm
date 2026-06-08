@@ -15,9 +15,10 @@ import GridItem from '@/components/layout/grid-container/grid-item.vue';
 import AreaSelector from '@/views/ziyanScr/hostApplication/components/AreaSelector';
 import ZoneSelector from '@/views/ziyanScr/hostApplication/components/ZoneSelector';
 import DevicetypeSelector from '@/views/ziyanScr/components/devicetype-selector/index.vue';
+import { type IDeviceFamilyItem } from '@/store/config/device-family';
+import HcmFormDeviceFamily from '@/components/form/device-family.vue';
 import { VendorEnum } from '@/common/constant';
 import { type ICondition } from '../../typings';
-import { deviceGroupsMap } from '../../constants';
 
 interface Props {
   requireType?: RequirementType;
@@ -35,7 +36,6 @@ const { pagination, pageParams, handlePageChange, handlePageSizeChange, handleSo
 
 const cvmDeviceStore = useCvmDeviceStore();
 
-const deviceGroups = computed(() => deviceGroupsMap[props.requireType] || deviceGroupsMap.default);
 const defaultSearchValues: () => ICondition = () => ({
   // 小额绿通和春保资源池使用常规项目查询，春保资源池暂已下线
   require_type: [RequirementType.GreenChannel, RequirementType.SpringResPool].includes(props.requireType)
@@ -43,7 +43,7 @@ const defaultSearchValues: () => ICondition = () => ({
     : props.requireType,
   region: [],
   zone: [],
-  device_families: [deviceGroups.value[0]],
+  device_families: [],
   ...props.initialCondition,
 });
 
@@ -94,11 +94,11 @@ const searchFields: ModelPropertySearch[] = [
     type: 'array',
     meta: {
       search: {
-        filterRules(value: string[]) {
+        filterRules() {
           return {
             field: 'device_family',
             op: QueryRuleOPEnum.IN,
-            value,
+            value: filterDeviceFamily.value,
           };
         },
       },
@@ -201,13 +201,25 @@ const columns: ModelPropertyColumn[] = [
   },
 ];
 
+// 选中的机型族
+const selectedDeviceFamily = ref<IDeviceFamilyItem[]>([]);
+
+const filterDeviceFamily = computed(() => {
+  if (isGreenChannel.value) {
+    return ['标准型'];
+  }
+  return selectedDeviceFamily.value.flatMap((item) =>
+    item.children?.length ? item.children?.map((child) => child.id) : [item.id],
+  );
+});
+
 const cvmDevicetypeParams = computed(() => {
-  const { region, zone, device_families } = searchValues.value;
+  const { region, zone } = searchValues.value;
   return {
     vendor: VendorEnum.ZIYAN,
     region,
     zone,
-    device_family: device_families,
+    device_family: filterDeviceFamily.value,
     disable: false,
   };
 });
@@ -261,13 +273,21 @@ const getOptions = async () => {
   memList.value = mem;
 };
 
+const deviceFamilyFilter = (list: IDeviceFamilyItem[]) => {
+  if (isGreenChannel.value) {
+    return list.filter((item) => item.id === '标准型');
+  }
+  return list;
+};
+
 onMounted(async () => {
   await getOptions();
   getList();
 });
 
-const handleDeviceGroupChange = () => {
+const handleDeviceGroupChange = (items: IDeviceFamilyItem[]) => {
   searchValues.value.device_type = [];
+  selectedDeviceFamily.value = items;
   if (isGreenChannel.value) {
     searchValues.value.device_families = ['标准型'];
   }
@@ -322,16 +342,16 @@ const handleReset = () => {
         />
       </grid-item-form-element>
       <grid-item-form-element label="实例族">
-        <bk-select
+        <HcmFormDeviceFamily
           v-model="searchValues.device_families"
-          multiple
+          default-first
           filterable
-          :clearable="false"
+          multiple
           collapse-tags
+          :clearable="!isGreenChannel"
+          :filter="deviceFamilyFilter"
           @change="handleDeviceGroupChange"
-        >
-          <bk-option v-for="(item, index) in deviceGroups" :key="index" :value="item" :label="item" />
-        </bk-select>
+        />
       </grid-item-form-element>
       <grid-item-form-element label="机型">
         <devicetype-selector

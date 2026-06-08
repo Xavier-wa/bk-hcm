@@ -408,14 +408,15 @@ export const useTable = (props: IProp) => {
     const { id, name } = val;
     if (!id || !name) return;
     // 如果是domain或者zones(数组类型), 则使用JSON_CONTAINS
-    if ((val?.id === 'domain' && val?.name !== '负载均衡域名') || val?.id === 'zones') {
+    if ((val?.id === 'domain' && val?.name !== '负载均衡域名') || val?.id === 'zones' || val?.id === 'managers') {
       op = QueryRuleOPEnum.JSON_CONTAINS;
     }
     // 如果是名称或指定了模糊搜索, 则模糊搜索
     else if (
       props?.requestOption?.filterOption?.fuzzySwitch ||
       val?.id === 'name' ||
-      (val?.id === 'domain' && val?.name === '负载均衡域名')
+      (val?.id === 'domain' && val?.name === '负载均衡域名') ||
+      val?.id === 'op_product_name'
     ) {
       op = QueryRuleOPEnum.CIS;
     }
@@ -447,15 +448,18 @@ export const useTable = (props: IProp) => {
       const searchFieldList: string[] = [];
       // 构建当前 search-select 规则
       const searchRules = Array.isArray(searchVal)
-        ? searchVal.map((val: any) => {
+        ? searchVal.flatMap((val: any) => {
             const field = val?.id;
             const op = resolveSearchFieldOp(val);
-            const value =
+            const values =
               field === 'bk_biz_id'
-                ? businessMapStore.businessNameToIDMap.get(val?.values?.[0]?.id) || Number(val?.values?.[0]?.id)
-                : val?.values?.[0]?.id;
+                ? val?.values
+                    ?.map((v: any) => businessMapStore.businessNameToIDMap.get(v?.id) || Number(v?.id))
+                    .filter(Boolean)
+                : val?.values?.map((v: any) => v?.id).filter(Boolean) || [];
+
             searchFieldList.push(field);
-            return { field, op, value };
+            return values.map((value: any) => ({ field, op, value }));
           })
         : [];
       // 页码重置

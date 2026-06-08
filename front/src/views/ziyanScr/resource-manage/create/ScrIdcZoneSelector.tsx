@@ -45,7 +45,8 @@ export default defineComponent({
         v-model={selected.value}
         multiple={props.multiple}
         multipleMode={props.multiple ? 'tag' : null}
-        collapseTags>
+        collapseTags
+        filterable>
         {list.value.map(({ id, cmdb_zone_name }: IdcZone) => (
           <Select.Option key={id} id={cmdb_zone_name} name={cmdb_zone_name} />
         ))}

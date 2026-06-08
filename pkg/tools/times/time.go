@@ -234,6 +234,24 @@ func ParseDateTime(layout, t string) (time.Time, error) {
 	return pdTime, nil
 }
 
+// ParseDateTimeInLocation parse date time from string in the given location.
+func ParseDateTimeInLocation(layout, t string, loc *time.Location) (time.Time, error) {
+	if len(t) == 0 {
+		return time.Time{}, errf.New(errf.InvalidParameter, "empty date time")
+	}
+	if loc == nil {
+		return time.Time{}, errf.New(errf.InvalidParameter, "location is nil")
+	}
+
+	pdTime, err := time.ParseInLocation(layout, t, loc)
+	if err != nil {
+		return time.Time{}, errf.Newf(errf.InvalidParameter, "invalid date time format, should be like %s, err: %v",
+			layout, err)
+	}
+
+	return pdTime, nil
+}
+
 // ParseTypesTime converts types.Time (ISO 8601 string) to time.Time
 // If the input is empty or invalid, returns zero time
 func ParseTypesTime(t tabletypes.Time) (time.Time, error) {

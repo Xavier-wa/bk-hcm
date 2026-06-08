@@ -1,0 +1,33 @@
+.header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.button {
+  margin-right: 24px;
+}
+
+.plus-icon {
+  font-size: 18px;
+  margin: 0 2px 0 -2px;
+}
+
+.total-number {
+  display: inline-block;
+  margin: 0 4px 0 8px;
+  color: #313238;
+}
+
+.total-unit {
+  margin-right: 32px;
+}
+
+.mr-5 {
+  margin-right: 5px;
+}
+
+.error-txt {
+  color: #ea3636;
+  font-size: 12px;
+}

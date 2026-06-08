@@ -201,6 +201,7 @@ type scheduler struct {
 	dissolveLogics dissolve.Logics
 	cmsiClient     cmsi.Client
 	apiClientSet   *client.ClientSet
+	planLogics     plan.Logics
 }
 
 // New creates a scheduler
@@ -246,6 +247,7 @@ func New(ctx context.Context, rsLogics rollingserver.Logics, srLogics shortrenta
 		dissolveLogics: dissolveLogics,
 		cmsiClient:     cmsiCli,
 		apiClientSet:   apiClientSet,
+		planLogics:     planLogics,
 	}
 
 	return scheduler, nil
@@ -827,11 +829,15 @@ func checkRequireType(s *scheduler, kit *kit.Kit, order *types.ApplyTicket) (str
 			logs.Errorf("can not find biz dissolve cpu core summary, bizID: %d, rid: %s", order.BkBizId, kit.Rid)
 			return "", false, fmt.Errorf("can not find biz dissolve cpu core summary, bizID: %d", order.BkBizId)
 		}
-		if summary.TotalCore == 0 {
-			logs.Errorf("total core is zero, bizID: %d, rid: %s", order.BkBizId, kit.Rid)
-			return "", false, fmt.Errorf("total core is zero, bizID: %d", order.BkBizId)
+		// 配额额度 = 裁撤原始核数 × 配额系数 / 100 + 业务偏移额度
+		quotaTotal := float64(summary.TotalCore)*summary.QuotaCoefficient/100 + float64(summary.QuotaOffset)
+		if quotaTotal <= 0 {
+			logs.Errorf("quota total is zero or negative, bizID: %d, quotaTotal: %f, rid: %s",
+				order.BkBizId, quotaTotal, kit.Rid)
+			return "", false, fmt.Errorf("quota total is zero or negative, bizID: %d", order.BkBizId)
 		}
-		cur := float64(summary.DeliveredCore) / float64(summary.TotalCore) * 100
+		// 已交付核数占配额额度的比例
+		cur := float64(summary.DeliveredCore) / quotaTotal * 100
 		if cur >= cvt.PtrToVal(approvalLimit) {
 			return fmt.Sprintf("delivery percentage greater than limit, cur: %f, limit: %f", cur,
 				cvt.PtrToVal(approvalLimit)), true, nil
@@ -2523,7 +2529,7 @@ func getModifyApplyCompare(order *types.ApplyOrder, param *types.ModifyApplyReq)
 	newZones := getApplyOrderZones(param.Spec)
 	modifyCompare.PreZone = fmt.Sprintf("修改前园区：%s\n", strings.Join(oldZones, "、"))
 	modifyCompare.CurZone = fmt.Sprintf("修改后园区：%s", strings.Join(newZones, "、"))
-	if order.Spec.DeviceType != param.Spec.DeviceType {
+	if strings.Join(oldZones, ",") != strings.Join(newZones, ",") {
 		modifyCompare.CurZone += "<font color=red>（有调整）</font>"
 	}
 	modifyCompare.CurZone += "\n"
@@ -2588,6 +2594,37 @@ func (s *scheduler) validateModification(kt *kit.Kit, order *types.ApplyOrder, p
 		return err
 	}
 
+	// 预测校验：仅针对常规项目、裁撤项目、短租项目、春节保障
+	if order.RequireType.NeedVerifyResPlan() {
+		if err = s.verifyResPlanForModify(kt, order, param); err != nil {
+			logs.Errorf("res plan verify failed for modify, subOrderID: %s, err: %v, rid: %s",
+				order.SubOrderId, err, kt.Rid)
+			return err
+		}
+	}
+
+	return nil
+}
+
+// verifyResPlanForModify 修改申请单时进行预测校验
+func (s *scheduler) verifyResPlanForModify(kt *kit.Kit, order *types.ApplyOrder, param *types.ModifyApplyReq) error {
+	suborder := types.Suborder{
+		SuborderID:   order.SubOrderId,
+		ResourceType: order.ResourceType,
+		Replicas:     param.Replicas,
+		Spec:         param.Spec,
+	}
+	results, err := s.planLogics.VerifyResPlanDemandV2(kt, order.BkBizId, order.RequireType, []types.Suborder{suborder})
+	if err != nil {
+		logs.Errorf("failed to verify res plan for modify, subOrderID: %s, err: %v, rid: %s",
+			order.SubOrderId, err, kt.Rid)
+		return err
+	}
+	if len(results) > 0 && results[0].VerifyResult == enumor.VerifyResPlanRstFailed {
+		logs.Errorf("res plan verify not passed for modify, subOrderID: %s, reason: %s, rid: %s",
+			order.SubOrderId, results[0].Reason, kt.Rid)
+		return errf.Newf(errf.ResPlanVerifyFailed, "预测校验不通过: %s", results[0].Reason)
+	}
 	return nil
 }
 
@@ -2798,8 +2835,8 @@ func (s *scheduler) modifyOrder(kt *kit.Kit, order *types.ApplyOrder, param *typ
 		DiskSize:          cvt.ValToPtr(param.Spec.DiskSize),
 		DiskType:          param.Spec.DiskType,
 		NetworkType:       param.Spec.NetworkType,
-		Vpc:               param.Spec.Vpc,
-		Subnet:            param.Spec.Subnet,
+		Vpc:               cvt.ValToPtr(param.Spec.Vpc),
+		Subnet:            cvt.ValToPtr(param.Spec.Subnet),
 		FailedZoneIds:     cvt.ValToPtr(tabletypes.JsonField("[]")), // 修改需求重试时需要清空已失败的可用区，也就是全可用区重试
 		ResAssign:         cvt.ValToPtr(param.Spec.ResAssign),
 		Stage:             types.TicketStageRunning,
@@ -2926,7 +2963,7 @@ func (s *scheduler) updateModifyRecordData(kt *kit.Kit, subOrderID string, modif
 
 	update := &cvmapplyproto.ZiyanCvmModifyRecordUpdateReq{
 		Status:   cvt.ValToPtr(status),
-		Approver: kt.User,
+		Approver: cvt.ValToPtr(kt.User),
 	}
 
 	if err := dao.Set().ModifyRecord().UpdateModifyRecord(kt, s.apiClientSet, filterExpr, update); err != nil {

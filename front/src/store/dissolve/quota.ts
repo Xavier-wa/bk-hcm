@@ -7,6 +7,21 @@ import { resolveBizApiPath } from '@/utils/search';
 export interface ICpuCoreSummary {
   total_core: number;
   delivered_core: number;
+  available_quota: number;
+}
+
+export interface IQuotaOffset {
+  bk_biz_id: number;
+  type: 'increase' | 'decrease';
+  offset: number;
+  memo: string;
+}
+
+export interface IDissolveConfig {
+  host_apply_time: string;
+  approval_limit: number;
+  quota_coefficient: number;
+  quota_offsets: IQuotaOffset[];
 }
 
 export const useDissolveQuotaStore = defineStore('dissolve-quota', () => {
@@ -32,7 +47,7 @@ export const useDissolveQuotaStore = defineStore('dissolve-quota', () => {
     dissolveConfigLoading.value = true;
     try {
       const api = '/api/v1/woa/dissolve/config';
-      const res: IQueryResData<{ host_apply_time: string; approval_limit: string }> = await http.get(api);
+      const res: IQueryResData<IDissolveConfig> = await http.get(api);
       return res?.data;
     } catch (error) {
       console.error(error);
@@ -42,7 +57,7 @@ export const useDissolveQuotaStore = defineStore('dissolve-quota', () => {
     }
   };
 
-  const upsertDissolveConfig = async (params: { host_apply_time?: string; approval_limit?: string }) => {
+  const upsertDissolveConfig = async (params: IDissolveConfig) => {
     upsertDissolveConfigLoading.value = true;
     try {
       const api = '/api/v1/woa/dissolve/config/upsert';

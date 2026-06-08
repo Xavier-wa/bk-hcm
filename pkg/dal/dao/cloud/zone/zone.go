@@ -122,6 +122,7 @@ func (z ZoneDao) List(kt *kit.Kit, opt *types.ListOption) (*typeszone.ListZoneDe
 	columnTypes := zone.ZoneColumns.ColumnTypes()
 	// 目前extension支持的字段类型：字符串（布尔值也需要传入字符串才会生效）
 	columnTypes["extension.disable_cvm"] = enumor.String
+	columnTypes["extension.logic_campus_name"] = enumor.String
 	if err := opt.Validate(filter.NewExprOption(filter.RuleFields(columnTypes)),
 		core.NewDefaultPageOption()); err != nil {
 		return nil, err

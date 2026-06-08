@@ -41,7 +41,7 @@ export default defineComponent({
     const defaultTime = () => [new Date(dayjs().subtract(30, 'day').format('YYYY-MM-DD')), new Date()];
     const deviceForm = ref(defaultDeviceForm());
     const timeForm = ref(defaultTime());
-    const handleTime = (time) => (!time ? '' : dayjs(time).format('YYYY-MM-DD'));
+    const handleTime = (time: any) => (!time ? '' : dayjs(time).format('YYYY-MM-DD'));
     const timeObj = computed(() => {
       return {
         start: handleTime(timeForm.value[0]) as string,
@@ -53,7 +53,7 @@ export default defineComponent({
     const subZoneList = ref([]);
     const stageList = ref([]);
     const { columns } = useColumns('hostRecycleDevice');
-    const routeBillDetail = (params) => {
+    const routeBillDetail = (params: any) => {
       emit('goBillDetailPage', params);
     };
     // 在第三个加子单号，需要跳转到单据详情，未用到路由
@@ -61,7 +61,7 @@ export default defineComponent({
       label: '子单号',
       field: 'suborder_id',
       width: 80,
-      render: ({ row }) => {
+      render: ({ row }: any) => {
         return (
           // 单据详情
           <span class='sub-order-num' onClick={() => routeBillDetail(row)}>
@@ -198,28 +198,28 @@ export default defineComponent({
               <FloatInput v-model={deviceForm.value.suborder_id} placeholder='请输入子单号，多个换行分割' />
             </FormItem>
             <FormItem label='机型'>
-              <Select v-model={deviceForm.value.device_type} multiple clearable placeholder='请选择机型'>
+              <Select v-model={deviceForm.value.device_type} multiple clearable filterable placeholder='请选择机型'>
                 {deviceTypeList.value.map((item) => {
                   return <Select.Option key={item} name={item} id={item} />;
                 })}
               </Select>
             </FormItem>
             <FormItem label='地域'>
-              <Select v-model={deviceForm.value.bk_zone_name} multiple clearable placeholder='请选择地域'>
+              <Select v-model={deviceForm.value.bk_zone_name} multiple clearable filterable placeholder='请选择地域'>
                 {bkZoneNameList.value.map((item) => {
                   return <Select.Option key={item} name={item} id={item} />;
                 })}
               </Select>
             </FormItem>
             <FormItem label='园区'>
-              <Select v-model={deviceForm.value.sub_zone} multiple clearable placeholder='请选择园区'>
+              <Select v-model={deviceForm.value.sub_zone} multiple clearable filterable placeholder='请选择园区'>
                 {subZoneList.value.map((item) => {
                   return <Select.Option key={item} name={item} id={item} />;
                 })}
               </Select>
             </FormItem>
             <FormItem label='状态'>
-              <Select v-model={deviceForm.value.stage} multiple clearable placeholder='请选择状态'>
+              <Select v-model={deviceForm.value.stage} multiple clearable filterable placeholder='请选择状态'>
                 {stageList.value.map(({ stage, description }) => {
                   return <Select.Option key={stage} name={description} id={stage} />;
                 })}

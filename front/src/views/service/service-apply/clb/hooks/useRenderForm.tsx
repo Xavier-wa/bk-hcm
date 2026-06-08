@@ -399,6 +399,7 @@ export default (formModel: Reactive<ApplyClbModel>) => {
               v-model={formModel.load_balancer_pass_to_target}
               allowEmptyValues={[false]}
               disabled={formModel.address_ip_version === 'IPv6FullChain'}
+              filterable
               v-bk-tooltips={{
                 content: 'IPv6类型负载均衡，不允许修改安全组的放通模式',
                 disabled: formModel.address_ip_version !== 'IPv6FullChain',
@@ -490,10 +491,10 @@ export default (formModel: Reactive<ApplyClbModel>) => {
               return (
                 <Select
                   v-model={formModel.slaType}
-                  filterable={false}
                   clearable={false}
                   class='w220'
-                  onChange={handleSlaTypeChange}>
+                  onChange={handleSlaTypeChange}
+                  filterable>
                   <Option id='0' name={t('共享型')} />
                   <Option id='1' name={t('性能容量型')} />
                 </Select>

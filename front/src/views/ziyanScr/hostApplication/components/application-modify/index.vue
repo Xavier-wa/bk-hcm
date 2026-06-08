@@ -338,6 +338,7 @@ const handleBack = () => {
               :region="details?.spec.region"
               :asset-id="details?.spec.bk_asset_id"
               :instance-id="details?.spec.inherit_instance_id"
+              :suborder-id="suborderId"
               :edit-mode="true"
               @change="handleDeviceTypeChange"
             />

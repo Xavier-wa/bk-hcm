@@ -63,12 +63,13 @@ func (r *ListDeviceTypeReq) Validate() error {
 
 // ListDeviceTypeRst defines list device type result.
 type ListDeviceTypeRst struct {
-	DeviceType   string `json:"device_type"`
-	CoreType     string `json:"core_type"`
-	CpuCore      int64  `json:"cpu_core"`
-	Memory       int64  `json:"memory"`
-	DeviceClass  string `json:"device_class"`
-	DeviceFamily string `json:"device_family"`
+	DeviceType   string  `json:"device_type"`
+	CoreType     string  `json:"core_type"`
+	CpuCore      int64   `json:"cpu_core"`
+	Memory       int64   `json:"memory"`
+	GpuAmount    float64 `json:"gpu_amount"`
+	DeviceClass  string  `json:"device_class"`
+	DeviceFamily string  `json:"device_family"`
 }
 
 // ListBizsByOpProdReq defines list bizs by op product request.

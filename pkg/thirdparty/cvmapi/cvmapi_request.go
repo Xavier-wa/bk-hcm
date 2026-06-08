@@ -846,3 +846,15 @@ type QueryZoneCityListReq struct {
 
 // QueryZoneCityListParams 查询可用区与城市映射参数（接口返回全量数据，无需传参）
 type QueryZoneCityListParams struct{}
+
+// QueryCvmTypeListReq CVM机型与物理机机型族映射查询请求
+type QueryCvmTypeListReq struct {
+	ReqMeta `json:",inline"`
+	Params  *QueryCvmTypeListParams `json:"params"`
+}
+
+// QueryCvmTypeListParams CVM机型与物理机机型族映射查询参数
+type QueryCvmTypeListParams struct {
+	// DeptName 部门名称，例如 "IEG技术运营部"
+	DeptName string `json:"deptName"`
+}
