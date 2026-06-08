@@ -34,6 +34,8 @@ const props = defineProps<{
   disabled?: boolean;
   // 是否处于编辑态
   isEditing?: boolean;
+  // 子订单ID，编辑模式下用于排除当前子订单预测
+  suborderId?: string;
 }>();
 
 const emit = defineEmits<{
@@ -44,7 +46,9 @@ const emit = defineEmits<{
 const { cvmChargeTypes } = useCvmChargeType();
 
 // 机型与预测统一的处理逻辑与数据来源
-const { availableDeviceTypeMap, loading: chargeTypeDeviceTypeListLoading } = useDeviceTypePlan(toRefs(props));
+const { availableDeviceTypeMap, loading: chargeTypeDeviceTypeListLoading } = useDeviceTypePlan({
+  ...toRefs(props),
+});
 
 const deviceTypeList = ref<ICvmDeviceTypeFormData['deviceTypeList']>();
 

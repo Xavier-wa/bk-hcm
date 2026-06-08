@@ -406,8 +406,9 @@ func (d *Dispatcher) checkSubTicket(kt *kit.Kit, ticket *ptypes.TicketInfo) erro
 	// 根据统计结果决定主单状态
 	ticketStatus := d.determineTicketStatus(kt, ticket.ID, subTickets, stats)
 
-	// 单据成功完结，且不存在失败的子单，需要将所有子单的结果汇总生效
-	if !stats.hasFailed {
+	// 单据成功完结，且不存在失败和审批拒绝的子单，需要将所有子单的结果汇总生效
+	// 审批拒绝视为非终态，和失败一样不会触发结果汇总生效
+	if !stats.hasFailed && !stats.hasRejected {
 		if err := d.FinishAuditFlow(kt, ticket); err != nil {
 			logs.Errorf("failed to finish audit flow, err: %v, id: %s, rid: %s", err, ticket.ID, kt.Rid)
 			return err
@@ -479,7 +480,7 @@ func (d *Dispatcher) calculateSubTicketStatistics(kt *kit.Kit, ticketID string,
 		// 拒绝状态为最低优先级，只有全部子单均为审批拒绝时才更新主单状态为审批拒绝
 		stats.allRejected = stats.allRejected && subTicket.Status == enumor.RPSubTicketStatusRejected
 		stats.hasRejected = stats.hasRejected || subTicket.Status == enumor.RPSubTicketStatusRejected
-		// 审批拒绝不认为是失败（失败为非终态，不会触发结果汇总生效）
+		// 审批拒绝视为非终态，和失败一样不会触发结果汇总生效
 		stats.allDone = stats.allDone && subTicket.Status == enumor.RPSubTicketStatusDone
 		stats.allFailed = stats.allFailed && subTicket.Status == enumor.RPSubTicketStatusFailed
 		stats.hasFailed = stats.hasFailed || subTicket.Status == enumor.RPSubTicketStatusFailed

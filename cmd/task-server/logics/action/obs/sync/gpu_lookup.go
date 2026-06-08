@@ -124,6 +124,12 @@ func isGcpGPU(skuDescription, hcProductName string) bool {
 		return true
 	}
 
+	// 兜底：直接对 SkuDescription 做 AI 关键词匹配
+	// 解决 Credit 条目 HcProductName 不含 AI 前缀的问题
+	if enumor.IsAIBillItem(skuDescription) {
+		return true
+	}
+
 	return false
 }
 

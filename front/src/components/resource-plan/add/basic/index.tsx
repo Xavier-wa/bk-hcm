@@ -1,4 +1,5 @@
 import { defineComponent, type PropType, onBeforeMount, ref, watch, nextTick, computed } from 'vue';
+import { useRoute } from 'vue-router';
 import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
 import isoWeek from 'dayjs/plugin/isoWeek';
@@ -14,6 +15,8 @@ import { isDateInRange } from '@/utils/plan';
 import useFormModel from '@/hooks/useFormModel';
 import { isEqual } from 'lodash';
 import ObsProjectSelector from '@/views/business/resource-plan/children/obs-project-selector.vue';
+import useDeadlineRestrict from '@/views/business/resource-plan/use-deadline-restrict';
+import { MENU_BUSINESS_RESOURCE_PLAN_CVM_MODIFY } from '@/constants/menu-symbol';
 
 dayjs.extend(isBetween);
 dayjs.extend(isoWeek);
@@ -40,6 +43,16 @@ export default defineComponent({
     const planStore = usePlanStore();
     const { t } = useI18n();
     const resourcePlanStore = useResourcePlanStore();
+    const route = useRoute();
+
+    // 修改单据场景不应用截止期限制 (与 PRD §3.4 / design.md §3.4 一致), 故关闭 Hook 后接口也不会拉取
+    const isModifyTicketScene = computed(() => route.name === MENU_BUSINESS_RESOURCE_PLAN_CVM_MODIFY);
+    const deadlineEnabled = computed(() => !isModifyTicketScene.value);
+    const {
+      isInReviewPhase,
+      isDateDisabled: isDateDisabledByDeadline,
+      nonCurrentYearLabel,
+    } = useDeadlineRestrict(deadlineEnabled);
     const { formModel: timeRange, setFormValues: setTimeRange } = useFormModel<IExceptTimeRange>({
       year_month_week: null,
       date_range_in_week: null,
@@ -171,6 +184,9 @@ export default defineComponent({
     };
 
     const getDisabledDate = (date: Date) => {
+      // 评审期内, 非本年 (≥ NON_CURRENT_YEAR_START_DATE) 的日期禁选; 修改单据场景已通过 Hook 关闭
+      if (isDateDisabledByDeadline(date)) return true;
+
       const currentDate = dayjs(date);
 
       const startOfWeek = dayjs().startOf('isoWeek');
@@ -371,6 +387,14 @@ export default defineComponent({
               <span class={cssModule['time-txt']}>{t(`${timeRange.date_range_in_month?.end}`)}</span>
               {t('将无法申领')}
             </p>
+            {isInReviewPhase.value && (
+              <p class={cssModule['review-phase-tip']}>
+                {t(
+                  '预算评审期间，不允许提交 {year} 及之后的预测；如需调整已有单据，请使用单据详情页的「修改需求」入口',
+                  { year: nonCurrentYearLabel },
+                )}
+              </p>
+            )}
           </bk-form-item>
           {isShowShortRentalTime.value && (
             <bk-form-item label={t('短租退回日期')} property='return_plan_time' required>

@@ -1,4 +1,4 @@
-import { PropType, defineComponent, ref } from 'vue';
+import { PropType, defineComponent, ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { Button } from 'bkui-vue';
@@ -10,6 +10,8 @@ import { useI18n } from 'vue-i18n';
 import useColumns from '@/views/resource/resource-manage/hooks/use-columns';
 import { useTable } from '@/hooks/useTable/useTable';
 import { AccountLevelEnum, searchData, secondarySearchData } from '../constants';
+import { useBusinessMapStore } from '@/store/useBusinessMap';
+import { useResourcePlanStore } from '@/store/resource-plan';
 
 export default defineComponent({
   props: { accountLevel: String as PropType<AccountLevelEnum>, authVerifyData: Object },
@@ -19,6 +21,37 @@ export default defineComponent({
     const { t } = useI18n();
 
     const { columns } = useColumns(props.accountLevel);
+
+    const businessMapStore = useBusinessMapStore();
+    const resourcePlanStore = useResourcePlanStore();
+
+    // 加载业务列表
+    onMounted(async () => {
+      await businessMapStore.fetchBusinessMap();
+    });
+
+    // 响应式 searchData 函数
+    const getSearchData = () => {
+      if (props.accountLevel === AccountLevelEnum.FirstLevel) {
+        return searchData;
+      }
+      return secondarySearchData;
+    };
+
+    // 远程加载子列表方法
+    const getMenuList = async (item: any, keyword: string) => {
+      if (item?.id === 'op_product_id') {
+        const list = await resourcePlanStore.getOpProductList();
+        const children = list.map((product) => ({
+          id: product.op_product_id,
+          name: product.op_product_name,
+        }));
+        if (keyword) {
+          return children.filter((child) => child.name.includes(keyword));
+        }
+        return children;
+      }
+    };
 
     const isSideSliderShow = ref(false);
     const curAccount = ref<any>({});
@@ -46,7 +79,10 @@ export default defineComponent({
         ],
       },
       searchOptions: {
-        searchData: props.accountLevel === AccountLevelEnum.FirstLevel ? searchData : secondarySearchData,
+        searchData: getSearchData,
+        extra: {
+          getMenuList,
+        },
       },
       requestOption: {
         type: props.accountLevel === AccountLevelEnum.FirstLevel ? 'account/root_accounts' : 'account/main_accounts',

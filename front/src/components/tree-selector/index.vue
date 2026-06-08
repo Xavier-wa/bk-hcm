@@ -219,6 +219,7 @@ defineExpose({
       display-key="name"
       multiple-mode="'default'"
       custom-content
+      filterable
       @clear="handleClear"
       @search-change="handleSearch"
       @tag-remove="handleSelectRemoveTag"

@@ -76,10 +76,12 @@ func (s *service) initCommonRestrict(h *rest.Handler) {
 
 func (s *service) initCvmImage(h *rest.Handler) {
 	h.Add("GetCvmImage", http.MethodPost, "/config/findmany/config/cvm/image", s.GetCvmImage)
+	h.Add("GetBizCvmImage", http.MethodPost, "/bizs/{bk_biz_id}/config/cvm/image", s.GetBizCvmImage)
 	h.Add("BatchEnableImageToApplyCVM", http.MethodPost, "/config/images/enable_cvm/batch",
 		s.BatchEnableImageToApplyCVM)
 	h.Add("BatchDisableImageToApplyCVM", http.MethodPost, "/config/images/disable_cvm/batch",
 		s.BatchDisableImageToApplyCVM)
+	h.Add("UpdateImageBizTag", http.MethodPut, "/config/images/{image_id}/biz_tag", s.UpdateImageBizTag)
 }
 
 func (s *service) initCvmRestrict(h *rest.Handler) {

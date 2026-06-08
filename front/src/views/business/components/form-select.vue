@@ -25,10 +25,10 @@ const props = defineProps({
   show: Boolean,
 });
 
+const emit = defineEmits(['change']);
 const { t } = useI18n();
 const accountStore = useAccountStore();
 const resourceStore = useResourceStore();
-const emit = defineEmits(['change']);
 const cloudRegionsList = ref([]);
 const accountLoading = ref(false);
 const cloudRegionsLoading = ref(false);
@@ -236,7 +236,7 @@ defineExpose([validate]);
       property="vendor"
       v-if="!props.hidden.includes('vendor')"
     >
-      <bk-select disabled class="item-warp-component" v-model="state.filter.vendor">
+      <bk-select disabled class="item-warp-component" v-model="state.filter.vendor" filterable>
         <bk-option v-for="(item, index) in CLOUD_TYPE" :key="index" :value="item.id" :label="item.name" />
       </bk-select>
     </bk-form-item>

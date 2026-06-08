@@ -21,7 +21,8 @@ export type ModelPropertyType =
   | 'region'
   | 'business'
   | 'json'
-  | 'cloud-area';
+  | 'cloud-area'
+  | 'device-family';
 
 export type ModelPropertyMeta = {
   display?: PropertyDisplayConfig;

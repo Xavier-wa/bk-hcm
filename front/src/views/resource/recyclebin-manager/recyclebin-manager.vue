@@ -224,7 +224,7 @@
       :is-loading="isSettingDialogLoading"
     >
       保留时长
-      <bk-select v-model="recycleReserveTime" class="mt6">
+      <bk-select v-model="recycleReserveTime" class="mt6" filterable>
         <bk-option v-for="item in RESERVE_TIME_SET" :key="item.value" :value="item.value" :label="item.label" />
       </bk-select>
     </bk-dialog>

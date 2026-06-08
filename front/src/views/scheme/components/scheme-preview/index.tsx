@@ -61,7 +61,7 @@ export default defineComponent({
               `,
             }}
           />
-          <Select class={'scheme-preivew-header-sort-selector'} v-model={sortChoice.value} clearable={false}>
+          <Select class={'scheme-preivew-header-sort-selector'} v-model={sortChoice.value} clearable={false} filterable>
             {{
               default: () => SchemeSortOptions.map(({ key, val }) => <Option value={key} label={val}></Option>),
             }}

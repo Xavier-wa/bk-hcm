@@ -149,48 +149,48 @@ func (c *BatchUpdateZiyanCvmModifyRecordReq) Validate() error {
 // ZiyanCvmModifyRecordUpdateReq update request
 type ZiyanCvmModifyRecordUpdateReq struct {
 	ID                   string                        `json:"id" validate:"required"`
-	SuborderID           string                        `json:"suborder_id" validate:"omitempty,max=64"`
-	BkUsername           string                        `json:"bk_username" validate:"omitempty,max=64"`
+	SuborderID           *string                       `json:"suborder_id" validate:"omitempty,max=64"`
+	BkUsername           *string                       `json:"bk_username" validate:"omitempty,max=64"`
 	PreTotalNum          *uint                         `json:"pre_total_num" validate:"omitempty"`
 	PreReplicas          *uint                         `json:"pre_replicas" validate:"omitempty"`
-	PreRegion            string                        `json:"pre_region" validate:"omitempty,max=64"`
-	PreZone              string                        `json:"pre_zone" validate:"omitempty,max=64"`
-	PreDeviceType        string                        `json:"pre_device_type" validate:"omitempty,max=64"`
-	PreImageID           string                        `json:"pre_image_id" validate:"omitempty,max=64"`
+	PreRegion            *string                       `json:"pre_region" validate:"omitempty,max=64"`
+	PreZone              *string                       `json:"pre_zone" validate:"omitempty,max=64"`
+	PreDeviceType        *string                       `json:"pre_device_type" validate:"omitempty,max=64"`
+	PreImageID           *string                       `json:"pre_image_id" validate:"omitempty,max=64"`
 	PreDiskSize          *int                          `json:"pre_disk_size" validate:"omitempty"`
-	PreDiskType          enumor.DiskType               `json:"pre_disk_type" validate:"omitempty,max=32"`
-	PreNetworkType       string                        `json:"pre_network_type" validate:"omitempty,max=32"`
-	PreVpc               string                        `json:"pre_vpc" validate:"omitempty,max=64"`
-	PreSubnet            string                        `json:"pre_subnet" validate:"omitempty,max=64"`
-	PreSystemDiskType    enumor.DiskType               `json:"pre_system_disk_type" validate:"omitempty,max=32"`
+	PreDiskType          *enumor.DiskType              `json:"pre_disk_type" validate:"omitempty,max=32"`
+	PreNetworkType       *string                       `json:"pre_network_type" validate:"omitempty,max=32"`
+	PreVpc               *string                       `json:"pre_vpc" validate:"omitempty,max=64"`
+	PreSubnet            *string                       `json:"pre_subnet" validate:"omitempty,max=64"`
+	PreSystemDiskType    *enumor.DiskType              `json:"pre_system_disk_type" validate:"omitempty,max=32"`
 	PreSystemDiskSize    *int                          `json:"pre_system_disk_size" validate:"omitempty"`
 	PreSystemDiskNum     *int                          `json:"pre_system_disk_num" validate:"omitempty"`
-	PreDataDisk          types.JsonField               `json:"pre_data_disk" validate:"omitempty"`
-	PreZones             types.JsonField               `json:"pre_zones" validate:"omitempty"`
+	PreDataDisk          *types.JsonField              `json:"pre_data_disk" validate:"omitempty"`
+	PreZones             *types.JsonField              `json:"pre_zones" validate:"omitempty"`
 	PreResAssign         *enumor.ResAssign             `json:"pre_res_assign" validate:"omitempty"`
-	PreBkAssetID         string                        `json:"pre_bk_asset_id" validate:"omitempty,max=64"`
-	PreInheritInstanceID string                        `json:"pre_inherit_instance_id" validate:"omitempty,max=64"`
+	PreBkAssetID         *string                       `json:"pre_bk_asset_id" validate:"omitempty,max=64"`
+	PreInheritInstanceID *string                       `json:"pre_inherit_instance_id" validate:"omitempty,max=64"`
 	CurTotalNum          *uint                         `json:"cur_total_num" validate:"omitempty"`
 	CurReplicas          *uint                         `json:"cur_replicas" validate:"omitempty"`
-	CurRegion            string                        `json:"cur_region" validate:"omitempty,max=64"`
-	CurZone              string                        `json:"cur_zone" validate:"omitempty,max=64"`
-	CurDeviceType        string                        `json:"cur_device_type" validate:"omitempty,max=64"`
-	CurImageID           string                        `json:"cur_image_id" validate:"omitempty,max=64"`
+	CurRegion            *string                       `json:"cur_region" validate:"omitempty,max=64"`
+	CurZone              *string                       `json:"cur_zone" validate:"omitempty,max=64"`
+	CurDeviceType        *string                       `json:"cur_device_type" validate:"omitempty,max=64"`
+	CurImageID           *string                       `json:"cur_image_id" validate:"omitempty,max=64"`
 	CurDiskSize          *int                          `json:"cur_disk_size" validate:"omitempty"`
-	CurDiskType          enumor.DiskType               `json:"cur_disk_type" validate:"omitempty,max=32"`
-	CurNetworkType       string                        `json:"cur_network_type" validate:"omitempty,max=32"`
-	CurVpc               string                        `json:"cur_vpc" validate:"omitempty,max=64"`
-	CurSubnet            string                        `json:"cur_subnet" validate:"omitempty,max=64"`
-	CurSystemDiskType    enumor.DiskType               `json:"cur_system_disk_type" validate:"omitempty,max=32"`
+	CurDiskType          *enumor.DiskType              `json:"cur_disk_type" validate:"omitempty,max=32"`
+	CurNetworkType       *string                       `json:"cur_network_type" validate:"omitempty,max=32"`
+	CurVpc               *string                       `json:"cur_vpc" validate:"omitempty,max=64"`
+	CurSubnet            *string                       `json:"cur_subnet" validate:"omitempty,max=64"`
+	CurSystemDiskType    *enumor.DiskType              `json:"cur_system_disk_type" validate:"omitempty,max=32"`
 	CurSystemDiskSize    *int                          `json:"cur_system_disk_size" validate:"omitempty"`
 	CurSystemDiskNum     *int                          `json:"cur_system_disk_num" validate:"omitempty"`
-	CurDataDisk          types.JsonField               `json:"cur_data_disk" validate:"omitempty"`
-	CurZones             types.JsonField               `json:"cur_zones" validate:"omitempty"`
+	CurDataDisk          *types.JsonField              `json:"cur_data_disk" validate:"omitempty"`
+	CurZones             *types.JsonField              `json:"cur_zones" validate:"omitempty"`
 	CurResAssign         *enumor.ResAssign             `json:"cur_res_assign" validate:"omitempty"`
-	CurBkAssetID         string                        `json:"cur_bk_asset_id" validate:"omitempty,max=64"`
-	CurInheritInstanceID string                        `json:"cur_inherit_instance_id" validate:"omitempty,max=64"`
+	CurBkAssetID         *string                       `json:"cur_bk_asset_id" validate:"omitempty,max=64"`
+	CurInheritInstanceID *string                       `json:"cur_inherit_instance_id" validate:"omitempty,max=64"`
 	Status               *enumor.CvmModifyRecordStatus `json:"status" validate:"omitempty"`
-	Approver             string                        `json:"approver" validate:"omitempty,max=64"`
+	Approver             *string                       `json:"approver" validate:"omitempty,max=64"`
 }
 
 // Validate ...

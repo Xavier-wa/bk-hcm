@@ -79,7 +79,7 @@ export default defineComponent({
                 <Input v-bind={props.controlAttrs} v-model={content.value} type='textarea' />
               ) : null}
               {props.type === 'boolean' ? (
-                <Select v-bind={props.controlAttrs} v-model={content.value}>
+                <Select v-model={content.value} filterable v-bind={props.controlAttrs}>
                   {options.value.map((item) => (
                     <Select.Option id={item.value} name={item.label} />
                   ))}

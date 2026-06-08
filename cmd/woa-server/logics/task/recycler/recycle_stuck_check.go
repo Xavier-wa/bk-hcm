@@ -46,7 +46,7 @@ func (r *recycler) StartStuckCheckLoop(kt *kit.Kit) {
 
 	time.Sleep(cfg.StartUpDelay)
 
-	err := r.checkStuckRecycleOrder(kt, cfg.MinTime, cfg.MaxTime)
+	err := r.checkStuckRecycleOrder(kt, cfg.MinTime, cfg.MaxTime, cfg.CvmDelayTime, cfg.PmDelayTime)
 	if err != nil {
 		logs.Errorf("check recycle order stuck failed, err: %v, rid: %s", err, kt.Rid)
 	}
@@ -59,7 +59,7 @@ func (r *recycler) StartStuckCheckLoop(kt *kit.Kit) {
 			return
 		case <-ticker.C:
 			subkit := kt.NewSubKit()
-			err := r.checkStuckRecycleOrder(subkit, cfg.MinTime, cfg.MaxTime)
+			err := r.checkStuckRecycleOrder(subkit, cfg.MinTime, cfg.MaxTime, cfg.CvmDelayTime, cfg.PmDelayTime)
 			if err != nil {
 				logs.Errorf("[%s] check recycle order stuck failed, err: %v, rid: %s",
 					constant.CvmRecycleStuck, err, subkit.Rid)
@@ -70,7 +70,9 @@ func (r *recycler) StartStuckCheckLoop(kt *kit.Kit) {
 }
 
 // checkStuckRecycleOrder 检查是否有回收任务长时间状态未更新且非终态
-func (r *recycler) checkStuckRecycleOrder(kt *kit.Kit, minStayDuration, maxStayDuration time.Duration) error {
+func (r *recycler) checkStuckRecycleOrder(kt *kit.Kit, minStayDuration, maxStayDuration, cvmDelayTime,
+	pmDelayTime time.Duration) error {
+
 	defer func() {
 		if err := recover(); err != nil {
 			logs.Errorf("[%s] check recycle order stuck panic: %v, stack: %s",
@@ -112,7 +114,7 @@ func (r *recycler) checkStuckRecycleOrder(kt *kit.Kit, minStayDuration, maxStayD
 			logs.Errorf("failed to get recycle order, err: %v, rid: %s", err, kt.Rid)
 			return err
 		}
-		r.handleRecycleStuckOrders(kt, orders, minStayDuration)
+		r.handleRecycleStuckOrders(kt, orders, minStayDuration, cvmDelayTime, pmDelayTime)
 		if len(orders) < page.Limit {
 			break
 		}
@@ -122,19 +124,21 @@ func (r *recycler) checkStuckRecycleOrder(kt *kit.Kit, minStayDuration, maxStayD
 	return nil
 }
 
-func (r *recycler) handleRecycleStuckOrders(kt *kit.Kit, orders []*table.RecycleOrder, minStayDuration time.Duration) {
+func (r *recycler) handleRecycleStuckOrders(kt *kit.Kit, orders []*table.RecycleOrder, minStayDuration, cvmDelayTime,
+	pmDelayTime time.Duration) {
+
 	now := time.Now()
 	for _, order := range orders {
 		stayTime := now.Sub(order.UpdateAt)
 		offsetDuration := time.Duration(0)
 		if order.Status == table.RecycleStatusReturning {
 			if order.ReturnPlan == table.RetPlanDelay {
-				// 延迟退回： CVM会先隔离7天，物理机会先隔离1天
+				// 延迟退回： CVM会先隔离15天，物理机会先隔离1天
 				switch order.ResourceType {
 				case table.ResourceTypeCvm:
-					offsetDuration += time.Hour * 24 * 7
+					offsetDuration += cvmDelayTime
 				case table.ResourceTypePm:
-					offsetDuration += time.Hour * 24
+					offsetDuration += pmDelayTime
 				default:
 					// 其他情况正常按配置时间算
 				}

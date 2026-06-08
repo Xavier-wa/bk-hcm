@@ -69,6 +69,11 @@ export const searchData = [
     name: '帐号邮箱',
     id: 'email',
   },
+  {
+    name: '主负责人',
+    id: 'managers',
+    multiple: true,
+  },
 ];
 
 export const BILL_SITE_TYPES = [
@@ -109,5 +114,11 @@ export const secondarySearchData = [
   {
     name: '帐号邮箱',
     id: 'accountEmail',
+  },
+  {
+    name: '运营产品',
+    id: 'op_product_id',
+    multiple: true,
+    async: true,
   },
 ];

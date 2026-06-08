@@ -20,6 +20,8 @@
 package cloud
 
 import (
+	"strings"
+
 	"hcm/pkg/api/core"
 	coredevicetype "hcm/pkg/api/core/cloud/device-type"
 	"hcm/pkg/criteria/enumor"
@@ -72,6 +74,8 @@ type DeviceTypeCreate struct {
 	CpuCore int64 `json:"cpu_core" validate:"gte=0"`
 	// Memory 内存大小，单位：GB
 	Memory int64 `json:"memory" validate:"gte=0"`
+	// GpuAmount GPU卡数
+	GpuAmount float64 `json:"gpu_amount" validate:"gte=0"`
 	// DeviceTypeClass 通/专用机型，SpecialType专用，CommonType通用
 	DeviceTypeClass cvmapi.InstanceTypeClass `json:"device_type_class" validate:"required,lte=64"`
 	// TechnicalClass 技术分类
@@ -109,6 +113,8 @@ type DeviceTypeUpdate struct {
 	CpuCore *int64 `json:"cpu_core,omitempty" validate:"omitempty,gte=0"`
 	// Memory 内存大小，单位：GB
 	Memory *int64 `json:"memory,omitempty" validate:"omitempty,gte=0"`
+	// GpuAmount GPU卡数
+	GpuAmount *float64 `json:"gpu_amount,omitempty" validate:"omitempty,gte=0"`
 	// DeviceTypeClass 通/专用机型，SpecialType专用，CommonType通用
 	DeviceTypeClass *cvmapi.InstanceTypeClass `json:"device_type_class,omitempty" validate:"omitempty,lte=64"`
 	// TechnicalClass 技术分类
@@ -133,6 +139,19 @@ func (r *DeviceTypeUpdate) Validate() error {
 // DeviceTypeBatchCreateReq create request
 type DeviceTypeBatchCreateReq struct {
 	DeviceTypes []DeviceTypeCreate `json:"device_types" validate:"required,min=1,max=100,dive"`
+}
+
+// TrimSpace trim space for all string fields in DeviceTypes
+func (r *DeviceTypeBatchCreateReq) TrimSpace() {
+	for i := range r.DeviceTypes {
+		r.DeviceTypes[i].DeviceType = strings.TrimSpace(r.DeviceTypes[i].DeviceType)
+		r.DeviceTypes[i].DeviceClass = strings.TrimSpace(r.DeviceTypes[i].DeviceClass)
+		r.DeviceTypes[i].DeviceFamily = strings.TrimSpace(r.DeviceTypes[i].DeviceFamily)
+		r.DeviceTypes[i].TechnicalClass = strings.TrimSpace(r.DeviceTypes[i].TechnicalClass)
+		r.DeviceTypes[i].Region = strings.TrimSpace(r.DeviceTypes[i].Region)
+		r.DeviceTypes[i].Zone = strings.TrimSpace(r.DeviceTypes[i].Zone)
+		r.DeviceTypes[i].GenerationType = strings.TrimSpace(r.DeviceTypes[i].GenerationType)
+	}
 }
 
 // Validate validate

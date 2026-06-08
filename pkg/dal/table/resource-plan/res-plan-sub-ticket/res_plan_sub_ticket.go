@@ -22,7 +22,9 @@ package resplansubticket
 
 import (
 	"errors"
+	"strings"
 
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	"hcm/pkg/dal/table"
@@ -216,7 +218,8 @@ func (r ResPlanSubTicketTable) InsertValidate() error {
 // UpdateValidate validate resource plan sub_ticket on update.
 func (r ResPlanSubTicketTable) UpdateValidate() error {
 	// 父单据不可变更
-	if r.TicketID != "" {
+	// 主单覆盖修改作废子单时，允许改为 drop_ 前缀
+	if r.TicketID != "" && !strings.HasPrefix(r.TicketID, constant.ResPlanSubTicketDropTicketIDPrefix) {
 		return errors.New("ticket_id can not update")
 	}
 

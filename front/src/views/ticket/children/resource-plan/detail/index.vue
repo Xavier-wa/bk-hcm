@@ -12,9 +12,10 @@ import ResourcePlanList from '@/components/resource-plan/applications/detail/lis
 import SubTicketList from '../sub-ticket/sub-ticket-list.vue';
 import DetailHeader from '@/views/resource/resource-manage/common/header/detail-header';
 import { TicketByIdResult } from '@/typings/resourcePlan';
-import { SubTicketAudit } from '@/store/ticket/res-sub-ticket';
+import { SubTicketAudit, SubTicketItem } from '@/store/ticket/res-sub-ticket';
 import { MENU_BUSINESS_TICKET_MANAGEMENT, MENU_SERVICE_TICKET_MANAGEMENT } from '@/constants/menu-symbol';
 import { GLOBAL_BIZS_KEY } from '@/common/constant';
+import useTicketModifiable from './use-modifiable';
 
 // 路由、状态管理、工具函数
 const route = useRoute();
@@ -42,19 +43,27 @@ const detailTitle = computed(() => `${t('申请单详情')} - ${ticketDetail.val
 
 // 计算属性：是否显示审批详情组件
 const isTicketAuditDetailShow = computed(() => {
-  return ticketAuditDetail.value?.itsm_audit.status !== 'init';
+  return ticketAuditDetail.value?.itsm_audit?.status !== 'init';
 });
+
+// 子单列表（用于聚合判断是否可修改），来自 SubTicketList 内部表格数据
+const subTickets = computed<SubTicketItem[] | undefined>(() => subTicketListRef.value?.tableData);
+
+// 是否展示「修改需求」入口：业务视角 + CVM 单据 + 主单可覆盖 + 无 done 子单
+const isModifiable = useTicketModifiable(ticketDetail, subTickets, isBusinessPage);
 
 // 获取数据的逻辑
 const getResultData = async () => {
   try {
     isLoading.value = true;
     let promise = null;
+    // 优先从 query 获取业务 ID，支持资源运营视图跳转过来的场景，解决直接使用 getBizsId() 获取业务 ID 不可靠的问题
+    const bizId = Number(route.query?.[GLOBAL_BIZS_KEY]) || getBizsId();
     // 判断是否业务页面
     if (isBusinessPage) {
       promise = Promise.all([
-        resourcePlanStore.getBizResourcesTicketsById(getBizsId(), route.query?.id as string),
-        resourcePlanStore.getBizResourcesTicketsAuditById(getBizsId(), route.query?.id as string),
+        resourcePlanStore.getBizResourcesTicketsById(bizId, route.query?.id as string),
+        resourcePlanStore.getBizResourcesTicketsAuditById(bizId, route.query?.id as string),
       ]);
     } else {
       // 服务页面
@@ -127,6 +136,7 @@ onBeforeMount(() => {
         :is-biz="isBusinessPage"
         :error-message="errorMessage"
         :ticket-audit-detail="ticketAuditDetail"
+        :is-modifiable="isModifiable"
       />
 
       <bk-tab type="card-grid" v-model:active="active" class="header-tab" @update:active="handelUpdate">
@@ -139,6 +149,7 @@ onBeforeMount(() => {
             :fetch-data="getResultData"
             :timeout-poll-action="autoFlushTask"
             :is-business-page="isBusinessPage"
+            :ticket-status="ticketDetail?.status_info"
           />
           <div class="divider">
             <bk-divider color="#dcdee5"></bk-divider>
@@ -148,6 +159,7 @@ onBeforeMount(() => {
             ref="subTicketList"
             :ticket-status="ticketDetail?.status_info?.status"
             :demands="ticketDetail?.demands"
+            :is-modifiable="isModifiable"
             @retry-ticket="getResultData"
           />
         </bk-tab-panel>

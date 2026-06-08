@@ -24,6 +24,7 @@ import { useApplyStages } from '@/views/ziyanScr/hooks/use-apply-stages';
 import { getResourceTypeName } from '@/views/ziyanScr/hostApplication/components/transform';
 import { getRegionCn, getZoneCn } from '@/views/ziyanScr/cvm-web/transform';
 import http from '@/http';
+import rollRequest from '@blueking/roll-request';
 import useTimeoutPoll from '@/hooks/use-timeout-poll';
 import { getDateRange, transformFlatCondition } from '@/utils/search';
 import type { ModelProperty } from '@/model/typings';
@@ -144,26 +145,26 @@ export default defineComponent({
     };
 
     const throttleInfo = ref(null);
-    // 已交付设备
-    const getDeliveredDevices = (params: any) => {
-      return http.post(
+    // 查询交付IP和固资号 - 使用 rollRequest 获取全部数据
+    const getDeliveredHostField = async (row: any, fieldKey: any) => {
+      const list = await rollRequest({
+        httpClient: http,
+        pageEnableCountKey: 'count',
+      }).rollReqUseCount(
         `${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/${getBusinessApiPath()}task/findmany/apply/device`,
-        params,
-      );
-    };
-    // 查询交付IP和固号IP
-    const getDeliveredHostField = (row: any, fieldKey: any) => {
-      const params = {
-        filter: {
-          op: 'and',
-          rules: [{ field: 'suborder_id', op: 'eq', value: row.suborder_id }],
+        {
+          filter: {
+            op: 'and',
+            rules: [{ field: 'suborder_id', op: 'eq', value: row.suborder_id }],
+          },
         },
-        page: { start: 0, limit: 500, count: false },
-      };
-      return getDeliveredDevices(params).then((res: any) => {
-        const value = res?.data?.info?.map((item: any) => item[fieldKey]) || [];
-        return value;
-      });
+        {
+          limit: 500,
+          listGetter: (res: any) => res?.data?.info || [],
+          countGetter: (res: any) => res?.data?.count || 0,
+        },
+      );
+      return list.map((item: any) => item[fieldKey]);
     };
     const throttleDeliveredHostField = () => {
       throttleInfo.value = throttle(async (row) => {

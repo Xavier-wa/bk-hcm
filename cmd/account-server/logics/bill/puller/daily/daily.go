@@ -162,11 +162,29 @@ func (dp *DailyPuller) ensureDailyPulling(kt *kit.Kit, dayList []int) error {
 			if !errf.IsRecordNotFound(err) {
 				return fmt.Errorf("failed to get flow by id %s, err %s", billTask.FlowID, err.Error())
 			}
-			return dp.createNewPullTask(kt, billTask)
+			if err := dp.createNewPullTask(kt, billTask); err != nil {
+				logs.Errorf("fail to create new pull task for billtask, err: %v, billTask: %#v, rid: %s",
+					err, billTask, kt.Rid)
+				return err
+			}
+			logs.Infof("create new pull task flow %s main account: %s(%s), %d-%02d-%02d:v%d, root: %s(%s), rid: %s",
+				billTask.Vendor, billTask.MainAccountCloudID, billTask.MainAccountID,
+				billTask.BillYear, billTask.BillMonth, billTask.BillDay, billTask.VersionID,
+				billTask.RootAccountCloudID, billTask.RootAccountID, kt.Rid)
+			continue
 		}
 		// 如果flow失败了或者flow找不到了，则重新创建一个新的flow
 		if flow.State == enumor.FlowFailed || flow.State == enumor.FlowCancel {
-			return dp.createNewPullTask(kt, billTask)
+			if err := dp.createNewPullTask(kt, billTask); err != nil {
+				logs.Errorf("fail to create new pull task for billtask, err: %v, billTask: %#v, rid: %s",
+					err, billTask, kt.Rid)
+				return err
+			}
+			logs.Infof("create new pull task flow %s main account: %s(%s), %d-%02d-%02d:v%d, root: %s(%s), rid: %s",
+				billTask.Vendor, billTask.MainAccountCloudID, billTask.MainAccountID,
+				billTask.BillYear, billTask.BillMonth, billTask.BillDay, billTask.VersionID,
+				billTask.RootAccountCloudID, billTask.RootAccountID, kt.Rid)
+			continue
 		}
 	}
 	for _, day := range dayList {

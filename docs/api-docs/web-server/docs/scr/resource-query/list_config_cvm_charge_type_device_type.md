@@ -10,12 +10,13 @@ POST /api/v1/woa/config/findmany/config/cvm/charge_type/device_type
 
 ### 输入参数
 
-| 参数名称         | 参数类型   | 必选 | 描述                             |
-|--------------|--------|----|--------------------------------|
-| bk_biz_id    | int	   | 是	 | CC业务ID                         |
-| require_type | int	   | 是	 | 需求类型。1: 常规项目; 2: 春节保障; 3: 机房裁撤 |
+| 参数名称      | 参数类型 | 必选 | 描述                            |
+|--------------|--------|-----|---------------------------------|
+| bk_biz_id    | int	| 是  | CC业务ID                         |
+| require_type | int	| 是  | 需求类型。1: 常规项目; 2: 春节保障; 3: 机房裁撤 |
 | region       | string | 是  | 地域                             |
-| zone         | string | 否  | 可用区，若为空则查询地域下所有可用区支持的机型        |
+| zone         | string | 否  | 可用区，若为空则查询地域下所有可用区支持的机型 |
+| suborder_id  | string | 否  | 主机申请子订单ID                  |
 
 ### 调用示例
 
@@ -26,7 +27,8 @@ POST /api/v1/woa/config/findmany/config/cvm/charge_type/device_type
   "bk_biz_id": 3,
   "require_type": 1,
   "region": "ap-shanghai",
-  "zone": "ap-shanghai-2"
+  "zone": "ap-shanghai-2",
+  "suborder_id": "1001-1"
 }
 ```
 

@@ -87,6 +87,7 @@ watch(model, () => formItem?.validate('change'), { deep: true });
         :popover-options="{ boundary: 'parent' }"
         class="form-control"
         @change="(val: CvmDataDiskType) => handleDiskTypeChange(val, index)"
+        filterable
       >
         <bk-option v-for="disk in dataDiskOptions" :key="disk.disk_type" :id="disk.disk_type" :name="disk.disk_name" />
       </bk-select>

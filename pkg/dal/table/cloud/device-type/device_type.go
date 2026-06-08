@@ -44,6 +44,7 @@ var DeviceTypeColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "core_type", NamedC: "core_type", Type: enumor.String},
 	{Column: "cpu_core", NamedC: "cpu_core", Type: enumor.Numeric},
 	{Column: "memory", NamedC: "memory", Type: enumor.Numeric},
+	{Column: "gpu_amount", NamedC: "gpu_amount", Type: enumor.Numeric},
 	{Column: "technical_class", NamedC: "technical_class", Type: enumor.String},
 	{Column: "region", NamedC: "region", Type: enumor.String},
 	{Column: "zone", NamedC: "zone", Type: enumor.String},
@@ -74,6 +75,8 @@ type DeviceTypeTable struct {
 	CpuCore int64 `db:"cpu_core" json:"cpu_core"`
 	// Memory 内存大小，单位：GB
 	Memory int64 `db:"memory" json:"memory"`
+	// GpuAmount GPU卡数
+	GpuAmount float64 `db:"gpu_amount" json:"gpu_amount"`
 	// DeviceTypeClass 通/专用机型，SpecialType专用，CommonType通用
 	DeviceTypeClass cvmapi.InstanceTypeClass `db:"device_type_class" json:"device_type_class" validate:"lte=64"`
 	// TechnicalClass 技术分类
@@ -145,6 +148,10 @@ func (t DeviceTypeTable) InsertValidate() error {
 		return errors.New("memory should be >= 0")
 	}
 
+	if t.GpuAmount < 0 {
+		return errors.New("gpu amount should be >= 0")
+	}
+
 	if err := t.Source.Validate(); err != nil {
 		return err
 	}
@@ -172,6 +179,10 @@ func (t DeviceTypeTable) UpdateValidate() error {
 
 	if t.Memory < 0 {
 		return errors.New("memory should be >= 0")
+	}
+
+	if t.GpuAmount < 0 {
+		return errors.New("gpu amount should be >= 0")
 	}
 
 	return nil

@@ -297,8 +297,9 @@ func (r *Returner) QueryReturnStatus(kt *kit.Kit, task *table.ReturnTask, hosts 
 		return ev
 	}
 
-	// query timeout 2 weeks
-	timeout := task.CreateAt.AddDate(0, 0, 14)
+	// query timeout 2 weeks 这里查询回收单据状态的时间不能限制的太短（尤其是现在CRP侧要求隔离15天）
+	// 否则重试单据时也会被卡住，所以改成按更新时间计算查询超时
+	timeout := task.UpdateAt.AddDate(0, 0, 14)
 	if time.Now().After(timeout) {
 		ev := &event.Event{
 			Type:  event.ReturnFailed,

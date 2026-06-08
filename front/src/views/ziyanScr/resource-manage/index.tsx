@@ -167,7 +167,7 @@ export default defineComponent({
       {
         label: '单据状态',
         render: () => (
-          <Select v-model={filter.phase} multiple>
+          <Select v-model={filter.phase} multiple filterable>
             {phaseList.value.map(({ description, status }) => (
               <Select.Option key={status} id={status} name={description} />
             ))}

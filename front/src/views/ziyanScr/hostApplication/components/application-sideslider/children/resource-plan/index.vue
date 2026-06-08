@@ -16,9 +16,10 @@ import GridItem from '@/components/layout/grid-container/grid-item.vue';
 import AreaSelector from '@/views/ziyanScr/hostApplication/components/AreaSelector';
 import ZoneSelector from '@/views/ziyanScr/hostApplication/components/ZoneSelector';
 import DevicetypeSelector from '@/views/ziyanScr/components/devicetype-selector/index.vue';
+import { type IDeviceFamilyItem } from '@/store/config/device-family';
+import HcmFormDeviceFamily from '@/components/form/device-family.vue';
 import { GLOBAL_BIZS_KEY, VendorEnum } from '@/common/constant';
 import { type ICondition } from '../../typings';
-import { deviceGroups } from '../../constants';
 
 const props = withDefaults(defineProps<Props>(), {});
 
@@ -51,6 +52,15 @@ const searchValues = ref(defaultSearchValues());
 
 const isAlertFolded = ref(false);
 const isAlertFoldable = [RequirementType.Regular, RequirementType.Spring].includes(props.requireType);
+
+// 选中的机型族
+const selectedDeviceFamily = ref<IDeviceFamilyItem[]>([]);
+
+const filterDeviceFamily = computed(() => {
+  return selectedDeviceFamily.value.flatMap((item) =>
+    item.children?.length ? item.children?.map((child) => child.id) : [item.id],
+  );
+});
 
 const columns = computed(() => {
   const baseCol: ModelPropertyColumn[] = [
@@ -106,12 +116,12 @@ const columns = computed(() => {
 });
 
 const cvmDevicetypeParams = computed(() => {
-  const { region, zone, device_families } = searchValues.value;
+  const { region, zone } = searchValues.value;
   return {
     vendor: VendorEnum.ZIYAN,
     region,
     zone,
-    device_family: device_families,
+    device_family: filterDeviceFamily.value,
     disable: false,
   };
 });
@@ -128,7 +138,7 @@ const getList = async () => {
     obs_projects: [requirementObsProjectMap.value[props.requireType]],
     region_ids: searchValues.value.region,
     zone_ids: searchValues.value.zone,
-    device_families: searchValues.value.device_families,
+    device_families: filterDeviceFamily.value,
     device_types: searchValues.value.device_type,
     // 查询当月有效的预测
     expect_time_range: {
@@ -151,8 +161,9 @@ onMounted(async () => {
   getList();
 });
 
-const handleDeviceGroupChange = () => {
+const handleDeviceGroupChange = (items: IDeviceFamilyItem[]) => {
   searchValues.value.device_type = [];
+  selectedDeviceFamily.value = items;
 };
 const handleAreaChange = () => {
   searchValues.value.zone = [];
@@ -197,16 +208,14 @@ const handleReset = () => {
         />
       </grid-item-form-element>
       <grid-item-form-element label="实例族">
-        <bk-select
+        <HcmFormDeviceFamily
           v-model="searchValues.device_families"
+          filterable
           multiple
           clearable
           collapse-tags
-          filterable
           @change="handleDeviceGroupChange"
-        >
-          <bk-option v-for="(item, index) in deviceGroups" :key="index" :value="item" :label="item" />
-        </bk-select>
+        />
       </grid-item-form-element>
       <grid-item-form-element label="机型">
         <devicetype-selector

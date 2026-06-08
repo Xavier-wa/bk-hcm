@@ -23,7 +23,6 @@ import (
 var NeverStop <-chan struct{} = make(chan struct{})
 
 // Until loops until stop channel is closed, running f every period.
-//
 func Until(f func() error, period time.Duration, ctx context.Context) {
 	JitterUntil(f, period, 0.0, true, ctx)
 }
@@ -36,9 +35,26 @@ func Until(f func() error, period time.Duration, ctx context.Context) {
 // If sliding is true, the period is computed after f runs. If it is false then
 // period includes the runtime for f.
 //
+// An initial delay of up to 1 minute (capped at period) is applied before the
+// first invocation of f. The delay is jittered when jitterFactor is positive.
+//
 // Close stopCh to stop. f may not be invoked if stop channel is already
 // closed. Pass NeverStop to if you don't want it stop.
 func JitterUntil(f func() error, period time.Duration, jitterFactor float64, sliding bool, ctx context.Context) {
+	// Random startup delay, max 1 minute.
+	jitteredDelay := time.Minute
+	if jitteredDelay > period {
+		jitteredDelay = period
+	}
+	if jitterFactor > 0.0 {
+		jitteredDelay = Jitter(jitteredDelay, jitterFactor)
+	}
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(jitteredDelay):
+	}
+
 	var t *time.Timer
 	var sawTimeout bool
 

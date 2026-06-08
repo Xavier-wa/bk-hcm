@@ -37,7 +37,7 @@ export default defineComponent({
       fetchOptions();
     });
     return () => (
-      <bk-select modelValue={selectedValue} onUpdate:modelValue={updateSelectedValue} v-bind={attrs}>
+      <bk-select modelValue={selectedValue} onUpdate:modelValue={updateSelectedValue} v-bind={attrs} filterable>
         {options.value.map(({ value, label }) => {
           return <bk-option key={value} label={label} value={value} />;
         })}

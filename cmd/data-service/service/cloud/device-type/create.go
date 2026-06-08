@@ -70,6 +70,7 @@ func batchCreateDeviceType(cts *rest.Contexts, svc *service, vendor enumor.Vendo
 			CoreType:        createReq.CoreType,
 			CpuCore:         createReq.CpuCore,
 			Memory:          createReq.Memory,
+			GpuAmount:       createReq.GpuAmount,
 			DeviceTypeClass: createReq.DeviceTypeClass,
 			TechnicalClass:  createReq.TechnicalClass,
 			Region:          createReq.Region,

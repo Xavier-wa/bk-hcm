@@ -10,52 +10,52 @@ POST /api/v1/woa/config/findmany/config/cvm/devicetype
 
 ### 输入参数
 
-| 参数名称   | 参数类型   | 必选 | 描述     |
-|--------|--------|----|--------|
-| filter | object | 是  | 查询过滤条件 |
-| page   | object | 是  | 分页参数     |
+| 参数名称   | 参数类型   | 必选 | 描述        |
+|--------|--------|----|-----------|
+| filter | object | 是  | 查询过滤条件    |
+| page   | object | 是  | 分页参数      |
 | fields | array  | 否  | 指定返回的字段列表 |
 
 #### filter
 
-| 参数名称 | 参数类型        | 必选 | 描述                                                              |
-|------|-------------|----|-----------------------------------------------------------------|
-| op   | enum string | 是  | 逻辑操作符（枚举值：and、or）。如果是and，则表示多个rule之间是且的关系；如果是or，则表示多个rule之间是或的关系。 |
-| rules| array       | 是  | 过滤规则数组，最多设置5个rules。如果rules为空数组，op（操作符）将没有作用，代表查询全部数据。             |
+| 参数名称  | 参数类型        | 必选 | 描述                                                                |
+|-------|-------------|----|-------------------------------------------------------------------|
+| op    | enum string | 是  | 逻辑操作符（枚举值：and、or）。如果是and，则表示多个rule之间是且的关系；如果是or，则表示多个rule之间是或的关系。 |
+| rules | array       | 是  | 过滤规则数组，最多设置5个rules。如果rules为空数组，op（操作符）将没有作用，代表查询全部数据。             |
 
 #### rule[n] （详情请看 rules 表达式说明）
 
-| 参数名称 | 参数类型        | 必选 | 描述                                          |
-|------|-------------|----|---------------------------------------------|
-| field| string      | 是  | 查询条件Field名称，具体可使用的用于查询的字段及其说明请看下面 - 查询参数介绍  |
-| op   | enum string | 是  | 操作符（枚举值：equal、not_equal、gt、gte、lt、lte、in、nin、contains） |
-| value| 可变类型        | 是  | 查询条件Value值                                  |
+| 参数名称  | 参数类型        | 必选 | 描述                                                     |
+|-------|-------------|----|--------------------------------------------------------|
+| field | string      | 是  | 查询条件Field名称，具体可使用的用于查询的字段及其说明请看下面 - 查询参数介绍             |
+| op    | enum string | 是  | 操作符（枚举值：equal、not_equal、gt、gte、lt、lte、in、nin、contains） |
+| value | 可变类型        | 是  | 查询条件Value值                                             |
 
 #### page
 
-| 参数名称 | 参数类型 | 必选 | 描述                                                              |
-|------|------|----|-----------------------------------------------------------------|
-| count| bool | 否  | 是否只返回总数。如果为true，则只返回count，不返回详情列表，此时start和limit必须为0 |
-| start| int  | 否  | 起始位置，从0开始。仅在count为false时生效                                |
-| limit| int  | 否  | 每页返回的记录数。仅在count为false时生效                                |
-| sort | string | 否 | 排序字段。仅在count为false时生效                                        |
-| order| enum string | 否 | 排序方向（枚举值：asc、desc）。仅在count为false且sort不为空时生效              |
+| 参数名称  | 参数类型        | 必选 | 描述                                                  |
+|-------|-------------|----|-----------------------------------------------------|
+| count | bool        | 否  | 是否只返回总数。如果为true，则只返回count，不返回详情列表，此时start和limit必须为0 |
+| start | int         | 否  | 起始位置，从0开始。仅在count为false时生效                          |
+| limit | int         | 否  | 每页返回的记录数。仅在count为false时生效                           |
+| sort  | string      | 否  | 排序字段。仅在count为false时生效                               |
+| order | enum string | 否  | 排序方向（枚举值：asc、desc）。仅在count为false且sort不为空时生效         |
 
 ##### rule 表达式说明：
 
 ##### 1. 操作符
 
-| 操作符      | 描述                                        | 操作符的value支持的数据类型                              |
-|---------|-------------------------------------------|-----------------------------------------------|
-| equal   | 等于。不能为空字符串                                | boolean, numeric, string                      |
+| 操作符       | 描述                                        | 操作符的value支持的数据类型                              |
+|-----------|-------------------------------------------|-----------------------------------------------|
+| equal     | 等于。不能为空字符串                                | boolean, numeric, string                      |
 | not_equal | 不等。不能为空字符串                                | boolean, numeric, string                      |
-| gt      | 大于                                        | numeric，时间类型为字符串（标准格式："2006-01-02T15:04:05Z"） |
-| gte     | 大于等于                                      | numeric，时间类型为字符串（标准格式："2006-01-02T15:04:05Z"） |
-| lt      | 小于                                        | numeric，时间类型为字符串（标准格式："2006-01-02T15:04:05Z"） |
-| lte     | 小于等于                                      | numeric，时间类型为字符串（标准格式："2006-01-02T15:04:05Z"） |
-| in      | 在给定的数组范围中。value数组中的元素最多设置100个，数组中至少有一个元素  | boolean, numeric, string                      |
-| nin     | 不在给定的数组范围中。value数组中的元素最多设置100个，数组中至少有一个元素 | boolean, numeric, string                      |
-| contains| 模糊查询，区分大小写                                | string                                        |
+| gt        | 大于                                        | numeric，时间类型为字符串（标准格式："2006-01-02T15:04:05Z"） |
+| gte       | 大于等于                                      | numeric，时间类型为字符串（标准格式："2006-01-02T15:04:05Z"） |
+| lt        | 小于                                        | numeric，时间类型为字符串（标准格式："2006-01-02T15:04:05Z"） |
+| lte       | 小于等于                                      | numeric，时间类型为字符串（标准格式："2006-01-02T15:04:05Z"） |
+| in        | 在给定的数组范围中。value数组中的元素最多设置100个，数组中至少有一个元素  | boolean, numeric, string                      |
+| nin       | 不在给定的数组范围中。value数组中的元素最多设置100个，数组中至少有一个元素 | boolean, numeric, string                      |
+| contains  | 模糊查询，区分大小写                                | string                                        |
 
 ### 调用示例
 
@@ -130,6 +130,7 @@ POST /api/v1/woa/config/findmany/config/cvm/devicetype
         "core_type": "中核心",
         "cpu_core": 2,
         "memory": 16,
+        "gpu_amount": 0,
         "technical_class": "",
         "disable": false,
         "source": "sync",
@@ -138,13 +139,14 @@ POST /api/v1/woa/config/findmany/config/cvm/devicetype
       {
         "id": "6002",
         "vendor": "tcloud_ziyan",
-        "device_type": "S3.LARGE8",
-        "device_type_class": "CommonType",
-        "device_class": "标准型",
-        "device_family": "标准型",
-        "core_type": "中核心",
+        "device_type": "PNV5b.12XLARGE192",
+        "device_type_class": "SpecialType",
+        "device_class": "GPU计算型PNV5b",
+        "device_family": "GPU型",
+        "core_type": "大核心",
         "cpu_core": 4,
         "memory": 32,
+        "gpu_amount": 0.25,
         "technical_class": "",
         "disable": false,
         "source": "sync",
@@ -179,10 +181,10 @@ POST /api/v1/woa/config/findmany/config/cvm/devicetype
 
 #### data
 
-| 参数名称   | 参数类型         | 描述             |
-|--------|--------------|----------------|
-| count  | int          | 当前规则能匹配到的总记录条数 |
-| details| object array | 机型列表（仅在page.count为false时返回）           |
+| 参数名称    | 参数类型         | 描述                          |
+|---------|--------------|-----------------------------|
+| count   | int          | 当前规则能匹配到的总记录条数              |
+| details | object array | 机型列表（仅在page.count为false时返回） |
 
 #### details[0]
 
@@ -197,6 +199,7 @@ POST /api/v1/woa/config/findmany/config/cvm/devicetype
 | core_type         | string | 核心类型，枚举值：小核心、中核心、大核心                  |
 | cpu_core          | int    | CPU核数                                 |
 | memory            | int    | 内存容量，单位：GB                            |
+| gpu_amount        | float  | GPU卡数                                 |
 | technical_class   | string | 技术分类                                  |
 | disable           | bool   | 是否禁用                                  |
 | source            | string | 机型来源：枚举值：sync(同步)、manually(手动添加)      |

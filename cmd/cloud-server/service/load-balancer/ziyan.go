@@ -131,7 +131,8 @@ func (svc *lbSvc) tcloudZiyanUrlBindTargetGroup(cts *rest.Contexts, bizID int64,
 		return "", errf.Newf(errf.InvalidParameter, "url rule(%s) is not layer7 rule", req.UrlRuleID)
 	}
 
-	lblInfo, lblBasicInfo, err := svc.getListenerByIDAndBiz(cts.Kit, enumor.TCloudZiyan, bizID, rule.LblID)
+	listenerDetail, lblBasicInfo, err := svc.getListenerDetailByIDAndBiz(
+		cts.Kit, enumor.TCloudZiyan, bizID, rule.LblID)
 	if err != nil {
 		logs.Errorf("fail to get listener info, bizID: %d, listenerID: %s, err: %v, rid: %s",
 			bizID, rule.LblID, err, cts.Kit.Rid)
@@ -150,12 +151,12 @@ func (svc *lbSvc) tcloudZiyanUrlBindTargetGroup(cts *rest.Contexts, bizID int64,
 	}
 
 	// 预检测-是否有执行中的负载均衡
-	_, err = svc.checkResFlowRel(cts.Kit, lblInfo.LbID, enumor.LoadBalancerCloudResType)
+	_, err = svc.checkResFlowRel(cts.Kit, listenerDetail.LbID, enumor.LoadBalancerCloudResType)
 	if err != nil {
 		return "", err
 	}
 
-	taskManagementID, err := svc.applyTargetToRule(cts.Kit, req.TargetGroupID, rule.CloudID, lblInfo, bizID)
+	taskManagementID, err := svc.applyTargetToRule(cts.Kit, req.TargetGroupID, rule.CloudID, listenerDetail, bizID)
 	if err != nil {
 		logs.Errorf("fail to create target register flow, err: %v, rid: %s", err, cts.Kit.Rid)
 		return "", err

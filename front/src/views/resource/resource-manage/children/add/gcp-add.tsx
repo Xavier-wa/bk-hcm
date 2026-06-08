@@ -174,7 +174,7 @@ export default defineComponent({
           property: 'target_tags',
           component: () => (
             <section class='flex-row'>
-              <Select v-model={state.target}>
+              <Select v-model={state.target} filterable>
                 {GCP_TARGET_LIST.map((item) => (
                   <Option key={item.id} value={item.id} label={item.name}>
                     {item.name}
@@ -197,7 +197,7 @@ export default defineComponent({
           property: 'name',
           component: () => (
             <section class='flex-row'>
-              <Select v-model={state.source}>
+              <Select v-model={state.source} filterable>
                 {GCP_SOURCE_LIST.map((item) => (
                   <Option key={item.id} value={item.id} label={item.name}>
                     {item.name}

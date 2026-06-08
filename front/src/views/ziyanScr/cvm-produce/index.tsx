@@ -256,7 +256,7 @@ export default defineComponent({
         <div class={'filter-container search-container'}>
           <Form formType='vertical' class='scr-form-wrapper' model={cvmProduceForm}>
             <FormItem label='需求类型'>
-              <Select v-model={cvmProduceForm.value.require_type} multiple clearable placeholder='请选择'>
+              <Select v-model={cvmProduceForm.value.require_type} multiple clearable filterable placeholder='请选择'>
                 {requireTypeList.value.map(({ label, value }) => {
                   return <Select.Option key={value} name={label} id={value} />;
                 })}
@@ -287,7 +287,7 @@ export default defineComponent({
               <FloatInput v-model={cvmProduceForm.value.task_id} placeholder='请输入云梯单号，多个换行分割' />
             </FormItem>
             <FormItem label='状态'>
-              <Select v-model={cvmProduceForm.value.status} multiple clearable placeholder='请选择状态'>
+              <Select v-model={cvmProduceForm.value.status} multiple clearable filterable placeholder='请选择状态'>
                 {statusList.value.map(({ status, description }) => {
                   return <Select.Option key={status} name={description} id={status} />;
                 })}

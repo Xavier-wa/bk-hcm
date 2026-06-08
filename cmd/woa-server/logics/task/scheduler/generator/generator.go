@@ -126,16 +126,15 @@ func initpriorityFuncs() []algorithm.PriorityConfig {
 // GenerateCVM generates cvm devices
 func (g *Generator) GenerateCVM(kt *kit.Kit, order *types.ApplyOrder) error {
 	// 1. get history generated devices
-	existDevices, err := g.getUnreleasedDevice(kt, order.SubOrderId)
+	existDevices, generatingCount, scheduledCount, err := g.getScheduledDeviceStats(kt, order.SubOrderId)
 	if err != nil {
-		logs.Errorf("failed to get unreleased device, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		return err
 	}
 
 	// check if need generate cvm
-	existCount := uint(len(existDevices))
-	if existCount >= order.TotalNum {
-		logs.Infof("apply order %s has been scheduled %d cvm, rid: %s", order.SubOrderId, existCount, kt.Rid)
+	if scheduledCount >= order.TotalNum {
+		logs.Infof("apply order %s has been scheduled %d cvm (existing: %d, generatingCount: %d), rid: %s",
+			order.SubOrderId, scheduledCount, len(existDevices), generatingCount, kt.Rid)
 		// check if need retry match task
 		if err = g.retryMatchDevice(existDevices); err != nil {
 			logs.Warnf("failed to retry match device, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
@@ -143,8 +142,9 @@ func (g *Generator) GenerateCVM(kt *kit.Kit, order *types.ApplyOrder) error {
 		return nil
 	}
 
-	logs.Infof("apply order %s existing device number: %d, stage: %s, status: %s, rid: %s",
-		order.SubOrderId, existCount, order.Stage, order.Status, kt.Rid)
+	logs.Infof("apply order %s existing device number: %d, generating number: %d, scheduled device number: %d, "+
+		"stage: %s, status: %s, rid: %s", order.SubOrderId, len(existDevices), generatingCount, scheduledCount,
+		order.Stage, order.Status, kt.Rid)
 
 	// 获取该申请单的可用区
 	orderZones, err := g.getApplyOrderMultiZones(kt, order)
@@ -246,11 +246,64 @@ func (g *Generator) retryMatchDevice(devices []*types.DeviceInfo) error {
 	return nil
 }
 
+// getGeneratingCount 获取生产中的主机数量
+func (g *Generator) getGeneratingCount(kt *kit.Kit, subOrderID string) (uint, error) {
+	records, err := g.getOrderGenRecords(kt, subOrderID)
+	if err != nil {
+		logs.Errorf("failed to get generating count, subOrderID: %s, err: %v, rid: %s",
+			subOrderID, err, kt.Rid)
+		return 0, err
+	}
+
+	generatingCount := uint(0)
+	for _, record := range records {
+		if record.Status != types.GenerateStatusInit && record.Status != types.GenerateStatusHandling {
+			continue
+		}
+		generatingCount += record.TotalNum
+	}
+
+	return generatingCount, nil
+}
+
+// getScheduledDeviceStats 获取已调度的主机数量
+// existDevices: 已生产成功的设备列表 existCount: 已生产成功的设备数量 generatingCount: 生产中的主机数量
+func (g *Generator) getScheduledDeviceStats(kt *kit.Kit, subOrderID string) ([]*types.DeviceInfo, uint, uint, error) {
+	existDevices, err := g.getExistDevices(kt, subOrderID)
+	if err != nil {
+		logs.Errorf("failed to get exist device, order id: %s, err: %v, rid: %s", subOrderID, err, kt.Rid)
+		return nil, 0, 0, err
+	}
+
+	existCount := uint(len(existDevices))
+	generatingCount, err := g.getGeneratingCount(kt, subOrderID)
+	if err != nil {
+		logs.Errorf("failed to get generating count, subOrderID: %s, err: %v, rid: %s", subOrderID, err, kt.Rid)
+		return nil, 0, 0, err
+	}
+
+	return existDevices, generatingCount, existCount + generatingCount, nil
+}
+
 // generateCVMConcentrate generates cvm devices in certain zone
 func (g *Generator) generateCVMConcentrate(kt *kit.Kit, order *types.ApplyOrder, existDevices []*types.DeviceInfo,
 	orderZones []string) error {
 
-	replicas := order.TotalNum - uint(len(existDevices))
+	_, generatingCount, scheduledCount, err := g.getScheduledDeviceStats(kt, order.SubOrderId)
+	if err != nil {
+		logs.Errorf("failed to get scheduled device stats, subOrderID: %s, err: %v, rid: %s",
+			order.SubOrderId, err, kt.Rid)
+		return err
+	}
+	if scheduledCount > order.TotalNum {
+		logs.Errorf("apply cvm order %s has been scheduled %d cvm (existing: %d, generatingCount: %d), "+
+			"exceeds total number: %d, rid: %s", order.SubOrderId, scheduledCount, len(existDevices), generatingCount,
+			order.TotalNum, kt.Rid)
+		return errf.Newf(errf.InvalidParameter, "apply cvm order scheduledCount: %d exceeds total number: %d",
+			scheduledCount, order.TotalNum)
+	}
+
+	replicas := order.TotalNum - scheduledCount
 
 	genRecordIds := make([]string, 0)
 	errs := make([]error, 0)
@@ -548,18 +601,18 @@ func (g *Generator) GenerateDVM(kt *kit.Kit, order *types.ApplyOrder) error {
 	}
 
 	// 2. get history generated devices
-	existDevices, err := g.getUnreleasedDevice(kt, order.SubOrderId)
+	existDevices, generatingCount, scheduledCount, err := g.getScheduledDeviceStats(kt, order.SubOrderId)
 	if err != nil {
-		logs.Errorf("failed to get unreleased device, order id: %s, err: %v", order.SubOrderId, err)
 		return err
 	}
 
-	existCount := uint(len(existDevices))
-	if existCount >= order.TotalNum {
-		logs.Infof("apply order %s has been scheduled %d docker vm", order.SubOrderId, existCount)
+	if scheduledCount >= order.TotalNum {
+		logs.Infof("apply dvm order %s has been scheduled %d docker vm (existing: %d, generatingCount: %d), rid: %s",
+			order.SubOrderId, scheduledCount, len(existDevices), generatingCount, kt.Rid)
 		return nil
 	}
-	logs.Infof("apply order %s existing device number: %d", order.SubOrderId, existCount)
+	logs.Infof("apply dvm order %s existing device number: %d, generating number: %d, scheduled device "+
+		"number: %d, rid: %s", order.SubOrderId, len(existDevices), generatingCount, scheduledCount, kt.Rid)
 
 	// 3. 初始化（存量设备）亲和性
 	// 记录每类亲和维度的设备数
@@ -759,8 +812,8 @@ func (g *Generator) parseDvmSelector(kt *kit.Kit, order *types.ApplyOrder) (*typ
 	return selector, nil
 }
 
-// getUnreleasedDevice gets unreleased devices bindings to current apply order
-func (g *Generator) getUnreleasedDevice(kt *kit.Kit, subOrderID string) ([]*types.DeviceInfo, error) {
+// getExistDevices gets exist devices bindings to current apply order
+func (g *Generator) getExistDevices(kt *kit.Kit, subOrderID string) ([]*types.DeviceInfo, error) {
 	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", subOrderID))
 	devices, err := model.Operation().DeviceInfo().GetDeviceInfo(kt, filter)
 	if err != nil {
@@ -1754,27 +1807,27 @@ func (g *Generator) lockApplyOrder(kt *kit.Kit, order *types.ApplyOrder) error {
 // MatchPM automatically match physical machine devices
 func (g *Generator) MatchPM(kt *kit.Kit, order *types.ApplyOrder) error {
 	// 1. get history generated devices
-	existDevices, err := g.getUnreleasedDevice(kt, order.SubOrderId)
+	existDevices, generatingCount, scheduledCount, err := g.getScheduledDeviceStats(kt, order.SubOrderId)
 	if err != nil {
-		logs.Errorf("failed to get unreleased device, order id: %s, err: %v", order.SubOrderId, err)
 		return err
 	}
 
 	// 2. check if need generate device
-	existCount := uint(len(existDevices))
-	if existCount >= order.TotalNum {
-		logs.Infof("apply order %s has been scheduled %d pm", order.SubOrderId, existCount)
+	if scheduledCount >= order.TotalNum {
+		logs.Infof("apply pm order %s has been scheduled %d pm (existing: %d, generatingCount: %d), rid: %s",
+			order.SubOrderId, scheduledCount, len(existDevices), generatingCount, kt.Rid)
 		// check if need retry match task
 		if err = g.retryMatchDevice(existDevices); err != nil {
-			logs.Warnf("failed to retry match device, order id: %s, err: %v", order.SubOrderId, err)
+			logs.Warnf("failed to retry match device, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		}
 		return nil
 	}
 
-	logs.Infof("apply order %s existing device number: %d", order.SubOrderId, existCount)
+	logs.Infof("apply pm order %s existing device number: %d, generating number: %d, scheduled device "+
+		"number: %d, rid: %s", order.SubOrderId, len(existDevices), generatingCount, scheduledCount, kt.Rid)
 
 	// 3. match pm
-	if err := g.matchPM(kt, order, existDevices); err != nil {
+	if err = g.matchPM(kt, order, existDevices); err != nil {
 		logs.Errorf("failed to match pm, suborder id: %s", order.SubOrderId)
 		return err
 	}

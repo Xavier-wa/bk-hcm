@@ -238,4 +238,6 @@ func bizService(h *rest.Handler, s *service) {
 	h.Add("CreateBizUpgradeCRPOrder", http.MethodPost, "/create/upgrade/crp_order", s.CreateBizUpgradeCRPOrder)
 	// 亲和性检查接口
 	h.Add("GetAffinityMatchDetail", http.MethodPost, "/apply/match/check", s.GetAffinityMatchDetail)
+
+	h.Add("GetBizApplyRecommendTop", http.MethodPost, "/apply/recommend/top", s.GetBizApplyRecommendTop)
 }

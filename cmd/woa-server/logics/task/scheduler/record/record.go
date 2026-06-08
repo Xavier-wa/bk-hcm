@@ -20,22 +20,30 @@ import (
 	"hcm/pkg/api/core"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	cvt "hcm/pkg/tools/converter"
 )
 
-// CreateInitRecord create resource apply init record
-func CreateInitRecord(kt *kit.Kit, suborderId, ip string) error {
+// CreateInitRecord create resource apply init record.
+//
+// 返回值 created:
+//   - true:  当次调用实际向 DB 写入了一条新记录；
+//   - false: (suborder_id, ip) 已存在记录（包括 count>0 提前返回，以及count=0 后 INSERT 命中唯一索引冲突两种并发场景）
+//
+// 上层调用方必须根据 created 判断后续是否要发起新的标准运维(sops)初始化任务，
+// 避免并发场景下重复发起；created=false 时通常应复用 DB 中已有记录的任务信息。
+func CreateInitRecord(kt *kit.Kit, suborderId, ip string) (bool, error) {
 	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", suborderId), tools.RuleEqual("ip", ip))
 	cnt, err := model.Operation().InitRecord().CountInitRecord(kt, filter)
 	if err != nil {
 		logs.Errorf("failed to count init record, err: %v, rid: %s", err, kt.Rid)
-		return err
+		return false, err
 	}
 	if cnt > 0 {
-		return nil
+		return false, nil
 	}
 
 	now := time.Now()
@@ -52,18 +60,37 @@ func CreateInitRecord(kt *kit.Kit, suborderId, ip string) error {
 		EndAt:      now,
 	}
 	if err = model.Operation().InitRecord().CreateInitRecord(kt, record); err != nil {
-		logs.Errorf("failed to create init record, err: %v, rid: %s", err, kt.Rid)
-		return err
+		// 并发场景：在 count 之后、insert 之前被其他协程抢先创建，由表唯一索引兜底
+		// 返回 RecordDuplicated。视为已存在，由上层决定是否复用现有记录。
+		if errf.IsDuplicated(err) {
+			logs.Warnf("init record already exists due to concurrent create, suborderID: %s, ip: %s, err: %v, rid: %s",
+				suborderId, ip, err, kt.Rid)
+			return false, nil
+		}
+		logs.Errorf("failed to create init record, suborderID: %s, ip: %s, err: %v, rid: %s",
+			suborderId, ip, err, kt.Rid)
+		return false, err
 	}
 
-	return nil
+	return true, nil
 }
 
 // UpdateInitRecord update resource apply init record
+//
+// 状态机说明：
+//   - InitStatusInit / InitStatusHandling 是中间态，允许更新到任意状态
+//   - InitStatusFailed 在 matcher.initDevice 中是可重试的中间态，允许被覆盖（failed → handling/success/failed）
+//   - InitStatusSuccess 是不可逆的终态，已经成功的 IP 初始化记录不应被任何并发任务再覆盖
+//
+// 因此 filter 仅排除当前已是 InitStatusSuccess 的记录；目标 status 不做限制。
 func UpdateInitRecord(kt *kit.Kit, suborderId, ip, taskId, taskUrl, message string,
 	status types.InitStepStatus) error {
 
-	filter := tools.ExpressionAnd(tools.RuleEqual("suborder_id", suborderId), tools.RuleEqual("ip", ip))
+	filter := tools.ExpressionAnd(
+		tools.RuleEqual("suborder_id", suborderId),
+		tools.RuleEqual("ip", ip),
+		tools.RuleNotEqual("status", types.InitStatusSuccess),
+	)
 
 	now := time.Now()
 	update := &cvmapplyproto.ZiyanCvmApplyInitTaskUpdateReq{

@@ -8,6 +8,7 @@
     :multiple="multiple"
     :multiple-mode="multiple ? 'tag' : 'default'"
     :collapse-tags="collapseTags"
+    filterable
   />
 </template>
 

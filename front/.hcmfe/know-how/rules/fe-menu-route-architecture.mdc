@@ -1,0 +1,205 @@
+---
+description: "前端菜单与路由架构规范。当任务涉及以下任一情况时必须主动读取本规则：(1) 新建模块、新增页面、新增菜单项、新增路由、添加二级/三级页面、增加详情页/创建页/列表页；(2) 改造或调整已有模块的路由结构、菜单结构、菜单分组、菜单显隐、面包屑、页签高亮（activeKey）；(3) 代码中需要创建或修改 route-config.ts、menu-service.ts、auth-service.ts、menu-symbol.ts、auth-symbols.ts、views/index.ts、router/meta.ts、Meta 类、entry-biz.vue / entry-rsc.vue / entry-srv.vue；(4) 涉及一级视图划分——业务（business / bizId）、工作台（service）、资源运营（resource），跨视图复用模块（同一模块在多个视图下出现）；(5) 用户提到\"加菜单\"\"加路由\"\"新建页面\"\"新增模块\"\"模块改造\"\"路由跳转的 name\"\"菜单不显示\"\"菜单高亮不对\"\"面包屑\"\"useWhereAmI\"\"业务视角与资源视角\"\"路由 Symbol\"\"meta.auth.view\" 等；(6) 路由权限 / 视图权限的定义（meta.auth.view、view-auth.ts、预鉴权配置）。"
+globs:
+  - 'front/**/route-config/**'
+  - 'front/**/menu-service/**'
+  - 'front/**/router/**'
+  - 'front/**/views/**'
+alwaysApply: false
+---
+
+# 菜单路由架构规范
+
+## 整体架构
+
+项目有三个一级视图，每个一级视图对应一组路由集合：
+
+| 一级视图 | 路由前缀            | 注册位置（views/index.ts） | 说明                |
+| -------- | ------------------- | -------------------------- | ------------------- |
+| 业务资源 | `/business/:bizId/` | `businessViews`            | 需要 bizId 路径参数 |
+| 工作台   | `/service/`         | `serviceViews`             | 个人/公共事务       |
+| 资源运营 | `/resource/`        | `resourceViews`            | 资源管理、账单等    |
+
+## 关键文件职责
+
+- **`constants/menu-symbol.ts`** — 所有菜单/路由的 Symbol 常量
+- **`constants/auth-symbols.ts`** — 所有权限标识的 Symbol 常量
+- **`views/<模块>/route-config.ts`** — 模块路由定义（去中心化）
+- **`views/index.ts`** — 汇总所有模块路由，注入状态组件
+- **`common/menu-service.ts`** — 菜单结构定义，与路由解耦
+- **`common/auth-service.ts`** — 权限定义与鉴权工具
+- **`router/meta.ts`** — 路由 meta 配置类
+
+## 新建/改造模块 Checklist
+
+### 1. 定义 Symbol 常量
+
+在 `constants/menu-symbol.ts` 中添加模块的所有路由 Symbol：
+
+```typescript
+export const MENU_XXX_LIST = Symbol("menu_xxx_list");
+export const MENU_XXX_CREATE = Symbol("menu_xxx_create");
+export const MENU_XXX_DETAIL = Symbol("menu_xxx_detail");
+```
+
+### 2. 创建 route-config.ts
+
+在 `views/<模块>/route-config.ts` 中定义路由，遵循：
+
+- **path 使用相对路径**，不要以 `/` 开头
+- **name 使用 Symbol**，禁止使用字符串
+- **meta 使用 `new Meta({...})` 展开**
+- **owner** 指向所属一级视图 Symbol（`MENU_BUSINESS` / `MENU_SERVICE` / `MENU_RESOURCE`）
+- **activeKey** 指向菜单高亮项
+- **menu.relative** 指向面包屑的上级
+  菜单是否展示由 `menu-service.ts` 独立控制，路由中不需要标记 `notMenu`。
+
+```typescript
+const routes: RouteRecordRaw[] = [
+  // 菜单页面（列表）
+  {
+    name: MENU_XXX_LIST,
+    path: "xxx", // 相对路径
+    component: () => import("@/views/xxx/list"),
+    meta: {
+      ...new Meta({
+        owner: MENU_RESOURCE,
+        activeKey: MENU_XXX_LIST,
+        auth: { view: { type: AUTH_XXX_FIND } },
+        menu: { i18n: "模块名称", relative: MENU_RESOURCE },
+      }),
+    },
+  },
+  // 非菜单页面（详情、创建等）—— 不需要特殊标记，只需不在 menu-service.ts 中注册即可
+  {
+    name: MENU_XXX_CREATE,
+    path: "xxx/create",
+    component: () => import("@/views/xxx/create"),
+    meta: {
+      ...new Meta({
+        owner: MENU_RESOURCE,
+        activeKey: MENU_XXX_LIST, // 高亮对应的菜单项
+        menu: { i18n: "创建XXX", relative: MENU_XXX_LIST },
+      }),
+    },
+  },
+];
+```
+
+### 3. 注册路由
+
+在 `views/index.ts` 中将模块路由合入对应视图数组：
+
+```typescript
+import xxxRoutes from "@/views/xxx/route-config";
+export const resourceViews = injectStatusComponents([
+  ...existing,
+  ...xxxRoutes,
+]);
+```
+
+### 4. 注册菜单
+
+在 `common/menu-service.ts` 中对应一级菜单的 `menu` 数组里添加菜单项：
+
+```typescript
+{
+  id: MENU_XXX_LIST,
+  i18n: '模块名称',
+  group: '分组名',
+  groupIcon: 'bkhcm-icon-xxx',
+  visibility: () => SOME_FEATURE_FLAG === 'true',  // 可选，控制显隐
+  route: getMenuRoute(resourceViews, MENU_XXX_LIST),
+},
+```
+
+### 5. 权限配置
+
+- **视图权限**：通过 `meta.auth.view` 定义，值为 `IAuthSign` 对象 `{ type: AUTH_SYMBOL }`
+- **操作权限**：通过 `hcm-auth` 组件包裹操作按钮
+- **权限 Symbol** 定义在 `constants/auth-symbols.ts`，对应定义在 `common/auth-service.ts`
+
+## 单个模块目录结构实践
+
+当一个模块需要在多个一级视图下呈现时（如业务视图、资源视图、工作台），推荐采用如下目录结构：
+
+```
+views/<模块>/
+├── route-config.ts          # 模块路由定义（去中心化）
+├── entry-biz.vue            # 业务视角入口（Business）
+├── entry-rsc.vue            # 资源视角入口（Resource）
+├── entry-srv.vue            # 服务视角入口（Service / 工作台）
+├── constants.ts             # 模块内闭环的常量定义
+├── typings.ts               # 模块内闭环的类型定义
+├── children/                # 子组件目录
+│   ├── search/
+│   └── data-list/
+└── details/                 # 详情、弹层等非菜单页面
+```
+
+### 多视角入口约定
+
+- `entry-biz.vue` —— 业务视角入口，注入 `provide('isBusinessPage', true)`
+- `entry-rsc.vue` —— 资源视角入口，注入 `provide('isResourcePage', true)`
+- `entry-srv.vue` —— 服务视角入口（工作台），注入 `provide('isServicePage', true)`
+
+各入口负责引入 `children/` 中的公共子组件，并通过 `provide` 将当前视角标识注入，使得子组件能通过 `inject` 共享到当前入口的上下文，实现同一套子组件在不同视角下的差异化行为。
+
+```vue
+<script setup lang="ts">
+import { provide } from 'vue';
+import Search from './children/search/search.vue';
+import DataList from './children/data-list/data-list.vue';
+
+provide('isBusinessPage', true);
+</script>
+```
+
+### 模块内闭环定义
+
+`constants.ts`、`typings.ts` 等文件应保持在模块内部闭环，仅在模块内引用，不对外暴露。若其他模块需要复用，应抽离到 `common/` 或 `utils/` 等公共目录，而不是直接跨模块引用。
+
+### 路由定义中引用对应入口
+
+若模块有多个视角入口，在 `route-config.ts` 中为每个视角定义独立的路由数组，并引用对应的入口文件：
+
+```typescript
+const moduleBiz: RouteRecordRaw[] = [
+  {
+    name: MENU_BUSINESS_MODULE,
+    path: 'module',
+    component: () => import('@/views/module/entry-biz.vue'),
+    meta: { ...new Meta({ owner: MENU_BUSINESS, activeKey: MENU_BUSINESS_MODULE }) },
+  },
+];
+
+const moduleRsc: RouteRecordRaw[] = [
+  {
+    name: MENU_RESOURCE_MODULE,
+    path: 'module',
+    component: () => import('@/views/module/entry-rsc.vue'),
+    meta: { ...new Meta({ owner: MENU_RESOURCE, activeKey: MENU_RESOURCE_MODULE }) },
+  },
+];
+
+export { moduleBiz, moduleRsc };
+```
+
+随后在 `views/index.ts` 中分别合入对应的一级视图数组：
+
+```typescript
+import { moduleBiz, moduleRsc } from '@/views/module/route-config';
+
+export const businessViews = injectStatusComponents([...existing, ...moduleBiz]);
+export const resourceViews = injectStatusComponents([...existing, ...moduleRsc]);
+```
+
+## 重要原则
+
+1. **路由导航一律使用 name（Symbol）**，禁止硬编码路径字符串
+2. **菜单与路由解耦** —— 菜单在 `menu-service.ts` 独立定义，通过 `getMenuRoute` 关联路由
+3. **模块路由去中心化** —— 每个模块在自己的 `views/<模块>/route-config.ts` 定义
+4. **改造老模块不删除老文件** —— 新建文件迁移，老文件添加 `@deprecated` 注释说明替代方案
+5. **功能模块独立于菜单** —— 模块是不变的功能单元，菜单和路由是可变的上层配置
+6. **跨视图复用模块** —— 同一模块可出现在多个视图下（如回收站同时在业务和资源视图），通过导出多个路由数组实现（如 `recyclebinBiz` / `recyclebinRsc`）
+7. **`useWhereAmI`（待废弃）** —— 当前通过正则匹配路由路径判断所处场景（`Senarios`），这是一种脆弱的实现。如果模块路径嵌套在其他一级路径下（如 `/resource/bill/`），需手动添加优先匹配规则。**后续应通过路由 meta（如 `owner`）来确定场景，彻底移除路径正则匹配**

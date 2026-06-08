@@ -23,6 +23,7 @@ import (
 	"errors"
 	"time"
 
+	"hcm/cmd/woa-server/logics/plan/demand-time"
 	"hcm/pkg/api/core"
 	rpproto "hcm/pkg/api/data-service/resource-plan"
 	"hcm/pkg/criteria/constant"
@@ -163,15 +164,19 @@ func constructSubTicketCreateReq(ticket *rpt.ResPlanTicketTable, auditQuota int6
 		SubUpdatedDiskSize:  cvt.ValToPtr(updatedDiskSize),
 		SubmittedAt:         time.Now().Format(constant.DateTimeLayout),
 	}
+	// 非本年度预测，不能跳过管理员审批
+	hasNonCurrentYear := demandtime.ContainsNonCurrentYearDemandPtrs(demands)
+
 	// 调减单、自动延期单、非转移单跳过管理员审批
 	if ticket.Type == enumor.RPTicketTypeDelete || ticket.Type == enumor.RPTicketTypeAutomaticTransfer ||
 		subTicket.SubType != enumor.RPTicketTypeTransfer {
-
-		subTicket.AdminAuditStatus = enumor.RPAdminAuditStatusSkip
+		if !hasNonCurrentYear {
+			subTicket.AdminAuditStatus = enumor.RPAdminAuditStatusSkip
+		}
 	}
 	if subTicket.SubType == enumor.RPTicketTypeTransfer || subTicket.SubType == enumor.RPTicketTypeTransferExempt {
 		// 转移单核数小于审批下限，跳过管理员审批
-		if updatedCpuCore <= auditQuota {
+		if updatedCpuCore <= auditQuota && !hasNonCurrentYear {
 			subTicket.AdminAuditStatus = enumor.RPAdminAuditStatusSkip
 		}
 		// 转移单不等待合并

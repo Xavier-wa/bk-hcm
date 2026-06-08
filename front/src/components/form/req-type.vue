@@ -84,6 +84,7 @@ const handleSelect = (item: IRequirementItem) => {
     :multiple-mode="multiple ? 'tag' : 'default'"
     :id-key="!useNameValue ? 'require_type' : 'require_name'"
     :display-key="'require_name'"
+    filterable
     v-bind="attrs"
   />
   <div v-else-if="appearance === 'card'" class="req-type-card">

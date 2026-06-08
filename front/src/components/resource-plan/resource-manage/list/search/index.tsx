@@ -264,7 +264,11 @@ export default defineComponent({
                     </div>
                     <div>
                       <div class={cssModule['search-label']}>{t('运营产品')}</div>
-                      <Select multiple v-model={searchModel.value.op_product_ids} loading={isLoadingOpProducts.value}>
+                      <Select
+                        multiple
+                        v-model={searchModel.value.op_product_ids}
+                        loading={isLoadingOpProducts.value}
+                        filterable>
                         {opProductList.value.map((item) => (
                           <Option name={item.op_product_name} id={item.op_product_id} />
                         ))}
@@ -275,7 +279,8 @@ export default defineComponent({
                       <Select
                         multiple
                         v-model={searchModel.value.plan_product_ids}
-                        loading={isLoadingPlanProducts.value}>
+                        loading={isLoadingPlanProducts.value}
+                        filterable>
                         {planProductsList.value.map((item) => (
                           <Option name={item.plan_product_name} id={item.plan_product_id} />
                         ))}
@@ -293,7 +298,11 @@ export default defineComponent({
                 </div>
                 <div>
                   <div class={cssModule['search-label']}>{t('预测用途')}</div>
-                  <Select multiple v-model={searchModel.value.demand_classes} loading={isLoadingDemandClass.value}>
+                  <Select
+                    multiple
+                    v-model={searchModel.value.demand_classes}
+                    loading={isLoadingDemandClass.value}
+                    filterable>
                     {demandClassList.value.map((item) => (
                       <Option name={item} id={item} />
                     ))}
@@ -301,7 +310,11 @@ export default defineComponent({
                 </div>
                 <div>
                   <div class={cssModule['search-label']}>{t('机型类型')}</div>
-                  <Select multiple v-model={searchModel.value.device_classes} loading={isLoadingDeviceClass.value}>
+                  <Select
+                    multiple
+                    v-model={searchModel.value.device_classes}
+                    loading={isLoadingDeviceClass.value}
+                    filterable>
                     {deviceClassList.value.map((item) => (
                       <Option name={item} id={item} />
                     ))}
@@ -309,7 +322,11 @@ export default defineComponent({
                 </div>
                 <div>
                   <div class={cssModule['search-label']}>{t('机型规格')}</div>
-                  <Select multiple v-model={searchModel.value.device_types} loading={isLoadingDeviceType.value}>
+                  <Select
+                    multiple
+                    v-model={searchModel.value.device_types}
+                    loading={isLoadingDeviceType.value}
+                    filterable>
                     {deviceTypeList.value.map((item) => (
                       <Option id={item.device_type} name={item.device_type} />
                     ))}
@@ -330,7 +347,8 @@ export default defineComponent({
                     multiple
                     v-model={searchModel.value.region_ids}
                     loading={isLoadingRegion.value}
-                    onChange={onChangeRegion}>
+                    onChange={onChangeRegion}
+                    filterable>
                     {regionList.value.map((item) => (
                       <Option id={item.region_id} name={item.region_name} />
                     ))}
@@ -338,7 +356,7 @@ export default defineComponent({
                 </div>
                 <div>
                   <div class={cssModule['search-label']}>{t('可用区')}</div>
-                  <Select multiple v-model={searchModel.value.zone_ids} loading={isLoadingZone.value}>
+                  <Select multiple v-model={searchModel.value.zone_ids} loading={isLoadingZone.value} filterable>
                     {zoneList.value.map((item) => (
                       <Option name={item.zone_name} id={item.zone_id} />
                     ))}
@@ -346,7 +364,7 @@ export default defineComponent({
                 </div>
                 <div>
                   <div class={cssModule['search-label']}>{t('预测类型')}</div>
-                  <Select multiple v-model={searchModel.value.plan_types} loading={isLoadingPlanClass.value}>
+                  <Select multiple v-model={searchModel.value.plan_types} loading={isLoadingPlanClass.value} filterable>
                     {planClassList.value.map((item) => (
                       <Option name={item} id={item} />
                     ))}
@@ -354,7 +372,7 @@ export default defineComponent({
                 </div>
                 <div>
                   <div class={cssModule['search-label']}>{t('状态')}</div>
-                  <Select multiple v-model={searchModel.value.statuses}>
+                  <Select multiple v-model={searchModel.value.statuses} filterable>
                     {Object.entries(RESOURCE_DEMANDS_STATUS_NAME).map(([id, name]) => (
                       <Option name={name} id={id} />
                     ))}

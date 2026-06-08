@@ -39,7 +39,9 @@ import (
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/runtime/filter"
+	"hcm/pkg/tools/converter"
 	"hcm/pkg/tools/times"
+	"hcm/pkg/tools/utils/wait"
 )
 
 // MainAccountControllerOption option for MainAccountController
@@ -141,6 +143,7 @@ func (mac *MainAccountController) Start() error {
 	cancelFunc := kt.CtxBackgroundWithCancel()
 	mac.kt = kt
 	mac.cancelFunc = cancelFunc
+
 	go mac.runBillSummaryLoop(kt)
 	go mac.runDailyRawBillLoop(kt)
 	go mac.runCalculateBillSummaryLoop(kt)
@@ -153,6 +156,7 @@ func (mac *MainAccountController) Start() error {
 	if err := mac.dailySummaryCtrl.Start(); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -172,44 +176,51 @@ func (mac *MainAccountController) syncBillSummary(kt *kit.Kit) error {
 }
 
 func (mac *MainAccountController) runBillSummaryLoop(kt *kit.Kit) {
-	if err := mac.syncBillSummary(kt.NewSubKit()); err != nil {
-		logs.Warnf("sync bill summary for account (%s, %s, %s) failed, err %s, rid: %s",
-			mac.RootAccountID, mac.MainAccountID, mac.Vendor, err.Error(), kt.Rid)
-	}
-	ticker := time.NewTicker(*cc.AccountServer().Controller.MainAccountSummarySyncDuration)
-	for {
-		select {
-		case <-ticker.C:
-			if err := mac.syncBillSummary(kt.NewSubKit()); err != nil {
+	wait.JitterUntil(
+		func() error {
+			err := mac.syncBillSummary(kt.NewSubKit())
+			if err != nil {
 				logs.Warnf("sync bill summary for account (%s, %s, %s) failed, err %s, rid: %s",
 					mac.RootAccountID, mac.MainAccountID, mac.Vendor, err.Error(), kt.Rid)
 			}
-		case <-kt.Ctx.Done():
-			logs.Infof("main account (%s, %s, %s) summary controller context done, rid: %s",
-				mac.RootAccountID, mac.MainAccountID, mac.Vendor, kt.Rid)
-			return
-		}
+			return err
+		},
+		converter.PtrToVal(cc.AccountServer().Controller.MainAccountSummarySyncDuration),
+		0.5,  // jitter factor
+		true, // sliding mode
+		kt.Ctx,
+	)
+	select {
+	case <-kt.Ctx.Done():
+		logs.Infof("main account (%s, %s, %s) summary controller context done, rid: %s",
+			mac.RootAccountID, mac.MainAccountID, mac.Vendor, kt.Rid)
+		return
 	}
 }
 
 func (mac *MainAccountController) runCalculateBillSummaryLoop(kt *kit.Kit) {
-	ticker := time.NewTicker(*cc.AccountServer().Controller.MainAccountSummarySyncDuration)
 	curMonthFlowID := ""
 	lastMonthFlowID := ""
-	for {
-		select {
-		case <-ticker.C:
+	wait.JitterUntil(
+		func() error {
 			subKit := kt.NewSubKit()
 			lastBillYear, lastBillMonth := times.GetLastMonthUTC()
 			lastMonthFlowID = mac.pollMainSummaryTask(subKit, lastMonthFlowID, lastBillYear, lastBillMonth)
 			curBillYear, curBillMonth := times.GetCurrentMonthUTC()
 			curMonthFlowID = mac.pollMainSummaryTask(subKit, curMonthFlowID, curBillYear, curBillMonth)
+			return nil
+		},
+		converter.PtrToVal(cc.AccountServer().Controller.MainAccountSummarySyncDuration),
+		0.5,
+		true,
+		kt.Ctx,
+	)
 
-		case <-kt.Ctx.Done():
-			logs.Infof("main account (%s, %s, %s) summary controller context done, rid: %s",
-				mac.RootAccountID, mac.MainAccountID, mac.Vendor, kt.Rid)
-			return
-		}
+	select {
+	case <-kt.Ctx.Done():
+		logs.Infof("main account (%s, %s, %s) summary controller context done, rid: %s",
+			mac.RootAccountID, mac.MainAccountID, mac.Vendor, kt.Rid)
+		return
 	}
 }
 
@@ -277,23 +288,26 @@ func (mac *MainAccountController) createMainSummaryFlow(kt *kit.Kit, billYear, b
 }
 
 func (mac *MainAccountController) runDailyRawBillLoop(kt *kit.Kit) {
-	if err := mac.syncDailyRawBill(kt); err != nil {
-		logs.Warnf("sync daily raw bill for account (%s, %s, %s) failed, err %s, rid: %s",
-			mac.RootAccountID, mac.MainAccountID, mac.Vendor, err.Error(), kt.Rid)
-	}
-	ticker := time.NewTicker(*cc.AccountServer().Controller.DailySummarySyncDuration)
-	for {
-		select {
-		case <-ticker.C:
-			if err := mac.syncDailyRawBill(kt); err != nil {
+	wait.JitterUntil(
+		func() error {
+			err := mac.syncDailyRawBill(kt)
+			if err != nil {
 				logs.Warnf("sync daily raw bill for account (%s, %s, %s) failed, err %s, rid: %s",
 					mac.RootAccountID, mac.MainAccountID, mac.Vendor, err.Error(), kt.Rid)
 			}
-		case <-kt.Ctx.Done():
-			logs.Infof("main account (%s, %s, %s) raw bill controller context done, rid: %s",
-				mac.RootAccountID, mac.MainAccountID, mac.Vendor, kt.Rid)
-			return
-		}
+			return err
+		},
+		converter.PtrToVal(cc.AccountServer().Controller.DailySummarySyncDuration),
+		0.5,
+		true,
+		kt.Ctx,
+	)
+
+	select {
+	case <-kt.Ctx.Done():
+		logs.Infof("main account (%s, %s, %s) raw bill controller context done, rid: %s",
+			mac.RootAccountID, mac.MainAccountID, mac.Vendor, kt.Rid)
+		return
 	}
 }
 

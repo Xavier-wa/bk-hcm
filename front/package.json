@@ -13,7 +13,10 @@
     "build:bcc": "cross-env TARGET_MODE=bcc bk-cli-service-webpack build",
     "serve": "node ./paas-server/index.js",
     "lint": "eslint --ext .js,.jsx,.ts,.tsx ./src --cache",
-    "lint:style": "stylelint --fix ./**/*.{scss,css,vue} --custom-syntax",
+    "lint:fix": "eslint --ext .js,.jsx,.ts,.tsx ./src --cache --fix",
+    "lint:style": "stylelint \"./src/**/*.{css,scss,vue}\" --cache",
+    "lint:style:fix": "stylelint \"./src/**/*.{css,scss,vue}\" --cache --fix",
+    "format": "prettier --config ./.prettierrc.js --write \"./src/**/*.{js,jsx,ts,tsx,vue,scss,css}\"",
     "prepare": "cd .. && husky install front/.husky"
   },
   "dependencies": {
@@ -30,42 +33,43 @@
     "@blueking/roll-request": "1.0.2",
     "@blueking/tdesign-ui": "0.0.1-beta.92",
     "ajv": "6.14.0",
-    "axios": "1.10.0",
+    "axios": "1.15.2",
     "bkui-vue": "2.1.0-beta.4",
     "dayjs": "1.11.3",
-    "echarts": "6.0.0",
-    "file-saver": "2.0.5",
-    "hot-formula-parser": "4.0.0",
     "dompurify": "3.3.3",
+    "echarts": "6.0.0",
+    "exceljs": "4.4.0",
+    "file-saver": "2.0.5",
     "highlight.js": "~11.5.0",
+    "hot-formula-parser": "4.0.0",
     "ipaddr.js": "2.1.0",
     "js-cookie": "3.0.5",
-    "lodash": "4.17.21",
+    "lodash": "4.18.1",
     "mitt": "3.0.0",
     "moment": "2.29.4",
     "pinia": "2.3.0",
     "qs": "6.13.0",
     "reflect-metadata": "0.2.2",
     "uuid": "9.0.0",
-    "validator": "13.12.0",
+    "validator": "13.15.22",
     "vue": "^3.5.13",
     "vue-clipboard3": "2.0.0",
     "vue-draggable-plus": "0.2.6",
     "vue-i18n": "11.1.9",
     "vue-router": "4.1.3",
-    "vue-virtual-scroller": "2.0.0-beta.8",
-    "xlsx": "0.18.5"
+    "vue-virtual-scroller": "2.0.0-beta.8"
   },
   "devDependencies": {
     "@blueking/babel-preset-bk": "2.1.0",
     "@blueking/cli-service-webpack": "0.0.7",
     "@blueking/eslint-config-bk": "2.1.0",
     "@types/cookie": "0.5.1",
+    "@types/file-saver": "2.0.7",
     "@types/js-cookie": "3.0.6",
-    "@types/lodash": "4.14.182",
+    "@types/lodash": "4.17.24",
     "@types/node": "18.19.68",
     "@types/qs": "6.9.7",
-    "@types/validator": "13.12.0",
+    "@types/validator": "13.15.10",
     "@vue/babel-plugin-jsx": "1.1.1",
     "chokidar": "3.6.0",
     "cross-env": "7.0.3",
@@ -105,9 +109,12 @@
     "dist"
   ],
   "lint-staged": {
-    "src/**/*.{js,ts,tsx,vue}": [
+    "src/**/*.{js,jsx,ts,tsx,vue}": [
       "prettier --config ./.prettierrc.js --write",
-      "eslint --fix -c ./.eslintrc.js --debug"
+      "eslint --fix -c ./.eslintrc.js --cache"
+    ],
+    "src/**/*.{css,scss,vue}": [
+      "stylelint --fix --cache"
     ]
   },
   "packageManager": "pnpm@8.8.0+sha512.798e6b322669ce63c8da856bd62ad1f7b6f36f4dfaa0ac025af2bdd700d09dd5dca943e5cad3edac5d1b3baebc4b2c3fb80fbb8537f936733c32be2ec7805144"

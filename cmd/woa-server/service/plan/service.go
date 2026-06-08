@@ -70,6 +70,7 @@ func (s *service) initPlanService(h *rest.Handler) {
 
 	// ticket
 	h.Add("ListResPlanTicket", http.MethodPost, "/plans/resources/tickets/list", s.ListResPlanTicket)
+	h.Add("ExportResPlanTicket", http.MethodPost, "/plans/resources/tickets/export", s.ExportResPlanTicket)
 	h.Add("GetResPlanTicket", http.MethodGet, "/plans/resources/tickets/{id}", s.GetResPlanTicket)
 	h.Add("GetResPlanTicketAudit", http.MethodGet,
 		"/plans/resources/tickets/{ticket_id}/audit", s.GetResPlanTicketAudit)
@@ -79,6 +80,10 @@ func (s *service) initPlanService(h *rest.Handler) {
 		"/plans/resources/tickets/{ticket_id}/retry", s.RetryResPlanTicket)
 	h.Add("TerminateResPlanTicket", http.MethodPost,
 		"/plans/resources/tickets/{ticket_id}/terminate", s.TerminateResPlanTicket)
+	h.Add("GetResPlanTicketReportDeadline", http.MethodGet,
+		"/plans/resources/tickets/report_deadline", s.GetResPlanTicketReportDeadline)
+	h.Add("UpsertResPlanTicketReportDeadline", http.MethodPut,
+		"/plans/resources/tickets/report_deadline/upsert", s.UpsertResPlanTicketReportDeadline)
 	// ticket audit
 	h.Add("ListResPlanItsmTicket", http.MethodPost,
 		"/plans/resources/itsm/ticket/list", s.ListResPlanItsmTicket)
@@ -177,6 +182,8 @@ func (s *service) initBizPlanService(h *rest.Handler) {
 		"/plans/resources/tickets/{ticket_id}/approve_itsm_node", s.ApproveBizResPlanTicketITSMNode)
 	h.Add("RetryBizResPlanTicket", http.MethodPost, "/plans/resources/tickets/{ticket_id}/retry",
 		s.RetryBizResPlanTicket)
+	h.Add("OverwriteResPlanTicket", http.MethodPost,
+		"/plans/resources/tickets/{ticket_id}/overwrite", s.OverwriteResPlanTicket)
 	h.Add("TerminateBizResPlanTicket", http.MethodPost,
 		"/plans/resources/tickets/{ticket_id}/terminate", s.TerminateBizResPlanTicket)
 

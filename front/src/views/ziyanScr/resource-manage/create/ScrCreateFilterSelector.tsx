@@ -64,7 +64,8 @@ export default defineComponent({
         multiple={props.multiple}
         multipleMode={props.multiple ? 'tag' : undefined}
         collapseTags
-        clearable>
+        clearable
+        filterable>
         {list.value.map((item) => (
           <Select.Option
             key={lodashGet(item, props.optionIdPath)}

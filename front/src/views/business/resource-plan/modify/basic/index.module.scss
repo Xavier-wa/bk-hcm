@@ -1,0 +1,46 @@
+.home {
+  display: grid;
+  padding: 0 28px 8px;
+  gap: 12px 40px;
+  grid-template-columns: 350px 350px 350px;
+
+  .op-relation{
+    width: 360px;
+    display: flex;
+
+      .warning-text{
+        color: #f00;
+      }
+  }
+
+  .biz-list{
+    grid-column: 1 / 2; 
+    width: 740px;
+    line-height: normal;
+  }
+
+  .forecast-type{
+    grid-column: 1 / 2; 
+  }
+
+  .text {
+    background: #f5f7fa;
+    border-radius: 2px;
+    line-height: 32px;
+    display: inline-block;
+    padding: 0 10px;
+    width: 100%;
+  }
+
+  :global(.bk-form-item) {
+    margin-bottom: 0 !important;
+  }
+
+  :global(.bk-radio-group) {
+    width: 100%
+  }
+
+  :global(.bk-radio-button) {
+    width: 50%;
+  }
+}

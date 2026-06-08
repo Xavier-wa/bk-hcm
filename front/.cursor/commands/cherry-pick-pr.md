@@ -1,0 +1,1 @@
+../../.hcmfe/know-how/commands/cherry-pick-pr.md

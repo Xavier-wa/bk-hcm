@@ -75,7 +75,6 @@ const fromData = reactive({
 });
 
 const handleToggleShow = (type: string) => {
-  console.log('type', type);
   if (type === 'network') {
     showNetworkDialog.value = !showNetworkDialog.value;
   } else if (type === 'virtual') {
@@ -108,9 +107,7 @@ const handleConfirmBind = () => {
 //   });
 // };
 
-const handleRadio = (item: any) => {
-  console.log(item);
-};
+const handleRadio = () => {};
 
 const getNetWorkList = async () => {
   isLoading.value = true;
@@ -118,7 +115,6 @@ const getNetWorkList = async () => {
     const type = props.data.vendor;
     const { id } = props.data;
     const res = await resourceStore.getNetworkList(type, id);
-    console.log('res', res);
     res.data = res.data.map((item: any) => {
       item = {
         ...item,
@@ -131,7 +127,7 @@ const getNetWorkList = async () => {
     });
     tableData.value = res.data;
   } catch (error) {
-    console.log(error);
+    console.error(error);
   } finally {
     isLoading.value = false;
   }
@@ -214,10 +210,10 @@ getNetWorkList();
         <span>新加坡</span>
       </bk-form-item>
       <bk-form-item :label="t('安全组')">
-        <bk-select v-model="fromData.name"></bk-select>
+        <bk-select v-model="fromData.name" filterable></bk-select>
       </bk-form-item>
       <bk-form-item :label="t('子网')">
-        <bk-select v-model="fromData.name"></bk-select>
+        <bk-select v-model="fromData.name" filterable></bk-select>
       </bk-form-item>
       <bk-form-item :label="t('私有IP地址')">
         <bk-input v-model="fromData.name" :placeholder="t('请输入私有IP地址')" />
@@ -243,7 +239,7 @@ getNetWorkList();
             label=""
             @click="
               () => {
-                handleRadio(data);
+                handleRadio();
               }
             "
           />
@@ -276,7 +272,7 @@ getNetWorkList();
         <span>新加坡</span>
       </bk-form-item>
       <bk-form-item :label="t('子网')">
-        <bk-select v-model="fromData.name"></bk-select>
+        <bk-select v-model="fromData.name" filterable></bk-select>
       </bk-form-item>
       <bk-form-item :label="t('私有IP地址')">
         <bk-input v-model="fromData.name" :placeholder="t('请输入私有IP地址')" />
@@ -300,16 +296,16 @@ getNetWorkList();
         <span>新加坡一区</span>
       </bk-form-item>
       <bk-form-item :label="t('虚拟私有云')">
-        <bk-select v-model="fromData.name"></bk-select>
+        <bk-select v-model="fromData.name" filterable></bk-select>
       </bk-form-item>
       <bk-form-item :label="t('子网')">
-        <bk-select v-model="fromData.name"></bk-select>
+        <bk-select v-model="fromData.name" filterable></bk-select>
       </bk-form-item>
       <bk-form-item :label="t('私有IP地址')">
-        <bk-select v-model="fromData.name"></bk-select>
+        <bk-select v-model="fromData.name" filterable></bk-select>
       </bk-form-item>
       <bk-form-item :label="t('安全组')">
-        <bk-select v-model="fromData.name"></bk-select>
+        <bk-select v-model="fromData.name" filterable></bk-select>
       </bk-form-item>
     </bk-form>
   </bk-dialog>
@@ -331,7 +327,7 @@ getNetWorkList();
         <span>新加坡</span>
       </bk-form-item>
       <bk-form-item :label="t('网卡')">
-        <bk-select v-model="fromData.name"></bk-select>
+        <bk-select v-model="fromData.name" filterable></bk-select>
       </bk-form-item>
     </bk-form>
     <bk-table class="mt20" dark-header :data="[{ ip: 'testetstt' }]" :outer-border="false" show-overflow-tooltip>
@@ -343,7 +339,7 @@ getNetWorkList();
               label=""
               @click="
                 () => {
-                  handleRadio(data);
+                  handleRadio();
                 }
               "
             />
@@ -388,7 +384,7 @@ getNetWorkList();
                   label=""
                   @click="
                     () => {
-                      handleRadio(data);
+                      handleRadio();
                     }
                   "
                 />
@@ -400,7 +396,7 @@ getNetWorkList();
         </bk-table>
       </bk-form-item>
       <bk-form-item :label="t('网卡')" label-width="100">
-        <bk-select v-model="fromData.name"></bk-select>
+        <bk-select v-model="fromData.name" filterable></bk-select>
       </bk-form-item>
     </bk-form>
   </bk-dialog>
@@ -411,28 +407,35 @@ getNetWorkList();
   font-size: 14px;
   margin-bottom: 8px;
 }
+
 .sub-title {
   font-size: 12px;
 }
+
 .cell-flex {
   display: flex;
   align-items: center;
 }
+
 .table-warp {
   padding: 20px;
-  border: 1px dashed rgb(225, 221, 221);
+  border: 1px dashed rgb(225 221 221);
+
   .table-flex {
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
 }
+
 .flex {
   display: flex;
   align-items: center;
 }
+
 .form-warp {
-  border-top: 1px solid rgb(225, 221, 221);
+  border-top: 1px solid rgb(225 221 221);
+
   .item-warp {
     margin-right: 40px;
   }
@@ -440,8 +443,5 @@ getNetWorkList();
 
 :deep(.detail-tab-main) .bk-tab-content {
   height: calc(100vh - 300px) !important;
-}
-
-.info-warp {
 }
 </style>

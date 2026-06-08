@@ -834,9 +834,7 @@ func convCreateResPlanDemandReqs(kt *kit.Kit, ticket *ApplyTicketCtx, demand *pt
 	}
 	createReq.DiskType = createReq.DiskType.GetWithDefault()
 	createReq.DiskTypeName = createReq.DiskType.Name()
-	if kt.User == constant.BackendOperationUserKey {
-		createReq.Creator = ticket.Applicant
-	}
+	createReq.Creator = ticket.Applicant
 
 	// 更新日志
 	logCreateReq := rpproto.DemandChangelogCreate{

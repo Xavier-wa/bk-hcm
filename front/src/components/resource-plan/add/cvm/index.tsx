@@ -106,7 +106,12 @@ export default defineComponent({
         (deviceType) => deviceType.device_type === props.planTicketDemand.cvm.device_type,
       );
       deviceTypeInfo.value = deviceType
-        ? t('所选机型为{0}，CPU为{1}核，内存为{2}G', [deviceType.core_type, deviceType.cpu_core, deviceType.memory])
+        ? t(
+            deviceType.gpu_amount > 0
+              ? '所选机型为{0}，CPU为{1}核，内存为{2}G，GPU卡为{3}张'
+              : '所选机型为{0}，CPU为{1}核，内存为{2}G',
+            [deviceType.core_type, deviceType.cpu_core, deviceType.memory, deviceType.gpu_amount],
+          )
         : '';
 
       const perCpuCore = deviceType?.cpu_core || 0;

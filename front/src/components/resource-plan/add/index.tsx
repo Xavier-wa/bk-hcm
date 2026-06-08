@@ -158,6 +158,7 @@ export default defineComponent({
       <CommonSideslider
         width='960'
         class={cssModule.home}
+        renderType='if'
         isSubmitDisabled={isSubmitDisabled.value}
         submitTooltips={submitTooltips.value}
         isShow={props.isShow}

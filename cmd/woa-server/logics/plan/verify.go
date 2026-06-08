@@ -37,6 +37,7 @@ import (
 	"hcm/pkg/runtime/filter"
 	"hcm/pkg/thirdparty/cvmapi"
 	cvt "hcm/pkg/tools/converter"
+	"hcm/pkg/tools/maps"
 )
 
 // VerifyResPlanDemandV2 verify resource plan demand for subOrders.
@@ -54,6 +55,7 @@ func (c *Controller) VerifyResPlanDemandV2(kt *kit.Kit, bkBizID int64, requireTy
 	result := make([]ptypes.VerifyResPlanDemandElem, len(subOrders))
 	resultIndex := make(map[int]int)
 	verifySlice := make([]VerifyResPlanElemV2, 0)
+	excludeSuborderIDSet := make(map[string]struct{}, len(subOrders))
 
 	for idx, subOrder := range subOrders {
 		// if resource type is not cvm or upgrade_cvm, set verify result to not involved.
@@ -62,6 +64,11 @@ func (c *Controller) VerifyResPlanDemandV2(kt *kit.Kit, bkBizID int64, requireTy
 				VerifyResult: enumor.VerifyResPlanRstNotInvolved,
 			}
 			continue
+		}
+
+		// 收集本次校验的子单ID
+		if subOrder.SuborderID != "" {
+			excludeSuborderIDSet[subOrder.SuborderID] = struct{}{}
 		}
 
 		baseVerifySlice := c.getVerifySliceWithDeviceInfo(deviceTypeMap, subOrder)
@@ -79,7 +86,7 @@ func (c *Controller) VerifyResPlanDemandV2(kt *kit.Kit, bkBizID int64, requireTy
 	}
 
 	// call verify resource plan demands to verify each cvm demands.
-	rst, err := c.VerifyProdDemandsV2(kt, bkBizID, requireType, verifySlice)
+	rst, err := c.verifyProdDemandsV2(kt, bkBizID, requireType, verifySlice, maps.Keys(excludeSuborderIDSet))
 	if err != nil {
 		logs.Errorf("failed to verify resource plan demand v2, err: %v, bkBizID: %d, rid: %s", err, bkBizID, kt.Rid)
 		return nil, errf.NewFromErr(errf.Aborted, err)

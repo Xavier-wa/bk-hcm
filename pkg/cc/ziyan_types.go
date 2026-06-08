@@ -1077,8 +1077,9 @@ func (c CaiCheCli) Validate() error {
 
 // ResourceSync 自研云-资源同步相关配置
 type ResourceSync struct {
-	SyncCapacity SyncCapacity `yaml:"syncCapacity"`
-	SyncLeftIP   int          `yaml:"syncLeftIP"`
+	SyncCapacity              SyncCapacity              `yaml:"syncCapacity"`
+	SyncLeftIP                int                       `yaml:"syncLeftIP"`
+	SyncDeviceTypePhysicalRel SyncDeviceTypePhysicalRel `yaml:"syncDeviceTypePhysicalRel"`
 }
 
 // Validate ...
@@ -1112,6 +1113,42 @@ func (c SyncCapacity) Validate() error {
 	return nil
 }
 
+// SyncDeviceTypePhysicalRel 自研云-CVM机型与物理机机型族映射同步配置
+type SyncDeviceTypePhysicalRel struct {
+	// Interval 同步周期，单位：分钟。默认 1440（每日 1 次）。
+	Interval int `yaml:"interval"`
+}
+
+// trySetDefault 缺省时回落默认值
+func (c *SyncDeviceTypePhysicalRel) trySetDefault() {
+	if c.Interval <= 0 {
+		c.Interval = 1440
+	}
+}
+
+// ApplyRecommend 申领机型推荐离线统计相关配置
+type ApplyRecommend struct {
+	// Interval 任务执行间隔，单位：分钟
+	Interval int `yaml:"interval"`
+	// LookbackDays 统计回溯天数
+	LookbackDays int `yaml:"lookbackDays"`
+	// MaxRows 每分组保留 Top-K 推荐条数
+	MaxRows int `yaml:"maxRows"`
+}
+
+// trySetDefault sets default values for ApplyRecommend.
+func (a *ApplyRecommend) trySetDefault() {
+	if a.Interval <= 0 {
+		a.Interval = 720
+	}
+	if a.LookbackDays <= 0 {
+		a.LookbackDays = 90
+	}
+	if a.MaxRows <= 0 {
+		a.MaxRows = 5
+	}
+}
+
 // StuckCheckCfg stuck check config.
 type StuckCheckCfg struct {
 	Enable       bool          `yaml:"enable"`
@@ -1119,6 +1156,8 @@ type StuckCheckCfg struct {
 	StartUpDelay time.Duration `yaml:"startUpDelay"`
 	MaxTime      time.Duration `yaml:"maxTime"`
 	MinTime      time.Duration `yaml:"minTime"`
+	CvmDelayTime time.Duration `yaml:"cvmDelayTime"` // CVM延迟销毁隔离时间
+	PmDelayTime  time.Duration `yaml:"pmDelayTime"`  // PM延迟销毁隔离时间
 }
 
 // StuckCheck order stuck check.
@@ -1144,6 +1183,12 @@ func (c *StuckCheckCfg) trySetDefault() {
 	}
 	if c.StartUpDelay <= 0 {
 		c.StartUpDelay = 2 * time.Minute
+	}
+	if c.CvmDelayTime <= 0 {
+		c.CvmDelayTime = 24 * 7 * time.Hour
+	}
+	if c.PmDelayTime <= 0 {
+		c.PmDelayTime = 24 * time.Hour
 	}
 }
 

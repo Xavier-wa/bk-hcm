@@ -23,6 +23,7 @@ package dispatcher
 import (
 	"context"
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"hcm/cmd/woa-server/logics/biz"
@@ -63,6 +64,9 @@ type Dispatcher struct {
 	subTicketQueue *ptypes.UniQueue
 
 	resFetcher fetcher.Fetcher
+
+	// processingTickets 记录正在处理中的单据ID，防止同一单据被并发处理
+	processingTickets sync.Map
 }
 
 // New creates a resource plan ticket Dispatcher instance.

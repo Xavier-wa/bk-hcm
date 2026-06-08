@@ -24,8 +24,8 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/preview/recycle/order
 
 | 参数名称 | 参数类型    | 必选 | 描述                                                                           |
 |------|---------|----|------------------------------------------------------------------------------|
-| cvm	 | string	 | 否	 | cvm退回策略，默认值"IMMEDIATE"。"IMMEDIATE": 立即销毁, "DELAY": 延迟销毁（隔离观察7天，隔离期间费用仍由业务承担） |
-| pm	  | string	 | 否  | 物理机退回策略，默认值"IMMEDIATE"。"IMMEDIATE": 立即销毁, "DELAY": 延迟销毁（隔离观察2天，隔离期间费用仍由业务承担） |
+| cvm	 | string	 | 否	 | cvm退回策略，默认值"IMMEDIATE"。"IMMEDIATE": 立即销毁, "DELAY": 延迟销毁（隔离观察15天，隔离期间费用仍由业务承担） |
+| pm	  | string	 | 否  | 物理机退回策略，默认值"IMMEDIATE"。"IMMEDIATE": 立即销毁, "DELAY": 延迟销毁（隔离观察1天，隔离期间费用仍由业务承担） |
 
 说明：
 

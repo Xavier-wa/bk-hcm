@@ -42,6 +42,7 @@ POST /api/v1/woa/meta/device_type/list
         "core_type": "大核心",
         "cpu_core": 123,
         "memory": 123,
+        "gpu_amount": 0,
         "device_class": "标准型SA5",
         "device_family": "标准型"
       },
@@ -50,8 +51,18 @@ POST /api/v1/woa/meta/device_type/list
         "core_type": "小核心",
         "cpu_core": 123,
         "memory": 123,
+        "gpu_amount": 0,
         "device_class": "标准型SA5",
         "device_family": "标准型"
+      },
+      {
+        "device_type": "PNV5b.12XLARGE192",
+        "core_type": "大核心",
+        "cpu_core": 48,
+        "memory": 192,
+        "gpu_amount": 0.25,
+        "device_class": "GPU计算型PNV5b",
+        "device_family": "GPU型"
       }
     ]
   }
@@ -74,11 +85,12 @@ POST /api/v1/woa/meta/device_type/list
 
 #### data.details[n]
 
-| 参数名称       | 参数类型 | 描述              |
-|---------------|--------|-------------------|
-| device_type   | string | 机型规格           |
-| core_type     | string | 核心类型           |
+| 参数名称          | 参数类型   | 描述          |
+|---------------|--------|-------------|
+| device_type   | string | 机型规格        |
+| core_type     | string | 核心类型        |
 | cpu_core      | int    | CPU核心数，单位：核 |
 | memory        | int    | 内存大小，单位：GB  |
-| device_class  | string | 机型分类           |
-| device_family | string | 机型族             |
+| gpu_amount    | float  | GPU卡数       |
+| device_class  | string | 机型分类        |
+| device_family | string | 机型族         |

@@ -102,6 +102,8 @@ type CVMClientInterface interface {
 	// QueryZoneCityList 查询可用区与城市映射列表
 	QueryZoneCityList(ctx context.Context, header http.Header, req *QueryZoneCityListReq) (*QueryZoneCityListResp,
 		error)
+	// QueryCvmTypeList 查询CVM机型与物理机机型族映射列表
+	QueryCvmTypeList(kt *kit.Kit, params *QueryCvmTypeListParams) (*QueryCvmTypeListResp, error)
 }
 
 // NewCVMClientInterface creates a cvm api instance
@@ -817,6 +819,42 @@ func (c *cvmApi) QueryZoneCityList(ctx context.Context, header http.Header, req 
 	if err != nil {
 		logs.Errorf("cvm:query:zone:city:list:failed, err: %v, subPath: %s, req: %+v", err, subPath, req)
 		return nil, err
+	}
+
+	return resp, nil
+}
+
+// QueryCvmTypeList 查询CVM机型与物理机机型族映射列表
+func (c *cvmApi) QueryCvmTypeList(kt *kit.Kit, params *QueryCvmTypeListParams) (*QueryCvmTypeListResp, error) {
+	req := &QueryCvmTypeListReq{
+		ReqMeta: ReqMeta{
+			Id:      CvmId,
+			JsonRpc: CvmJsonRpc,
+			Method:  QueryCvmTypeListMethod,
+		},
+		Params: params,
+	}
+	subPath := "/yunti-demand/external"
+	resp := new(QueryCvmTypeListResp)
+	err := c.client.Post().
+		WithContext(kt.Ctx).
+		Body(req).
+		SubResourcef(subPath).
+		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithHeaders(kt.Header()).
+		Do().
+		Into(resp)
+
+	if err != nil {
+		logs.Errorf("query cvm type list failed, err: %v, subPath: %s, req: %+v, rid: %s", err, subPath, req, kt.Rid)
+		return nil, err
+	}
+
+	if resp.Error.Code != 0 {
+		logs.Errorf("query cvm type list code error, subPath: %s, code: %d, msg: %s, crpTraceID: %s, req: %+v, "+
+			"rid: %s", subPath, resp.Error.Code, resp.Error.Message, resp.TraceId, req, kt.Rid)
+		return nil, fmt.Errorf("query cvm type list code error, code: %d, msg: %s, crpTraceID: %s",
+			resp.Error.Code, resp.Error.Message, resp.TraceId)
 	}
 
 	return resp, nil

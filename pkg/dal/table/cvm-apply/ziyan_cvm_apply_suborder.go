@@ -150,9 +150,9 @@ type ZiyanCvmApplySuborder struct {
 	// NetworkType 网络类型
 	NetworkType string `db:"network_type" json:"network_type" validate:"max=64"`
 	// Vpc VPC ID
-	Vpc string `db:"vpc" json:"vpc" validate:"max=64"`
+	Vpc *string `db:"vpc" json:"vpc" validate:"omitempty,max=64"`
 	// Subnet 子网ID
-	Subnet string `db:"subnet" json:"subnet" validate:"max=64"`
+	Subnet *string `db:"subnet" json:"subnet" validate:"omitempty,max=64"`
 	// OsType 操作系统类型
 	OsType string `db:"os_type" json:"os_type" validate:"max=64"`
 	// RaidType RAID类型
@@ -170,7 +170,7 @@ type ZiyanCvmApplySuborder struct {
 	// BkAssetID 被继承固资编号
 	BkAssetID string `db:"bk_asset_id" json:"bk_asset_id" validate:"max=64"`
 	// ResAssign 资源分配方式
-	ResAssign enumor.ResAssign `db:"res_assign" json:"res_assign"`
+	ResAssign *enumor.ResAssign `db:"res_assign" json:"res_assign"`
 	// CPUThreadSwitch CPU线程开关
 	CPUThreadSwitch enumor.CPUThreadSwitch `db:"cpu_thread_switch" json:"cpu_thread_switch"`
 	// SystemDisk 系统盘

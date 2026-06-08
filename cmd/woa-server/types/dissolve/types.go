@@ -28,6 +28,7 @@ import (
 	"hcm/pkg"
 	"hcm/pkg/api/core"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/criteria/validator"
 	hostdefine "hcm/pkg/dal/table/dissolve/host"
@@ -481,21 +482,61 @@ func (l *ListDissolveCpuCoreSummaryReq) Validate() error {
 
 // CpuCoreSummary dissolve cpu core summary
 type CpuCoreSummary struct {
-	TotalCore     int64     `json:"total_core"`
-	DeliveredCore int64     `json:"delivered_core"`
-	HostApplyTime time.Time `json:"host_apply_time"`
+	TotalCore        int64     `json:"total_core"`
+	DeliveredCore    int64     `json:"delivered_core"`
+	HostApplyTime    time.Time `json:"host_apply_time"`
+	QuotaCoefficient float64   `json:"quota_coefficient"` // 配额系数
+	QuotaOffset      int64     `json:"quota_offset"`      // 业务偏移额度（正数为调增，负数为调减）
+	AvailableQuota   int64     `json:"available_quota"`   // 可申请额度
+}
+
+// QuotaOffsetItem 单个业务偏移配置
+type QuotaOffsetItem struct {
+	BkBizID int64                          `json:"bk_biz_id"` // 业务ID
+	Offset  int64                          `json:"offset"`    // 偏移值
+	Type    enumor.DissolveQuotaOffsetType `json:"type"`      // 调整类型：increase=调增，decrease=调减
+	Memo    string                         `json:"memo"`      // 调整原因
+}
+
+// Validate 校验偏移配置
+func (q *QuotaOffsetItem) Validate() error {
+	if q.BkBizID <= 0 {
+		return fmt.Errorf("invalid bk_biz_id: %d", q.BkBizID)
+	}
+	if err := q.Type.Validate(); err != nil {
+		return err
+	}
+	if q.Offset < 0 {
+		return errors.New("offset must be non-negative")
+	}
+	if len(q.Memo) > 512 {
+		return errors.New("memo exceeds 512 characters")
+	}
+	return nil
+}
+
+// SignedOffset 返回带符号的偏移值（调增为正，调减为负）
+func (q *QuotaOffsetItem) SignedOffset() int64 {
+	if q.Type == enumor.DissolveQuotaOffsetTypeIncrease {
+		return q.Offset
+	}
+	return -q.Offset
 }
 
 // Config dissolve config
 type Config struct {
-	HostApplyTime *time.Time `json:"host_apply_time"`
-	ApprovalLimit *float64   `json:"approval_limit"`
+	HostApplyTime    *time.Time        `json:"host_apply_time"`
+	ApprovalLimit    *float64          `json:"approval_limit"`
+	QuotaCoefficient *float64          `json:"quota_coefficient,omitempty"`
+	QuotaOffsets     []QuotaOffsetItem `json:"quota_offsets,omitempty"`
 }
 
 // UpsertConfigReq upsert config request
 type UpsertConfigReq struct {
-	HostApplyTime *time.Time `json:"host_apply_time" validate:"omitempty"`
-	ApprovalLimit *float64   `json:"approval_limit" validate:"omitempty"`
+	HostApplyTime    *time.Time        `json:"host_apply_time" validate:"omitempty"`
+	ApprovalLimit    *float64          `json:"approval_limit" validate:"omitempty"`
+	QuotaCoefficient *float64          `json:"quota_coefficient" validate:"omitempty"`
+	QuotaOffsets     []QuotaOffsetItem `json:"quota_offsets" validate:"omitempty"`
 }
 
 // Validate ...
@@ -504,12 +545,73 @@ func (u *UpsertConfigReq) Validate() error {
 		return err
 	}
 
-	if u.ApprovalLimit == nil {
-		return nil
+	if u.ApprovalLimit != nil {
+		if cvt.PtrToVal(u.ApprovalLimit) < 0 || cvt.PtrToVal(u.ApprovalLimit) > 100 {
+			return errors.New("approval_limit must between 0 and 100")
+		}
 	}
-	if cvt.PtrToVal(u.ApprovalLimit) < 0 || cvt.PtrToVal(u.ApprovalLimit) > 100 {
-		return errors.New("approval_limit must between 0 and 100")
+
+	if u.QuotaCoefficient != nil {
+		coef := cvt.PtrToVal(u.QuotaCoefficient)
+		if coef < 1 || coef > 100 {
+			return errors.New("quota_coefficient must between 1 and 100")
+		}
+	}
+
+	// 校验偏移配置
+	seenBizIDs := make(map[int64]bool)
+	for _, item := range u.QuotaOffsets {
+		if err := item.Validate(); err != nil {
+			return fmt.Errorf("quota offset for biz %d: %w", item.BkBizID, err)
+		}
+		if seenBizIDs[item.BkBizID] {
+			return fmt.Errorf("duplicate bk_biz_id: %d", item.BkBizID)
+		}
+		seenBizIDs[item.BkBizID] = true
 	}
 
 	return nil
+}
+
+// UpdateDissolveQuotaOffsetReq 单业务偏移修改请求
+type UpdateDissolveQuotaOffsetReq struct {
+	Offset *int64                         `json:"offset" validate:"required,min=0"`
+	Type   enumor.DissolveQuotaOffsetType `json:"type" validate:"required"`
+	Memo   string                         `json:"memo" validate:"max=512"`
+}
+
+// Validate ...
+func (u *UpdateDissolveQuotaOffsetReq) Validate() error {
+	if err := validator.Validate.Struct(u); err != nil {
+		return err
+	}
+	if err := u.Type.Validate(); err != nil {
+		return err
+	}
+	// 显式校验 offset >= 0，因为 validator 的 min=0 对指针类型可能不生效
+	if u.Offset != nil && *u.Offset < 0 {
+		return errors.New("offset must be greater than or equal to 0")
+	}
+	if len(u.Memo) > 512 {
+		return errors.New("memo exceeds 512 characters")
+	}
+	return nil
+}
+
+// SignedOffset 返回带符号的偏移值（调增为正，调减为负）
+func (u *UpdateDissolveQuotaOffsetReq) SignedOffset() int64 {
+	if u.Offset == nil {
+		return 0
+	}
+	if u.Type == enumor.DissolveQuotaOffsetTypeIncrease {
+		return *u.Offset
+	}
+	return -*u.Offset
+}
+
+// UpdateDissolveQuotaOffsetResp 单业务偏移修改响应
+type UpdateDissolveQuotaOffsetResp struct {
+	BkBizID      int64 `json:"bk_biz_id"`
+	BeforeOffset int64 `json:"before_offset"`
+	AfterOffset  int64 `json:"after_offset"`
 }
