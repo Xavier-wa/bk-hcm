@@ -1126,6 +1126,29 @@ func (c *SyncDeviceTypePhysicalRel) trySetDefault() {
 	}
 }
 
+// ApplyRecommend 申领机型推荐离线统计相关配置
+type ApplyRecommend struct {
+	// Interval 任务执行间隔，单位：分钟
+	Interval int `yaml:"interval"`
+	// LookbackDays 统计回溯天数
+	LookbackDays int `yaml:"lookbackDays"`
+	// MaxRows 每分组保留 Top-K 推荐条数
+	MaxRows int `yaml:"maxRows"`
+}
+
+// trySetDefault sets default values for ApplyRecommend.
+func (a *ApplyRecommend) trySetDefault() {
+	if a.Interval <= 0 {
+		a.Interval = 720
+	}
+	if a.LookbackDays <= 0 {
+		a.LookbackDays = 90
+	}
+	if a.MaxRows <= 0 {
+		a.MaxRows = 5
+	}
+}
+
 // StuckCheckCfg stuck check config.
 type StuckCheckCfg struct {
 	Enable       bool          `yaml:"enable"`

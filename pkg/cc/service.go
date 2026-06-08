@@ -609,6 +609,7 @@ type WoaServerSetting struct {
 	RollingServer     RollingServer     `yaml:"rollingServer"`
 	ResPlan           ResPlan           `yaml:"resPlan"`
 	ResourceSync      ResourceSync      `yaml:"resourceSync"`
+	ApplyRecommend    ApplyRecommend    `yaml:"applyRecommend"`
 	Cmsi              CMSI              `yaml:"cmsi"`
 	StuckCheck        StuckCheck        `yaml:"stuckCheck"`
 	ApplyTicketConfig ApplyTicketConfig `yaml:"applyTicketConfig"`
@@ -629,6 +630,7 @@ func (s *WoaServerSetting) trySetDefault() {
 	s.Log.trySetDefault()
 	s.StuckCheck.trySetDefault()
 	s.ResourceSync.SyncDeviceTypePhysicalRel.trySetDefault()
+	s.ApplyRecommend.trySetDefault()
 
 	return
 }

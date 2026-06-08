@@ -60,4 +60,6 @@ func (s *service) initService(h *rest.Handler) {
 	h.Add("SyncLeftIPs", http.MethodPost, "/left_ips/sync", s.SyncLeftIPs)
 	h.Add("SyncDeviceTypePhysicalRel", http.MethodPost,
 		s.tasks[enumor.CronTaskSyncDeviceTypePhysicalRel].GetURL(), s.SyncDeviceTypePhysicalRel)
+	h.Add("SyncApplyRecommend", http.MethodPost, s.tasks[enumor.CronTaskApplyRecommendOffline].GetURL(),
+		s.SyncApplyRecommend)
 }

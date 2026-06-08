@@ -214,6 +214,8 @@ type Set interface {
 	ZiyanCvmDeviceInfo() cvmapply.ZiyanCvmDeviceInfoInterface
 	ZiyanCvmDeliverRecord() cvmapply.ZiyanCvmDeliverRecordInterface
 	ZiyanCvmModifyRecord() cvmapply.ZiyanCvmModifyRecordInterface
+	ZiyanCvmApplyUserRecommend() cvmapply.ZiyanCvmApplyUserRecommendInterface
+	ZiyanCvmApplyBizRecommend() cvmapply.ZiyanCvmApplyBizRecommendInterface
 
 	Txn() *Txn
 }
@@ -1289,5 +1291,21 @@ func (s *set) ZiyanCvmModifyRecord() cvmapply.ZiyanCvmModifyRecordInterface {
 		Orm:   s.orm,
 		IDGen: s.idGen,
 		Audit: s.audit,
+	}
+}
+
+// ZiyanCvmApplyUserRecommend return ziyan cvm apply user recommend dao.
+func (s *set) ZiyanCvmApplyUserRecommend() cvmapply.ZiyanCvmApplyUserRecommendInterface {
+	return &cvmapply.ZiyanCvmApplyUserRecommendDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+	}
+}
+
+// ZiyanCvmApplyBizRecommend return ziyan cvm apply biz recommend dao.
+func (s *set) ZiyanCvmApplyBizRecommend() cvmapply.ZiyanCvmApplyBizRecommendInterface {
+	return &cvmapply.ZiyanCvmApplyBizRecommendDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
 	}
 }

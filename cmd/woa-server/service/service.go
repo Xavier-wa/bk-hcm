@@ -712,8 +712,15 @@ func (s *Service) initCronTask() error {
 	}
 	s.tasks[enumor.CronTaskSyncDeviceTypePhysicalRel] = syncDeviceTypePhysicalRelTask
 
+	applyRecommendTask, err := crontask.NewApplyRecommendOfflineTask(s.client, s.sd)
+	if err != nil {
+		logs.Errorf("init apply recommend offline task failed, err: %v", err)
+		return err
+	}
+	s.tasks[enumor.CronTaskApplyRecommendOffline] = applyRecommendTask
+
 	err = cron.Register([]croncore.Task{
-		deviceCapacityTask, rollingMonthlyTerminateNoticeTask, syncDeviceTypePhysicalRelTask,
+		deviceCapacityTask, rollingMonthlyTerminateNoticeTask, syncDeviceTypePhysicalRelTask, applyRecommendTask,
 	})
 	if err != nil {
 		logs.Errorf("register cron tasks failed, err: %v", err)

@@ -318,6 +318,10 @@ const (
 	ZiyanCvmDeliverRecordTable = "ziyan_cvm_deliver_record"
 	// ZiyanCvmModifyRecordTable 自研云CVM变更记录表
 	ZiyanCvmModifyRecordTable = "ziyan_cvm_modify_record"
+	// ZiyanCvmApplyUserRecommendTable 用户维度申领机型推荐表
+	ZiyanCvmApplyUserRecommendTable = "ziyan_cvm_apply_user_recommend"
+	// ZiyanCvmApplyBizRecommendTable 业务维度申领机型推荐表
+	ZiyanCvmApplyBizRecommendTable = "ziyan_cvm_apply_biz_recommend"
 )
 
 // Validate whether the table name is valid or not.
@@ -481,14 +485,16 @@ var TableMap = map[Name]TableConfig{
 	PermissionPolicyLibraryTable: {EnableTenant: true},
 	DeviceCapacityTable:          {},
 
-	ZiyanCvmApplyOrderTable:     {},
-	ZiyanCvmApplySuborderTable:  {},
-	ZiyanCvmApplyStepTable:      {},
-	ZiyanCvmGenerateRecordTable: {},
-	ZiyanCvmApplyInitTaskTable:  {},
-	ZiyanCvmDeviceInfoTable:     {},
-	ZiyanCvmDeliverRecordTable:  {},
-	ZiyanCvmModifyRecordTable:   {},
+	ZiyanCvmApplyOrderTable:         {},
+	ZiyanCvmApplySuborderTable:      {},
+	ZiyanCvmApplyStepTable:          {},
+	ZiyanCvmGenerateRecordTable:     {},
+	ZiyanCvmApplyInitTaskTable:      {},
+	ZiyanCvmDeviceInfoTable:         {},
+	ZiyanCvmDeliverRecordTable:      {},
+	ZiyanCvmModifyRecordTable:       {},
+	ZiyanCvmApplyUserRecommendTable: {},
+	ZiyanCvmApplyBizRecommendTable:  {},
 }
 
 // Register 注册表名

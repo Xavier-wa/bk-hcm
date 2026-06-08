@@ -132,3 +132,5 @@ data:
       {{- toYaml .Values.applyTicketConfig | nindent 6 }}
     recycleNotice:
       {{- toYaml .Values.recycleNotice | nindent 6 }}
+    applyRecommend:
+      {{- toYaml .Values.applyRecommend | nindent 6 }}

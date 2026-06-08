@@ -1,7 +1,7 @@
 /*
  * TencentBlueKing is pleased to support the open source community by making
  * 蓝鲸智云 - 混合云管理平台 (BlueKing - Hybrid Cloud Management System) available.
- * Copyright (C) 2022 THL A29 Limited,
+ * Copyright (C) 2024 THL A29 Limited,
  * a Tencent company. All rights reserved.
  * Licensed under the MIT License (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,18 +17,28 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package enumor
+// Package ressync 资源同步相关接口
+package ressync
 
-// CronTask 定时任务
-type CronTask string
-
-const (
-	// CronTaskSyncDeviceCapacity 同步主机库存
-	CronTaskSyncDeviceCapacity CronTask = "sync_device_capacity"
-	// CronTaskRollingMonthlyTerminateNotice 滚服申领单跨月终止通知
-	CronTaskRollingMonthlyTerminateNotice CronTask = "rolling_monthly_terminate_notice"
-	// CronTaskSyncDeviceTypePhysicalRel 同步 CVM 机型与物理机机型族映射
-	CronTaskSyncDeviceTypePhysicalRel CronTask = "sync_device_type_physical_rel"
-	// CronTaskApplyRecommendOffline 申领机型推荐离线统计
-	CronTaskApplyRecommendOffline CronTask = "apply_recommend_offline"
+import (
+	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/iam/meta"
+	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 )
+
+// SyncApplyRecommend manually triggers the apply recommend offline stats task.
+func (s *service) SyncApplyRecommend(cts *rest.Contexts) (any, error) {
+	if err := s.authorizer.AuthorizeWithPerm(cts.Kit, meta.ResourceAttribute{Basic: &meta.Basic{
+		Type: meta.ZiyanCvmCreate, Action: meta.Find}}); err != nil {
+		logs.Errorf("no permission to sync apply recommend, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	if err := s.tasks[enumor.CronTaskApplyRecommendOffline].Do(cts.Kit); err != nil {
+		logs.Errorf("sync apply recommend failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return nil, nil
+}
