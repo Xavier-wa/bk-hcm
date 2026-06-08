@@ -26,14 +26,20 @@ import (
 	"sync"
 
 	"hcm/cmd/agent-server/logics/agent"
+	"hcm/cmd/agent-server/logics/auth"
+	"hcm/cmd/agent-server/logics/embedding"
 	"hcm/cmd/agent-server/logics/model"
 	"hcm/cmd/agent-server/logics/prompt"
 	"hcm/cmd/agent-server/logics/skill"
 	"hcm/cmd/agent-server/logics/storage"
 	"hcm/cmd/agent-server/logics/tool"
+	"hcm/cmd/agent-server/logics/toolproxy"
+	"hcm/pkg/api/core"
 	"hcm/pkg/cc"
+	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 
 	_ "github.com/ncruces/go-sqlite3/driver" // import sqlite3 driver, used by memory/sqlitevec
@@ -50,16 +56,24 @@ import (
 // Runtime wraps app.Runtime and adds an idempotent Close.
 type Runtime struct {
 	// AGUIRunner is the AGUI runner instance that orchestrates agent execution.
-	AGUIRunner        runner.Runner
-	aguiSessionSvc    session.Service     // non-nil when MySQL session backend is configured
-	aguiMemorySvc     memory.Service      // non-nil when MySQL memory backend is configured
-	aguiMCPToolSets   *tool.MCPToolSet    // non-nil when MCP toolsets are configured
+	AGUIRunner      runner.Runner
+	aguiSessionSvc  session.Service  // non-nil when MySQL session backend is configured
+	aguiMemorySvc   memory.Service   // non-nil when MySQL memory backend is configured
+	aguiMCPToolSets *tool.MCPToolSet // non-nil when MCP toolsets are configured
+
+	// toolProxy is the tool proxy instance, or nil when not active.
+	toolProxy         *toolproxy.ToolProxy
 	dynamicToolFilter trpctool.FilterFunc // non-nil when dynamic tool loading is enabled
 	skillMgr          *skill.Manager
 	promptMgr         *prompt.Manager
 	readiness         *Readiness
 	checkpointSaver   graph.CheckpointSaver
 	closeOnce         sync.Once
+}
+
+// ToolProxy returns the Tool Proxy instance, or nil when not active.
+func (rt *Runtime) ToolProxy() *toolproxy.ToolProxy {
+	return rt.toolProxy
 }
 
 // Readiness returns agent-server readiness state (skill + prompt sync).
@@ -122,7 +136,7 @@ func (rt *Runtime) MCPToolSets() *tool.MCPToolSet {
 
 // New initialises the Agent Runtime from the global configuration (cc.AgentServer).
 // Runtime contains the Agent and Runner.
-func New() (*Runtime, error) {
+func New(clientSet *client.ClientSet) (*Runtime, error) {
 	aguiCfg := cc.AgentServer().AGUI
 	toolsCfg := cc.AgentServer().Tools
 	storageCfg := cc.AgentServer().Storage
@@ -135,18 +149,9 @@ func New() (*Runtime, error) {
 		logs.Infof("registered custom model context windows: %v", cw)
 	}
 
-	// Build Readiness to record the readiness status of the Agent Server
-	readiness := NewReadiness()
-	skillMgr, err := skill.NewManager(readiness)
+	readiness, skillMgr, promptMgr, err := buildManagers()
 	if err != nil {
-		logs.Errorf("build skill manager failed, err: %v", err)
-		return nil, fmt.Errorf("build skill manager: %w", err)
-	}
-
-	promptMgr, err := prompt.NewManager(readiness)
-	if err != nil {
-		logs.Errorf("build prompt manager failed, err: %v", err)
-		return nil, fmt.Errorf("build prompt manager: %w", err)
+		return nil, err
 	}
 
 	// Build one model instance per allowed model name.
@@ -176,14 +181,10 @@ func New() (*Runtime, error) {
 	if err != nil {
 		return nil, fmt.Errorf("build MCP toolsets: %w", err)
 	}
-
-	// Build dynamic tool filter when enabled. The filter performs per-invocation
-	// BM25/keyword retrieval so the LLM only sees relevant MCP tools.
-	var dynFilter trpctool.FilterFunc
-	if d := toolsCfg.DynamicToolLoading; d != nil && d.Enabled {
-		dynFilter = tool.MakeDynamicToolFilter(tool.NewLazyToolIndex(mcpToolSets, d, aidevGW))
-		logs.Infof("dynamic tool loading: enabled (strategy=%s, topN=%d, scoreThreshold=%.2f, tags=%d)",
-			d.Strategy, d.TopN, d.ScoreThreshold, len(d.ToolTags))
+	// Build tool loading setup; tool proxy or dynamic tool loading.
+	toolSetup, err := buildToolLoading(clientSet, toolsCfg, aguiCfg.Model.Mode, mcpToolSets, aidevGW)
+	if err != nil {
+		return nil, err
 	}
 	// Build checkpoint saver for graph agent interrupt/resume support.
 	checkpointSaver, err := agent.BuildCheckpointSaver(storageCfg.Checkpoint)
@@ -193,7 +194,7 @@ func New() (*Runtime, error) {
 
 	runnerOpts := buildRunnerOpts(sessionSvc, memorySvc)
 	agUIRunner, err := newAGUIRunner(defaultMdl, modelsMap, mcpToolSets, skillMgr, promptMgr.Store, runnerOpts,
-		checkpointSaver)
+		toolSetup.toolProxy, checkpointSaver)
 	if err != nil {
 		return nil, fmt.Errorf("build AGUI runner: %w", err)
 	}
@@ -203,13 +204,107 @@ func New() (*Runtime, error) {
 		aguiSessionSvc:    sessionSvc,
 		aguiMemorySvc:     memorySvc,
 		aguiMCPToolSets:   mcpToolSets,
-		dynamicToolFilter: dynFilter,
+		toolProxy:         toolSetup.toolProxy,
+		dynamicToolFilter: toolSetup.dynamicToolFilter,
 		skillMgr:          skillMgr,
 		promptMgr:         promptMgr,
 		readiness:         readiness,
 		checkpointSaver:   checkpointSaver,
 	}
 	return runtime, nil
+}
+
+// buildManagers creates the readiness tracker, skill manager, and prompt manager.
+func buildManagers() (*Readiness, *skill.Manager, *prompt.Manager, error) {
+	readiness := NewReadiness()
+	skillMgr, err := skill.NewManager(readiness)
+	if err != nil {
+		logs.Errorf("build skill manager failed, err: %v", err)
+		return nil, nil, nil, fmt.Errorf("build skill manager: %w", err)
+	}
+	promptMgr, err := prompt.NewManager(readiness)
+	if err != nil {
+		logs.Errorf("build prompt manager failed, err: %v", err)
+		return nil, nil, nil, fmt.Errorf("build prompt manager: %w", err)
+	}
+	return readiness, skillMgr, promptMgr, nil
+}
+
+// toolLoadingSetup holds tool proxy and dynamic tool loading initialization results.
+type toolLoadingSetup struct {
+	toolProxy         *toolproxy.ToolProxy
+	dynamicToolFilter trpctool.FilterFunc
+}
+
+// buildToolLoading initializes Tool Proxy (graph mode) or dynamic tool filtering.
+func buildToolLoading(clientSet *client.ClientSet, toolsCfg cc.AgentToolsConfig, agentMode enumor.AgentMode,
+	mcpToolSets *tool.MCPToolSet, aidevGW *cc.AgentModelProvider) (toolLoadingSetup, error) {
+
+	var setup toolLoadingSetup
+	var toolProxyActive bool
+
+	// 1. MCP工具代理：仅 graph 模式下支持，通过三个元工具替代全量 MCP 工具注册，降低 token 消耗
+	tpCfg := toolsCfg.ToolProxy
+	if tpCfg != nil && tpCfg.Enabled {
+		if agentMode == enumor.AgentModeGraph {
+			var err error
+			setup.toolProxy, toolProxyActive, err = buildToolProxy(clientSet, tpCfg, mcpToolSets, aidevGW)
+			if err != nil {
+				logs.Errorf("build tool proxy: %v", err)
+				return setup, err
+			}
+		}
+	}
+
+	if toolProxyActive {
+		logs.Infof("tool proxy: enabled for graph mode, dynamic tool loading skipped")
+		return setup, nil
+	}
+
+	// 2. MCP工具动态加载：LLM 根据用户消息自动过滤工具，降低 token 消耗
+	if d := toolsCfg.DynamicToolLoading; d != nil && d.Enabled {
+		setup.dynamicToolFilter = tool.MakeDynamicToolFilter(tool.NewLazyToolIndex(mcpToolSets, d, aidevGW))
+		logs.Infof("dynamic tool loading: enabled (strategy=%s, topN=%d, scoreThreshold=%.2f, tags=%d)",
+			d.Strategy, d.TopN, d.ScoreThreshold, len(d.ToolTags))
+	}
+	return setup, nil
+}
+
+// buildToolProxy creates, builds, and optionally starts the refresh loop for Tool Proxy.
+// On non-required build failure it returns (nil, false, nil) so callers can fall back to direct MCP toolsets.
+func buildToolProxy(clientSet *client.ClientSet, tpCfg *cc.AgentToolProxyConfig,
+	mcpToolSets *tool.MCPToolSet, aidevGW *cc.AgentModelProvider) (*toolproxy.ToolProxy, bool, error) {
+
+	emb := embedding.BuildEmbeddingClient(aidevGW, &tpCfg.Embedding)
+	virtualUser := tpCfg.InitVirtualUser
+	loadToken := func(kt *kit.Kit) (string, error) {
+		return auth.LoadInitAccessToken(kt, clientSet.DataService(), virtualUser)
+	}
+	toolProxy := toolproxy.NewToolProxy(mcpToolSets, emb, tpCfg, loadToken)
+
+	kt := core.NewBackendKit()
+	if err := toolProxy.Build(kt); err != nil {
+		if tpCfg.Required {
+			return nil, false, fmt.Errorf("tool proxy build: %v", err)
+		}
+		logs.Warnf("tool proxy build failed, fallback to direct MCP toolsets: %v", err)
+		return nil, false, nil
+	}
+
+	interval, err := tpCfg.GetRefreshInterval()
+	if err != nil {
+		logs.Warnf("get tool proxy refresh interval: %v", err)
+		return toolProxy, true, nil
+	}
+
+	err = toolProxy.StartRefreshLoop(kt, interval)
+	if err != nil {
+		logs.Warnf("tool proxy start refresh loop: %v", err)
+		return nil, false, nil
+	}
+
+	logs.Infof("tool proxy refresh loop started, interval=%s", interval)
+	return toolProxy, true, nil
 }
 
 // buildRunnerOpts assembles runner.Option slice from the provided services.
@@ -226,7 +321,7 @@ func buildRunnerOpts(sessionSvc session.Service, memorySvc memory.Service) []run
 }
 
 func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Model, mcpToolSets *tool.MCPToolSet,
-	skillMgr *skill.Manager, promptStore *prompt.Store, runnerOpts []runner.Option,
+	skillMgr *skill.Manager, promptStore *prompt.Store, runnerOpts []runner.Option, toolProxy *toolproxy.ToolProxy,
 	checkpointSaver graph.CheckpointSaver) (runner.Runner, error) {
 
 	aguiCfg := cc.AgentServer().AGUI
@@ -245,7 +340,7 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 	var agt trpcagent.Agent
 	switch aguiCfg.Model.Mode {
 	case enumor.AgentModeGraph:
-		compiledGraph, err := agent.BuildGraph(defaultMdl, skillRepo, mcpToolSets,
+		compiledGraph, err := agent.BuildGraph(defaultMdl, skillRepo, mcpToolSets, toolProxy,
 			aguiCfg.AppName, aguiCfg.Model, promptStore)
 		if err != nil {
 			return nil, fmt.Errorf("build graph: %w", err)
@@ -269,6 +364,9 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 func (rt *Runtime) Close() error {
 	var err error
 	rt.closeOnce.Do(func() {
+		if rt.toolProxy != nil {
+			rt.toolProxy.StopRefresh()
+		}
 		if rt.aguiMemorySvc != nil {
 			if cerr := rt.aguiMemorySvc.Close(); cerr != nil {
 				logs.Warnf("close AGUI memory service: %v", cerr)

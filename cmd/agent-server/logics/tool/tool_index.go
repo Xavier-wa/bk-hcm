@@ -62,11 +62,16 @@ type ToolMatch struct {
 	Score float64 // match score
 }
 
+// ExtractToolMeta builds a ToolMeta from a tool.Tool declaration.
+func ExtractToolMeta(t tool.Tool, frameworkName string, tags []string) ToolMeta {
+	return extractToolMeta(t, frameworkName, tags)
+}
+
 // extractToolMeta builds a ToolMeta from a tool.Tool declaration.
-func extractToolMeta(t tool.Tool, tags []string) ToolMeta {
+func extractToolMeta(t tool.Tool, frameworkName string, tags []string) ToolMeta {
 	decl := t.Declaration()
 	meta := ToolMeta{
-		Name:        decl.Name,
+		Name:        frameworkName,
 		Description: decl.Description,
 		Tags:        tags,
 	}
@@ -426,7 +431,9 @@ func (idx *EmbeddingIndex) Search(ctx context.Context, query string, topN int, s
 				idx.tools[i].Name, rid)
 			return nil
 		}
-		matches = append(matches, ToolMatch{Name: idx.tools[i].Name, Score: score})
+		if score > 0 {
+			matches = append(matches, ToolMatch{Name: idx.tools[i].Name, Score: score})
+		}
 	}
 
 	return applyThresholdAndTopN(matches, topN, scoreThreshold)

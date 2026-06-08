@@ -52,6 +52,21 @@ const (
 	SkillSelectDocsToolName = "skill_select_docs"
 )
 
+// MCP proxy tool
+const (
+	// ProxyToolSetName is the name of the MCP proxy toolset.
+	ProxyToolSetName = "tool_proxy"
+	// ProxySchemaTokenLen is the length of the token for the proxy schema.
+	ProxySchemaTokenLen = 16
+
+	// SearchToolsToolName is the meta-tool for semantic tool search.
+	SearchToolsToolName = "search_tools"
+	// GetToolSchemaToolName is the meta-tool for fetching a tool schema by name.
+	GetToolSchemaToolName = "get_tool_schema"
+	// ExecuteToolToolName is the meta-tool for executing an MCP tool by name.
+	ExecuteToolToolName = "execute_tool"
+)
+
 // Default upper bounds for the agent invocation loop.
 const (
 	// DefaultMaxLLMCalls caps LLM requests per invocation to prevent runaway loops.
@@ -131,3 +146,6 @@ const (
 	// MemoryExtractPromptKey is the well-known prompt key used by the memory extractor.
 	MemoryExtractPromptKey = "memory_extract_prompt"
 )
+
+// PermissionDeniedMsg is the message for permission denied.
+const PermissionDeniedMsg = "当前用户无权限执行该工具，请联系管理员或确认工具可见范围"

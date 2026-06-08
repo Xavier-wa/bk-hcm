@@ -233,7 +233,7 @@ tools:
   # 启用后，ToolFilter 会在每次 Run 中检索匹配工具，减少 token 消耗并提升推理质量。
   # enabled: false 时不注入 ToolFilter，MCP 工具全量暴露（默认行为）。
   dynamicToolLoading:
-    enabled: true
+    enabled: false
     # 检索策略：
     #   keyword  — 关键词子串匹配（最快，适合工具名精确匹配）
     #   bm25     — BM25 全文检索（默认，平衡速度与召回率）
@@ -246,6 +246,21 @@ tools:
     scoreThreshold: 0.3        # 相对分数阈值 (0.0~1.0)，0=不启用
     # embedding 字段仅在 strategy: "embedding" 时生效。
     # model / dimensions 留空则使用 SDK 默认值（text-embedding-3-small，1536 维）。
+    embedding:
+      model: "hunyuan-embedding"
+      dimensions: 1536
+    # toolTags:                  # 工具标签（key 为 MCP 原始工具名，value 为额外检索关键词）
+    #   list_cvms: ["CVM", "云服务器", "主机"]
+    #   query_bill: ["账单", "费用", "计费"]
+
+  # Tool Proxy：Graph 模式用 3 个元工具替代全量 MCP 工具注册，降低 token 消耗。
+  toolProxy:
+    enabled: true
+    initVirtualUser: bk-hcm  # 首次加载 / 定时刷新使用的 virtual-user，对应 global_config access_token 中的 key
+    refreshInterval: 30m     # 刷新间隔，不可为空
+    required: true           # true=启动构建失败则拒绝启动；false=降级为全量 MCP 注册
+    topN: 5                  # 返回 Top-N 最相关工具
+    scoreThreshold: 0.3        # 相对分数阈值 (0.0~1.0)，0=不启用
     embedding:
       model: "hunyuan-embedding"
       dimensions: 1536

@@ -51,6 +51,9 @@ const (
 
 	// BKTicket is blueking ticket header key.
 	BKTicket = "X-Bk-Ticket"
+
+	// AccessTokenKey is the context key for BK access_token (tool proxy init / refresh).
+	AccessTokenKey = "access_token"
 )
 
 const (

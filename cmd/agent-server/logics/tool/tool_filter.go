@@ -88,13 +88,11 @@ func (l *LazyToolIndex) ensureBuild(ctx context.Context) {
 				rawName := t.Declaration().Name
 				frameworkName := rawName
 				if prefix != "" {
-					frameworkName = prefix + "_" + rawName
+					frameworkName = prefix + "/" + rawName
 				}
 
 				tags := l.toolTags[rawName]
-				meta := extractToolMeta(t, tags)
-				meta.Name = frameworkName
-				meta.SearchText = buildSearchText(meta)
+				meta := extractToolMeta(t, frameworkName, tags)
 
 				metas = append(metas, meta)
 				l.mcpToolNames[frameworkName] = true

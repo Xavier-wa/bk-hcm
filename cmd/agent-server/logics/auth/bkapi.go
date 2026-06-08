@@ -51,10 +51,27 @@ func BKTicketFromContext(ctx context.Context) string {
 	return v
 }
 
+// AccessTokenFromContext extracts the BK access_token stored in ctx.
+// Returns an empty string if not set.
+func AccessTokenFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(constant.AccessTokenKey).(string)
+	return v
+}
+
 // BKApiAuthHeaderValue builds the JSON value for the X-Bkapi-Authorization header.
 func BKApiAuthHeaderValue(appCode, appSecret, username, ticket string) string {
 	return fmt.Sprintf(
 		`{"bk_app_code":"%s","bk_app_secret":"%s","bk_username":"%s","bk_ticket":"%s"}`,
 		appCode, appSecret, username, ticket,
 	)
+}
+
+// WithAccessToken returns a new context carrying the given BK access_token.
+func WithAccessToken(ctx context.Context, token string) context.Context {
+	return context.WithValue(ctx, constant.AccessTokenKey, token)
+}
+
+// AccessTokenAuthHeaderValue builds the JSON value for access_token-only auth.
+func AccessTokenAuthHeaderValue(token string) string {
+	return fmt.Sprintf(`{"access_token":"%s"}`, token)
 }

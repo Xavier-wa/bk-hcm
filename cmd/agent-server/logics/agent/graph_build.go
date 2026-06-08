@@ -32,6 +32,7 @@ import (
 	"hcm/cmd/agent-server/logics/skill"
 	"hcm/cmd/agent-server/logics/timer"
 	"hcm/cmd/agent-server/logics/tool"
+	"hcm/cmd/agent-server/logics/toolproxy"
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
@@ -57,13 +58,14 @@ import (
 // The tool node executes tools when the LLM requests them.
 // The fallback node normalizes the LLM response and interrupts to wait for the next user message.
 func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *tool.MCPToolSet,
-	agentName string, modelCfg cc.AgentModelGeneralConfig, promptStore *prompt.Store) (*graph.Graph, error) {
+	toolProxy *toolproxy.ToolProxy, agentName string, modelCfg cc.AgentModelGeneralConfig, promptStore *prompt.Store) (
+	*graph.Graph, error) {
 
 	schema := graph.MessagesStateSchema()
 	stateGraph := graph.NewStateGraph(schema)
 
 	staticPrompt := resolveStaticPrompt(promptStore)
-	llmOpts := genLLMNodeOptions(toolset, modelCfg)
+	llmOpts := genLLMNodeOptions(toolset, toolProxy, modelCfg)
 
 	// 构建 LLM 调用 callback
 	modelCb := trpcmodel.NewCallbacks()
@@ -95,7 +97,7 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *too
 	stateGraph.AddNode("hitl", hitl.GetNode())
 
 	// 3. Tool Node: executes tools when the LLM requests them.
-	toolsOpts := genToolNodeOptions(toolset, agentName)
+	toolsOpts := genToolNodeOptions(toolset, toolProxy, agentName)
 	stateGraph.AddToolsNode("tool", skillTools, toolsOpts...)
 
 	// 4. Fallback Node: normalizes output when the LLM does not call any tools.
@@ -175,7 +177,9 @@ func makeRoutingFunc() func(ctx context.Context, state graph.State) (string, err
 	}
 }
 
-func genLLMNodeOptions(toolset *tool.MCPToolSet, modelCfg cc.AgentModelGeneralConfig) []graph.Option {
+func genLLMNodeOptions(toolset *tool.MCPToolSet, toolProxy *toolproxy.ToolProxy,
+	modelCfg cc.AgentModelGeneralConfig) []graph.Option {
+
 	generationConfig := trpcmodel.GenerationConfig{
 		MaxTokens:   cvt.ValToPtr(modelCfg.MaxTokens),
 		Temperature: cvt.ValToPtr(modelCfg.Temperature),
@@ -184,8 +188,17 @@ func genLLMNodeOptions(toolset *tool.MCPToolSet, modelCfg cc.AgentModelGeneralCo
 
 	opts := []graph.Option{
 		graph.WithGenerationConfig(generationConfig),
-		graph.WithToolSets(toolset.TS),
-		graph.WithRefreshToolSetsOnRun(true),
+	}
+
+	if toolProxy != nil && toolProxy.IsBuildOK() {
+		// Tool Proxy 元工具为静态注册，无需 WithRefreshToolSetsOnRun。
+		// MCP 实际工具已在启动/刷新时用 access_token 预加载，调用时仍使用请求 ctx 中的 bk_ticket 鉴权。
+		opts = append(opts, graph.WithToolSets([]trpctool.ToolSet{toolProxy.GetProxyToolSet()}))
+	} else {
+		opts = append(opts,
+			graph.WithToolSets(toolset.TS),
+			graph.WithRefreshToolSetsOnRun(true),
+		)
 	}
 
 	toolCb := logger.ToolLoggerCallback()
@@ -195,13 +208,22 @@ func genLLMNodeOptions(toolset *tool.MCPToolSet, modelCfg cc.AgentModelGeneralCo
 	return opts
 }
 
-func genToolNodeOptions(toolset *tool.MCPToolSet, agentName string) []graph.Option {
+func genToolNodeOptions(toolset *tool.MCPToolSet, proxy *toolproxy.ToolProxy, agentName string) []graph.Option {
+
 	opts := []graph.Option{
-		graph.WithToolSets(toolset.TS),
-		graph.WithRefreshToolSetsOnRun(true),
 		// skill tool 调用后将 skill 的加载状态写入 session.State
 		graph.WithPostNodeCallback(skill.MakeSkillLoadAfterToolCallback(agentName)),
 	}
+
+	if proxy != nil && proxy.IsBuildOK() {
+		opts = append(opts, graph.WithToolSets([]trpctool.ToolSet{proxy.GetProxyToolSet()}))
+	} else {
+		opts = append(opts,
+			graph.WithToolSets(toolset.TS),
+			graph.WithRefreshToolSetsOnRun(true),
+		)
+	}
+
 	return opts
 }
 

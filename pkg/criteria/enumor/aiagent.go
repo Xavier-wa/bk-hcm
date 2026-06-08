@@ -132,3 +132,23 @@ func (b GraphCheckpointBackend) Validate() error {
 	}
 	return nil
 }
+
+// MCPFilterMode is the mode of the MCP filter.
+type MCPFilterMode string
+
+const (
+	// MCPFilterModeInclude is the include mode of the MCP filter.
+	MCPFilterModeInclude MCPFilterMode = "include"
+	// MCPFilterModeExclude is the exclude mode of the MCP filter.
+	MCPFilterModeExclude MCPFilterMode = "exclude"
+)
+
+// Validate validates the MCP filter mode.
+func (m MCPFilterMode) Validate() error {
+	switch m {
+	case MCPFilterModeInclude, MCPFilterModeExclude:
+	default:
+		return fmt.Errorf("unsupported MCP filter mode: %s", m)
+	}
+	return nil
+}

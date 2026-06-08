@@ -1014,9 +1014,17 @@ type AgentEmbeddingConfig struct {
 type AgentMCPFilter struct {
 	// Mode is the filter mode: "include" (default) keeps only listed tools,
 	// "exclude" removes listed tools.
-	Mode string `yaml:"mode"`
+	Mode enumor.MCPFilterMode `yaml:"mode"`
 	// Names lists the tool names to include or exclude.
 	Names []string `yaml:"names"`
+}
+
+// Validate validates the MCP filter config.
+func (s *AgentMCPFilter) Validate() error {
+	if err := s.Mode.Validate(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // AgentMCPReconnect configures automatic MCP session reconnection.
@@ -1055,6 +1063,16 @@ type AgentMCPToolSet struct {
 	// RequireConfirm when true requires the user to explicitly send "确认"
 	// before any tool in this MCP toolset is actually executed.
 	RequireConfirm bool `yaml:"requireConfirm"`
+}
+
+// Validate validates the MCP tool set config.
+func (s *AgentMCPToolSet) Validate() error {
+	if s.Filter != nil {
+		if err := s.Filter.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // AgentBKAIDevSyncSkillsConfig holds all skill configuration: filesystem paths
@@ -1139,6 +1157,67 @@ type AgentBKAIDevConfig struct {
 	AppSecret string `yaml:"appSecret"`
 }
 
+// AgentToolProxyConfig configures MCP tool proxy meta-tools for Graph mode.
+type AgentToolProxyConfig struct {
+	// Enabled turns on Tool Proxy (search_tools / get_tool_schema / execute_tool).
+	Enabled bool `yaml:"enabled"`
+	// InitVirtualUser selects which virtual-user key to use from global_config auth/access_token.
+	InitVirtualUser string `yaml:"initVirtualUser"`
+	// RefreshInterval controls periodic MCP tool list refresh, e.g. "30m".
+	RefreshInterval string `yaml:"refreshInterval"`
+	// Required when true, Tool Proxy build failure aborts Graph agent startup.
+	Required bool `yaml:"required"`
+	// TopN is the maximum number of tools returned by search_tools.
+	TopN int `yaml:"topN"`
+	// ScoreThreshold is a relative score cutoff (0.0–1.0). Results scoring below
+	// maxScore*ScoreThreshold are discarded before the TopN cap is applied. Default: 0.
+	ScoreThreshold float64 `yaml:"scoreThreshold"`
+	// ToolTags maps raw MCP tool names to extra search keywords (e.g. Chinese synonyms).
+	ToolTags map[string][]string `yaml:"toolTags"`
+	// Embedding holds model/dimension config for Tool Proxy semantic search.
+	Embedding AgentEmbeddingConfig `yaml:"embedding"`
+}
+
+// GetRefreshInterval returns the refresh interval.
+func (s *AgentToolProxyConfig) GetRefreshInterval() (time.Duration, error) {
+	if s.RefreshInterval == "" {
+		return 0, errors.New("refreshInterval is required")
+	}
+	interval, parseErr := time.ParseDuration(strings.TrimSpace(s.RefreshInterval))
+	if parseErr != nil || interval <= 0 {
+		return 0, fmt.Errorf("refreshInterval is invalid, interval: %s, err: %v", interval.String(), parseErr)
+	}
+	return interval, nil
+}
+
+func (s *AgentToolProxyConfig) trySetDefault() {
+	if s.TopN <= 0 {
+		s.TopN = 5
+	}
+}
+
+// Validate validates the tool proxy config.
+func (s *AgentToolProxyConfig) Validate() error {
+	if s.Enabled {
+		if s.InitVirtualUser == "" {
+			return errors.New("initVirtualUser is required")
+		}
+
+		if s.RefreshInterval == "" {
+			return errors.New("refreshInterval is required")
+		}
+		interval, parseErr := time.ParseDuration(strings.TrimSpace(s.RefreshInterval))
+		if parseErr != nil || interval <= 0 {
+			return fmt.Errorf("refreshInterval is invalid, interval: %s, err: %v", interval.String(), parseErr)
+		}
+
+		if s.Embedding.Model == "" {
+			return errors.New("embedding.model is required")
+		}
+	}
+	return nil
+}
+
 // AgentDynamicToolLoadingConfig configures BM25/keyword-based dynamic tool
 // filtering so the LLM only sees tools relevant to each user message.
 type AgentDynamicToolLoadingConfig struct {
@@ -1164,6 +1243,9 @@ type AgentDynamicToolLoadingConfig struct {
 }
 
 func (s *AgentDynamicToolLoadingConfig) trySetDefault() {
+	if s == nil {
+		return
+	}
 	if s.TopN <= 0 {
 		s.TopN = 10
 	}
@@ -1181,13 +1263,35 @@ type AgentToolsConfig struct {
 	// When an MCP toolset has type: "bkaidev", the server injects X-Bkapi-Authorization
 	// on every request using these credentials combined with the per-request bk_ticket
 	// extracted from the incoming HTTP request Cookie.
-	BKAIDev *AgentBKAIDevConfig `yaml:"bkAIDev"`
+	BKAIDev AgentBKAIDevConfig `yaml:"bkAIDev"`
 	// DynamicToolLoading configures index-based dynamic tool filtering.
 	DynamicToolLoading *AgentDynamicToolLoadingConfig `yaml:"dynamicToolLoading"`
+	// ToolProxy configures MCP tool proxy meta-tools (Graph mode MVP).
+	ToolProxy *AgentToolProxyConfig `yaml:"toolProxy"`
 }
 
 func (s *AgentToolsConfig) trySetDefault() {
 	s.DynamicToolLoading.trySetDefault()
+
+	if s.ToolProxy != nil {
+		s.ToolProxy.trySetDefault()
+	}
+}
+
+// Validate validates the tools config.
+func (s *AgentToolsConfig) Validate() error {
+	for _, cfg := range s.MCPToolSets {
+		if err := cfg.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if s.ToolProxy != nil {
+		if err := s.ToolProxy.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // NeedToRefreshToolSetsOnRun bkaidev 类型 MCP 需要用户的 token 进行鉴权，因此无法在启动时加载工具集，需要在每次运行时刷新。
@@ -1571,6 +1675,10 @@ func (s AgentServerSetting) Validate() error {
 	}
 
 	if err := s.Service.validate(); err != nil {
+		return err
+	}
+
+	if err := s.Tools.Validate(); err != nil {
 		return err
 	}
 

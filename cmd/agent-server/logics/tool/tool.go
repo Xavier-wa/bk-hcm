@@ -31,6 +31,7 @@ import (
 	"hcm/cmd/agent-server/logics/logger"
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 
@@ -106,7 +107,7 @@ func buildOneMCPToolSet(cfg cc.AgentMCPToolSet) (tool.ToolSet, error) {
 
 	if f := cfg.Filter; f != nil && len(f.Names) > 0 {
 		var filterFunc tool.FilterFunc
-		if strings.EqualFold(strings.TrimSpace(f.Mode), "exclude") {
+		if f.Mode == enumor.MCPFilterModeExclude {
 			filterFunc = tool.NewExcludeToolNamesFilter(f.Names...)
 		} else {
 			filterFunc = tool.NewIncludeToolNamesFilter(f.Names...)
@@ -122,39 +123,43 @@ func buildOneMCPToolSet(cfg cc.AgentMCPToolSet) (tool.ToolSet, error) {
 		opts = append(opts, mcp.WithSessionReconnect(attempts))
 	}
 
-	if strings.EqualFold(strings.TrimSpace(cfg.Type), constant.MCPTypeBKAIDev) {
-		if cc.AgentServer().Tools.BKAIDev == nil {
-			logs.Warnf("AGUI MCP toolset %q: type=bkaidev but tools.bkAIDev config is nil, "+
-				"X-Bkapi-Authorization will NOT be injected", cfg.Name)
-		} else {
-			bkaidevCfg := cc.AgentServer().Tools.BKAIDev
-			appCode := bkaidevCfg.AppCode
-			appSecret := bkaidevCfg.AppSecret
-			logs.Infof("AGUI MCP toolset %q: bkaidev auth hook registered (appCode=%q)",
-				cfg.Name, appCode)
-			opts = append(opts, mcp.WithMCPOptions(
-				trpcmcp.WithHTTPBeforeRequest(func(ctx context.Context, req *http.Request) error {
-					rid := rest.RidFromContext(ctx)
-					ticket := auth.BKTicketFromContext(ctx)
-					if ticket != "" {
-						req.Header.Set(constant.BKGWAuthKey,
-							auth.BKApiAuthHeaderValue(appCode, appSecret, auth.BKUsernameFromContext(ctx), ticket))
-						logs.Infof("bkaidev MCP hook: injected auth header for %s %s, rid: %s",
-							req.Method, req.URL.Path, rid)
-					} else {
-						logs.Warnf("bkaidev MCP hook: no bk_ticket in context for %s %s, "+
-							"skipping auth header injection, rid: %s", req.Method, req.URL.Path, rid)
-					}
-					return nil
-				}),
-			))
-		}
-	}
-
 	// Log HTTP >=400 response bodies: trpc-mcp-go does not attach body to errors on non-200.
 	// See trpcmcp streamable_client.send(). Disable via env AGENT_SERVER_MCP_HTTP_LOG_ERROR_BODY=0.
 	opts = append(opts, mcp.WithMCPOptions(
 		trpcmcp.WithHTTPReqHandler(logger.NewMCPHTTPLoggingHandler(trpcmcp.NewDefaultHTTPReqHandler(), cfg.Name)),
+	))
+
+	if !strings.EqualFold(strings.TrimSpace(cfg.Type), constant.MCPTypeBKAIDev) {
+		return mcp.NewMCPToolSet(conn, opts...), nil
+	}
+
+	bkaidevCfg := cc.AgentServer().Tools.BKAIDev
+	appCode := bkaidevCfg.AppCode
+	appSecret := bkaidevCfg.AppSecret
+	logs.Infof("AGUI MCP toolset %q: bkaidev auth hook registered (appCode=%q)", cfg.Name, appCode)
+	opts = append(opts, mcp.WithMCPOptions(
+		trpcmcp.WithHTTPBeforeRequest(func(ctx context.Context, req *http.Request) error {
+			rid := rest.RidFromContext(ctx)
+			ticket := auth.BKTicketFromContext(ctx)
+			if ticket != "" {
+				req.Header.Set(constant.BKGWAuthKey,
+					auth.BKApiAuthHeaderValue(appCode, appSecret, auth.BKUsernameFromContext(ctx), ticket))
+				logs.Infof("bkaidev MCP hook: injected bk_ticket auth header for %s %s, rid: %s",
+					req.Method, req.URL.Path, rid)
+				return nil
+			}
+
+			token := auth.AccessTokenFromContext(ctx)
+			if token != "" {
+				req.Header.Set(constant.BKGWAuthKey, auth.AccessTokenAuthHeaderValue(token))
+				logs.Infof("bkaidev MCP hook: injected access_token auth header for %s %s, rid: %s",
+					req.Method, req.URL.Path, rid)
+				return nil
+			}
+			logs.Warnf("bkaidev MCP hook: no bk_ticket or access_token in context for %s %s, "+
+				"skipping auth header injection, rid: %s", req.Method, req.URL.Path, rid)
+			return nil
+		}),
 	))
 
 	return mcp.NewMCPToolSet(conn, opts...), nil

@@ -50,6 +50,8 @@ const (
 	GlobalConfigTypeSpringResPool GlobalConfigType = "spring_res_pool"
 	// GlobalConfigTypeAccountBill 账单相关配置
 	GlobalConfigTypeAccountBill GlobalConfigType = "account_bill"
+	// GlobalConfigTypeAuth auth related global config
+	GlobalConfigTypeAuth GlobalConfigType = "auth"
 )
 
 // GlobalConfigResDissolveKey resource dissolve global config key
@@ -127,4 +129,12 @@ const (
 	GlobalConfigKeyAwsGpuInstanceTypes GlobalConfigKeyAccountBill = "aws_gpu_instance_types"
 	// GlobalConfigKeyHuaweiGpuInstancePrefixes 华为 GPU 实例规格前缀列表配置key（JSON 数组字符串）
 	GlobalConfigKeyHuaweiGpuInstancePrefixes GlobalConfigKeyAccountBill = "huawei_gpu_instance_prefixes"
+)
+
+// GlobalConfigKeyAuth auth related global config key
+type GlobalConfigKeyAuth string
+
+const (
+	// GlobalConfigKeyAccessToken virtual-user access_token map stored as JSON object, for bkapigw
+	GlobalConfigKeyAccessToken GlobalConfigKeyAuth = "access_token"
 )

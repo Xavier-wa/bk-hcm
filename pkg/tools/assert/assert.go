@@ -22,6 +22,8 @@ package assert
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
 	"reflect"
 	"strings"
 
@@ -54,6 +56,32 @@ func IsNumeric(val interface{}) bool {
 	default:
 		return false
 	}
+}
+
+// IsInteger tests if an interface is an integer value.
+func IsInteger(val interface{}) bool {
+	switch v := val.(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return true
+	case float32:
+		return math.Trunc(float64(v)) == float64(v)
+	case float64:
+		return math.Trunc(v) == v
+	default:
+		return false
+	}
+}
+
+// InterfaceValuesEqual compares two interface values with loose numeric equality.
+// It uses reflect.DeepEqual first, then falls back to string representation for numeric pairs.
+func InterfaceValuesEqual(a, b interface{}) bool {
+	if reflect.DeepEqual(a, b) {
+		return true
+	}
+	if IsNumeric(a) && IsNumeric(b) {
+		return fmt.Sprint(a) == fmt.Sprint(b)
+	}
+	return false
 }
 
 // IsBasicValue test if an interface is the basic supported
