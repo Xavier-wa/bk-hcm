@@ -1,5 +1,5 @@
 import { ref, watch } from 'vue';
-import { useRoute, useRouter, type RouteRecordRaw } from 'vue-router';
+import { useRoute, type RouteRecordRaw } from 'vue-router';
 // import routes
 import resource from '@/router/module/resource';
 import resourcePlan from '@/router/module/resource-plan';
@@ -12,6 +12,8 @@ import bill from '@/router/module/bill';
 import { useAccountStore } from '@/store';
 import { useResourceAccountStore } from '@/store/useResourceAccountStore';
 import { GLOBAL_BIZS_KEY } from '@/common/constant';
+import { MENU_BUSINESS_INDEX } from '@/constants/menu-symbol';
+import routerAction from '@/router/utils/action';
 
 // home页切换header-tab相关业务逻辑
 export default () => {
@@ -19,7 +21,6 @@ export default () => {
   const resourceAccountStore = useResourceAccountStore();
   // use hooks
   const route = useRoute();
-  const router = useRouter();
 
   // define data
   const topMenuActiveItem = ref(''); // 当前 active header-tab
@@ -28,14 +29,17 @@ export default () => {
 
   // 点击 header-tab handler
   const handleHeaderMenuClick = (id: string, path: string) => {
-    let bizs;
-    if (id === 'business') {
-      bizs = accountStore.bizs;
-    }
     if (id !== 'resource') {
       resourceAccountStore.clear();
     }
-    router.push({ path, query: { [GLOBAL_BIZS_KEY]: bizs } });
+    if (id === 'business') {
+      routerAction.redirect({
+        name: MENU_BUSINESS_INDEX,
+        query: { [GLOBAL_BIZS_KEY]: accountStore.bizs },
+      });
+      return;
+    }
+    routerAction.redirect({ path });
   };
 
   // 更新左侧 menus 菜单, 并更新全局业务id
@@ -43,16 +47,6 @@ export default () => {
     // 更新当前 active header-tab
     topMenuActiveItem.value = id;
     switch (id) {
-      case '': {
-        topMenuActiveItem.value = 'index';
-        menus.value = [];
-        break;
-      }
-      case 'chatbot': {
-        topMenuActiveItem.value = 'index';
-        menus.value = [];
-        break;
-      }
       case 'business':
         menus.value = businessViews;
         break;

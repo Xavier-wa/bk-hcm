@@ -118,5 +118,3 @@ watchEffect(async () => {
     </bk-radio-button>
   </bk-radio-group>
 </template>
-
-<style lang="scss" scoped></style>

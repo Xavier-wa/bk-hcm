@@ -8,6 +8,7 @@ import type { ChatSession } from './types';
 interface SessionDeps {
   messages: Ref<Message[]>;
   sessionCode: Ref<string>;
+  getBkBizId: () => number;
   // 会话切换 / 新建时仅做本地 abort，不调用后端 /cancel —— 主动取消仅由用户点击"停止"触发
   abortStream: () => void;
   // 注意：fetchHistory 现在采用增量渲染，直接写入 deps.messages，不再返回消息数组
@@ -18,10 +19,14 @@ const toSession = (item: SessionApiItem): ChatSession => ({
   sessionCode: item.session_code,
   sessionName: item.session_name || '新对话',
   sessionContentCount: item.session_content_count,
+  sessionTag: item.session_tag?.trim() || undefined,
   createdAt: item.created_at,
   updatedAt: item.updated_at,
   messages: [],
 });
+
+const sortByUpdatedAtDesc = (list: ChatSession[]) =>
+  [...list].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
 export function useSession(deps: SessionDeps) {
   const sessions = ref<ChatSession[]>([]);
@@ -30,6 +35,11 @@ export function useSession(deps: SessionDeps) {
   const isLoadingSessions = ref(false);
 
   const currentSession = computed(() => sessions.value.find((s) => s.sessionCode === currentSessionCode.value));
+
+  const resolveBkBizId = () => {
+    const bkBizId = deps.getBkBizId();
+    return Number.isFinite(bkBizId) && bkBizId > 0 ? bkBizId : 0;
+  };
 
   const saveCurrentSession = () => {
     const session = currentSession.value;
@@ -44,17 +54,29 @@ export function useSession(deps: SessionDeps) {
   };
 
   const loadSessions = async () => {
+    const bkBizId = resolveBkBizId();
+    if (!bkBizId) {
+      sessions.value = [];
+      return;
+    }
+
     isLoadingSessions.value = true;
     try {
-      const res = await sessionApi.listSessions();
-      sessions.value = res.details.map(toSession);
+      const res = await sessionApi.listSessions(bkBizId);
+      sessions.value = sortByUpdatedAtDesc(res.details.map(toSession));
     } finally {
       isLoadingSessions.value = false;
     }
   };
 
-  const createSession = async () => {
-    const emptySession = sessions.value.find((s) => s.messages.length === 0 && s.sessionContentCount === 0);
+  const createSession = async (sessionTag = '') => {
+    const bkBizId = resolveBkBizId();
+    if (!bkBizId) return;
+
+    // 带场景 tag 时不复用无 tag 的空会话，直接新建带 tag 的会话，确保归入对应文件夹
+    const emptySession = sessionTag
+      ? undefined
+      : sessions.value.find((s) => s.messages.length === 0 && s.sessionContentCount === 0);
     if (emptySession) {
       if (emptySession.sessionCode === currentSessionCode.value) return;
       deps.abortStream();
@@ -73,11 +95,12 @@ export function useSession(deps: SessionDeps) {
     saveCurrentSession();
 
     try {
-      const res = await sessionApi.createSession('新对话');
+      const res = await sessionApi.createSession(bkBizId, '新对话', sessionTag);
       const session: ChatSession = {
         sessionCode: res.session_code,
         sessionName: res.session_name || '新对话',
         sessionContentCount: 0,
+        sessionTag: res.session_tag?.trim() || undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         messages: [],
@@ -129,8 +152,11 @@ export function useSession(deps: SessionDeps) {
   };
 
   const deleteSession = async (code: string) => {
+    const bkBizId = resolveBkBizId();
+    if (!bkBizId) return;
+
     try {
-      await sessionApi.deleteSession(code);
+      await sessionApi.deleteSession(bkBizId, code);
     } catch (err) {
       console.error('[Session] deleteSession failed:', err);
       return;
@@ -158,6 +184,9 @@ export function useSession(deps: SessionDeps) {
   };
 
   const renameSession = async (code: string, title: string) => {
+    const bkBizId = resolveBkBizId();
+    if (!bkBizId) return;
+
     const name = title.trim();
     if (!name) return;
     const session = sessions.value.find((s) => s.sessionCode === code);
@@ -167,31 +196,40 @@ export function useSession(deps: SessionDeps) {
     session.sessionName = name;
 
     try {
-      await sessionApi.updateSession(code, name);
+      await sessionApi.updateSession(bkBizId, code, name);
     } catch (err) {
       console.error('[Session] renameSession failed:', err);
       session.sessionName = oldName;
     }
   };
 
+  // 回到首页空态：清空当前选中会话与消息，不创建/不选中任何会话。
+  // 用于「进入页面」「新对话」「业务切换后当前会话失效」等场景统一收敛到默认首页。
+  const goHome = () => {
+    deps.abortStream();
+    saveCurrentSession();
+    applySession('');
+    deps.messages.value = [];
+  };
+
   const initSessions = async (targetCode?: string) => {
     await loadSessions();
 
+    // 深链直达指定会话时切换；否则默认停留在首页空态，不自动创建/选中会话
     if (targetCode && sessions.value.some((s) => s.sessionCode === targetCode)) {
       await switchSession(targetCode);
       return;
     }
+  };
 
-    if (sessions.value.length > 0) {
-      const recent = sessions.value[0];
-      if (recent.sessionContentCount > 0) {
-        await createSession();
-      } else {
-        await switchSession(recent.sessionCode);
-      }
-    } else {
-      await createSession();
+  const reloadSessions = async () => {
+    const code = currentSessionCode.value;
+    await loadSessions();
+    // 当前会话仍存在则保持；否则（业务切换 / 被删等）回到首页空态，不自动选中或新建
+    if (code && sessions.value.some((s) => s.sessionCode === code)) {
+      return;
     }
+    goHome();
   };
 
   return {
@@ -206,7 +244,9 @@ export function useSession(deps: SessionDeps) {
     deleteSession,
     renameSession,
     moveSessionToTop,
+    goHome,
     initSessions,
+    reloadSessions,
   };
 }
 

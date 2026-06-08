@@ -1,6 +1,7 @@
 import { MessageRole, type Message } from '@blueking/chat-x';
 
 import * as sessionApi from '@/store/chatbot/session';
+import { useWhereAmI } from '@/hooks/useWhereAmI';
 import { useMessage } from './use-message';
 import { useEventHandler } from './use-event';
 import { useStream } from './use-stream';
@@ -18,23 +19,32 @@ export const extractText = (content: unknown): string => {
 };
 
 export function useChatbot() {
+  const { getBizsId } = useWhereAmI();
   const messageModule = useMessage();
   const eventModule = useEventHandler(messageModule);
   const streamModule = useStream(messageModule, eventModule);
   const sessionModule = useSession({
     messages: messageModule.messages,
     sessionCode: streamModule.sessionCode,
+    getBkBizId: getBizsId,
     abortStream: streamModule.abortStream,
     fetchHistory: streamModule.fetchHistory,
   });
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (content: string, sessionTag = '') => {
+    // 首页空态（无选中会话）发送：先惰性创建/复用会话，避免清空消息时丢失刚加入的用户消息。
+    // 创建失败（如无 bizId）时直接返回，不发送。
+    // sessionTag 为场景标识（如 host_apply），通过 create_session 的 session_tag 入参传递。
+    if (!sessionModule.currentSession.value) {
+      await sessionModule.createSession(sessionTag);
+      if (!sessionModule.currentSession.value) return;
+    }
     messageModule.addUserMessage(content);
     const session = sessionModule.currentSession.value;
     if (session && session.sessionName === '新对话' && content.trim()) {
       const newName = content.trim().slice(0, 30);
       session.sessionName = newName;
-      sessionApi.updateSession(session.sessionCode, newName).catch(() => {});
+      sessionApi.updateSession(getBizsId(), session.sessionCode, newName).catch(() => {});
     }
     await streamModule.streamChat([{ role: 'user', content }]);
     sessionModule.saveCurrentSession();
@@ -95,7 +105,9 @@ export function useChatbot() {
     switchSession: sessionModule.switchSession,
     deleteSession: sessionModule.deleteSession,
     renameSession: sessionModule.renameSession,
+    goHome: sessionModule.goHome,
     initSessions: sessionModule.initSessions,
+    reloadSessions: sessionModule.reloadSessions,
     clearMessages: messageModule.clearMessages,
   };
 }

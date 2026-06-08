@@ -36,6 +36,7 @@ import {
   MENU_BUSINESS_OPERATION_LOG,
   MENU_SERVICE_TICKET_MANAGEMENT,
   MENU_BUSINESS_LOAD_BALANCER,
+  MENU_BUSINESS_CHATBOT,
 } from '@/constants/menu-symbol';
 import { jsonp } from '@/http';
 import i18n from '@/language/i18n';
@@ -66,12 +67,9 @@ export default defineComponent({
     const isMenuOpen = ref<boolean>(true);
     const language = ref(Cookies.get('blueking_language') || i18n.global.locale.value);
 
-    const isNeedSideMenu = computed(
-      () =>
-        ![Senarios.unknown, Senarios.index, Senarios.resource, Senarios.scheme, Senarios.unauthorized].includes(
-          whereAmI.value,
-        ),
-    );
+    const isNeedSideMenu = computed(() => {
+      return ![Senarios.unknown, Senarios.resource, Senarios.scheme, Senarios.unauthorized].includes(whereAmI.value);
+    });
 
     const { hasPagePermission, permissionMsg, logout } = usePagePermissionStore();
 
@@ -92,6 +90,7 @@ export default defineComponent({
           MENU_SERVICE_TICKET_MANAGEMENT,
           MENU_BUSINESS_OPERATION_LOG,
           MENU_BUSINESS_LOAD_BALANCER,
+          MENU_BUSINESS_CHATBOT,
         ].includes(config.name)
       ) {
         return { name: config.name };
@@ -189,8 +188,7 @@ export default defineComponent({
                     .filter(
                       ({ id }) =>
                         ((ENABLE_CLOUD_SELECTION !== 'true' && id !== 'scheme') || ENABLE_CLOUD_SELECTION === 'true') &&
-                        ((ENABLE_ACCOUNT_BILL !== 'true' && id !== 'bill') || ENABLE_ACCOUNT_BILL === 'true') &&
-                        (id !== 'index' || authVerifyData.value?.permissionAction?.chatbot_access),
+                        ((ENABLE_ACCOUNT_BILL !== 'true' && id !== 'bill') || ENABLE_ACCOUNT_BILL === 'true'),
                     )
                     .map(({ id, name, path }) => (
                       <Button

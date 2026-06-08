@@ -1,0 +1,105 @@
+{
+  "id": "iter-biz-index-chatbot-route-layout",
+  "title": "aiagent - 资源管理首页chatbot - 路由与布局",
+  "currentStage": "done",
+  "createdAt": "2026-05-27T11:20:35.389Z",
+  "updatedAt": "2026-05-28T06:21:33.946Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-route-layout/prd.md",
+        "kind": "file",
+        "addedAt": "2026-05-27T11:22:10.051Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-route-layout/design.md",
+        "kind": "file",
+        "addedAt": "2026-05-27T11:34:57.199Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-route-layout/api.md",
+        "kind": "file",
+        "addedAt": "2026-05-27T11:56:02.064Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-route-layout/coding.md",
+        "kind": "file",
+        "addedAt": "2026-05-27T12:06:33.273Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-route-layout/test.md",
+        "kind": "file",
+        "addedAt": "2026-05-28T06:20:31.808Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-05-27T11:31:21.280Z",
+      "note": "User confirmed PRD"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-05-27T11:53:56.704Z",
+      "note": "User confirmed Design"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-05-27T12:05:08.331Z",
+      "note": "User confirmed API"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-05-28T06:20:13.671Z",
+      "note": "User confirmed continue; route/layout implementation complete"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-05-28T06:21:27.289Z",
+      "note": "User confirmed Test"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-05-27T11:20:35.389Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-05-27T11:31:30.502Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-05-27T11:54:10.546Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-05-27T12:05:10.374Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-05-28T06:20:24.654Z"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-05-28T06:21:33.946Z"
+    }
+  ],
+  "requirementId": "req-aiagent-biz-index-chatbot",
+  "branch": "feat-biz-index-chatbot"
+}

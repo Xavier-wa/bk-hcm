@@ -102,25 +102,26 @@ interface ChatSession {
 
 | 方法 | 说明 | API 层调用 |
 |------|------|-----------|
-| `initSessions()` | 页面初始化：加载列表 → 有内容则新建 / 无内容则复用 | `sessionApi.listSessions` + `sessionApi.createSession` |
+| `initSessions()` | 页面初始化：加载列表；有深链 `sessionCode` 则切换，否则停留在首页空态（不新建/不选中） | `sessionApi.listSessions` |
 | `loadSessions()` | 获取会话列表 | `sessionApi.listSessions` |
-| `createSession()` | 创建新会话（复用空会话或调用后端创建） | `sessionApi.createSession` |
+| `createSession()` | 创建新会话（复用空会话或调用后端创建），由首次发送惰性触发 | `sessionApi.createSession` |
+| `goHome()` | 回到首页空态：清空当前选中会话与消息，不新建/不选中 | 无（纯本地） |
 | `switchSession(code)` | 切换会话，通过 SSE 历史接口加载消息 | `agentApi.fetchHistoryStream` |
 | `deleteSession(code)` | 删除会话 | `sessionApi.deleteSession` |
 | `renameSession(code, title)` | 重命名会话（乐观更新） | `sessionApi.updateSession` |
 | `saveCurrentSession()` | 将当前 `messages` 快照写回会话（本地缓存） | 无（纯本地） |
 
-**会话初始化流程**（`initSessions`，参考 ai-blueking 的 `loadRecentSession`）：
+**会话初始化流程**（`initSessions`）：
 ```
 页面 onMounted
-  → loadSessions()                        // sessionApi.listSessions
-  → 优先级判断：
-    1. 列表不为空 + 最近会话有内容 → createSession()（新建空会话）
-    2. 列表不为空 + 最近会话为空 → switchSession(code)（复用空会话）
-    3. 列表为空 → createSession()（新建第一个会话）
+  → loadSessions()                        // sessionApi.listSessions（仅拉取侧栏列表）
+  → 有深链 sessionCode 且命中列表 → switchSession(code)（直达指定会话）
+  → 否则 → 停留在首页空态（不新建、不选中，主内容区展示欢迎语）
 ```
 
-**新建会话复用逻辑**：点击"新对话"按钮时，先检查是否存在空会话（`messages.length === 0 && sessionContentCount === 0`），有则复用，无则调用后端创建。
+**首页空态 / 惰性创建**：进入页面或点击"新对话"均回到首页空态（`goHome()`，`currentSessionCode === ''`、`messages === []`），不创建后端会话；用户首次发送消息时（`sendMessage`）才惰性创建/复用会话（`createSession`：存在空会话 `messages.length === 0 && sessionContentCount === 0` 则复用，否则调用后端创建），随后路由同步写入 `sessionCode`。
+
+**业务切换**：`reloadSessions` 在当前会话于新业务列表中不存在时回到首页空态（`goHome()`），不自动选中或新建。
 
 **自动标题**：首次发送消息时，取用户输入前 30 字作为会话标题，同步调用 `sessionApi.updateSession` 更新后端。
 
@@ -231,14 +232,14 @@ interface ChatSession {
 
 - [x] 左侧侧边栏固定展示会话历史列表（可折叠，hover 弹出）
 - [x] 会话按日期分组（今天、昨天、3 天前、一周前、更早），基于本地时区午夜零点计算
-- [x] "开启新对话"按钮（复用空会话或调用后端创建，复用时自动移至列表顶部）
+- [x] "开启新对话"按钮（回到首页空态，待首次发送时惰性创建/复用会话，复用时自动移至列表顶部）
 - [x] 会话操作菜单（重命名、删除）
 - [x] 点击会话切换，通过 SSE `/api/v1/agent/history` 加载历史消息（**增量渲染**：`MESSAGES_SNAPSHOT` 到达即关闭全屏 spinner、先把历史消息铺出来，后续断点续传的实时事件继续追加）
 - [x] 后端加载失败时降级到本地快照
 - [x] 切换会话竞态守卫：`switchSession` 在 await 回收时用 `currentSessionCode === code` 守住，避免旧流 resolve 后写回错误会话；`useStream` 内部用局部 `controller === abortController` 守护状态收尾
 - [x] 首条消息自动设为会话标题（截取前 30 字）+ 同步更新后端
 - [x] `isLoadingHistory` 状态支持 UI 展示加载中
-- [x] 页面加载时通过 `initSessions` 自动初始化会话
+- [x] 页面加载时通过 `initSessions` 初始化：有深链 `sessionCode` 直达会话，否则停留首页空态（不默认创建/选中）
 
 ### 3.8 已知问题与经验
 

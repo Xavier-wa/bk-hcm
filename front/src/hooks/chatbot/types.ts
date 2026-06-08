@@ -13,6 +13,7 @@ export interface ChatSession {
   sessionCode: string;
   sessionName: string;
   sessionContentCount: number;
+  sessionTag?: string;
   createdAt: string;
   updatedAt: string;
   messages: Message[];

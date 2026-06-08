@@ -23,7 +23,7 @@
     "@antv/l7": "2.20.2",
     "@antv/l7-maps": "2.20.2",
     "@blueking/app-select": "0.0.1-beta.6",
-    "@blueking/chat-x": "0.0.36",
+    "@blueking/chat-x": "0.0.42",
     "@blueking/collapsible-tag": "1.1.0-beta.4",
     "@blueking/combine-request": "1.0.1",
     "@blueking/ediatable": "0.0.1-beta.22",

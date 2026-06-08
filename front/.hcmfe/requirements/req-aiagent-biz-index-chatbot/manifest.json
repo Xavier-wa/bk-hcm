@@ -1,0 +1,120 @@
+{
+  "id": "req-aiagent-biz-index-chatbot",
+  "title": "aiagent - 资源管理首页chatbot",
+  "createdAt": "2026-05-27T08:46:44.523Z",
+  "updatedAt": "2026-06-08T09:23:21.775Z",
+  "external": {
+    "tapd": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598134643064",
+    "tapd_parent_id": "1069995598134643064"
+  },
+  "iterations": [
+    {
+      "wfId": "iter-biz-index-chatbot-route-layout",
+      "status": "done",
+      "branch": "feat-biz-index-chatbot",
+      "title": "aiagent - 资源管理首页chatbot - 路由与布局",
+      "tapd_story_id": "1069995598134649293",
+      "createdAt": "2026-05-27T11:20:35.389Z",
+      "mergedCommit": "9e4cf4161004ccd0a807915c7d4cf754d22d8cd8"
+    },
+    {
+      "wfId": "iter-biz-index-chatbot-session-sidebar",
+      "status": "done",
+      "branch": "feat-biz-index-chatbot",
+      "title": "aiagent - 资源管理首页chatbot - 侧边栏会话列表",
+      "tapd_story_id": "1069995598134649467",
+      "createdAt": "2026-05-28T08:00:17.790Z",
+      "mergedCommit": "6f12f4a5395907f83260622324c25b19662816d2"
+    },
+    {
+      "wfId": "iter-biz-index-chatbot-default-main-content",
+      "status": "done",
+      "branch": "feat-biz-index-chatbot",
+      "title": "aiagent - 资源管理首页chatbot - 默认主内容区",
+      "tapd_story_id": "1069995598134649472",
+      "createdAt": "2026-06-05T11:51:03.143Z",
+      "mergedCommit": "07769d97b29ff8ccad842a8dd6e3182886eb69a3"
+    }
+  ],
+  "aggregatedArtifacts": {
+    "prd": {
+      "ref": ".hcmfe/requirements/req-aiagent-biz-index-chatbot/prd.md",
+      "lastMergedFrom": "iter-biz-index-chatbot-default-main-content",
+      "lastMergedAt": "2026-06-08T09:23:21.354Z",
+      "fingerprint": "0d24f5ae85643bac26b96a33166ceca41d893960"
+    },
+    "design": {
+      "ref": ".hcmfe/requirements/req-aiagent-biz-index-chatbot/design.md",
+      "lastMergedFrom": "iter-biz-index-chatbot-default-main-content",
+      "lastMergedAt": "2026-06-08T09:23:21.354Z",
+      "fingerprint": "126117e8feaa73c1af9e78bbd8708ac024d5ee9b"
+    },
+    "api": {
+      "ref": ".hcmfe/requirements/req-aiagent-biz-index-chatbot/api.md",
+      "lastMergedFrom": "iter-biz-index-chatbot-default-main-content",
+      "lastMergedAt": "2026-06-08T09:23:21.354Z",
+      "fingerprint": "e29de6c97c24898bb28ea3961945341b98dfa5d9"
+    }
+  },
+  "codeScope": {
+    "globs": [
+      "\".codebuddy/rules//347/224/237/346/210/220/344/273/243/347/240/201/345/220/216/350/277/233/350/241/214/347/276/216/345/214/**",
+      "\".codebuddy/rules/Message/347/273/204/344/273/266/344/275/277/347/224/250/350/247/204/345/210/**",
+      ".bkui-knowledge.json/**",
+      ".ci/**",
+      ".codebuddy/commands/**",
+      ".codebuddy/rules/**",
+      ".codebuddy/skills/**",
+      ".cursor/**",
+      ".gitignore/**",
+      "Makefile/**",
+      "bkcodeai.json/**",
+      "cmd/**",
+      "docs/api-docs/api-server/api/**",
+      "docs/api-docs/api-server/bin/**",
+      "docs/api-docs/api-server/docs/zh/**",
+      "docs/api-docs/task-server/**",
+      "docs/api-docs/web-server/api/**",
+      "docs/api-docs/web-server/docs/biz/**",
+      "docs/api-docs/web-server/docs/resource/**",
+      "docs/api-docs/web-server/docs/scr/**",
+      "docs/api-docs/web-server/docs/service/**",
+      "docs/api-docs/web-server/docs/zh/**",
+      "docs/overview/**",
+      "docs/resource/img/**",
+      "docs/support-file/changelog/ch/**",
+      "docs/support-file/changelog/en/**",
+      "docs/support-file/docker/bk-hcm-accountserver/**",
+      "docs/support-file/docker/bk-hcm-apigwregister/**",
+      "docs/support-file/docker/bk-hcm-apiserver/**",
+      "docs/support-file/docker/bk-hcm-authregister/**",
+      "docs/support-file/docker/bk-hcm-authserver/**",
+      "docs/support-file/docker/bk-hcm-base/**",
+      "docs/support-file/docker/bk-hcm-cloudserver/**",
+      "docs/support-file/docker/bk-hcm-dataservice/**",
+      "docs/support-file/docker/bk-hcm-hcservice/**",
+      "docs/support-file/docker/bk-hcm-taskserver/**",
+      "docs/support-file/docker/bk-hcm-webserver/**",
+      "docs/support-file/docker/bk-hcm-woaserver/**",
+      "docs/support-file/helm/**",
+      "docs/support-file/template/**",
+      "front/**",
+      "go.mod/**",
+      "go.sum/**",
+      "openspec/**",
+      "pkg/**",
+      "readme.md/**",
+      "readme_en.md/**",
+      "scripts/install/**",
+      "scripts/obssql/**",
+      "scripts/sql/**",
+      "test/suite/**"
+    ],
+    "autoLearned": true
+  },
+  "codeFingerprint": {
+    "computedAt": "2026-06-08T09:23:21.728Z",
+    "files": {},
+    "rootHash": "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+  }
+}

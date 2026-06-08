@@ -416,3 +416,27 @@ url("fonts/iconcool.eot?#iefix") format("embedded-opentype");
 .bkhcm-icon-upload:before {
 	content: "\e18c";
 }
+.bkhcm-icon-export:before {
+	content: "\e18d";
+}
+.bkhcm-icon-user:before {
+	content: "\e18e";
+}
+.bkhcm-icon-permission:before {
+	content: "\e18f";
+}
+.bkhcm-icon-pin:before {
+	content: "\e190";
+}
+.bkhcm-icon-folder-open:before {
+	content: "\e191";
+}
+.bkhcm-icon-folder-close:before {
+	content: "\e192";
+}
+.bkhcm-icon-chat-plus:before {
+	content: "\e193";
+}
+.bkhcm-icon-home-fill:before {
+	content: "\e194";
+}

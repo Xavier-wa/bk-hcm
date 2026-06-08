@@ -337,44 +337,6 @@ const handleReset = () => {
   align-items: center;
   gap: 8px;
 
-  &.foldable {
-    flex-direction: column-reverse;
-    align-items: normal;
-
-    &.folded {
-      flex-direction: row;
-      align-items: center;
-      justify-content: space-between;
-
-      .result-alert {
-        border-radius: 16px;
-        margin-left: auto;
-
-        .result-alert-title {
-          font-weight: 400;
-          cursor: pointer;
-
-          .icon-down {
-            color: #c4c6cc;
-            margin: 0 4px;
-          }
-        }
-
-        :deep(.bk-alert-wraper) {
-          padding: 2px 4px;
-        }
-
-        &:hover {
-          box-shadow: 0 2px 4px 0 #0000001a;
-
-          .icon-down {
-            color: #3a84ff;
-          }
-        }
-      }
-    }
-  }
-
   .result-title {
     font-weight: 700;
     font-size: 14px;
@@ -410,6 +372,44 @@ const handleReset = () => {
       :deep(.bk-alert-icon-info) {
         color: #979ba5;
         font-size: 14px;
+      }
+    }
+  }
+
+  &.foldable {
+    flex-direction: column-reverse;
+    align-items: normal;
+
+    &.folded {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+
+      .result-alert {
+        border-radius: 16px;
+        margin-left: auto;
+
+        .result-alert-title {
+          font-weight: 400;
+          cursor: pointer;
+
+          .icon-down {
+            color: #c4c6cc;
+            margin: 0 4px;
+          }
+        }
+
+        :deep(.bk-alert-wraper) {
+          padding: 2px 4px;
+        }
+
+        &:hover {
+          box-shadow: 0 2px 4px 0 #0000001a;
+
+          .icon-down {
+            color: #3a84ff;
+          }
+        }
       }
     }
   }

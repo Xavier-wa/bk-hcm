@@ -1,12 +1,11 @@
 /**
- * 首页
- */
-export const MENU_INDEX = 'menu_index';
-
-/**
  * 业务（资源管理）
  */
 export const MENU_BUSINESS = 'menu_business';
+// 业务资源管理模块（/business 路由组，便于 routerAction 按 name 跳转）
+export const MENU_BUSINESS_INDEX = 'menu_business_index';
+// 业务视角 AI 首页（chatbot，/business/chatbot）
+export const MENU_BUSINESS_CHATBOT = 'menu_business_chatbot';
 export const MENU_BUSINESS_TASK_MANAGEMENT = 'menu_business_task_management';
 export const MENU_BUSINESS_TASK_MANAGEMENT_DETAILS = 'menu_business_task_management_details';
 export const MENU_BUSINESS_OPERATION_LOG = 'menu_business_operation_log';

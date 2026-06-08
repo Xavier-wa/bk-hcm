@@ -132,6 +132,20 @@ const handleSelect = (item: IRequirementItem) => {
       box-shadow: 0 2px 6px 0 #0000001a;
     }
 
+    .recommend-tag {
+      display: flex;
+      align-items: center;
+      font-size: 12px;
+      color: #fff;
+      background: #f59500;
+      border-radius: 2px;
+      position: absolute;
+      top: -1px;
+      right: -1px;
+      height: 16px;
+      padding: 0 6px;
+    }
+
     &.selected {
       padding: 11px;
       border: 2px solid #3a84ff;
@@ -154,20 +168,6 @@ const handleSelect = (item: IRequirementItem) => {
     .type-name {
       font-size: 14px;
       color: #313238;
-    }
-
-    .recommend-tag {
-      display: flex;
-      align-items: center;
-      font-size: 12px;
-      color: #fff;
-      background: #f59500;
-      border-radius: 2px;
-      position: absolute;
-      top: -1px;
-      right: -1px;
-      height: 16px;
-      padding: 0 6px;
     }
   }
 

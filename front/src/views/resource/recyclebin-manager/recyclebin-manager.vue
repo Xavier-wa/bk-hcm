@@ -685,15 +685,18 @@ export default defineComponent({
 .recycle-manager-page {
   :deep(.bk-tab) {
     height: calc(100vh - 200px);
+
     .bk-tab-header-item {
       height: 42px;
     }
+
     .bk-tab-content {
       padding: 16px 24px;
       height: calc(100% - 42px);
 
       .bk-nested-loading {
         height: calc(100% - 48px);
+
         .bk-table {
           max-height: 100%;
         }
@@ -701,6 +704,7 @@ export default defineComponent({
     }
   }
 }
+
 .operate-warp {
   :deep(.bk-tab-header) {
     line-height: normal !important;
@@ -710,22 +714,27 @@ export default defineComponent({
     }
   }
 }
+
 .sync-dialog-warp {
   height: 150px;
+
   .t-icon {
     height: 42px;
     width: 110px;
   }
+
   .logo-icon {
     height: 42px;
     width: 42px;
   }
+
   .arrow-icon {
     position: relative;
     flex: 1;
     overflow: hidden;
     height: 13px;
     line-height: 13px;
+
     .content {
       width: 130px;
       position: absolute;
@@ -734,10 +743,11 @@ export default defineComponent({
     }
   }
 }
+
 .setting-icon-container {
   width: 32px;
   height: 32px;
-  background: #ffffff;
+  background: #fff;
   box-shadow: 0 2px 4px 0 #1919290d;
   border-radius: 2px;
   display: flex;
@@ -745,19 +755,23 @@ export default defineComponent({
   align-items: center;
   cursor: pointer;
 }
+
 .mt6 {
   margin-top: 6px;
 }
+
 .related-cvm-link {
   margin-left: 4px;
   cursor: pointer;
   color: #3a84ff;
 }
+
 .header-container {
   display: flex;
   justify-content: space-between;
 }
-@-webkit-keyframes move {
+
+@keyframes move {
   from {
     left: 0%;
   }

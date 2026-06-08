@@ -4,14 +4,9 @@
 
 export const headRouteConfig = [
   {
-    id: 'index',
-    name: '首页',
-    path: '/chatbot',
-  },
-  {
     id: 'business',
     name: '资源管理',
-    path: '/business/host',
+    path: '/business',
   },
   {
     id: 'service',

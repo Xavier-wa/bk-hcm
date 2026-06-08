@@ -17,13 +17,13 @@ export const useWhereAmI = (): {
   const route = useRoute();
   const senario = computed(() => {
     if (!route) return;
-    if (route.path === '/chatbot' || route.path.startsWith('/chatbot/')) return Senarios.index;
     if (/^\/resource\/.+$/.test(route?.path)) return Senarios.resource;
     if (/^\/business\/.+$/.test(route.path)) return Senarios.business;
     if (/^\/service\/.+$/.test(route.path)) return Senarios.service;
     if (/^\/scheme\/.+$/.test(route.path)) return Senarios.scheme;
     if (/^\/ziyanscr\/.+$/.test(route.path)) return Senarios.ziyanscr;
     if (/^\/bill\/.+$/.test(route.path)) return Senarios.bill;
+    if (/^\/platform\/.+$/.test(route.path)) return Senarios.platform;
     if (/^\/403\/.+$/.test(route.path)) return Senarios.unauthorized;
     return Senarios.unknown;
   });
@@ -55,13 +55,13 @@ export const useWhereAmI = (): {
 };
 
 export enum Senarios {
-  index = 'index',
   business = 'business',
   resource = 'resource',
   service = 'service',
   scheme = 'scheme',
   ziyanscr = 'ziyanscr',
   bill = 'bill',
+  platform = 'platform',
   unknown = 'unknown',
   unauthorized = 'unauthorized',
 }

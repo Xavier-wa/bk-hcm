@@ -15,22 +15,36 @@ import {
   MENU_BUSINESS_VPC_MANAGEMENT,
   MENU_BUSINESS_TICKET_MANAGEMENT,
   MENU_BUSINESS_RESOURCE_PLAN_CVM,
+  MENU_BUSINESS_INDEX,
+  MENU_BUSINESS_CHATBOT,
   MENU_BUSINESS_RESOURCE_PLAN_CVM_MODIFY,
 } from '@/constants/menu-symbol';
+import { useCommonStore } from '@/store';
 import { operationLogBiz as operationLogBizRouteConfig } from '@/views/operation-log/route-config';
 import { loadBalancerBiz as loadBalancerBizRouteConfig } from '@/views/load-balancer/route-config';
 import { gpuDemandBiz as gpuDemandBizRouteConfig } from '@/views/resource-plan/route-config';
 import taskRouteConfig from '@/views/task/route-config';
 import { ticketRoutesBiz } from '@/views/ticket/route-config';
+import { chatbotBiz as chatbotBizRouteConfig } from '@/views/chatbot/route-config';
 import Meta from '../meta';
 
 const businessMenus: RouteRecordRaw[] = [
   {
+    name: MENU_BUSINESS_INDEX,
     path: '/business',
+    redirect: (to) => {
+      const { authVerifyData } = useCommonStore();
+      // 业务视角 chatbot 权限：有权限默认进 chatbot 首页，否则回退到主机（资源管理默认页）
+      const hasBizChatbotAccess = !!authVerifyData?.permissionAction?.biz_agent_assistant;
+      return {
+        name: hasBizChatbotAccess ? MENU_BUSINESS_CHATBOT : MENU_BUSINESS_HOST_MANAGEMENT,
+        query: to.query,
+      };
+    },
     children: [
+      ...chatbotBizRouteConfig,
       {
         path: '/business/host',
-        alias: '',
         children: [
           {
             path: '',
