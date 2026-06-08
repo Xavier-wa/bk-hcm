@@ -111,6 +111,28 @@ func (m AgentMode) Validate() error {
 	return nil
 }
 
+// IntentType represents the user's intent category recognised by the intent recognition node.
+type IntentType string
+
+const (
+	// IntentTypeHostApply indicates the user wants to apply for host resources.
+	IntentTypeHostApply IntentType = "host_apply"
+	// IntentTypeResourceQuery indicates the user wants to query resource information.
+	IntentTypeResourceQuery IntentType = "resource_query"
+	// IntentTypeChat indicates the user is engaging in general conversation.
+	IntentTypeChat IntentType = "chat"
+)
+
+// Validate checks whether the intent type is one of the declared values.
+func (t IntentType) Validate() error {
+	switch t {
+	case IntentTypeHostApply, IntentTypeResourceQuery, IntentTypeChat:
+		return nil
+	default:
+		return fmt.Errorf("unsupported intent type: %s", t)
+	}
+}
+
 // GraphCheckpointBackend is the backend type for the graph checkpoint storage.
 type GraphCheckpointBackend string
 

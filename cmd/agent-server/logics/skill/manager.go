@@ -47,10 +47,6 @@ type Manager struct {
 func NewManager(readiness ReadinessNotifier) (*Manager, error) {
 	agentCfg := cc.AgentServer()
 	skillsCfg := agentCfg.Skills
-	if skillsCfg == nil {
-		logs.Warnf("skill config is empty")
-		return nil, nil
-	}
 
 	repo, err := BuildFSRepo(skillsCfg)
 	if err != nil {

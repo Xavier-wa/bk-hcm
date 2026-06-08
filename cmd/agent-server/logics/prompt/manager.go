@@ -62,6 +62,13 @@ func newLocalFileManager(cfg cc.AgentPromptConfig, readiness ReadinessNotifier) 
 	if cfg.Instruction != "" {
 		_ = store.Set(constant.InstructionKey, PromptEntry{Content: cfg.Instruction})
 	}
+	if cfg.IntentRecognitionPrompt != "" {
+		_ = store.Set(constant.IntentRecognitionPromptKey, PromptEntry{Content: cfg.IntentRecognitionPrompt})
+	}
+	if cc.AgentServer().Storage.Memory.ExtractPrompt != "" {
+		_ = store.Set(constant.MemoryExtractPromptKey,
+			PromptEntry{Content: cc.AgentServer().Storage.Memory.ExtractPrompt})
+	}
 
 	readiness.MarkPromptReady()
 	logs.Infof("prompt manager built in local-file mode")

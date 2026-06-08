@@ -278,8 +278,8 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 		agui.WithAGUIRunnerOptions(
 			aguirunner.WithUserIDResolver(resolveAGUIUserID),
 			aguirunner.WithRunOptionResolver(
-				makeRunOptionResolver(s.runTime.CheckpointSaver(), svcCfg.AllowedModelNames(),
-					s.runTime.DynamicToolFilter())),
+				makeRunOptionResolver(s.runTime.CheckpointSaver(),
+					svcCfg.AllowedModelNames(), s.runTime.DynamicToolFilter())),
 			aguirunner.WithTranslatorFactory(aguievent.NewCustomTranslator),
 			// Auto-cancel the LLM call when the SSE connection drops (client disconnects).
 			// NOTE: When ctx ends, the request stops immediately, so recorded conversation events may be incomplete.
@@ -549,14 +549,12 @@ func makeRunOptionResolver(saver graph.CheckpointSaver, allowedModels []string,
 	return func(ctx context.Context, input *adapter.RunAgentInput) ([]agent.RunOption, error) {
 		var opts []agent.RunOption
 
-		// 1. Bind lineageID to threadID so checkpoints can be queried by thread.
+		// Bind lineageID to threadID so checkpoints can be queried by thread.
 		runtimeState := map[string]any{
 			graph.CfgKeyLineageID: input.ThreadID,
 		}
-
-		// 2. Auto-detect interrupted checkpoint and prepare resume.
+		// Auto-detect interrupted checkpoint and prepare resume (HITL / fallback interrupt).
 		runtimeState = tryPrepareAutoResume(saver, ctx, input, runtimeState)
-
 		opts = append(opts, agent.WithRuntimeState(runtimeState))
 
 		// Model selection.
@@ -609,6 +607,7 @@ func tryPrepareAutoResume(saver graph.CheckpointSaver, ctx context.Context, inpu
 		if len(input.Messages) > 0 {
 			lastMsg := input.Messages[len(input.Messages)-1]
 			if lastMsg.Role == "user" && lastMsg.Content != "" {
+
 				// NOTE: mergeInitialStateNonInternal skips keys starting with "_",
 				// so we must use StateKeyCommand (processed by processResumeCommand)
 				// instead of writing ResumeChannel directly.

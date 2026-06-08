@@ -112,6 +112,10 @@ const (
 	AvailableSkillsInjected = "available_skills_injected"
 )
 
+// StateKeyIntent is the graph state key for the intent recognised in the current turn.
+// Values are enumor.IntentType strings (e.g. "host_apply", "chat", "resource_query").
+const StateKeyIntent = "intent"
+
 // HITL (Human-in-the-Loop) constants
 const (
 	// HumanConfirmToolName is the name of the human confirmation tool.
@@ -142,9 +146,11 @@ const (
 	// SystemPromptKey is the well-known prompt key injected as the LLM system message.
 	SystemPromptKey = "system_prompt"
 	// InstructionKey is the ll-known prompt key appended after the system message.
-	InstructionKey = "instruction"
+	InstructionKey = "instruction_prompt"
 	// MemoryExtractPromptKey is the well-known prompt key used by the memory extractor.
 	MemoryExtractPromptKey = "memory_extract_prompt"
+	// IntentRecognitionPromptKey is the well-known prompt key used by the intent recognition.
+	IntentRecognitionPromptKey = "intent_recognition_prompt"
 )
 
 // PermissionDeniedMsg is the message for permission denied.

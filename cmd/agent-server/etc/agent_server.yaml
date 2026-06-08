@@ -305,6 +305,7 @@ prompt:
   # 开启 BKAIDev 同步后（enabled: true）这两个字段被忽略。
   systemPromptFile: "cmd/agent-server/etc/prompts/system_prompt.md"
   instructionFile: "cmd/agent-server/etc/prompts/instruction.md"
+  intentRecognitionPromptFile: "cmd/agent-server/etc/prompts/intent_recognition_prompt.md"
 
   # BKAIDev 托管同步模式：开启后从平台实时拉取并热更新，网关复用顶层 bkaidevSyncApiGateway。
   enabled: false
@@ -321,6 +322,14 @@ prompt:
     - id: 3
       code: memory_extract_prompt  # 对应 MemoryExtractPromptKey，供 memory extractor 使用
       required: false
+    - id: 4
+      code: intent_recognition_prompt  # 对应 IntentRecognitionPromptKey，供意图识别使用
+      required: true
+
+# 意图识别节点配置（仅 agui.model.mode: graph 时生效）。
+# prompt 文件路径在上方 prompt.intentRecognitionPromptFile 中配置。
+intent:
+  contextWindowSize: 5  # 传入意图识别 LLM 的最近用户消息条数（默认 5）
 
 # BKAIDev 同步网关凭证，由 skills / prompt 等同步域共用。
 # 仅在至少一个同步域 enabled: true 时需要配置。

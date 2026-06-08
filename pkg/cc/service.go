@@ -1326,10 +1326,15 @@ type AgentPromptConfig struct {
 	// InstructionFile is the path to a Markdown/text file whose content becomes the
 	// Instruction. Appended to every LLM request.
 	InstructionFile string `yaml:"instructionFile"`
+	// IntentRecognitionPromptFile is the path to the intent recognition prompt file.
+	// Required in graph mode when not using BKAIDev sync.
+	IntentRecognitionPromptFile string `yaml:"intentRecognitionPromptFile"`
 	// SystemPrompt is the system prompt content loaded from SystemPromptFile at startup.
-	SystemPrompt string
+	SystemPrompt string `yaml:"-"`
 	// Instruction is the instruction content loaded from InstructionFile at startup.
-	Instruction string
+	Instruction string `yaml:"-"`
+	// IntentRecognitionPrompt holds the loaded intent recognition prompt content. Not serialised to yaml.
+	IntentRecognitionPrompt string `yaml:"-"`
 
 	// BKAIDev sync mode fields (ignored when Enabled=false).
 	// Enabled turns on BKAIDev prompt sync. When true, file fields above are ignored.
@@ -1363,13 +1368,20 @@ func (s *AgentPromptConfig) trySetDefault() {
 	}
 	s.SystemPrompt = loadPromptFile(s.SystemPromptFile)
 	s.Instruction = loadPromptFile(s.InstructionFile)
+	s.IntentRecognitionPrompt = loadPromptFile(s.IntentRecognitionPromptFile)
 }
 
 // Validate validates the agent prompt config.
-func (s AgentPromptConfig) Validate() error {
+// mode is the AGUI agent mode; in graph mode the intent recognition prompt is also required.
+func (s AgentPromptConfig) Validate(mode enumor.AgentMode) error {
 	if !s.BKAIDevSyncEnabled() {
 		if s.SystemPrompt == "" {
 			return errors.New("SystemPrompt is required for local file mode")
+		}
+
+		if mode == enumor.AgentModeGraph && s.IntentRecognitionPrompt == "" {
+			return errors.New("intent recognition prompt is required for graph mode: " +
+				"set prompt.intentRecognitionPromptFile or enable BKAIDev sync")
 		}
 		return nil
 	}
@@ -1550,6 +1562,19 @@ func (a *AgentModelGeneralConfig) trySetDefault() {
 	}
 }
 
+// AgentIntentConfig configures the intent recognition node for GraphAgent.
+type AgentIntentConfig struct {
+	// ContextWindowSize is the maximum number of recent user messages passed to the
+	// intent recognition LLM for context. Defaults to 5.
+	ContextWindowSize int `yaml:"contextWindowSize"`
+}
+
+func (c *AgentIntentConfig) trySetDefault() {
+	if c.ContextWindowSize <= 0 {
+		c.ContextWindowSize = 5
+	}
+}
+
 // AgentAGUI configures the AG-UI protocol endpoint and its optional history feature.
 type AgentAGUI struct {
 	// Enable enables the AG-UI protocol endpoint.
@@ -1630,8 +1655,10 @@ type AgentServerSetting struct {
 	Storage   AgentStorage         `yaml:"storage"`
 	Tools     AgentToolsConfig     `yaml:"tools"`
 	AGUI      AgentAGUI            `yaml:"agui"`
+	// Intent configures the intent recognition node. Only used when AGUI.Model.Mode is "graph".
+	Intent AgentIntentConfig `yaml:"intent"`
 	// Skills holds all skill configuration: filesystem paths and BKAIDev sync parameters.
-	Skills *AgentBKAIDevSyncSkillsConfig `yaml:"skills"`
+	Skills AgentBKAIDevSyncSkillsConfig `yaml:"skills"`
 	// Prompt configures prompt files or BKAIDev-hosted prompt sync.
 	Prompt AgentPromptConfig `yaml:"prompt"`
 	// BKAIDevSyncAPIGateway holds the BKAIDev API gateway credentials shared by all
@@ -1641,7 +1668,7 @@ type AgentServerSetting struct {
 
 // SkillSyncEnabled reports whether BKAIDev skill sync is turned on.
 func (s *AgentServerSetting) SkillSyncEnabled() bool {
-	return s.Skills != nil && s.Skills.Enabled
+	return s.Skills.Enabled
 }
 
 // PromptSyncEnabled reports whether BKAIDev prompt sync is turned on.
@@ -1660,6 +1687,7 @@ func (s *AgentServerSetting) trySetDefault() {
 	s.Service.trySetDefault()
 	s.Log.trySetDefault()
 	s.AGUI.trySetDefault()
+	s.Intent.trySetDefault()
 	s.Storage.trySetDefault()
 	s.Tools.trySetDefault()
 	if s.SkillSyncEnabled() {
@@ -1698,7 +1726,7 @@ func (s AgentServerSetting) Validate() error {
 		}
 	}
 
-	if err := s.Prompt.Validate(); err != nil {
+	if err := s.Prompt.Validate(s.AGUI.Model.Mode); err != nil {
 		return fmt.Errorf("prompt: %w", err)
 	}
 

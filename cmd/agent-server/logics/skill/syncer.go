@@ -53,13 +53,13 @@ type Syncer struct {
 	store     *localstore.Store[skillRecord]
 	repo      skillpkg.RefreshableRepository
 	readiness ReadinessNotifier
-	cfg       *cc.AgentBKAIDevSyncSkillsConfig
+	cfg       cc.AgentBKAIDevSyncSkillsConfig
 	skillRoot string
 }
 
 // newSyncer constructs a Syncer. All arguments are required.
 func newSyncer(cli bkaidev.Client, inst *Installer, store *localstore.Store[skillRecord],
-	repo skillpkg.RefreshableRepository, readiness ReadinessNotifier, cfg *cc.AgentBKAIDevSyncSkillsConfig,
+	repo skillpkg.RefreshableRepository, readiness ReadinessNotifier, cfg cc.AgentBKAIDevSyncSkillsConfig,
 	skillRoot string) *Syncer {
 
 	return &Syncer{
@@ -209,7 +209,7 @@ func (s *Syncer) diffSkills(remote map[string]bkaidev.SkillListItem) (added, rem
 }
 
 // ParseSyncInterval parses cfg.SyncInterval into a time.Duration.
-func ParseSyncInterval(cfg *cc.AgentBKAIDevSyncSkillsConfig) (time.Duration, error) {
+func ParseSyncInterval(cfg cc.AgentBKAIDevSyncSkillsConfig) (time.Duration, error) {
 	d, err := time.ParseDuration(cfg.SyncInterval)
 	if err != nil {
 		return 0, fmt.Errorf("invalid skill sync interval %q: %w", cfg.SyncInterval, err)

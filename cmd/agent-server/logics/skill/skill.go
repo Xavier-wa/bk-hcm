@@ -33,11 +33,7 @@ import (
 
 // BuildFSRepo constructs an FSRepository from the configured roots.
 // Returns nil when no roots are configured.
-func BuildFSRepo(cfg *cc.AgentBKAIDevSyncSkillsConfig) (skillpkg.RefreshableRepository, error) {
-	if cfg == nil {
-		return nil, nil
-	}
-
+func BuildFSRepo(cfg cc.AgentBKAIDevSyncSkillsConfig) (skillpkg.RefreshableRepository, error) {
 	roots := make([]string, 0, 1+len(cfg.ExtraDirs))
 	if r := strings.TrimSpace(cfg.Root); r != "" {
 		roots = append(roots, r)
