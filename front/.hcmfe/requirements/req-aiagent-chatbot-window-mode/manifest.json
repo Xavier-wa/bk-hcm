@@ -1,0 +1,24 @@
+{
+  "id": "req-aiagent-chatbot-window-mode",
+  "title": "aiagent - chatbot 聊天窗模式",
+  "createdAt": "2026-06-09T06:22:04.555Z",
+  "updatedAt": "2026-06-09T06:22:16.123Z",
+  "external": {
+    "tapd": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598135027084",
+    "figma": "https://www.figma.com/design/nKX02SsMK8StZYAEEw0MfK/?node-id=2097-18867"
+  },
+  "iterations": [
+    {
+      "wfId": "feat-aiagent-chatbot-window-mode",
+      "status": "prd",
+      "branch": "feat-chatbot-popup",
+      "title": "aiagent - chatbot 聊天窗模式",
+      "createdAt": "2026-06-09T06:22:16.091Z"
+    }
+  ],
+  "aggregatedArtifacts": {},
+  "codeScope": {
+    "globs": [],
+    "autoLearned": true
+  }
+}

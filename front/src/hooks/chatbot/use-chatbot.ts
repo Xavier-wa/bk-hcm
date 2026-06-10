@@ -18,7 +18,14 @@ export const extractText = (content: unknown): string => {
     .join('');
 };
 
-export function useChatbot() {
+// useChatbot 选项。sceneTag 为场景标识（如 host_apply）：
+// 浮窗按场景挂载时传入，会话列表仅加载该场景，发送时默认按该场景创建会话；全页不传，加载全部。
+export interface UseChatbotOptions {
+  sceneTag?: string;
+}
+
+export function useChatbot(options: UseChatbotOptions = {}) {
+  const { sceneTag = '' } = options;
   const { getBizsId } = useWhereAmI();
   const messageModule = useMessage();
   const eventModule = useEventHandler(messageModule);
@@ -29,9 +36,10 @@ export function useChatbot() {
     getBkBizId: getBizsId,
     abortStream: streamModule.abortStream,
     fetchHistory: streamModule.fetchHistory,
+    sceneTag,
   });
 
-  const sendMessage = async (content: string, sessionTag = '') => {
+  const sendMessage = async (content: string, sessionTag = sceneTag) => {
     // 首页空态（无选中会话）发送：先惰性创建/复用会话，避免清空消息时丢失刚加入的用户消息。
     // 创建失败（如无 bizId）时直接返回，不发送。
     // sessionTag 为场景标识（如 host_apply），通过 create_session 的 session_tag 入参传递。

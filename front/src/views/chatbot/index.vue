@@ -1,30 +1,20 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, useTemplateRef, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { MENU_BUSINESS_CHATBOT } from '@/constants/menu-symbol';
 import routerAction from '@/router/utils/action';
 import { AngleDownLine, AngleLeft, AngleRight, Close, Search } from 'bkui-vue/lib/icon';
 import { InfoBox } from 'bkui-vue';
 
-import {
-  ChatInput,
-  MessageContainer,
-  MessageRole,
-  MessageStatus,
-  useMessageGroup,
-  type IToolBtn,
-  type Message,
-  type TagSchema,
-  type UserMessage,
-} from '@blueking/chat-x';
-import '@blueking/chat-x/dist/index.css';
+import { MessageRole } from '@blueking/chat-x';
 
 import { useChatbot, extractText, type ChatSession } from '@/hooks/chatbot/use-chatbot';
+import { ChatbotKey } from '@/hooks/chatbot/provide';
 import { useUserStore } from '@/store/user';
-import HitlInterruptCard from './children/hitl-interrupt-card.vue';
+import ChatMessageList from '@/components/chatbot/chat-message-list.vue';
+import ChatInputBox from '@/components/chatbot/chat-input-box.vue';
 import SessionSidebarItem from './children/session-sidebar-item.vue';
 import { GLOBAL_BIZS_KEY } from '@/common/constant';
-import { type HitlInterruptValue, type HitlInterruptMessage } from '@/hooks/chatbot/types';
 import { ASSISTANT_CONTACT, BIG_CARDS, PROMPT_CHIPS, type BigCard, type PromptChip } from './constants';
 import { resolveSessionTagName } from './utils';
 import cloudAssistantSvg from '@/assets/image/cloud-assistant.svg';
@@ -32,6 +22,10 @@ import WName from '@/components/w-name';
 
 const route = useRoute();
 const userStore = useUserStore();
+
+const chatbot = useChatbot();
+// 容器持有 useChatbot 实例并 provide，供 chat-message-list / chat-input-box 等原子 inject 复用同一会话内核
+provide(ChatbotKey, chatbot);
 
 const {
   messages,
@@ -41,29 +35,19 @@ const {
   currentSession,
   isLoadingHistory,
   sendMessage,
-  regenerate,
-  resendEdited,
-  stopGeneration,
   switchSession,
   deleteSession,
   renameSession,
   goHome,
   initSessions,
   reloadSessions,
-} = useChatbot();
+} = chatbot;
 
 const readRouteSessionCode = () => {
   const code = route.params.sessionCode;
   return typeof code === 'string' && code ? code : '';
 };
 
-const selectedUserMessages = ref<Message[]>();
-const { messageGroups } = useMessageGroup({
-  messages: computed(() => messages.value),
-  selectedUserMessages,
-});
-
-const inputValue = shallowRef<string | TagSchema>([[]]);
 const editingSessionId = ref('');
 const editingTitle = ref('');
 const activeMenuId = ref('');
@@ -73,7 +57,7 @@ const expandedFolderTags = ref<Set<string>>(new Set());
 
 // 小卡片点击后的待发送场景（chip 在编辑器首行自渲染；其 sessionTag 在发送时随 create_session 上报）
 const pendingChip = ref<PromptChip | null>(null);
-const chatInputRef = ref<{ focus: () => void } | null>(null);
+const chatInputBoxRef = useTemplateRef<{ setInput: (text: string) => void; focus: () => void }>('chatInputBoxRef');
 // chip 绝对定位 + 编辑器首行 text-indent 让位，需实测 chip 宽度
 const sceneChipRef = ref<HTMLElement>();
 const sceneChipWidth = ref(0);
@@ -121,7 +105,6 @@ const handleTogglePin = (code: string) => {
 
 watch(pinnedStorageKey, loadPinned, { immediate: true });
 
-const messageStatus = computed(() => (isChatting.value ? MessageStatus.Streaming : MessageStatus.Complete));
 const isEmpty = computed(() => messages.value.length === 0 && !isLoadingHistory.value);
 // 首页空态：未选中任何会话且无消息 → 展示默认主内容区（欢迎区 + 大卡片 + 小卡片排）。
 // 已选中会话但无消息（空会话）保持空白，不展示默认内容。
@@ -250,13 +233,10 @@ const handleMenuAction = (session: ChatSession, key: string) => {
   }
 };
 
-const handleSendMessage = async (content: UserMessage['content'], _docSchema: TagSchema) => {
-  const text = typeof content === 'string' ? content : '';
-  if (!text.trim()) return;
+const handleSend = async (text: string) => {
   // 小卡片场景的 sessionTag 随本次发送上报后清空；普通输入无 tag
   const sessionTag = pendingChip.value?.sessionTag || '';
   pendingChip.value = null;
-  inputValue.value = [[]];
   await sendMessage(text, sessionTag);
 };
 
@@ -264,15 +244,14 @@ const handleSendMessage = async (content: UserMessage['content'], _docSchema: Ta
 const handleBigCardClick = async (card: BigCard) => {
   if (isChatting.value) return;
   pendingChip.value = null;
-  inputValue.value = [[]];
   await sendMessage(card.prompt, card.sessionTag || '');
 };
 
-// 小卡片：编辑器内注入默认提示词文本，场景 chip 由 #top 插槽自渲染（组件 v-model 不支持注入 tag 节点）
+// 小卡片：编辑器内注入默认提示词文本，场景 chip 由 #input-header 插槽自渲染（组件 v-model 不支持注入 tag 节点）
 const handlePromptChipClick = (chip: PromptChip) => {
   pendingChip.value = chip;
-  inputValue.value = [[{ type: 'text', text: chip.prompt }]] as TagSchema;
-  nextTick(() => chatInputRef.value?.focus());
+  chatInputBoxRef.value?.setInput(chip.prompt);
+  nextTick(() => chatInputBoxRef.value?.focus());
 };
 
 // 移除场景 chip：仅清除场景标识，保留输入框已有文本
@@ -299,61 +278,14 @@ watch(sceneChip, () => {
   });
 });
 
-const handleStopSending = async () => {
-  stopGeneration();
-};
-
-const handleAgentAction = async (tool: IToolBtn, msgs: Message[]) => {
-  if (tool.id === 'rebuild') {
-    await regenerate(msgs);
-  }
-};
-
-// 类型守卫：检查消息是否为 HITL 中断消息
-const isHitlInterruptMessage = (message: Message): boolean => {
-  return (message as HitlInterruptMessage).__type === 'hitl.interrupt';
-};
-
-const getHitlContent = (message: Message): HitlInterruptValue | null => {
-  if (!isHitlInterruptMessage(message)) return null;
-  return (message as HitlInterruptMessage).content as HitlInterruptValue;
-};
-
-// 历史消息只读展示：仅当后续 user 文本命中 options 时，才视为有效选择；
-// 未命中则按“其它/未命中”处理（不回填具体文本，避免误判为自定义输入）
-const getHitlReadonlyState = (message: Message): { readonly: boolean; value: string } => {
-  if (!isHitlInterruptMessage(message)) return { readonly: false, value: '' };
-
-  const currentIndex = messages.value.findIndex((item) => item.id === message.id);
-  if (currentIndex < 0) return { readonly: false, value: '' };
-
-  const nextMessage = messages.value[currentIndex + 1];
-  if (!nextMessage || nextMessage.role !== MessageRole.User) return { readonly: false, value: '' };
-
-  const userAnswer = extractText(nextMessage.content).trim();
-  const hitlContent = getHitlContent(message);
-  const options = hitlContent?.value.options ?? [];
-
-  if (!userAnswer) return { readonly: true, value: '' };
-  if (options.includes(userAnswer)) return { readonly: true, value: userAnswer };
-
-  return { readonly: true, value: '' };
-};
-
-const handleUserInputConfirm = async (message: Message, content: UserMessage['content']) => {
-  await resendEdited(message, content);
-};
-
 const handleNewSession = () => {
-  // 新对话：回到首页空态，待用户首次发送时再惰性创建会话
+  // 新对话：回到首页空态，待用户首次发送时再惰性创建会话（输入框随会话切换由 chat-input-box 自行清空）
   goHome();
-  inputValue.value = [[]];
   pendingChip.value = null;
 };
 
 const handleSwitchSession = (code: string) => {
   switchSession(code);
-  inputValue.value = [[]];
   pendingChip.value = null;
   activeMenuId.value = '';
 };
@@ -684,26 +616,7 @@ onMounted(() => {
           </div>
           <!-- 已选中会话但无消息：保持空白，不回退默认内容 -->
           <div v-else-if="isEmpty" class="chat-blank" />
-          <!-- messages 在新版组件中未被消费，仅因类型定义为必填而保留 -->
-          <MessageContainer
-            v-else
-            :messages="messages"
-            :message-groups="messageGroups"
-            :message-status="messageStatus"
-            :on-agent-action="handleAgentAction"
-            :on-user-input-confirm="handleUserInputConfirm"
-            @stop-streaming="handleStopSending"
-          >
-            <template #default="{ message }">
-              <HitlInterruptCard
-                v-if="isHitlInterruptMessage(message)"
-                :content="getHitlContent(message)"
-                :readonly="getHitlReadonlyState(message).readonly"
-                :readonly-value="getHitlReadonlyState(message).value"
-                :on-confirm="sendMessage"
-              />
-            </template>
-          </MessageContainer>
+          <ChatMessageList v-else />
         </div>
         <div v-if="userAnchors.length >= 2" class="message-nav">
           <div class="nav-track">
@@ -740,27 +653,19 @@ onMounted(() => {
             </button>
           </div>
         </div>
-        <div
+        <ChatInputBox
+          ref="chatInputBoxRef"
           class="chatbot-chat-input"
-          :class="{ 'has-scene-chip': sceneChip }"
-          :style="{ '--scene-chip-w': `${sceneChipWidth}px` }"
+          :input-indent="sceneChipWidth"
+          @send="handleSend"
         >
-          <ChatInput
-            ref="chatInputRef"
-            v-model="inputValue"
-            :message-status="messageStatus"
-            :support-upload="false"
-            :on-send-message="handleSendMessage"
-            :on-stop-sending="handleStopSending"
-          >
-            <template #input-header>
-              <div v-if="sceneChip" ref="sceneChipRef" class="scene-chip">
-                <span class="scene-chip-label">{{ sceneChip.label }}</span>
-                <Close v-if="!sceneChip.readonly" class="scene-chip-close" @click="clearPendingChip" />
-              </div>
-            </template>
-          </ChatInput>
-        </div>
+          <template #input-header>
+            <div v-if="sceneChip" ref="sceneChipRef" class="scene-chip">
+              <span class="scene-chip-label">{{ sceneChip.label }}</span>
+              <Close v-if="!sceneChip.readonly" class="scene-chip-close" @click="clearPendingChip" />
+            </div>
+          </template>
+        </ChatInputBox>
         <p class="chatbot-footer">
           有任何问题可联系
           <WName :name="ASSISTANT_CONTACT.name" :alias="ASSISTANT_CONTACT.alias" />
@@ -1104,40 +1009,6 @@ onMounted(() => {
         background: var(--chat-scroll-thumb-hover);
       }
     }
-
-    :deep(.message-group) {
-      max-width: 1000px;
-      padding-right: 16px;
-      margin-right: auto;
-      margin-left: auto;
-    }
-  }
-
-  :deep(.message-wrapper) {
-    .message-tools-hover {
-      opacity: 0;
-      transition: opacity 0.2s ease-in-out;
-    }
-
-    &:hover .message-tools-hover {
-      opacity: 1;
-    }
-  }
-
-  :deep(.message-tools-container:not(.ai-user-message-tools)) {
-    .message-tools > *:has(.ai-cite-icon),
-    .message-tools > *:has(.ai-share-icon),
-    .ai-divider,
-    .message-tools:last-child {
-      display: none;
-    }
-  }
-
-  :deep(.ai-user-message-tools) {
-    .message-tools > *:has(.ai-cite-icon),
-    .message-tools > *:has(.ai-delete-icon) {
-      display: none;
-    }
   }
 
   .chat-loading {
@@ -1431,10 +1302,8 @@ onMounted(() => {
     }
   }
 
+  // 场景 chip 绝对定位到编辑器首行左侧（让位逻辑由 chat-input-box 的 input-indent 处理）
   .chatbot-chat-input {
-    padding: 16px;
-
-    // 场景 chip 绝对定位到编辑器首行左侧，配合 text-indent 让首行文字环绕在 chip 右侧
     .scene-chip {
       position: absolute;
       top: 6px;
@@ -1456,13 +1325,6 @@ onMounted(() => {
         height: 14px;
         cursor: pointer;
       }
-    }
-
-    // 有场景 chip 时，给编辑器整体让出左列（padding-left 对所有行生效，换行/空态光标都对齐右列，
-    // 区别于 text-indent 仅缩进首行）。左列宽度 = chip 左偏移 8px + chip 实测宽度 + 间距 8px。
-    // chip 绝对定位在左列，编辑器文字在右列，形成两列布局。
-    &.has-scene-chip :deep(.ai-slash-input) {
-      padding-left: calc(var(--scene-chip-w, 0px) + 16px);
     }
   }
 

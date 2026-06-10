@@ -23,9 +23,12 @@ export interface PromptChip {
   sessionTag?: string;
 }
 
+// 场景标识常量：主机申领。用于按场景过滤会话列表、创建会话时打 session_tag。
+export const SESSION_TAG_HOST_APPLY = 'host_apply';
+
 // session_tag key → 文件夹/场景展示名映射（与侧栏标签文件夹共用）。目前仅支持主机申领。
 export const SESSION_TAG_NAME: Record<string, string> = {
-  host_apply: '主机申领',
+  [SESSION_TAG_HOST_APPLY]: '主机申领',
 };
 
 // 主内容区底部联系人：name 为企业微信账号（点击拉起会话），alias 为展示文案。
@@ -41,7 +44,7 @@ export const BIG_CARDS: BigCard[] = [
     title: '申领 10 台主机',
     desc: '可通过智能推荐快捷申领主机',
     prompt: '我要申领 10 台主机',
-    sessionTag: 'host_apply',
+    sessionTag: SESSION_TAG_HOST_APPLY,
   },
   {
     icon: 'bkhcm-icon-host-inventory',
@@ -60,12 +63,12 @@ export const BIG_CARDS: BigCard[] = [
     title: '申领 50 台服务器',
     desc: '可通过智能推荐快捷申领服务器',
     prompt: '我要申领 50 台服务器',
-    sessionTag: 'host_apply',
+    sessionTag: SESSION_TAG_HOST_APPLY,
   },
 ];
 
 export const PROMPT_CHIPS: PromptChip[] = [
-  { tag: '主机申领', icon: 'bkhcm-icon-host-application', prompt: '我要申请主机', sessionTag: 'host_apply' },
+  { tag: '主机申领', icon: 'bkhcm-icon-host-application', prompt: '我要申请主机', sessionTag: SESSION_TAG_HOST_APPLY },
   { tag: '主机回收', icon: 'bkhcm-icon-host-recycle', prompt: '我要回收主机' },
   { tag: '预测提单', icon: 'bkhcm-icon-resource-plan', prompt: '我要提交预测单' },
   { tag: '预测调整', icon: 'bkhcm-icon-resource-plan', prompt: '我要调整预测' },

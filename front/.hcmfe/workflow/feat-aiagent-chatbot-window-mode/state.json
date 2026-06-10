@@ -1,0 +1,83 @@
+{
+  "id": "feat-aiagent-chatbot-window-mode",
+  "title": "aiagent - chatbot 聊天窗模式",
+  "currentStage": "coding",
+  "createdAt": "2026-06-09T06:22:16.091Z",
+  "updatedAt": "2026-06-09T08:19:54.027Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-chatbot-window-mode/prd.md",
+        "kind": "file",
+        "addedAt": "2026-06-09T06:30:53.975Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-chatbot-window-mode/design.md",
+        "kind": "file",
+        "addedAt": "2026-06-09T07:36:07.664Z"
+      },
+      {
+        "ref": "https://www.figma.com/design/nKX02SsMK8StZYAEEw0MfK/?node-id=2097-18867",
+        "kind": "url",
+        "addedAt": "2026-06-09T07:36:19.566Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-chatbot-window-mode/api.md",
+        "kind": "file",
+        "addedAt": "2026-06-09T08:04:59.237Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-chatbot-window-mode/coding.md",
+        "kind": "file",
+        "addedAt": "2026-06-09T08:19:54.027Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-06-09T07:33:15.833Z",
+      "note": "用户确认 PRD；决策 D1-D5 + 会话共享联动场景（US-7/AC-11）均已落盘"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-06-09T08:03:51.642Z",
+      "note": "用户确认 Design；决策 D1-D4 + 实现取向（图标从 ai-blueking 搬运、框内能力用 chat-x、严格参照 ai-blueking）均已落盘"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-06-09T08:09:25.074Z",
+      "note": "用户确认 API：后端零新增/零修改，复用现网 session REST + SSE；联动走前端 sessionCode 约定；不顺带整改 BK_HCM_AJAX_URL_PREFIX"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-06-09T06:22:16.091Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-06-09T07:33:21.452Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-06-09T08:03:57.683Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-06-09T08:09:33.161Z"
+    }
+  ],
+  "requirementId": "req-aiagent-chatbot-window-mode",
+  "branch": "feat-chatbot-popup"
+}

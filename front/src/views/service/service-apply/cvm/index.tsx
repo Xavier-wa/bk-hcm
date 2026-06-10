@@ -1,6 +1,6 @@
 /* eslint-disable no-useless-escape */
 // eslint-disable
-import { computed, defineComponent, reactive, ref, watch } from 'vue';
+import { computed, defineComponent, onMounted, reactive, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { Form, Input, Select, Checkbox, Button, Radio, Switcher, Slider, Alert, Popover } from 'bkui-vue';
 import ConditionOptions from '../components/common/condition-options/index.vue';
@@ -36,6 +36,8 @@ import { Senarios, useWhereAmI } from '@/hooks/useWhereAmI';
 import { pluginHandler } from '@pluginHandler/service-apply-cvm';
 import { bizApplyCvmCloudAreaSelectedKey } from '@/constants/storage-symbols';
 import cloudAreaFilter from './cloud-area-filter.plugin';
+import AiAssistant from '@/components/ai-assistant/index.vue';
+import { SESSION_TAG_HOST_APPLY } from '@/views/chatbot/constants';
 const { BK_HCM_AJAX_URL_PREFIX } = window.PROJECT_CONFIG;
 
 const accountStore = useAccountStore();
@@ -68,6 +70,17 @@ export default defineComponent({
     const { t } = useI18n();
     const router = useRouter();
     const route = useRoute();
+
+    // 跨形态联动：携带 query sessionCode 进入本页时，自动唤起 AI 浮窗并加载对应会话
+    const aiAssistantRef = ref<InstanceType<typeof AiAssistant>>();
+    onMounted(() => {
+      const sessionCode = typeof route.query.sessionCode === 'string' ? route.query.sessionCode : '';
+      if (!sessionCode) return;
+      // 先按场景加载会话列表并切换到深链会话，再唤起面板，避免 show() 二次拉取
+      aiAssistantRef.value?.initSessions(sessionCode);
+      aiAssistantRef.value?.show();
+    });
+
     const isSubmitBtnLoading = ref(false);
     const usageNum = ref(0);
     const limitNum = ref(-1);
@@ -1048,6 +1061,7 @@ export default defineComponent({
 
     return () => (
       <div>
+        <AiAssistant ref={aiAssistantRef} title='海垒 AI 助手' sceneTag={SESSION_TAG_HOST_APPLY} />
         <DetailHeader fromConfig={fromConfig.value}>
           <p class={'purchase-cvm-header-title'}>购买主机</p>
         </DetailHeader>

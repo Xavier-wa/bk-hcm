@@ -1,5 +1,5 @@
 ---
-name: test-checklist
+name: workflow-test-checklist
 description: 在 test 阶段为新功能产出可执行的手测验证清单 (P0/P1/P2 用例 + 数据准备 + 期望结果), 落到 .hcmfe/workflow/<id>/ 下。当 hcmfe wf 进入 test 阶段或需要为某个 feature 设计验证用例时使用。
 ---
 
@@ -36,7 +36,7 @@ description: 在 test 阶段为新功能产出可执行的手测验证清单 (P0
 
 - `./assets/test-checklist-template.md` —— `test.md` 模板
 
-> 这份模板在 know-how 同步后位于 `<projectRoot>/.hcmfe/know-how/skills/test-checklist/assets/`，可直接读出来作为初始内容。
+> 这份模板在 know-how 同步后位于 `<projectRoot>/.hcmfe/know-how/skills/workflow-test-checklist/assets/`，可直接读出来作为初始内容。
 
 ## 操作步骤（AI 必须按序执行）
 

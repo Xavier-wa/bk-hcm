@@ -14,7 +14,7 @@ const chatbotBiz: RouteRecordRaw[] = [
         owner: MENU_BUSINESS,
         title: '首页',
         activeKey: MENU_BUSINESS_CHATBOT,
-        icon: 'hcm-icon bkhcm-icon-host',
+        icon: 'hcm-icon bkhcm-icon-home-fill',
         // 业务视角 chatbot 权限：无该权限时不展示「首页」入口（见 store/common.ts biz_agent_assistant）
         checkAuth: 'biz_agent_assistant',
         layout: {

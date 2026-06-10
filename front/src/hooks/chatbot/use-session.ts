@@ -9,6 +9,8 @@ interface SessionDeps {
   messages: Ref<Message[]>;
   sessionCode: Ref<string>;
   getBkBizId: () => number;
+  // sceneTag 为场景标识（如 host_apply）：浮窗场景下仅加载该场景的会话；为空则加载全部（全页）
+  sceneTag?: string;
   // 会话切换 / 新建时仅做本地 abort，不调用后端 /cancel —— 主动取消仅由用户点击"停止"触发
   abortStream: () => void;
   // 注意：fetchHistory 现在采用增量渲染，直接写入 deps.messages，不再返回消息数组
@@ -62,7 +64,7 @@ export function useSession(deps: SessionDeps) {
 
     isLoadingSessions.value = true;
     try {
-      const res = await sessionApi.listSessions(bkBizId);
+      const res = await sessionApi.listSessions(bkBizId, deps.sceneTag);
       sessions.value = sortByUpdatedAtDesc(res.details.map(toSession));
     } finally {
       isLoadingSessions.value = false;

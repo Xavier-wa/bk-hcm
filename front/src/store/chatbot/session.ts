@@ -28,9 +28,11 @@ const AGENT_API_PREFIX = '/api/v1/agent';
 
 const sessionsPrefix = (bkBizId: number) => `${AGENT_API_PREFIX}/${resolveBizApiPath(bkBizId)}sessions`;
 
-export const listSessions = async (bkBizId: number, start = 0, limit = 100) => {
+export const listSessions = async (bkBizId: number, sessionTag = '', start = 0, limit = 100) => {
+  // sessionTag 为场景标识（如 host_apply）：按场景加载会话列表；为空则不过滤，加载全部
+  const rules = sessionTag ? [{ field: 'session_tag', op: 'eq', value: sessionTag }] : [];
   const res: IListResData<SessionApiItem[]> = await http.post(`${sessionsPrefix(bkBizId)}/list`, {
-    filter: { op: 'and', rules: [] },
+    filter: { op: 'and', rules },
     page: { count: false, start, limit, sort: 'updated_at', order: 'DESC' },
   });
   return res.data;

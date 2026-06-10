@@ -440,3 +440,12 @@ url("fonts/iconcool.eot?#iefix") format("embedded-opentype");
 .bkhcm-icon-home-fill:before {
 	content: "\e194";
 }
+.bkhcm-icon-minus:before {
+	content: "\e195";
+}
+.bkhcm-icon-undo:before {
+	content: "\e196";
+}
+.bkhcm-icon-history:before {
+	content: "\e197";
+}
