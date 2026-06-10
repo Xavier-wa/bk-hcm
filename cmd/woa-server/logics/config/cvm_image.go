@@ -113,7 +113,7 @@ func (i *cvmImage) GetCvmImage(kt *kit.Kit, param *types.GetCvmImageParam) (*typ
 func (i *cvmImage) GetBizCvmImage(kt *kit.Kit, bizID int64, param *types.GetCvmImageParam) (
 	*types.GetCvmImageResult, error) {
 
-	finalFilter := buildBizCvmImageFilter(bizID, param)
+	finalFilter := buildBizCvmImageFilter(param)
 
 	req := &core.ListReq{
 		Filter: finalFilter,
@@ -131,6 +131,10 @@ func (i *cvmImage) GetBizCvmImage(kt *kit.Kit, bizID int64, param *types.GetCvmI
 
 		for _, image := range images.Details {
 			if image == nil {
+				continue
+			}
+			// 过滤掉其他业务的私有镜像：当 bizID > 0 时，私有镜像只能属于当前业务
+			if image.Type == string(enumor.TCloudPrivateImage) && image.BkBizID != bizID {
 				continue
 			}
 			imageList = append(imageList, &types.CvmImage{
@@ -154,9 +158,10 @@ func (i *cvmImage) GetBizCvmImage(kt *kit.Kit, bizID int64, param *types.GetCvmI
 	}, nil
 }
 
-// buildBizCvmImageFilter 构建业务维度镜像查询条件：公共镜像 + 当前业务的私有镜像
-func buildBizCvmImageFilter(bizID int64, param *types.GetCvmImageParam) *filter.Expression {
-	// 基础条件
+// buildBizCvmImageFilter 构建业务维度镜像查询条件
+// enable_cvm 是先决条件，所有返回的镜像都必须满足 enable_cvm=true
+// 返回：enable_cvm=true 的所有镜像（在 Go 代码中再过滤掉其他业务的私有镜像）
+func buildBizCvmImageFilter(param *types.GetCvmImageParam) *filter.Expression {
 	baseRules := []filter.RuleFactory{
 		tools.RuleEqual("vendor", enumor.TCloudZiyan),
 		tools.RuleJSONEqual("extension.enable_cvm", "true"),
@@ -166,24 +171,6 @@ func buildBizCvmImageFilter(bizID int64, param *types.GetCvmImageParam) *filter.
 	if len(param.Region) > 0 {
 		baseRules = append(baseRules, tools.RuleIn("region", param.Region))
 	}
-
-	// 可见性条件：公共镜像(type=PUBLIC_IMAGE) 或 属于当前业务的私有镜像(type=PRIVATE_IMAGE AND bk_biz_id=bizID)
-	visibilityExpr := &filter.Expression{
-		Op: filter.Or,
-		Rules: []filter.RuleFactory{
-			// 公共镜像：所有业务可见
-			tools.RuleEqual("type", enumor.TCloudPublicImage),
-			// 私有镜像：只有绑定了当前业务的才可见
-			&filter.Expression{
-				Op: filter.And,
-				Rules: []filter.RuleFactory{
-					tools.RuleEqual("type", enumor.TCloudPrivateImage),
-					tools.RuleEqual("bk_biz_id", bizID),
-				},
-			},
-		},
-	}
-	baseRules = append(baseRules, visibilityExpr)
 
 	return &filter.Expression{
 		Op:    filter.And,

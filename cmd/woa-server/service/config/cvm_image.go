@@ -40,7 +40,8 @@ func (s *service) GetCvmImage(cts *rest.Contexts) (interface{}, error) {
 	return rst, nil
 }
 
-// GetBizCvmImage 业务维度镜像查询，返回公共镜像 + 该业务的私有镜像
+// GetBizCvmImage 业务维度镜像查询
+// 返回所有 enable_cvm=true 的镜像（兼容老接口 GetCvmImage） 返回公共镜像 + 该业务的私有镜像
 func (s *service) GetBizCvmImage(cts *rest.Contexts) (interface{}, error) {
 	bizID, err := cts.PathParameter("bk_biz_id").Int64()
 	if err != nil {
@@ -122,10 +123,12 @@ func (s *service) UpdateImageBizTag(cts *rest.Contexts) (interface{}, error) {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	// 鉴权：需要IaaS资源-资源操作权限
-	if err := s.authorizer.AuthorizeWithPerm(cts.Kit, meta.ResourceAttribute{Basic: &meta.Basic{
-		Type: meta.Image, Action: meta.Update}}); err != nil {
-		logs.Errorf("update image biz tag auth failed, err: %v, rid: %s", err, cts.Kit.Rid)
+	// 鉴权：需要平台全局配置管理权限
+	if err := s.authorizer.AuthorizeWithPerm(cts.Kit, meta.ResourceAttribute{
+		Basic: &meta.Basic{Type: meta.GlobalConfig, Action: meta.Update},
+	}); err != nil {
+		logs.Errorf("update image biz tag auth failed, bkBizID: %d, err: %v, rid: %s",
+			req.BkBizID, err, cts.Kit.Rid)
 		return nil, err
 	}
 
