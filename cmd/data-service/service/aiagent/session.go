@@ -79,7 +79,7 @@ func (svc *service) CreateAiagentSession(cts *rest.Contexts) (interface{}, error
 			User:        req.User,
 			SessionName: req.SessionName,
 			IsTemporary: req.IsTemporary,
-			Extension:   req.Extension,
+			SessionTag:  req.SessionTag,
 		}
 
 		id, sessionCode, err := svc.dao.AiagentSession().CreateWithTx(cts.Kit, txn, sess)
@@ -121,6 +121,7 @@ func (svc *service) UpdateAiagentSession(cts *rest.Contexts) (interface{}, error
 	sess := &tableaiagent.SessionTable{
 		SessionName: req.SessionName,
 		Reviser:     req.Reviser,
+		SessionTag:  req.SessionTag,
 	}
 
 	if err = svc.dao.AiagentSession().Update(cts.Kit, expr, sess); err != nil {

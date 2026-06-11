@@ -150,6 +150,7 @@ POST /api/v1/agent/sessions/list
         "is_temporary": false,
         "session_content_count": 5,
         "extensions": null,
+        "session_tag": "host_apply",
         "creator": "admin",
         "revisor": "admin",
         "created_at": "2026-03-20T09:00:00Z",
@@ -187,7 +188,8 @@ POST /api/v1/agent/sessions/list
 | thread_id             | string | 框架内部 thread ID，值与 id 相同                |
 | is_temporary          | bool   | 是否为临时会话                                |
 | session_content_count | int    | 会话消息计数（每次通过 /agui 接口交互后异步自增）           |
-| extensions            | object | 扩展字段，暂未使用，默认为 null                     |
+| extensions            | object | 扩展字段
+| session_tag           | string | 会话场景标签，无标签时为空字符串 |
 | creator               | string | 创建者                                    |
 | revisor               | string | 最近修改者                                  |
 | created_at            | string | 创建时间（格式："2006-01-02T15:04:05.000000Z"） |

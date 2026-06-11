@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Graph entry runs intent recognition when intent is not host_apply
 
@@ -46,21 +46,3 @@ When `scene_dispatch` observes a this-turn intent other than `host_apply` (e.g. 
 
 - **WHEN** the fallback node resumes with a new user message in a session whose `StateKeySessionTag` is `host_apply`
 - **THEN** routing goes directly to `llm` and does not return to `scene_dispatch` or `intent_recognition`
-
-### Requirement: finish_intent_task is not used
-
-The system SHALL NOT expose or register a `finish_intent_task` tool, and the LLM system prompt SHALL NOT instruct the model to call it.
-
-#### Scenario: Tool list for graph agent
-
-- **WHEN** the graph agent is built with skill and HITL tools
-- **THEN** `finish_intent_task` is absent from the tool set and tool node callbacks
-
-### Requirement: Intent task status enum is not used for routing
-
-The system SHALL NOT use `StateKeyIntentTaskStatus` or `IntentTaskStatus` values (`idle`, `in_progress`, `completed`) for conditional edges or intent node output.
-
-#### Scenario: Fallback routing uses intent only
-
-- **WHEN** the fallback node resumes with a new user message
-- **THEN** routing checks only `StateKeyIntent` (and not `intent_task_status`) to choose between `llm` and `intent_recognition`

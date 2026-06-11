@@ -30,58 +30,75 @@ import (
 	trpcmodel "trpc.group/trpc-go/trpc-agent-go/model"
 )
 
-func TestMakeIntentRoutingFunc(t *testing.T) {
-	route := makeIntentRoutingFunc()
+func TestIntentType_IsSupportedScene(t *testing.T) {
+	tests := []struct {
+		in   enumor.IntentType
+		want bool
+	}{
+		{enumor.IntentTypeHostApply, true},
+		{enumor.IntentTypeResourceQuery, false},
+		{enumor.IntentTypeChat, false},
+		{"", false},
+		{"unknown", false},
+	}
+	for _, tc := range tests {
+		if got := tc.in.IsSupportedScene(); got != tc.want {
+			t.Errorf("IntentType(%q).IsSupportedScene() = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestMakeSceneDispatchNode(t *testing.T) {
+	node := makeSceneDispatchNode()
 	ctx := context.Background()
 
 	tests := []struct {
-		name       string
-		state      graph.State
-		wantTarget string
+		name    string
+		state   graph.State
+		wantTag enumor.IntentType // expected committed StateKeySessionTag, empty means no-op
 	}{
 		{
-			name: "host_apply routes to llm",
-			state: graph.State{
-				constant.StateKeyIntent: string(enumor.IntentTypeHostApply),
-			},
-			wantTarget: "llm",
+			name:    "recognised host_apply commits session_tag",
+			state:   graph.State{constant.StateKeyIntent: string(enumor.IntentTypeHostApply)},
+			wantTag: enumor.IntentTypeHostApply,
 		},
 		{
-			name: "resource_query routes to fallback",
-			state: graph.State{
-				constant.StateKeyIntent: string(enumor.IntentTypeResourceQuery),
-			},
-			wantTarget: "fallback",
+			name:    "already tagged is no-op",
+			state:   graph.State{constant.StateKeySessionTag: enumor.IntentTypeHostApply},
+			wantTag: "",
 		},
 		{
-			name: "chat routes to fallback",
-			state: graph.State{
-				constant.StateKeyIntent: string(enumor.IntentTypeChat),
-			},
-			wantTarget: "fallback",
+			name:    "unsupported intent is no-op",
+			state:   graph.State{constant.StateKeyIntent: string(enumor.IntentTypeChat)},
+			wantTag: "",
 		},
 		{
-			name:       "missing intent routes to fallback",
-			state:      graph.State{},
-			wantTarget: "fallback",
+			name:    "no tag no intent is no-op",
+			state:   graph.State{},
+			wantTag: "",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := route(ctx, tc.state)
+			got, err := node(ctx, tc.state)
 			if err != nil {
-				t.Fatalf("route() error = %v", err)
+				t.Fatalf("node() error = %v", err)
 			}
-			if got != tc.wantTarget {
-				t.Errorf("route() = %q, want %q", got, tc.wantTarget)
+			st, ok := got.(graph.State)
+			if !ok {
+				t.Fatalf("node() returned %T, want graph.State", got)
+			}
+			tag, _ := st[constant.StateKeySessionTag].(enumor.IntentType)
+			if tag != tc.wantTag {
+				t.Errorf("committed session_tag = %q, want %q", tag, tc.wantTag)
 			}
 		})
 	}
 }
 
-func TestMakePostFallbackRoutingFunc(t *testing.T) {
-	route := makePostFallbackRoutingFunc()
+func TestMakeSceneDispatchRoutingFunc(t *testing.T) {
+	route := makeSceneDispatchRoutingFunc()
 	ctx := context.Background()
 
 	tests := []struct {
@@ -90,43 +107,55 @@ func TestMakePostFallbackRoutingFunc(t *testing.T) {
 		wantTarget string
 	}{
 		{
-			name: "host_apply routes to llm",
-			state: graph.State{
-				constant.StateKeyIntent: string(enumor.IntentTypeHostApply),
-			},
+			name:       "supported session_tag routes to llm",
+			state:      graph.State{constant.StateKeySessionTag: enumor.IntentTypeHostApply},
 			wantTarget: "llm",
 		},
 		{
-			name: "chat routes to intent_recognition",
-			state: graph.State{
-				constant.StateKeyIntent: string(enumor.IntentTypeChat),
-			},
-			wantTarget: "intent_recognition",
+			name:       "this-turn unsupported intent routes to fallback",
+			state:      graph.State{constant.StateKeyIntent: string(enumor.IntentTypeChat)},
+			wantTarget: "fallback",
 		},
 		{
-			name: "resource_query routes to intent_recognition",
-			state: graph.State{
-				constant.StateKeyIntent: string(enumor.IntentTypeResourceQuery),
-			},
-			wantTarget: "intent_recognition",
-		},
-		{
-			name:       "missing intent routes to intent_recognition",
+			name:       "no tag no intent routes to intent_recognition",
 			state:      graph.State{},
 			wantTarget: "intent_recognition",
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := route(ctx, tc.state)
-			if err != nil {
-				t.Fatalf("route() error = %v", err)
-			}
-			if got != tc.wantTarget {
-				t.Errorf("route() = %q, want %q", got, tc.wantTarget)
-			}
-		})
+	for _, test := range tests {
+		target, err := route(ctx, test.state)
+		if err != nil {
+			t.Fatalf("route() error = %v", err)
+		}
+		if target != test.wantTarget {
+			t.Errorf("route() = %q, want %q", target, test.wantTarget)
+		}
+	}
+}
+
+// TestSceneDispatchNodeThenRouting 校验节点提交标签后路由直达 llm 的组合行为。
+func TestSceneDispatchNodeThenRouting(t *testing.T) {
+	node := makeSceneDispatchNode()
+	route := makeSceneDispatchRoutingFunc()
+	ctx := context.Background()
+
+	state := graph.State{constant.StateKeyIntent: string(enumor.IntentTypeHostApply)}
+	got, err := node(ctx, state)
+	if err != nil {
+		t.Fatalf("node() error = %v", err)
+	}
+	st, _ := got.(graph.State)
+	for k, v := range st {
+		state[k] = v
+	}
+
+	target, err := route(ctx, state)
+	if err != nil {
+		t.Fatalf("route() error = %v", err)
+	}
+	if target != "llm" {
+		t.Errorf("route() = %q, want llm", target)
 	}
 }
 
@@ -196,7 +225,13 @@ func TestShouldEmitFallbackResponse(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := shouldEmitFallbackResponse(tc.state, tc.messages, tc.lastResp); got != tc.want {
+			state := make(graph.State, len(tc.state)+1)
+			for k, v := range tc.state {
+				state[k] = v
+			}
+			state[graph.StateKeyMessages] = tc.messages
+			interruptKey := buildFallbackInterruptKey(state, tc.lastResp)
+			if got := shouldEmitFallbackResponse(state, interruptKey, tc.messages, tc.lastResp); got != tc.want {
 				t.Errorf("shouldEmitFallbackResponse() = %v, want %v", got, tc.want)
 			}
 		})
@@ -271,7 +306,7 @@ func TestBuildFallbackResumeDeltaClearsUserInput(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			delta := buildFallbackResumeDelta(tc.state, tc.messages, fallbackText, tc.userInput, "test-rid")
+			delta := buildFallbackResumeDelta(context.Background(), tc.state, tc.messages, fallbackText, tc.userInput)
 
 			userInputVal, exists := delta[graph.StateKeyUserInput]
 			if !exists {

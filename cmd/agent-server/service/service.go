@@ -428,18 +428,23 @@ func (s *Service) sessionCodeMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		threadID, err := s.resolver.Resolve(kt, sessionCode)
+		sessionMeta, err := s.resolver.ResolveMeta(kt, sessionCode)
 		if err != nil {
 			logs.Errorf("sessionCodeMiddleware: resolve %s failed: %v", sessionCode, err)
 			http.Error(w, "invalid session code", http.StatusBadRequest)
 			return
 		}
+		threadID := sessionMeta.ThreadID
 
 		runID := uuid.UUID()
 
 		delete(reqMap, "sessionCode")
 		reqMap["threadId"] = threadID
 		reqMap["runId"] = runID
+		// 将会话场景标签通过 forwardedProps 透传，供 Graph 首轮注入 StateKeySessionTag
+		if sessionMeta.SessionTag != "" {
+			injectForwardedSessionTag(reqMap, sessionMeta.SessionTag)
+		}
 
 		newBody, err := json.Marshal(reqMap)
 		if err != nil {
@@ -462,9 +467,80 @@ func (s *Service) sessionCodeMiddleware(next http.Handler) http.Handler {
 				if err := s.clientSet.DataService().Aiagent.Session.IncrContentCount(asyncKt, req); err != nil {
 					logs.Errorf("async incr content count failed, session_code: %s, err: %v", sessionCode, err)
 				}
+				// Run 结束后对账：意图识别命中受支持场景时回写 session_tag
+				s.reconcileSessionTag(asyncKt, sessionCode, threadID, sessionMeta.SessionTag)
 			}()
 		}
 	})
+}
+
+// injectForwardedSessionTag merges the session tag into the request body's forwardedProps map.
+func injectForwardedSessionTag(reqMap map[string]interface{}, sessionTag enumor.IntentType) {
+	fp, _ := reqMap["forwardedProps"].(map[string]interface{})
+	if fp == nil {
+		fp = make(map[string]interface{})
+	}
+	fp[constant.ForwardedPropSessionTag] = string(sessionTag)
+	reqMap["forwardedProps"] = fp
+}
+
+// reconcileSessionTag writes back the scene tag recognised during the run when the
+// session started without a tag. It reads the latest checkpoint for StateKeySessionTag,
+// persists it via data-service, and refreshes the resolver cache.
+// 该操作为尽力而为，失败仅记录 Warn 日志，不影响对话。
+func (s *Service) reconcileSessionTag(kt *kit.Kit, sessionCode, threadID string, originalTag enumor.IntentType) {
+	// TODO：目前会话标签不允许修改，所有有标签的会话不需要回写，只会写意图识别出来的场景
+	// 未来需要支持修改标签时，需要修改这里
+	if originalTag != "" {
+		// 已绑定标签的会话无需回写
+		logs.Infof("reconcile session tag: session already has tag, session_code: %s, tag: %s, rid: %s",
+			sessionCode, originalTag, kt.Rid)
+		return
+	}
+
+	saver := s.runTime.CheckpointSaver()
+	if saver == nil {
+		logs.Infof("reconcile session tag: checkpoint saver is nil, session_code: %s, rid: %s",
+			sessionCode, kt.Rid)
+		return
+	}
+
+	cm := graph.NewCheckpointManager(saver)
+	tuple, err := cm.Latest(kt.Ctx, threadID, "")
+	if err != nil {
+		logs.Warnf("reconcile session tag: get latest checkpoint failed, thread: %s, err: %v, rid: %s",
+			threadID, err, kt.Rid)
+		return
+	}
+	if tuple == nil || tuple.Checkpoint == nil {
+		return
+	}
+
+	var tag enumor.IntentType
+	switch value := tuple.Checkpoint.ChannelValues[constant.StateKeySessionTag].(type) {
+	case enumor.IntentType:
+		tag = value
+	case string:
+		tag = enumor.IntentType(value)
+	}
+	if tag == "" {
+		logs.Infof("reconcile session tag: checkpoint has no session tag, session_code: %s, rid: %s",
+			sessionCode, kt.Rid)
+		return
+	}
+
+	updateReq := &dsaiagent.UpdateAiagentSessionReq{
+		ID:         threadID,
+		Reviser:    kt.User,
+		SessionTag: tag,
+	}
+	if err := s.clientSet.DataService().Aiagent.Session.Update(kt, updateReq); err != nil {
+		logs.Warnf("reconcile session tag: write back failed, session_code: %s, tag: %s, err: %v, rid: %s",
+			sessionCode, tag, err, kt.Rid)
+		return
+	}
+
+	s.resolver.UpdateCachedSessionTag(kt, sessionCode, tag)
 }
 
 // bkapiContextMiddleware extracts BK auth parameters from the incoming HTTP
@@ -555,9 +631,7 @@ func makeRunOptionResolver(saver graph.CheckpointSaver, allowedModels []string,
 		}
 		// Auto-detect interrupted checkpoint and prepare resume (HITL / fallback interrupt).
 		runtimeState = tryPrepareAutoResume(saver, ctx, input, runtimeState)
-		opts = append(opts, agent.WithRuntimeState(runtimeState))
 
-		// Model selection.
 		if props, ok := input.ForwardedProps.(map[string]any); ok {
 			if modelName, _ := props["modelName"].(string); modelName != "" {
 				modelName = strings.TrimSpace(modelName)
@@ -566,7 +640,13 @@ func makeRunOptionResolver(saver graph.CheckpointSaver, allowedModels []string,
 				}
 				opts = append(opts, agent.WithModelName(modelName))
 			}
+
+			// 注入会话场景标签：非空时写入 StateKeySessionTag，供 scene_dispatch 首轮直达
+			if sessionTag, _ := props[constant.ForwardedPropSessionTag].(string); sessionTag != "" {
+				runtimeState[constant.StateKeySessionTag] = enumor.IntentType(sessionTag)
+			}
 		}
+		opts = append(opts, agent.WithRuntimeState(runtimeState))
 
 		// Dynamic tool filtering.
 		if toolFilter != nil {

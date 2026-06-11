@@ -116,6 +116,13 @@ const (
 // Values are enumor.IntentType strings (e.g. "host_apply", "chat", "resource_query").
 const StateKeyIntent = "intent"
 
+// StateKeySessionTag is the graph state key for the session-level scene tag.
+// 会话级场景标签，区别于本轮意图 StateKeyIntent；取值为 enumor.IntentType 字符串。
+const StateKeySessionTag = "session_tag"
+
+// ForwardedPropSessionTag is the forwardedProps key used to pass the session tag into a graph run.
+const ForwardedPropSessionTag = "sessionTag"
+
 // HITL (Human-in-the-Loop) constants
 const (
 	// HumanConfirmToolName is the name of the human confirmation tool.

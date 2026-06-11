@@ -133,6 +133,11 @@ func (t IntentType) Validate() error {
 	}
 }
 
+// IsSupportedScene reports whether the intent has an implemented scene flow.
+func (t IntentType) IsSupportedScene() bool {
+	return t == IntentTypeHostApply
+}
+
 // GraphCheckpointBackend is the backend type for the graph checkpoint storage.
 type GraphCheckpointBackend string
 

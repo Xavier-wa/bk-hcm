@@ -55,6 +55,7 @@ func (svc *service) CreateSession(cts *rest.Contexts) (interface{}, error) {
 		AppName:     svc.appName,
 		User:        cts.Kit.User,
 		SessionName: req.SessionName,
+		SessionTag:  req.SessionTag,
 	}
 
 	result, err := svc.cli.DataService().Aiagent.Session.Create(cts.Kit, createReq)
@@ -68,5 +69,6 @@ func (svc *service) CreateSession(cts *rest.Contexts) (interface{}, error) {
 		SessionCode: result.SessionCode,
 		ThreadID:    result.ThreadID,
 		SessionName: req.SessionName,
+		SessionTag:  req.SessionTag,
 	}, nil
 }

@@ -24,6 +24,7 @@ import (
 	"errors"
 
 	"hcm/pkg/api/core"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	tableaiagent "hcm/pkg/dal/table/aiagent"
 	"hcm/pkg/dal/table/types"
@@ -34,11 +35,12 @@ import (
 
 // CreateAiagentSessionReq defines the request for creating an aiagent session.
 type CreateAiagentSessionReq struct {
-	AppName     string          `json:"app_name" validate:"required,max=64"`
-	User        string          `json:"user" validate:"required,max=64"`
-	SessionName string          `json:"session_name" validate:"max=255"`
-	IsTemporary bool            `json:"is_temporary"`
-	Extension   types.JsonField `json:"extension,omitempty"`
+	AppName     string            `json:"app_name" validate:"required,max=64"`
+	User        string            `json:"user" validate:"required,max=64"`
+	SessionName string            `json:"session_name" validate:"max=255"`
+	IsTemporary bool              `json:"is_temporary"`
+	SessionTag  enumor.IntentType `json:"session_tag" validate:"max=64"`
+	Extension   types.JsonField   `json:"extension,omitempty"`
 }
 
 // Validate validates the create request.
@@ -51,6 +53,11 @@ func (req *CreateAiagentSessionReq) Validate() error {
 	}
 	if len(req.User) == 0 {
 		return errors.New("user is required")
+	}
+	if req.SessionTag != "" {
+		if err := req.SessionTag.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -66,14 +73,23 @@ type CreateAiagentSessionResult struct {
 
 // UpdateAiagentSessionReq defines the request for updating an aiagent session.
 type UpdateAiagentSessionReq struct {
-	ID          string `json:"id" validate:"required,max=64"`
-	SessionName string `json:"session_name" validate:"max=255"`
-	Reviser     string `json:"reviser" validate:"required,max=64"`
+	ID          string            `json:"id" validate:"required,max=64"`
+	SessionName string            `json:"session_name" validate:"max=255"`
+	Reviser     string            `json:"reviser" validate:"required,max=64"`
+	SessionTag  enumor.IntentType `json:"session_tag" validate:"max=64"`
 }
 
 // Validate validates the update request.
 func (req *UpdateAiagentSessionReq) Validate() error {
-	return validator.Validate.Struct(req)
+	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+	if req.SessionTag != "" {
+		if err := req.SessionTag.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // -------------------------- List --------------------------

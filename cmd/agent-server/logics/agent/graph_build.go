@@ -50,16 +50,21 @@ import (
 	toolskill "trpc.group/trpc-go/trpc-agent-go/tool/skill"
 )
 
-// BuildGraph constructs a ReAct graph topology with five nodes:
+// BuildGraph constructs a ReAct graph topology with scene_dispatch as the single routing hub:
 //
-//	START → intent_recognition → ConditionalEdge(by intent)
-//	  ├─ host_apply → llm → ConditionalEdge(by tool_calls)
-//	  │     ├─ human_confirm → hitl → llm (loop back)
-//	  │     ├─ other_tool_calls → tool → llm (loop back)
-//	  │     └─ no tool_calls → fallback (interrupt) → llm (session stays on host_apply)
-//	  └─ other intents → fallback (interrupt) → intent_recognition
+//	START → scene_dispatch → ConditionalEdge
+//	  ├─ supported session_tag (host_apply)        → llm
+//	  ├─ this-turn intent recognised but unsupported → fallback
+//	  └─ no tag / no intent this turn               → intent_recognition → scene_dispatch
+//	llm → ConditionalEdge(by tool_calls)
+//	  ├─ human_confirm → hitl → llm (loop back)
+//	  ├─ other_tool_calls → tool → llm (loop back)
+//	  └─ no tool_calls → fallback (interrupt)
+//	fallback (interrupt) → scene_dispatch (re-dispatch; this-turn intent always cleared)
 //
-// The intent_recognition node classifies user intent and writes StateKeyIntent.
+// The scene_dispatch node is the single routing brain: it commits a recognised supported
+// intent into StateKeySessionTag and decides the next hop.
+// The intent_recognition node only classifies user intent (writes StateKeyIntent) and returns to scene_dispatch.
 // The llm node drives the ReAct loop for host_apply.
 // The hitl node handles human-in-the-loop interrupts when LLM calls human_confirm.
 // The tool node executes MCP and skill tools.
@@ -97,31 +102,38 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 	// 注册 HITL 工具（纯声明工具，路由到 hitl 节点处理，不经过 tool 节点执行）
 	skillTools[constant.HumanConfirmToolName] = hitl.GetToolWrapper()
 
-	// 1. Intent Recognition Node: classifies intent and writes StateKeyIntent before routing.
-	stateGraph.AddNode("intent_recognition",
-		intent.MakeIntentRecognitionNode(mdl, promptStore, cc.AgentServer().Intent.ContextWindowSize))
+	// 1. Scene Dispatch Node: single routing hub; commits supported intent into StateKeySessionTag.
+	stateGraph.AddNode("scene_dispatch", makeSceneDispatchNode())
 
-	// 2. LLM Node: drives the ReAct loop for supported intents.
+	// 2. Intent Recognition Node: classifies intent and writes StateKeyIntent, then returns to scene_dispatch.
+	stateGraph.AddNode("intent_recognition", intent.MakeIntentRecognitionNode(mdl, promptStore,
+		cc.AgentServer().Intent.ContextWindowSize))
+
+	// 3. LLM Node: drives the ReAct loop for supported scenes.
 	stateGraph.AddLLMNode("llm", mdl, staticPrompt, skillTools, llmOpts...)
 
-	// 3. HITL Node: handles human_confirm tool calls mid-task.
+	// 4. HITL Node: handles human_confirm tool calls mid-task.
 	stateGraph.AddNode("hitl", hitl.GetNode())
 
-	// 3. Tool Node: executes tools when the LLM requests them.
+	// 5. Tool Node: executes tools when the LLM requests them.
 	toolsOpts := genToolNodeOptions(toolset, toolProxy, agentName)
 	stateGraph.AddToolsNode("tool", skillTools, toolsOpts...)
 
-	// 5. Fallback Node: delivers LLM response, interrupts, and routes the next user message.
+	// 6. Fallback Node: delivers LLM response, interrupts, and routes the next user message.
 	stateGraph.AddNode("fallback", makeFallbackNode())
 
-	// Entry point: every new run starts with intent recognition.
-	stateGraph.SetEntryPoint("intent_recognition")
+	// Entry point: every new run starts with scene dispatch.
+	stateGraph.SetEntryPoint("scene_dispatch")
 
-	// intent_recognition → llm (supported intent) or fallback (unsupported intent)
-	stateGraph.AddConditionalEdges("intent_recognition", makeIntentRoutingFunc(), map[string]string{
-		"llm":      "llm",
-		"fallback": "fallback",
+	// scene_dispatch → llm (supported tag/intent) / fallback (unsupported intent) / intent_recognition (no tag, no intent)
+	stateGraph.AddConditionalEdges("scene_dispatch", makeSceneDispatchRoutingFunc(), map[string]string{
+		"llm":                "llm",
+		"fallback":           "fallback",
+		"intent_recognition": "intent_recognition",
 	})
+
+	// intent_recognition always returns to scene_dispatch for the routing decision.
+	stateGraph.AddEdge("intent_recognition", "scene_dispatch")
 
 	// llm → hitl / tool / fallback based on tool_calls in the last message
 	stateGraph.AddConditionalEdges("llm", makeRoutingFunc(), map[string]string{
@@ -134,46 +146,57 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 	stateGraph.AddEdge("hitl", "llm")
 	stateGraph.AddEdge("tool", "llm")
 
-	// fallback routes by StateKeyIntent after collecting the user's next message:
-	//   host_apply → llm (session-bound host apply, skip intent recognition)
-	//   other/missing → intent_recognition
-	stateGraph.AddConditionalEdges("fallback", makePostFallbackRoutingFunc(), map[string]string{
-		"llm":                "llm",
-		"intent_recognition": "intent_recognition",
-	})
+	// fallback always returns to scene_dispatch so the unified routing hub handles
+	// the next user message regardless of whether the session already has a tag.
+	stateGraph.AddEdge("fallback", "scene_dispatch")
 
 	return stateGraph.Compile()
 }
 
-// makeIntentRoutingFunc routes after intent_recognition based on StateKeyIntent.
-// Only host_apply enters the host-apply ReAct sub-flow; other intents route to fallback.
-func makeIntentRoutingFunc() func(ctx context.Context, state graph.State) (string, error) {
-	return func(ctx context.Context, state graph.State) (string, error) {
+// makeSceneDispatchNode returns the scene_dispatch node function.
+// 场景分发节点：会话无标签但本轮意图命中受支持场景时，将其提交到 StateKeySessionTag。
+// 仅做 state 提交，不写 DB；DB 回写由 middleware 在 Run 结束后对账完成。
+func makeSceneDispatchNode() graph.NodeFunc {
+	return func(ctx context.Context, state graph.State) (any, error) {
 		rid := rest.RidFromContext(ctx)
-		intentStr, _ := state[constant.StateKeyIntent].(string)
-		// TODO: only host_apply is supported now; add new sub-flows here
-		if enumor.IntentType(intentStr) == enumor.IntentTypeHostApply {
-			logs.Infof("[intent routing] intent=%s, route to llm, rid: %s", intentStr, rid)
-			return "llm", nil
+		tag, _ := state[constant.StateKeySessionTag].(enumor.IntentType)
+		if tag.IsSupportedScene() {
+			return graph.State{}, nil
 		}
 
-		logs.Infof("[intent routing] intent=%s (unsupported), route to fallback, rid: %s", intentStr, rid)
-		return "fallback", nil
+		// 检查是否意图识别出来了支持的场景，是则提交到 StateKeySessionTag
+		intentStr, _ := state[constant.StateKeyIntent].(string)
+		intentType := enumor.IntentType(intentStr)
+		if intentType.IsSupportedScene() {
+			logs.Infof("[scene dispatch] commit session_tag=%s from intent, rid: %s", intentType, rid)
+			return graph.State{constant.StateKeySessionTag: intentType}, nil
+		}
+
+		return graph.State{}, nil
 	}
 }
 
-// makePostFallbackRoutingFunc routes after fallback interrupt/resume based on StateKeyIntent.
-// When intent is host_apply the session stays on the host-apply ReAct loop without re-running intent recognition.
-// For other or missing intents a fresh intent recognition run starts.
-func makePostFallbackRoutingFunc() func(ctx context.Context, state graph.State) (string, error) {
+// makeSceneDispatchRoutingFunc 根据会话标签与本轮意图决定 scene_dispatch 的后续路由。
+func makeSceneDispatchRoutingFunc() func(ctx context.Context, state graph.State) (string, error) {
 	return func(ctx context.Context, state graph.State) (string, error) {
 		rid := rest.RidFromContext(ctx)
-		intentStr, _ := state[constant.StateKeyIntent].(string)
-		if enumor.IntentType(intentStr) == enumor.IntentTypeHostApply {
-			logs.Infof("[fallback routing] intent=host_apply, route to llm, rid: %s", rid)
+		tag, _ := state[constant.StateKeySessionTag].(enumor.IntentType)
+		if tag.IsSupportedScene() {
+			logs.Infof("[scene dispatch routing] session_tag=%s, route to llm, rid: %s", tag, rid)
 			return "llm", nil
 		}
-		logs.Infof("[fallback routing] intent=%s, route to intent_recognition, rid: %s", intentStr, rid)
+
+		// 本轮意图非空且不受支持：直接路由到 fallback 给出拒识回复，
+		// 避免 intent_recognition 与 scene_dispatch 之间反复循环。
+		if intentStr, _ := state[constant.StateKeyIntent].(string); intentStr != "" {
+			intentType := enumor.IntentType(intentStr)
+			if !intentType.IsSupportedScene() {
+				logs.Infof("[scene dispatch routing] intent=%s unsupported, route to fallback, rid: %s", intentType, rid)
+				return "fallback", nil
+			}
+		}
+
+		logs.Infof("[scene dispatch routing] no tag/intent, route to intent_recognition, rid: %s", rid)
 		return "intent_recognition", nil
 	}
 }
@@ -277,7 +300,7 @@ func genToolNodeOptions(toolset *agenttool.MCPToolSet, proxy *toolproxy.ToolProx
 	return opts
 }
 
-// buildPrompt combines system prompt and instruction into a single prompt string.
+// buildPrompt 将 system prompt 与 instruction 组合成最终提示词。
 func buildPrompt(systemPrompt, instruction string) string {
 	prompt := systemPrompt
 	if instruction != "" {
@@ -289,25 +312,26 @@ func buildPrompt(systemPrompt, instruction string) string {
 	return prompt
 }
 
-// makeFallbackNode returns the fallback node.
-// It delivers response to user, interrupts to wait for next input, and resumes graph routing.
+// makeFallbackNode 返回 fallback 节点：
+// 负责向用户返回回复、执行 interrupt 等待下一轮输入，并在 resume 后返回用户输入供路由继续执行。
 //
-// When the graph skips llm (unsupported intent), it emits an intent-specific fallback message.
-// On resume replay, if assistant tail already exists, it skips duplicate emit.
+// 当图在未经过 llm 节点（不支持意图）时，会先通过 model execution event 输出兜底文案后再 interrupt。
+// 节点在 resume 时会被重执行；若检测到存在 resume 值，或消息尾部已有 assistant 回复，则跳过重复 emit。
 //
-// In InterruptError paths, executor does not apply node delta immediately, so the assistant
-// fallback message is appended again in resume success path when needed.
+// 注意：executor 在 InterruptError 场景不会应用节点返回的 delta，因此 assistant 消息需要在
+// resume 成功路径补齐（并在不支持意图切换时裁剪历史），不能仅依赖 StateKeyLastResponse 跨 checkpoint 持久化。
 func makeFallbackNode() graph.NodeFunc {
 	return func(ctx context.Context, state graph.State) (any, error) {
 		rid := rest.RidFromContext(ctx)
 		messages, _ := state[graph.StateKeyMessages].([]trpcmodel.Message)
 		lastResp := resolveFallbackLastResp(state)
+		interruptKey := buildFallbackInterruptKey(state, lastResp)
+
 		// 上一步没有产生助手回复，需要进行emit事件封装，生成AGUI消息
-		if shouldEmitFallbackResponse(state, messages, lastResp) {
+		if shouldEmitFallbackResponse(state, interruptKey, messages, lastResp) {
 			emitFallbackMessage(ctx, state, "fallback", lastResp)
 		}
 
-		interruptKey := buildFallbackInterruptKey(state, lastResp)
 		resumeValue, err := graph.Interrupt(ctx, state, interruptKey, map[string]any{
 			"last_response": lastResp,
 		})
@@ -333,8 +357,8 @@ func makeFallbackNode() graph.NodeFunc {
 	}
 }
 
-// resolveFallbackLastResp returns response text for current fallback turn.
-// Priority: assistant tail (llm->fallback path) > StateKeyLastResponse > fallback by intent.
+// resolveFallbackLastResp 计算当前 fallback 轮次应使用的回复文本。
+// 优先顺序：消息尾部 assistant 回复（LLM→fallback 路径）→ StateKeyLastResponse → 意图兜底文案。
 func resolveFallbackLastResp(state graph.State) string {
 	messages, _ := state[graph.StateKeyMessages].([]trpcmodel.Message)
 	if len(messages) > 0 && messages[len(messages)-1].Role == trpcmodel.RoleAssistant {
@@ -346,16 +370,24 @@ func resolveFallbackLastResp(state graph.State) string {
 	return unsupportedIntentFallbackMessage(state)
 }
 
-// shouldEmitFallbackResponse reports whether fallback should emit model execution event.
-// During interrupt replay or when assistant tail already exists, skip duplicate emit.
-func shouldEmitFallbackResponse(state graph.State, messages []trpcmodel.Message, lastResp string) bool {
+// shouldEmitFallbackResponse 判断 fallback 节点是否需要 emit model execution event。
+// 在 interrupt resume 重放、或消息尾部已存在 assistant 回复时，跳过 emit 防止重复输出。
+func shouldEmitFallbackResponse(state graph.State, interruptKey string, messages []trpcmodel.Message,
+	lastResp string) bool {
+
+	// 查看是否是resume重放，不能单靠下面最后一条assistant回复来判断，因为触发中断的时候，delta并不会被更新到message中
+	// 这里通过检查： 1. ResumeChannel 是否有值； 2. ResumeMap 是否有值判断是否为中断恢复
+	if graph.HasResumeValue(state, interruptKey) {
+		return false
+	}
+
 	if len(messages) > 0 && messages[len(messages)-1].Role == trpcmodel.RoleAssistant {
 		return false
 	}
 	return lastResp != ""
 }
 
-// hasAssistantTailWithContent reports whether messages tail is assistant with given content.
+// hasAssistantTailWithContent 判断消息尾部是否已存在指定内容的 assistant 回复。
 func hasAssistantTailWithContent(messages []trpcmodel.Message, content string) bool {
 	if content == "" || len(messages) == 0 {
 		return false
@@ -389,7 +421,7 @@ func buildFallbackResumeDelta(ctx context.Context, state graph.State, messages [
 
 	intentStr, _ := state[constant.StateKeyIntent].(string)
 	intentType := enumor.IntentType(intentStr)
-	clearingUnsupported := intentStr != "" && intentType != enumor.IntentTypeHostApply
+	clearingUnsupported := intentStr != "" && !intentType.IsSupportedScene()
 
 	if clearingUnsupported {
 		logs.Infof("[fallback] clear unsupported intent=%s for re-recognition, rid: %s", intentStr, rid)
@@ -417,7 +449,7 @@ func buildFallbackResumeDelta(ctx context.Context, state graph.State, messages [
 	return delta
 }
 
-// buildFallbackInterruptKey builds a stable interrupt key for the fallback node.
+// buildFallbackInterruptKey 为 fallback 节点生成稳定的 interrupt key。
 func buildFallbackInterruptKey(state graph.State, lastResp string) string {
 	messages, _ := state[graph.StateKeyMessages].([]trpcmodel.Message)
 	sum := sha256.Sum256([]byte(lastResp))
@@ -429,9 +461,9 @@ func buildFallbackInterruptKey(state graph.State, lastResp string) string {
 		len(messages), constant.InterruptKeySeparator, hash)
 }
 
-// resolveStaticPrompt returns the system prompt to pass to AddLLMNode.
-// It prefers Store content (populated by local-file or BKAIDev sync),
-// falling back to raw cc config values only when the store has no system prompt yet.
+// resolveStaticPrompt 返回传给 AddLLMNode 的系统提示词。
+// 优先使用 Store 中的内容（来自本地文件或 BKAIDev 同步），
+// 仅在 Store 暂无 system prompt 时回退到 cc 原始配置。
 func resolveStaticPrompt(store *prompt.Store) string {
 	if store != nil {
 		sp, _ := store.Get(constant.SystemPromptKey)
@@ -444,14 +476,12 @@ func resolveStaticPrompt(store *prompt.Store) string {
 	return prompt.BuildSystemPrompt(promptCfg.SystemPrompt, promptCfg.Instruction)
 }
 
-// unsupportedIntentFallbackMessage returns a user-facing reply when llm was not invoked.
+// unsupportedIntentFallbackMessage 在未调用 llm 时返回面向用户的兜底回复。
 func unsupportedIntentFallbackMessage(state graph.State) string {
 	intentStr, _ := state[constant.StateKeyIntent].(string)
 	switch enumor.IntentType(intentStr) {
-	case enumor.IntentTypeResourceQuery:
-		return "资源查询功能正在建设中，敬请期待。如需主机申领，请直接描述您的申领需求。"
-	case enumor.IntentTypeChat:
-		return "您好，当前我主要支持主机申领相关能力。如需申请主机，请描述您的配置与业务需求。"
+	case enumor.IntentTypeResourceQuery, enumor.IntentTypeChat:
+		return "目前AI助手仅支持主机申领相关能力，其他云资源管理功能即将上线，如需要申领主机，请直接描述您的配置需求。"
 	default:
 		return "抱歉，我暂时无法处理您的请求。"
 	}

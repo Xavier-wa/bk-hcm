@@ -43,6 +43,7 @@ var SessionColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "thread_id", NamedC: "thread_id", Type: enumor.String},
 	{Column: "is_temporary", NamedC: "is_temporary", Type: enumor.Boolean},
 	{Column: "session_content_count", NamedC: "session_content_count", Type: enumor.Numeric},
+	{Column: "session_tag", NamedC: "session_tag", Type: enumor.String},
 	{Column: "extension", NamedC: "extension", Type: enumor.Json},
 	{Column: "creator", NamedC: "creator", Type: enumor.String},
 	{Column: "reviser", NamedC: "reviser", Type: enumor.String},
@@ -52,19 +53,20 @@ var SessionColumnDescriptor = utils.ColumnDescriptors{
 
 // SessionTable is used to save aiagent session information.
 type SessionTable struct {
-	ID                  string          `db:"id" json:"id"`
-	SessionCode         string          `db:"session_code" validate:"max=128" json:"session_code"`
-	SessionName         string          `db:"session_name" validate:"max=255" json:"session_name"`
-	AppName             string          `db:"app_name" validate:"max=64" json:"app_name"`
-	User                string          `db:"user" validate:"max=64" json:"user"`
-	ThreadID            string          `db:"thread_id" validate:"max=64" json:"thread_id"`
-	IsTemporary         bool            `db:"is_temporary" json:"is_temporary"`
-	SessionContentCount uint32          `db:"session_content_count" json:"session_content_count"`
-	Extension           types.JsonField `db:"extension" json:"extension"`
-	Creator             string          `db:"creator" validate:"max=64" json:"creator"`
-	Reviser             string          `db:"reviser" validate:"max=64" json:"reviser"`
-	CreatedAt           types.Time      `db:"created_at" validate:"isdefault" json:"created_at"`
-	UpdatedAt           types.Time      `db:"updated_at" validate:"isdefault" json:"updated_at"`
+	ID                  string            `db:"id" json:"id"`
+	SessionCode         string            `db:"session_code" validate:"max=128" json:"session_code"`
+	SessionName         string            `db:"session_name" validate:"max=255" json:"session_name"`
+	AppName             string            `db:"app_name" validate:"max=64" json:"app_name"`
+	User                string            `db:"user" validate:"max=64" json:"user"`
+	ThreadID            string            `db:"thread_id" validate:"max=64" json:"thread_id"`
+	IsTemporary         bool              `db:"is_temporary" json:"is_temporary"`
+	SessionContentCount uint32            `db:"session_content_count" json:"session_content_count"`
+	SessionTag          enumor.IntentType `db:"session_tag" validate:"max=64" json:"session_tag"`
+	Extension           types.JsonField   `db:"extension" json:"extension"`
+	Creator             string            `db:"creator" validate:"max=64" json:"creator"`
+	Reviser             string            `db:"reviser" validate:"max=64" json:"reviser"`
+	CreatedAt           types.Time        `db:"created_at" validate:"isdefault" json:"created_at"`
+	UpdatedAt           types.Time        `db:"updated_at" validate:"isdefault" json:"updated_at"`
 }
 
 // TableName returns the database table name for aiagent sessions.

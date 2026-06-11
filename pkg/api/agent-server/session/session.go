@@ -24,12 +24,15 @@ import (
 	"errors"
 
 	"hcm/pkg/api/core"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/dal/table/aiagent"
 )
 
 // CreateSessionReq is the request body for creating a session.
 type CreateSessionReq struct {
 	SessionName string `json:"session_name"`
+	// SessionTag 可选会话场景标签。
+	SessionTag enumor.IntentType `json:"session_tag"`
 }
 
 // Validate validates the request body.
@@ -37,15 +40,21 @@ func (r *CreateSessionReq) Validate() error {
 	if r.SessionName == "" {
 		return errors.New("session_name is required")
 	}
+	if r.SessionTag != "" {
+		if err := r.SessionTag.Validate(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 // CreateSessionResp is the response body for creating a session.
 type CreateSessionResp struct {
-	ID          string `json:"id"`
-	SessionCode string `json:"session_code"`
-	ThreadID    string `json:"thread_id"`
-	SessionName string `json:"session_name"`
+	ID          string            `json:"id"`
+	SessionCode string            `json:"session_code"`
+	ThreadID    string            `json:"thread_id"`
+	SessionName string            `json:"session_name"`
+	SessionTag  enumor.IntentType `json:"session_tag"`
 }
 
 // UpdateSessionReq is the request body for updating a session.

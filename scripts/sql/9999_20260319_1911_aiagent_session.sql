@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS `aiagent_session`
     `thread_id`             VARCHAR(64)  NOT NULL COMMENT '框架threadId，值等于id',
     `is_temporary`          TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '是否为临时会话',
     `session_content_count` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '会话消息计数',
+    `session_tag`           VARCHAR(64)  DEFAULT '' COMMENT '会话级标签',
     `extension`             JSON                  DEFAULT NULL COMMENT '扩展字段',
     `creator`               VARCHAR(64)  NOT NULL COMMENT '创建者',
     `reviser`               VARCHAR(64)  NOT NULL COMMENT '更新者',
