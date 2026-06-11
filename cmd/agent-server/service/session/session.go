@@ -48,15 +48,14 @@ func InitService(cap *capability.Capability, resolver *Resolver) {
 	}
 
 	h := rest.NewHandler()
-	// Session management APIs.
-	h.Add("CreateSession", http.MethodPost, "/sessions/create", svc.CreateSession)
-	h.Add("ListSessions", http.MethodPost, "/sessions/list", svc.ListSessions)
-	h.Add("UpdateSession", http.MethodPatch, "/sessions/{session_code}", svc.UpdateSession)
-	h.Add("DeleteSession", http.MethodDelete, "/sessions/{session_code}", svc.DeleteSession)
-	// Context stats (uses session_code now).
-	h.Add("GetContextStats", http.MethodGet, "/sessions/{thread_id}/context_stats", svc.GetContextStats)
+	svc.initSessionService(h)
+
+	bizH := rest.NewHandler()
+	bizH.Path("/bizs/{bk_biz_id}")
+	svc.initBizSessionService(bizH)
 
 	h.Load(cap.WebService)
+	bizH.Load(cap.WebService)
 }
 
 type service struct {
@@ -66,6 +65,24 @@ type service struct {
 	resolver   *Resolver
 	sessionSvc session.Service
 	appName    string
+}
+
+func (svc *service) initSessionService(h *rest.Handler) {
+	// Session management APIs.
+	h.Add("CreateSession", http.MethodPost, "/sessions/create", svc.CreateSession)
+	h.Add("ListSessions", http.MethodPost, "/sessions/list", svc.ListSessions)
+	h.Add("UpdateSession", http.MethodPatch, "/sessions/{session_code}", svc.UpdateSession)
+	h.Add("DeleteSession", http.MethodDelete, "/sessions/{session_code}", svc.DeleteSession)
+	// Context stats.
+	h.Add("GetContextStats", http.MethodGet, "/sessions/{session_code}/context_stats", svc.GetContextStats)
+
+}
+
+func (svc *service) initBizSessionService(h *rest.Handler) {
+	h.Add("BizCreateSession", http.MethodPost, "/sessions/create", svc.BizCreateSession)
+	h.Add("BizListSessions", http.MethodPost, "/sessions/list", svc.BizListSessions)
+	h.Add("BizUpdateSession", http.MethodPatch, "/sessions/{session_code}", svc.BizUpdateSession)
+	h.Add("BizDeleteSession", http.MethodDelete, "/sessions/{session_code}", svc.BizDeleteSession)
 }
 
 // getSessionByCode queries a session by session_code and returns it.

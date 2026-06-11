@@ -2,7 +2,8 @@
 
 - 该接口提供版本：v9.9.9+。
 - 该接口所需权限：平台-智能体助手。
-- 该接口功能描述：创建 AI Agent 会话，返回会话 ID、对外标识 session_code 及框架内部 thread_id。
+- 该接口功能描述：创建平台维度 AI Agent 会话，返回会话 ID、对外标识 session_code、框架内部 thread_id 及会话所属业务
+  ID。平台维度创建的会话默认写入 `bk_biz_id = -1`，表示未分配业务。
 
 ### URL
 
@@ -56,4 +57,4 @@ POST /api/v1/agent/sessions/create
 | session_code | string | 对外会话标识，格式为 `{md5}-{YYYYMMDDHH}`，客户端后续操作均使用此字段 |
 | thread_id    | string | 框架内部 thread ID，与 id 值相同                       |
 | session_name | string | 会话名称                                          |
-| session_tag  | string | 会话场景标签，回显请求入参；无标签时为空字符串                        |
+| session_tag  | string | 会话场景标签，回显请求入参；无标签时为空字符串                       |

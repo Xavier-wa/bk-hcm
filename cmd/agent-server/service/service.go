@@ -403,21 +403,9 @@ func (s *Service) sessionCodeMiddleware(next http.Handler) http.Handler {
 		}
 		r.Body.Close()
 
-		var reqMap map[string]interface{}
-		if err = json.Unmarshal(body, &reqMap); err != nil {
-			http.Error(w, "invalid JSON body", http.StatusBadRequest)
-			return
-		}
-
-		sessionCodeVal, ok := reqMap["sessionCode"]
-		if !ok {
-			http.Error(w, `missing field "sessionCode"`, http.StatusBadRequest)
-			return
-		}
-
-		sessionCode, ok := sessionCodeVal.(string)
-		if !ok || strings.TrimSpace(sessionCode) == "" {
-			http.Error(w, `"sessionCode" must be a non-empty string`, http.StatusBadRequest)
+		sessionCode, reqMap, err := extractSessionCode(body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -428,19 +416,16 @@ func (s *Service) sessionCodeMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		sessionMeta, err := s.resolver.ResolveMeta(kt, sessionCode)
+		sessionMeta, httpStatus, err := s.resolveAndValidateSession(kt, sessionCode)
 		if err != nil {
-			logs.Errorf("sessionCodeMiddleware: resolve %s failed: %v", sessionCode, err)
-			http.Error(w, "invalid session code", http.StatusBadRequest)
+			http.Error(w, err.Error(), httpStatus)
 			return
 		}
 		threadID := sessionMeta.ThreadID
 
-		runID := uuid.UUID()
-
 		delete(reqMap, "sessionCode")
 		reqMap["threadId"] = threadID
-		reqMap["runId"] = runID
+		reqMap["runId"] = uuid.UUID()
 		// 将会话场景标签通过 forwardedProps 透传，供 Graph 首轮注入 StateKeySessionTag
 		if sessionMeta.SessionTag != "" {
 			injectForwardedSessionTag(reqMap, sessionMeta.SessionTag)
@@ -456,22 +441,71 @@ func (s *Service) sessionCodeMiddleware(next http.Handler) http.Handler {
 		r.ContentLength = int64(len(newBody))
 
 		isAGUI := strings.HasSuffix(r.URL.Path, "/agui")
-		next.ServeHTTP(w, r)
-
 		if isAGUI {
-			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), constant.SessionIncrContentCountTimeout)
-				defer cancel()
-				asyncKt := kt.NewSubKitWithCtx(ctx)
-				req := &dsaiagent.IncrContentCountReq{SessionCode: sessionCode}
-				if err := s.clientSet.DataService().Aiagent.Session.IncrContentCount(asyncKt, req); err != nil {
-					logs.Errorf("async incr content count failed, session_code: %s, err: %v", sessionCode, err)
-				}
-				// Run 结束后对账：意图识别命中受支持场景时回写 session_tag
-				s.reconcileSessionTag(asyncKt, sessionCode, threadID, sessionMeta.SessionTag)
-			}()
+			go s.asyncIncrContentCount(kt, sessionCode, threadID, sessionMeta.SessionTag)
+			if sessionMeta.BkBizID > 0 {
+				r = r.WithContext(authlogic.WithBkBizID(r.Context(), sessionMeta.BkBizID))
+			}
 		}
+		next.ServeHTTP(w, r)
 	})
+}
+
+// extractSessionCode parses the raw JSON body, validates and extracts the sessionCode field.
+// Returns the sessionCode string and the full request map for body rewriting.
+func extractSessionCode(body []byte) (string, map[string]interface{}, error) {
+	var reqMap map[string]interface{}
+	if err := json.Unmarshal(body, &reqMap); err != nil {
+		return "", nil, errors.New("invalid JSON body")
+	}
+
+	sessionCodeVal, ok := reqMap["sessionCode"]
+	if !ok {
+		return "", nil, errors.New(`missing field "sessionCode"`)
+	}
+
+	sessionCode, ok := sessionCodeVal.(string)
+	if !ok || strings.TrimSpace(sessionCode) == "" {
+		return "", nil, errors.New(`"sessionCode" must be a non-empty string`)
+	}
+
+	return sessionCode, reqMap, nil
+}
+
+// resolveAndValidateSession resolves sessionCode to its metadata and verifies
+// that the resolved user matches the authenticated user in kt.
+// Returns the session metadata, an HTTP status code and an error on failure.
+func (s *Service) resolveAndValidateSession(kt *kit.Kit, sessionCode string) (*session.SessionMeta, int, error) {
+	sessionMeta, err := s.resolver.ResolveMeta(kt, sessionCode)
+	if err != nil {
+		logs.Errorf("resolve session code failed, session_code: %s, err: %v, rid: %s", sessionCode, err, kt.Rid)
+		return nil, http.StatusBadRequest, errors.New("invalid session code")
+	}
+
+	if sessionMeta.User != kt.User {
+		logs.Errorf("session code user mismatch, session_code: %s, session_user: %s, user: %s, rid: %s",
+			sessionCode, sessionMeta.User, kt.User, kt.Rid)
+		return nil, http.StatusForbidden, errors.New("permission denied")
+	}
+
+	return sessionMeta, http.StatusOK, nil
+}
+
+// asyncIncrContentCount asynchronously increments the session_content_count for the given sessionCode.
+func (s *Service) asyncIncrContentCount(kt *kit.Kit, sessionCode string, threadID string,
+	sessionTag enumor.IntentType) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), constant.SessionIncrContentCountTimeout)
+	defer cancel()
+
+	asyncKt := kt.NewSubKitWithCtx(ctx)
+	req := &dsaiagent.IncrContentCountReq{SessionCode: sessionCode}
+	if err := s.clientSet.DataService().Aiagent.Session.IncrContentCount(asyncKt, req); err != nil {
+		logs.Errorf("async incr content count failed, session_code: %s, err: %v, rid: %s",
+			sessionCode, err, asyncKt.Rid)
+	}
+	// Run 结束后对账：意图识别命中受支持场景时回写 session_tag
+	s.reconcileSessionTag(asyncKt, sessionCode, threadID, sessionTag)
 }
 
 // injectForwardedSessionTag merges the session tag into the request body's forwardedProps map.
@@ -629,6 +663,13 @@ func makeRunOptionResolver(saver graph.CheckpointSaver, allowedModels []string,
 		runtimeState := map[string]any{
 			graph.CfgKeyLineageID: input.ThreadID,
 		}
+
+		// Inject bk_biz_id from session context when the session belongs to a business.
+		bkBizID := authlogic.BkBizIDFromContext(ctx)
+		if bkBizID > 0 {
+			runtimeState[constant.SessionBkBizIDStateKey] = bkBizID
+		}
+
 		// Auto-detect interrupted checkpoint and prepare resume (HITL / fallback interrupt).
 		runtimeState = tryPrepareAutoResume(saver, ctx, input, runtimeState)
 
@@ -700,7 +741,7 @@ func tryPrepareAutoResume(saver graph.CheckpointSaver, ctx context.Context, inpu
 	return runtimeState
 }
 
-// agentReadiness handles GET /api/v1/agent/readiness.
+// AgentReadiness handles GET /api/v1/agent/readiness.
 // Unlike /healthz (which checks etcd), this reports skill/prompt initial sync status.
 // Envelope is built by rest.Handler (respEntity / respErrorWithEntity), same as other APIs.
 func (s *Service) AgentReadiness(cts *rest.Contexts) (interface{}, error) {

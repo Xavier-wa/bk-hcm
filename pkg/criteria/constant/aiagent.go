@@ -105,6 +105,21 @@ const (
 	// use to track which events have already been included in a summary.
 	SessionStateLastIncludedTS = "summary:last_included_ts"
 
+	// SessionBkBizIDStateKey is the runtime-state key used to propagate the session's
+	// bk_biz_id into the Graph run, allowing Function nodes (e.g. fetch_plans) to
+	// consume it directly without asking the user.
+	SessionBkBizIDStateKey = "bk_biz_id"
+
+	// SessionBkBizIDTempKey is the session temp-state key written by the BeforeModel
+	// callback so that the instruction placeholder {temp:session_bk_biz_id?} is
+	// expanded before each LLM call.
+	SessionBkBizIDTempKey = "session_bk_biz_id"
+
+	// SessionUserDisplayNameKey is the session user-state key written by the BeforeModel
+	// callback so that the instruction placeholder {user:display_name?} is
+	// expanded before each LLM call.
+	SessionUserDisplayNameKey = "display_name"
+
 	// RetrievedToolsCacheKey is the cache key for the retrieved tools.
 	RetrievedToolsCacheKey = "custom:retrieved_tools"
 

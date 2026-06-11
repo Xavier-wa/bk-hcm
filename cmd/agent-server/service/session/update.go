@@ -24,6 +24,7 @@ import (
 
 	proto "hcm/pkg/api/agent-server/session"
 	dsaiagent "hcm/pkg/api/data-service/aiagent"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/iam/meta"
 	"hcm/pkg/logs"
@@ -34,8 +35,31 @@ import (
 //
 // PATCH /api/v1/agent/sessions/{session_code}
 func (svc *service) UpdateSession(cts *rest.Contexts) (interface{}, error) {
+	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Update}}
+	return svc.updateSession(cts, constant.UnassignedBiz, authRes)
+}
+
+// BizUpdateSession updates a session's name under a business.
+//
+// PATCH /api/v1/agent/bizs/{bk_biz_id}/sessions/{session_code}
+func (svc *service) BizUpdateSession(cts *rest.Contexts) (interface{}, error) {
+	bizID, err := cts.PathParameter("bk_biz_id").Int64()
+	if err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+	if bizID <= 0 {
+		return nil, errf.Newf(errf.InvalidParameter, "bk_biz_id must be greater than 0")
+	}
+
+	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Update}, BizID: bizID}
+	return svc.updateSession(cts, bizID, authRes)
+}
+
+func (svc *service) updateSession(cts *rest.Contexts, bkBizID int64, authRes meta.ResourceAttribute) (
+	interface{}, error) {
+
 	if svc.cli == nil {
-		return nil, errf.New(errf.PermissionDenied, "data service client is not configured")
+		return nil, errf.New(errf.UnHealthy, "data service client is not configured")
 	}
 
 	sessionCode := cts.PathParameter("session_code").String()
@@ -52,9 +76,9 @@ func (svc *service) UpdateSession(cts *rest.Contexts) (interface{}, error) {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit,
-		meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Update}}); err != nil {
-		logs.Errorf("agent auth: permission denied, user: %s, err: %v, rid: %s", cts.Kit.User, err, cts.Kit.Rid)
+	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit, authRes); err != nil {
+		logs.Errorf("update session: permission denied, user: %s, bk_biz_id: %d, err: %v, rid: %s",
+			cts.Kit.User, bkBizID, err, cts.Kit.Rid)
 		return nil, errf.New(errf.PermissionDenied, "permission denied")
 	}
 
@@ -68,6 +92,10 @@ func (svc *service) UpdateSession(cts *rest.Contexts) (interface{}, error) {
 		return nil, errf.New(errf.PermissionDenied, "session does not belong to current user")
 	}
 
+	if bkBizID != constant.UnassignedBiz && sess.BkBizID != bkBizID {
+		return nil, errf.Newf(errf.PermissionDenied, "session does not belong to bk_biz_id: %d", bkBizID)
+	}
+
 	updateReq := &dsaiagent.UpdateAiagentSessionReq{
 		ID:          sess.ID,
 		SessionName: req.SessionName,
@@ -75,7 +103,8 @@ func (svc *service) UpdateSession(cts *rest.Contexts) (interface{}, error) {
 	}
 
 	if err = svc.cli.DataService().Aiagent.Session.Update(cts.Kit, updateReq); err != nil {
-		logs.Errorf("update session failed, session_code: %s, err: %v, rid: %s", sessionCode, err, cts.Kit.Rid)
+		logs.Errorf("update session failed, session_code: %s, bk_biz_id: %d, err: %v, rid: %s",
+			sessionCode, bkBizID, err, cts.Kit.Rid)
 		return nil, err
 	}
 

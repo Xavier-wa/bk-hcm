@@ -37,6 +37,7 @@ import (
 type CreateAiagentSessionReq struct {
 	AppName     string            `json:"app_name" validate:"required,max=64"`
 	User        string            `json:"user" validate:"required,max=64"`
+	BkBizID     int64             `json:"bk_biz_id" validate:"required"`
 	SessionName string            `json:"session_name" validate:"max=255"`
 	IsTemporary bool              `json:"is_temporary"`
 	SessionTag  enumor.IntentType `json:"session_tag" validate:"max=64"`

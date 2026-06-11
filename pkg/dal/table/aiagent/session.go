@@ -40,6 +40,7 @@ var SessionColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "session_name", NamedC: "session_name", Type: enumor.String},
 	{Column: "app_name", NamedC: "app_name", Type: enumor.String},
 	{Column: "user", NamedC: "user", Type: enumor.String},
+	{Column: "bk_biz_id", NamedC: "bk_biz_id", Type: enumor.Numeric},
 	{Column: "thread_id", NamedC: "thread_id", Type: enumor.String},
 	{Column: "is_temporary", NamedC: "is_temporary", Type: enumor.Boolean},
 	{Column: "session_content_count", NamedC: "session_content_count", Type: enumor.Numeric},
@@ -58,6 +59,7 @@ type SessionTable struct {
 	SessionName         string            `db:"session_name" validate:"max=255" json:"session_name"`
 	AppName             string            `db:"app_name" validate:"max=64" json:"app_name"`
 	User                string            `db:"user" validate:"max=64" json:"user"`
+	BkBizID             int64             `db:"bk_biz_id" json:"bk_biz_id"`
 	ThreadID            string            `db:"thread_id" validate:"max=64" json:"thread_id"`
 	IsTemporary         bool              `db:"is_temporary" json:"is_temporary"`
 	SessionContentCount uint32            `db:"session_content_count" json:"session_content_count"`
@@ -87,6 +89,9 @@ func (s SessionTable) InsertValidate() error {
 	}
 	if len(s.User) == 0 {
 		return errors.New("user can not be empty")
+	}
+	if s.BkBizID == 0 {
+		return errors.New("bk_biz_id is required")
 	}
 	if len(s.Creator) == 0 {
 		return errors.New("creator can not be empty")

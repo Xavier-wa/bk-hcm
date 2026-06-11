@@ -77,6 +77,7 @@ func (svc *service) CreateAiagentSession(cts *rest.Contexts) (interface{}, error
 		sess := &tableaiagent.SessionTable{
 			AppName:     req.AppName,
 			User:        req.User,
+			BkBizID:     req.BkBizID,
 			SessionName: req.SessionName,
 			IsTemporary: req.IsTemporary,
 			SessionTag:  req.SessionTag,

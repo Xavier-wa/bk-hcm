@@ -195,6 +195,8 @@ func genResManagementActions() []client.ResourceAction {
 
 	// 业务下-COS资源的Actions
 	actions = append(actions, genBizCosResManActions()...)
+	// 业务下-智能体助手的Actions
+	actions = append(actions, genBizAgentAssistantActions()...)
 
 	return actions
 }
@@ -278,6 +280,21 @@ func genBizCosResManActions() []client.ResourceAction {
 			Name:                 ActionIDNameMap[BizCosBucketDelete],
 			NameEn:               "Delete Biz COS Bucket",
 			Type:                 Delete,
+			RelatedResourceTypes: bizResource,
+			RelatedActions:       []client.ActionID{BizAccess},
+			Version:              1,
+			Hidden:               true,
+		},
+	}
+}
+
+func genBizAgentAssistantActions() []client.ResourceAction {
+	return []client.ResourceAction{
+		{
+			ID:                   BizAgentAssistant,
+			Name:                 ActionIDNameMap[BizAgentAssistant],
+			NameEn:               "Biz Agent Assistant",
+			Type:                 View,
 			RelatedResourceTypes: bizResource,
 			RelatedActions:       []client.ActionID{BizAccess},
 			Version:              1,

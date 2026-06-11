@@ -32,6 +32,7 @@ import (
 	"hcm/pkg/iam/meta"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
+	"hcm/pkg/runtime/filter"
 
 	"trpc.group/trpc-go/trpc-agent-go/event"
 	"trpc.group/trpc-go/trpc-agent-go/session"
@@ -41,6 +42,33 @@ import (
 //
 // POST /api/v1/agent/sessions/list
 func (svc *service) ListSessions(cts *rest.Contexts) (interface{}, error) {
+	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Find}}
+	return svc.listSessions(cts, constant.UnassignedBiz, authRes)
+}
+
+// BizListSessions queries the current user's session list in a specific business.
+//
+// POST /api/v1/agent/bizs/{bk_biz_id}/sessions/list
+func (svc *service) BizListSessions(cts *rest.Contexts) (interface{}, error) {
+	bizID, err := cts.PathParameter("bk_biz_id").Int64()
+	if err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+	if bizID <= 0 {
+		return nil, errf.Newf(errf.InvalidParameter, "bk_biz_id must be greater than 0")
+	}
+
+	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Find}, BizID: bizID}
+	return svc.listSessions(cts, bizID, authRes)
+}
+
+func (svc *service) listSessions(cts *rest.Contexts, bkBizID int64, authRes meta.ResourceAttribute) (
+	interface{}, error) {
+
+	if svc.cli == nil {
+		return nil, errf.New(errf.UnHealthy, "data service client is not configured")
+	}
+
 	req := new(core.ListReq)
 	if err := cts.DecodeInto(req); err != nil {
 		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
@@ -50,19 +78,25 @@ func (svc *service) ListSessions(cts *rest.Contexts) (interface{}, error) {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit,
-		meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Find}}); err != nil {
-		logs.Errorf("agent auth: permission denied, user: %s, err: %v, rid: %s", cts.Kit.User, err, cts.Kit.Rid)
+	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit, authRes); err != nil {
+		logs.Errorf("list sessions: permission denied, user: %s, bk_biz_id: %d, err: %v, rid: %s",
+			cts.Kit.User, bkBizID, err, cts.Kit.Rid)
 		return nil, errf.New(errf.PermissionDenied, "permission denied")
 	}
 
-	combined := tools.EqualExpression("user", cts.Kit.User)
+	filterRules := make([]*filter.AtomRule, 0)
+	filterRules = append(filterRules, tools.RuleEqual("user", cts.Kit.User))
+	if bkBizID != constant.UnassignedBiz {
+		filterRules = append(filterRules, tools.RuleEqual("bk_biz_id", bkBizID))
+	}
+	combined := tools.ExpressionAnd(filterRules...)
+
 	var err error
 	if req.Filter != nil {
 		combined, err = tools.And(combined, req.Filter)
 		if err != nil {
-			logs.Errorf("list sessions failed, filter invalid, err: %v, user: %s, filter: %+v, rid: %s",
-				err, cts.Kit.User, req.Filter, cts.Kit.Rid)
+			logs.Errorf("list sessions failed, filter invalid, err: %v, user: %s, bk_biz_id: %d, filter: %+v, rid: %s",
+				err, cts.Kit.User, bkBizID, req.Filter, cts.Kit.Rid)
 			return nil, errf.NewFromErr(errf.InvalidParameter, err)
 		}
 	}
@@ -75,7 +109,8 @@ func (svc *service) ListSessions(cts *rest.Contexts) (interface{}, error) {
 
 	result, err := svc.cli.DataService().Aiagent.Session.List(cts.Kit, listReq)
 	if err != nil {
-		logs.Errorf("list sessions failed, user: %s, err: %v, rid: %s", cts.Kit.User, err, cts.Kit.Rid)
+		logs.Errorf("list sessions failed, user: %s, bk_biz_id: %d, err: %v, rid: %s", cts.Kit.User,
+			bkBizID, err, cts.Kit.Rid)
 		return nil, err
 	}
 
@@ -99,16 +134,21 @@ func (svc *service) GetContextStats(cts *rest.Contexts) (interface{}, error) {
 		return nil, errf.New(errf.PermissionDenied, "permission denied")
 	}
 
-	threadID, err := svc.resolver.Resolve(cts.Kit, sessionCode)
+	sessionMeta, err := svc.resolver.ResolveMeta(cts.Kit, sessionCode)
 	if err != nil {
 		logs.Errorf("context-stats: resolve session_code %s failed: %v, rid: %s", sessionCode, err, cts.Kit.Rid)
 		return nil, err
+	}
+	if sessionMeta.User != cts.Kit.User {
+		logs.Errorf("get context stats failed, session user mismatch, session_code: %s, session_user: %s, "+
+			"user: %s, rid: %s", sessionCode, sessionMeta.User, cts.Kit.User, cts.Kit.Rid)
+		return nil, errf.New(errf.PermissionDenied, "permission denied")
 	}
 
 	key := session.Key{
 		AppName:   svc.appName,
 		UserID:    cts.Kit.User,
-		SessionID: threadID,
+		SessionID: sessionMeta.ThreadID,
 	}
 
 	sess, err := svc.sessionSvc.GetSession(cts.Kit.Ctx, key)

@@ -38,6 +38,10 @@ type SessionMeta struct {
 	ThreadID string
 	// SessionTag is the session-level scene tag.
 	SessionTag enumor.IntentType
+	// BkBizID is the business id of the session.
+	BkBizID int64
+	// User is the user of the session.
+	User string
 }
 
 // Resolver resolves sessionCode → session metadata with LRU cache.
@@ -66,9 +70,9 @@ func (r *Resolver) Resolve(kt *kit.Kit, sessionCode string) (string, error) {
 
 // ResolveMeta returns the cached session metadata (threadID + sessionTag) for the given sessionCode.
 // It checks the local cache first; on miss it queries data-service once and caches the result.
-func (r *Resolver) ResolveMeta(kt *kit.Kit, sessionCode string) (SessionMeta, error) {
+func (r *Resolver) ResolveMeta(kt *kit.Kit, sessionCode string) (*SessionMeta, error) {
 	if meta, ok := r.cache.Get(sessionCode); ok {
-		return meta, nil
+		return &meta, nil
 	}
 
 	listReq := &dsaiagent.ListAiagentSessionReq{
@@ -79,19 +83,22 @@ func (r *Resolver) ResolveMeta(kt *kit.Kit, sessionCode string) (SessionMeta, er
 	result, err := r.dataSvc.Aiagent.Session.List(kt, listReq)
 	if err != nil {
 		logs.Errorf("list session by code %s failed: %v, rid: %s", sessionCode, err, kt.Rid)
-		return SessionMeta{}, err
+		return nil, err
 	}
 
 	if len(result.Details) == 0 {
-		return SessionMeta{}, errf.Newf(errf.RecordNotFound, "session not found for code: %s", sessionCode)
+		return nil, errf.Newf(errf.RecordNotFound, "session not found for code: %s", sessionCode)
 	}
 
+	detail := result.Details[0]
 	meta := SessionMeta{
-		ThreadID:   result.Details[0].ThreadID,
-		SessionTag: result.Details[0].SessionTag,
+		ThreadID:   detail.ThreadID,
+		SessionTag: detail.SessionTag,
+		BkBizID:    detail.BkBizID,
+		User:       detail.User,
 	}
 	r.cache.Set(sessionCode, meta)
-	return meta, nil
+	return &meta, nil
 }
 
 // UpdateCachedSessionTag refreshes the cached session tag after a runtime write-back.

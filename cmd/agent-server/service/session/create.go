@@ -22,6 +22,7 @@ package session
 import (
 	proto "hcm/pkg/api/agent-server/session"
 	dsaiagent "hcm/pkg/api/data-service/aiagent"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/iam/meta"
 	"hcm/pkg/logs"
@@ -32,8 +33,31 @@ import (
 //
 // POST /api/v1/agent/sessions/create
 func (svc *service) CreateSession(cts *rest.Contexts) (interface{}, error) {
+	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Create}}
+	return svc.createSession(cts, constant.UnassignedBiz, authRes)
+}
+
+// BizCreateSession creates a new session under a business.
+//
+// POST /api/v1/agent/bizs/{bk_biz_id}/sessions/create
+func (svc *service) BizCreateSession(cts *rest.Contexts) (interface{}, error) {
+	bizID, err := cts.PathParameter("bk_biz_id").Int64()
+	if err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+	if bizID <= 0 {
+		return nil, errf.Newf(errf.InvalidParameter, "bk_biz_id must be greater than 0")
+	}
+
+	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Create}, BizID: bizID}
+	return svc.createSession(cts, bizID, authRes)
+}
+
+func (svc *service) createSession(cts *rest.Contexts, bizID int64, authRes meta.ResourceAttribute) (
+	*proto.CreateSessionResp, error) {
+
 	if svc.cli == nil {
-		return nil, errf.New(errf.PermissionDenied, "data service client is not configured")
+		return nil, errf.New(errf.UnHealthy, "data service client is not configured")
 	}
 
 	req := new(proto.CreateSessionReq)
@@ -45,22 +69,24 @@ func (svc *service) CreateSession(cts *rest.Contexts) (interface{}, error) {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit,
-		meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Create}}); err != nil {
-		logs.Errorf("agent auth: permission denied, user: %s, err: %v, rid: %s", cts.Kit.User, err, cts.Kit.Rid)
+	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit, authRes); err != nil {
+		logs.Errorf("create session: permission denied, user: %s, bk_biz_id: %d, err: %v, rid: %s",
+			cts.Kit.User, bizID, err, cts.Kit.Rid)
 		return nil, errf.New(errf.PermissionDenied, "permission denied")
 	}
 
 	createReq := &dsaiagent.CreateAiagentSessionReq{
 		AppName:     svc.appName,
 		User:        cts.Kit.User,
+		BkBizID:     bizID,
 		SessionName: req.SessionName,
 		SessionTag:  req.SessionTag,
 	}
 
 	result, err := svc.cli.DataService().Aiagent.Session.Create(cts.Kit, createReq)
 	if err != nil {
-		logs.Errorf("create session failed, user: %s, err: %v, rid: %s", cts.Kit.User, err, cts.Kit.Rid)
+		logs.Errorf("create session failed, user: %s, bk_biz_id: %d, err: %v, rid: %s", cts.Kit.User,
+			bizID, err, cts.Kit.Rid)
 		return nil, err
 	}
 

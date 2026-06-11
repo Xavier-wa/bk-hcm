@@ -54,6 +54,9 @@ const (
 
 	// AccessTokenKey is the context key for BK access_token (tool proxy init / refresh).
 	AccessTokenKey = "access_token"
+
+	// BkBizIDKey is the bk biz ID header key.
+	BkBizIDKey = "X-Bk-Biz-Id"
 )
 
 const (

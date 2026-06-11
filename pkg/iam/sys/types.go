@@ -262,6 +262,9 @@ const (
 	// AgentAssistant 平台管理-智能体助手
 	AgentAssistant client.ActionID = "agent_assistant"
 
+	// BizAgentAssistant 业务-智能体助手
+	BizAgentAssistant client.ActionID = "biz_agent_assistant"
+
 	// Skip is an action that no need to auth
 	Skip client.ActionID = "skip"
 )
@@ -340,6 +343,8 @@ var ActionIDNameMap = map[client.ActionID]string{
 	RollingServerManage:    "滚服管理",
 	GreenChannel:           "小额绿通",
 	AgentAssistant:         "平台-智能体助手",
+
+	BizAgentAssistant: "业务-智能体助手",
 
 	MainAccountFind:   "账号-二级账号查看",
 	MainAccountCreate: "账号-二级账号创建",

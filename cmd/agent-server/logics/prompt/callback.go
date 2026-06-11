@@ -20,8 +20,11 @@
 package prompt
 
 import (
+	"bytes"
 	"context"
+	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"hcm/pkg/criteria/constant"
@@ -29,6 +32,7 @@ import (
 	"hcm/pkg/rest"
 	"hcm/pkg/tools/util"
 
+	trpcagent "trpc.group/trpc-go/trpc-agent-go/agent"
 	"trpc.group/trpc-go/trpc-agent-go/model"
 )
 
@@ -54,7 +58,10 @@ func MakeSystemPromptReplaceCallback(store *Store) model.BeforeModelCallbackStru
 		}
 
 		instructionEntry, _ := store.Get(constant.InstructionKey)
-		content := BuildSystemPrompt(systemEntry.Content, instructionEntry.Content)
+		// NOTE beforeModelCallback 的触发时点在 instruction 渲染之后，因此动态渲染必须手动实现，不能依赖框架
+		rendered := renderInstructionTemplate(ctx, instructionEntry.Content)
+
+		content := BuildSystemPrompt(systemEntry.Content, rendered)
 
 		args.Request.Messages = replaceOrInsertSystem(args.Request.Messages, content)
 
@@ -149,4 +156,50 @@ func BuildSystemPrompt(systemPrompt, instruction string) string {
 		prompt += instruction
 	}
 	return prompt
+}
+
+// instructionTemplateData holds the dynamic values injected into the instruction Go template.
+type instructionTemplateData struct {
+	// UserDisplayName is the display name of the current user, sourced from the request context.
+	UserDisplayName string
+	// BkBizID is the business ID bound to the current session. Empty when the session is
+	// platform-level (bk_biz_id = -1) or when the value has not been set.
+	BkBizID string
+}
+
+// renderInstructionTemplate executes the instruction Go template with runtime values
+// extracted from ctx and the current invocation's RuntimeState.
+// On any parse or execution error the original template string is returned unchanged.
+func renderInstructionTemplate(ctx context.Context, tmpl string) string {
+	if tmpl == "" {
+		return ""
+	}
+
+	rid := rest.RidFromContext(ctx)
+
+	data := instructionTemplateData{}
+
+	if username, _ := ctx.Value(constant.UserKey).(string); username != "" {
+		data.UserDisplayName = username
+	}
+
+	if inv, ok := trpcagent.InvocationFromContext(ctx); ok && inv != nil && inv.RunOptions.RuntimeState != nil {
+		if bkBizID, ok := inv.RunOptions.RuntimeState[constant.SessionBkBizIDStateKey].(int64); ok && bkBizID > 0 {
+			data.BkBizID = strconv.FormatInt(bkBizID, 10)
+		}
+	}
+
+	t, err := template.New(constant.InstructionKey).Parse(tmpl)
+	if err != nil {
+		logs.Warnf("[instruction_render] failed to parse instruction template, err: %v, rid: %s", err, rid)
+		return tmpl
+	}
+
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, data); err != nil {
+		logs.Warnf("[instruction_render] failed to execute instruction template, err: %v, rid: %s", err, rid)
+		return tmpl
+	}
+
+	return buf.String()
 }

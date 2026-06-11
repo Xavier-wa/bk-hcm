@@ -1,12 +1,18 @@
 ### 描述
 
 - 该接口提供版本：v9.9.9+。
-- 该接口所需权限：平台-智能体助手。
-- 该接口功能描述：查询当前用户的 AI Agent 会话列表。系统自动在过滤条件中注入 `user = 当前用户`，确保用户只能查看自己的会话。
+- 该接口所需权限：业务-智能体助手。
+- 该接口功能描述：查询当前用户在指定业务下的 AI Agent 会话列表。
 
 ### URL
 
-POST /api/v1/agent/sessions/list
+POST /api/v1/agent/bizs/{bk_biz_id}/sessions/list
+
+### 路径参数
+
+| 参数名称      | 参数类型  | 必选 | 描述      |
+|-----------|-------|----|---------|
+| bk_biz_id | int64 | 是  | 蓝鲸业务 ID |
 
 ### 输入参数
 
@@ -47,28 +53,6 @@ POST /api/v1/agent/sessions/list
 | cs  | 模糊查询，区分大小写                                   | string                                        |
 | cis | 模糊查询，不区分大小写                                  | string                                        |
 
-##### 2. 协议示例
-
-查询 session_name 包含 "test" 且 is_temporary 为 false 的会话。
-
-```json
-{
-  "op": "and",
-  "rules": [
-    {
-      "field": "session_name",
-      "op": "cs",
-      "value": "test"
-    },
-    {
-      "field": "is_temporary",
-      "op": "eq",
-      "value": false
-    }
-  ]
-}
-```
-
 #### 查询参数介绍：
 
 | 参数名称                  | 参数类型   | 描述                              |
@@ -77,7 +61,6 @@ POST /api/v1/agent/sessions/list
 | session_code          | string | 对外会话标识                          |
 | session_name          | string | 会话名称                            |
 | app_name              | string | 应用名称                            |
-| bk_biz_id             | int64  | 会话所属蓝鲸业务 ID，`-1` 表示未分配业务       |
 | is_temporary          | bool   | 是否为临时会话                         |
 | session_content_count | int    | 会话消息计数                          |
 | creator               | string | 创建者                             |
@@ -96,7 +79,7 @@ POST /api/v1/agent/sessions/list
 
 ### 调用示例
 
-#### 查询所有正式会话（第一页，每页 20 条）
+#### 查询当前业务下所有正式会话（第一页，每页 20 条）
 
 ```json
 {
@@ -144,7 +127,7 @@ POST /api/v1/agent/sessions/list
       {
         "id": "a1b2c3d4",
         "session_code": "e3f4a2b1c9d8e7f6a5b4c3d2-2026032009",
-        "session_name": "我的第一个对话",
+        "session_name": "业务申领对话",
         "app_name": "hcm-agent",
         "user": "admin",
         "thread_id": "a1b2c3d4",
@@ -152,7 +135,6 @@ POST /api/v1/agent/sessions/list
         "is_temporary": false,
         "session_content_count": 5,
         "extensions": null,
-        "session_tag": "host_apply",
         "creator": "admin",
         "revisor": "admin",
         "created_at": "2026-03-20T09:00:00Z",
@@ -188,17 +170,19 @@ POST /api/v1/agent/sessions/list
 | app_name              | string | 应用名称                                   |
 | user                  | string | 会话所属用户                                 |
 | thread_id             | string | 框架内部 thread ID，值与 id 相同                |
-| bk_biz_id             | int64  | 会话所属蓝鲸业务 ID，`-1` 表示未分配业务              |
+| bk_biz_id             | int64  | 会话所属蓝鲸业务 ID                            |
 | is_temporary          | bool   | 是否为临时会话                                |
 | session_content_count | int    | 会话消息计数（每次通过 /agui 接口交互后异步自增）           |
-| extensions            | object | 扩展字段
-| session_tag           | string | 会话场景标签，无标签时为空字符串 |
+| extensions            | object | 扩展字段，暂未使用，默认为 null                     |
 | creator               | string | 创建者                                    |
 | revisor               | string | 最近修改者                                  |
 | created_at            | string | 创建时间（格式："2006-01-02T15:04:05.000000Z"） |
 | updated_at            | string | 更新时间（格式："2006-01-02T15:04:05.000000Z"） |
 
-### 补充说明
+### 错误码说明
 
-- 该接口为平台维度，服务端只强制过滤当前用户，不主动追加 `bk_biz_id` 条件。
-- 如需按业务隔离查询会话，请使用业务维度列表接口 `POST /api/v1/agent/bizs/{bk_biz_id}/sessions/list`。
+| code    | 描述                                   |
+|---------|--------------------------------------|
+| 2000001 | 请求参数错误，例如路径参数 `bk_biz_id` 为空、为 0 或负数 |
+| 2000006 | 查询会话列表失败                             |
+| 2000012 | 用户无指定业务的「业务-智能体助手」Find 权限            |
