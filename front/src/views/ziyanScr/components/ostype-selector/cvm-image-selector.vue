@@ -3,11 +3,14 @@ import { computed, ref, watch } from 'vue';
 import { isEqual } from 'lodash';
 import type { IQueryResData } from '@/typings';
 import http from '@/http';
+import { useWhereAmI } from '@/hooks/useWhereAmI';
 
 export interface ICvmImage {
   image_id: string;
   image_name: string;
-  [key: string]: string;
+  type?: string;
+  bk_biz_id?: number;
+  [key: string]: any;
 }
 
 interface IProps {
@@ -19,6 +22,7 @@ interface IProps {
   filterable?: boolean;
   disabled?: boolean;
   transform?: (options: ICvmImage[]) => ICvmImage[];
+  bizId?: number | string;
 }
 
 defineOptions({ name: 'cvm-image-selector' });
@@ -31,8 +35,9 @@ const props = withDefaults(defineProps<IProps>(), {
   filterable: true,
   disabled: false,
 });
-
 const emit = defineEmits(['change']);
+
+const { getBizsId } = useWhereAmI();
 
 const localModel = computed({
   get() {
@@ -51,9 +56,17 @@ const options = ref<ICvmImage[]>([]);
 const getOptions = async (region: string[]) => {
   loading.value = true;
   try {
-    const res: IQueryResData<{ info: ICvmImage[] }> = await http.post('/api/v1/woa/config/findmany/config/cvm/image', {
-      region,
-    });
+    const bizId = props.bizId ?? getBizsId();
+    let res: IQueryResData<{ info: ICvmImage[] }>;
+    if (bizId !== null) {
+      res = await http.post(`/api/v1/woa/bizs/${bizId}/config/cvm/image`, {
+        region,
+      });
+    } else {
+      res = await http.post('/api/v1/woa/config/findmany/config/cvm/image', {
+        region,
+      });
+    }
     const list = res.data.info;
 
     if (props.transform) {
@@ -110,5 +123,3 @@ const handleChange = (val: string | string[]) => {
     </bk-option>
   </bk-select>
 </template>
-
-<style scoped lang="scss"></style>

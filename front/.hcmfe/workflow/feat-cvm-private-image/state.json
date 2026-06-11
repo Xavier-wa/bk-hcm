@@ -1,0 +1,111 @@
+{
+  "id": "feat-cvm-private-image",
+  "title": "自研云-主机申领-私有镜像支持-v1",
+  "currentStage": "done",
+  "createdAt": "2026-06-09T04:16:12.630Z",
+  "updatedAt": "2026-06-10T06:58:42.702Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-private-image/prd.md",
+        "kind": "file",
+        "addedAt": "2026-06-09T04:16:34.325Z"
+      },
+      {
+        "ref": "d:\\hcm\\.hcmfe\\workflow\\feat-cvm-private-image\\prd.md",
+        "kind": "file",
+        "addedAt": "2026-06-09T05:56:12.386Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": "d:\\hcm\\.hcmfe\\workflow\\feat-cvm-private-image\\design.md",
+        "kind": "file",
+        "addedAt": "2026-06-09T05:57:01.371Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": "d:\\hcm\\.hcmfe\\workflow\\feat-cvm-private-image\\api.md",
+        "kind": "file",
+        "addedAt": "2026-06-09T06:06:31.945Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": "d:\\hcm\\.hcmfe\\workflow\\feat-cvm-private-image\\coding.md",
+        "kind": "file",
+        "addedAt": "2026-06-09T06:11:16.753Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": "d:\\hcm\\.hcmfe\\workflow\\feat-cvm-private-image\\test.md",
+        "kind": "file",
+        "addedAt": "2026-06-09T06:19:06.928Z"
+      }
+    ]
+  },
+  "approvals": {
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-06-09T06:05:51.137Z"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-06-09T06:10:11.115Z"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-06-09T07:15:05.818Z"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-06-09T07:32:11.035Z"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-06-09T04:16:12.630Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-06-09T05:56:22.801Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-06-09T06:05:55.568Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-06-09T06:10:18.329Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-06-09T06:17:59.951Z"
+    },
+    {
+      "from": "test",
+      "to": "coding",
+      "at": "2026-06-09T07:02:15.391Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-06-09T07:15:13.875Z"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-06-09T07:32:15.400Z"
+    }
+  ],
+  "requirementId": "req-cvm-private-image-support",
+  "branch": "feat-cvm-private-image"
+}
