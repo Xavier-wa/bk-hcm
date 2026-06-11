@@ -125,6 +125,18 @@ const (
 	IntentTypeChat IntentType = "chat"
 )
 
+// IntentTypes lists all recognised intent categories.
+var IntentTypes = []IntentType{
+	IntentTypeHostApply,
+	IntentTypeResourceQuery,
+	IntentTypeChat,
+}
+
+// GetAllIntentTypes returns all intent types.
+func GetAllIntentTypes() []IntentType {
+	return IntentTypes
+}
+
 // Validate checks whether the intent type is one of the declared values.
 func (t IntentType) Validate() error {
 	switch t {
@@ -137,7 +149,12 @@ func (t IntentType) Validate() error {
 
 // IsSupportedScene reports whether the intent has an implemented scene flow.
 func (t IntentType) IsSupportedScene() bool {
-	return t == IntentTypeHostApply
+	switch t {
+	case IntentTypeHostApply, IntentTypeResourceQuery:
+		return true
+	default:
+		return false
+	}
 }
 
 // GraphCheckpointBackend is the backend type for the graph checkpoint storage.

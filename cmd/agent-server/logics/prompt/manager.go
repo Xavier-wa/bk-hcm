@@ -65,6 +65,14 @@ func newLocalFileManager(cfg cc.AgentPromptConfig, readiness ReadinessNotifier) 
 	if cfg.IntentRecognitionPrompt != "" {
 		_ = store.Set(constant.IntentRecognitionPromptKey, PromptEntry{Content: cfg.IntentRecognitionPrompt})
 	}
+	for scene, content := range cfg.ScenePromptContents {
+		if content.System != "" {
+			_ = store.Set(constant.PromptSystemKey(scene), PromptEntry{Content: content.System})
+		}
+		if content.Instruction != "" {
+			_ = store.Set(constant.PromptInstructionKey(scene), PromptEntry{Content: content.Instruction})
+		}
+	}
 	if cc.AgentServer().Storage.Memory.ExtractPrompt != "" {
 		_ = store.Set(constant.MemoryExtractPromptKey,
 			PromptEntry{Content: cc.AgentServer().Storage.Memory.ExtractPrompt})

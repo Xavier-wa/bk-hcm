@@ -44,6 +44,9 @@ import (
 type MCPToolSet struct {
 	// TS holds the configured MCP tool sets.
 	TS []tool.ToolSet
+	// scenes stores the scene tags for each ToolSet in TS, indexed in parallel.
+	// An empty slice at a given index means the toolset applies to all scenes.
+	scenes [][]string
 }
 
 // BuildMCPToolSets constructs MCP ToolSet instances from the global configuration.
@@ -54,6 +57,7 @@ func BuildMCPToolSets(gateSkip map[string]struct{}) (*MCPToolSet, error) {
 	cfgs := cc.AgentServer().Tools.MCPToolSets
 
 	sets := make([]tool.ToolSet, 0, len(cfgs))
+	scenesList := make([][]string, 0, len(cfgs))
 	for _, cfg := range cfgs {
 		ts, err := buildOneMCPToolSet(cfg)
 		if err != nil {
@@ -68,8 +72,40 @@ func BuildMCPToolSets(gateSkip map[string]struct{}) (*MCPToolSet, error) {
 				cfg.Name, cfg.Type, cfg.Transport, cfg.ServerURL)
 		}
 		sets = append(sets, ts)
+		scns := make([]string, 0, len(cfg.Scenes))
+		for _, sc := range cfg.Scenes {
+			scns = append(scns, string(sc))
+		}
+		scenesList = append(scenesList, scns)
 	}
-	return &MCPToolSet{TS: sets}, nil
+	return &MCPToolSet{TS: sets, scenes: scenesList}, nil
+}
+
+// FilterByScene returns a new MCPToolSet containing only toolsets whose scenes list
+// is empty (applies to all scenes) or contains the specified scene.
+// The original MCPToolSet is not modified.
+func (s *MCPToolSet) FilterByScene(scene string) *MCPToolSet {
+	filtered := &MCPToolSet{}
+	for i, ts := range s.TS {
+		var scns []string
+		if i < len(s.scenes) {
+			scns = s.scenes[i]
+		}
+		// Empty scenes means the toolset applies to all scenes.
+		if len(scns) == 0 {
+			filtered.TS = append(filtered.TS, ts)
+			filtered.scenes = append(filtered.scenes, scns)
+			continue
+		}
+		for _, sc := range scns {
+			if sc == scene {
+				filtered.TS = append(filtered.TS, ts)
+				filtered.scenes = append(filtered.scenes, scns)
+				break
+			}
+		}
+	}
+	return filtered
 }
 
 // Close closes the MCPToolSet.

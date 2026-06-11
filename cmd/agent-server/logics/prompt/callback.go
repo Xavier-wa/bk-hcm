@@ -42,22 +42,32 @@ const (
 )
 
 // MakeSystemPromptReplaceCallback returns a BeforeModelCallbackStructured that replaces
-// the system message with the latest prompt content from store before each LLM call.
-// If the store has no system prompt, the callback is a no-op.
-// Use verbosity >= 2 (logs.V(2)) to see per-call injection details.
+// the system message with the latest default-scene prompt content from store before each
+// LLM call. It is a thin wrapper over MakeSceneSystemPromptReplaceCallback with an empty scene.
 func MakeSystemPromptReplaceCallback(store *Store) model.BeforeModelCallbackStructured {
+	return MakeSceneSystemPromptReplaceCallback(store, "")
+}
+
+// MakeSceneSystemPromptReplaceCallback returns a BeforeModelCallbackStructured that replaces
+// the system message with the latest scene-specific prompt content from store before each LLM
+// call. An empty scene selects the default system prompt keys. If the store has no system prompt
+// for the scene, the callback is a no-op.
+// Use verbosity >= 2 (logs.V(2)) to see per-call injection details.
+func MakeSceneSystemPromptReplaceCallback(store *Store, scene string) model.BeforeModelCallbackStructured {
+	systemKey := constant.PromptSystemKey(scene)
+	instructionKey := constant.PromptInstructionKey(scene)
 	return func(ctx context.Context, args *model.BeforeModelArgs) (*model.BeforeModelResult, error) {
 		rid := rest.RidFromContext(ctx)
 		if args == nil || args.Request == nil {
 			return nil, nil
 		}
 
-		systemEntry, _ := store.Get(constant.SystemPromptKey)
+		systemEntry, _ := store.Get(systemKey)
 		if systemEntry.Content == "" {
 			return nil, nil
 		}
 
-		instructionEntry, _ := store.Get(constant.InstructionKey)
+		instructionEntry, _ := store.Get(instructionKey)
 		// NOTE beforeModelCallback 的触发时点在 instruction 渲染之后，因此动态渲染必须手动实现，不能依赖框架
 		rendered := renderInstructionTemplate(ctx, instructionEntry.Content)
 
@@ -66,8 +76,8 @@ func MakeSystemPromptReplaceCallback(store *Store) model.BeforeModelCallbackStru
 		args.Request.Messages = replaceOrInsertSystem(args.Request.Messages, content)
 
 		if logs.V(2) {
-			logs.V(2).Infof("[replace callback]system prompt injected: content=%d preview=%q,rid: %s", len(content),
-				util.TruncateRune(content, PromptContentMaxRuneLength), rid)
+			logs.V(2).Infof("[replace callback]system prompt injected: scene=%q content=%d preview=%q,rid: %s",
+				scene, len(content), util.TruncateRune(content, PromptContentMaxRuneLength), rid)
 		}
 
 		return nil, nil

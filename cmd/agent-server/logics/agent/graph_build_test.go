@@ -40,7 +40,7 @@ func TestIntentType_IsSupportedScene(t *testing.T) {
 		want bool
 	}{
 		{enumor.IntentTypeHostApply, true},
-		{enumor.IntentTypeResourceQuery, false},
+		{enumor.IntentTypeResourceQuery, true},
 		{enumor.IntentTypeChat, false},
 		{"", false},
 		{"unknown", false},
@@ -48,6 +48,21 @@ func TestIntentType_IsSupportedScene(t *testing.T) {
 	for _, tc := range tests {
 		if got := tc.in.IsSupportedScene(); got != tc.want {
 			t.Errorf("IntentType(%q).IsSupportedScene() = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestSceneNodeTarget(t *testing.T) {
+	tests := []struct {
+		scene enumor.IntentType
+		want  string
+	}{
+		{enumor.IntentTypeHostApply, "account_select"},
+		{enumor.IntentTypeResourceQuery, "resource_query"},
+	}
+	for _, tc := range tests {
+		if got := sceneNodeTarget(tc.scene); got != tc.want {
+			t.Errorf("sceneNodeTarget(%q) = %q, want %q", tc.scene, got, tc.want)
 		}
 	}
 }
@@ -65,6 +80,11 @@ func TestMakeSceneDispatchNode(t *testing.T) {
 			name:    "recognised host_apply commits session_tag",
 			state:   graph.State{constant.StateKeyIntent: string(enumor.IntentTypeHostApply)},
 			wantTag: enumor.IntentTypeHostApply,
+		},
+		{
+			name:    "recognised resource_query commits session_tag",
+			state:   graph.State{constant.StateKeyIntent: string(enumor.IntentTypeResourceQuery)},
+			wantTag: enumor.IntentTypeResourceQuery,
 		},
 		{
 			name:    "already tagged is no-op",
@@ -242,9 +262,19 @@ func TestMakeSceneDispatchRoutingFunc(t *testing.T) {
 			wantTarget: string(enumor.CvmApplyNodeAccountSelect),
 		},
 		{
+			name:       "resource_query session_tag routes to resource_query subgraph",
+			state:      graph.State{constant.StateKeySessionTag: enumor.IntentTypeResourceQuery},
+			wantTarget: "resource_query",
+		},
+		{
 			name:       "this-turn unsupported intent routes to fallback",
 			state:      graph.State{constant.StateKeyIntent: string(enumor.IntentTypeChat)},
 			wantTarget: "fallback",
+		},
+		{
+			name:       "supported intent without committed tag routes to intent_recognition",
+			state:      graph.State{constant.StateKeyIntent: string(enumor.IntentTypeResourceQuery)},
+			wantTarget: "intent_recognition",
 		},
 		{
 			name:       "no tag no intent routes to intent_recognition",
@@ -253,44 +283,63 @@ func TestMakeSceneDispatchRoutingFunc(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		target, err := route(ctx, test.state)
-		if err != nil {
-			t.Fatalf("route() error = %v", err)
-		}
-		if target != test.wantTarget {
-			t.Errorf("route() = %q, want %q", target, test.wantTarget)
-		}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			target, err := route(ctx, tc.state)
+			if err != nil {
+				t.Fatalf("route() error = %v", err)
+			}
+			if target != tc.wantTarget {
+				t.Errorf("route() = %q, want %q", target, tc.wantTarget)
+			}
+		})
 	}
 }
 
-// TestSceneDispatchNodeThenRouting 校验节点提交标签后路由直达 account_select 的组合行为。
+// TestSceneDispatchNodeThenRouting 校验节点提交标签后，路由按场景直达对应入口节点的组合行为。
 func TestSceneDispatchNodeThenRouting(t *testing.T) {
 	node := makeSceneDispatchNode()
 	route := makeSceneDispatchRoutingFunc()
 	ctx := context.Background()
 
-	state := graph.State{constant.StateKeyIntent: string(enumor.IntentTypeHostApply)}
-	got, err := node(ctx, state)
-	if err != nil {
-		t.Fatalf("node() error = %v", err)
-	}
-	st, _ := got.(graph.State)
-	for k, v := range st {
-		state[k] = v
+	tests := []struct {
+		name       string
+		intent     enumor.IntentType
+		wantTarget string
+	}{
+		{name: "host_apply dispatch then route to llm", intent: enumor.IntentTypeHostApply, wantTarget: "llm"},
+		{name: "resource_query dispatch then route to subgraph", intent: enumor.IntentTypeResourceQuery,
+			wantTarget: "resource_query"},
 	}
 
-	target, err := route(ctx, state)
-	if err != nil {
-		t.Fatalf("route() error = %v", err)
-	}
-	if want := string(enumor.CvmApplyNodeAccountSelect); target != want {
-		t.Errorf("route() = %q, want %q", target, want)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			state := graph.State{constant.StateKeyIntent: string(tc.intent)}
+			got, err := node(ctx, state)
+			if err != nil {
+				t.Fatalf("node() error = %v", err)
+			}
+			st, _ := got.(graph.State)
+			for k, v := range st {
+				state[k] = v
+			}
+
+			target, err := route(ctx, state)
+			if err != nil {
+				t.Fatalf("route() error = %v", err)
+			}
+			if target != tc.wantTarget {
+				t.Errorf("route() = %q, want %q", target, tc.wantTarget)
+			}
+		})
 	}
 }
 
 func TestUnsupportedIntentFallbackMessage(t *testing.T) {
-	const unsupportedMsg = "目前AI助手仅支持主机申领相关能力，其他云资源管理功能即将上线，如需要申领主机，请直接描述您的配置需求。"
+	const (
+		unsupportedMsg = "目前AI助手仅支持主机申领相关能力，其他云资源管理功能即将上线，如需要申领主机，请直接描述您的配置需求。"
+		genericMsg     = "抱歉，我暂时无法处理您的请求。"
+	)
 
 	tests := []struct {
 		name   string
@@ -298,19 +347,19 @@ func TestUnsupportedIntentFallbackMessage(t *testing.T) {
 		want   string
 	}{
 		{
-			name:   "resource_query message",
-			intent: enumor.IntentTypeResourceQuery,
-			want:   unsupportedMsg,
-		},
-		{
-			name:   "chat message",
+			name:   "unsupported chat intent returns guidance message",
 			intent: enumor.IntentTypeChat,
 			want:   unsupportedMsg,
 		},
 		{
-			name:   "unknown intent uses default message",
-			intent: "unknown",
-			want:   "抱歉，我暂时无法处理您的请求。",
+			name:   "empty intent returns guidance message",
+			intent: "",
+			want:   unsupportedMsg,
+		},
+		{
+			name:   "supported resource_query intent returns generic message",
+			intent: enumor.IntentTypeResourceQuery,
+			want:   genericMsg,
 		},
 	}
 
@@ -326,10 +375,12 @@ func TestUnsupportedIntentFallbackMessage(t *testing.T) {
 }
 
 func TestBuildFallbackResumeDeltaClearsUnsupportedIntentHistory(t *testing.T) {
-	fallbackText := "资源查询功能正在建设中，敬请期待。如需主机申领，请直接描述您的申领需求。"
-	state := graph.State{constant.StateKeyIntent: string(enumor.IntentTypeResourceQuery)}
+	fallbackText := "目前AI助手仅支持主机申领相关能力，其他云资源管理功能即将上线，如需要申领主机，请直接描述您的配置需求。"
+	// Use chat intent (genuinely unsupported) to test clearing logic.
+	// resource_query is now a supported intent and its history is preserved (not cleared).
+	state := graph.State{constant.StateKeyIntent: string(enumor.IntentTypeChat)}
 	messages := []trpcmodel.Message{
-		{Role: trpcmodel.RoleUser, Content: "我要看一下我的预测"},
+		{Role: trpcmodel.RoleUser, Content: "给我讲个故事"},
 	}
 
 	delta := message.BuildFallbackResumeDelta(context.Background(), state, messages, fallbackText,
@@ -344,12 +395,11 @@ func TestBuildFallbackResumeDeltaClearsUnsupportedIntentHistory(t *testing.T) {
 	if !ok {
 		t.Fatalf("messages update = %T, want []graph.MessageOp", delta[graph.StateKeyMessages])
 	}
-	if len(ops) != 2 {
-		t.Fatalf("message ops len = %d, want 2", len(ops))
+	if len(ops) != 1 {
+		t.Fatalf("message ops len = %d, want 1", len(ops))
 	}
 
 	rebuilt := ops[0].Apply(nil)
-	rebuilt = ops[1].Apply(rebuilt)
 	if len(rebuilt) != 2 {
 		t.Fatalf("rebuilt messages len = %d, want 2", len(rebuilt))
 	}
@@ -368,7 +418,7 @@ func TestBuildFallbackResumeDeltaClearsUnsupportedIntentHistory(t *testing.T) {
 // the next turn. Without the explicit clear, executeUserInputStage would use that
 // stale value and overwrite the correctly-rebuilt messages tail with the old input.
 func TestBuildFallbackResumeDeltaClearsUserInput(t *testing.T) {
-	fallbackText := "资源查询功能正在建设中，敬请期待。如需主机申领，请直接描述您的申领需求。"
+	fallbackText := "目前AI助手仅支持主机申领相关能力，其他云资源管理功能即将上线，如需要申领主机，请直接描述您的配置需求。"
 
 	tests := []struct {
 		name      string
@@ -378,7 +428,7 @@ func TestBuildFallbackResumeDeltaClearsUserInput(t *testing.T) {
 	}{
 		{
 			name:      "clearing unsupported intent path clears user_input",
-			state:     graph.State{constant.StateKeyIntent: string(enumor.IntentTypeResourceQuery)},
+			state:     graph.State{constant.StateKeyIntent: string(enumor.IntentTypeChat)},
 			messages:  []trpcmodel.Message{{Role: trpcmodel.RoleUser, Content: "查看预测"}},
 			userInput: "我要申请主机",
 		},

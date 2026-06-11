@@ -317,6 +317,24 @@ const (
 	IntentRecognitionPromptKey = "intent_recognition_prompt"
 )
 
+// PromptSystemKey 按场景派生 system prompt 的 store key。
+// scene 为空时返回默认场景的 SystemPromptKey；非空时返回 "{scene}_system_prompt"。
+func PromptSystemKey(scene string) string {
+	if scene == "" {
+		return SystemPromptKey
+	}
+	return scene + "_system_prompt"
+}
+
+// PromptInstructionKey 按场景派生 instruction 的 store key。
+// scene 为空时返回默认场景的 InstructionKey；非空时返回 "{scene}_instruction_prompt"。
+func PromptInstructionKey(scene string) string {
+	if scene == "" {
+		return InstructionKey
+	}
+	return scene + "_instruction_prompt"
+}
+
 // PermissionDeniedMsg is the message for permission denied.
 const PermissionDeniedMsg = "当前用户无权限执行该工具，请联系管理员或确认工具可见范围"
 

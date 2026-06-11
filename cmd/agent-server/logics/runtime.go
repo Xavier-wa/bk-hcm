@@ -62,8 +62,9 @@ type Runtime struct {
 	aguiMemorySvc   memory.Service   // non-nil when MySQL memory backend is configured
 	aguiMCPToolSets *tool.MCPToolSet // non-nil when MCP toolsets are configured
 
-	// toolProxy is the tool proxy instance, or nil when not active.
-	toolProxy         *toolproxy.ToolProxy
+	// toolProxies bundles the main-graph tool proxy and per-scene subgraph proxies.
+	// Individual proxies are nil when not active.
+	toolProxies       *toolproxy.ToolProxies
 	dynamicToolFilter trpctool.FilterFunc // non-nil when dynamic tool loading is enabled
 	skillMgr          *skill.Manager
 	promptMgr         *prompt.Manager
@@ -72,9 +73,13 @@ type Runtime struct {
 	closeOnce         sync.Once
 }
 
-// ToolProxy returns the Tool Proxy instance, or nil when not active.
-func (rt *Runtime) ToolProxy() *toolproxy.ToolProxy {
-	return rt.toolProxy
+// ToolProxies returns the tool proxies, or nil when not active.
+func (rt *Runtime) ToolProxies() *toolproxy.ToolProxies {
+	if rt.toolProxies == nil {
+		return nil
+	}
+
+	return rt.toolProxies
 }
 
 // Readiness returns agent-server readiness state (skill + prompt sync).
@@ -196,7 +201,7 @@ func New(clientSet *client.ClientSet) (*Runtime, error) {
 
 	runnerOpts := buildRunnerOpts(sessionSvc, memorySvc)
 	agUIRunner, err := newAGUIRunner(defaultMdl, modelsMap, mcpToolSets, skillMgr, promptMgr.Store, runnerOpts,
-		toolSetup.toolProxy, checkpointSaver, clientSet)
+		&toolSetup.toolProxies, checkpointSaver, clientSet)
 	if err != nil {
 		return nil, fmt.Errorf("build AGUI runner: %w", err)
 	}
@@ -206,7 +211,7 @@ func New(clientSet *client.ClientSet) (*Runtime, error) {
 		aguiSessionSvc:    sessionSvc,
 		aguiMemorySvc:     memorySvc,
 		aguiMCPToolSets:   mcpToolSets,
-		toolProxy:         toolSetup.toolProxy,
+		toolProxies:       &toolSetup.toolProxies,
 		dynamicToolFilter: toolSetup.dynamicToolFilter,
 		skillMgr:          skillMgr,
 		promptMgr:         promptMgr,
@@ -234,7 +239,7 @@ func buildManagers() (*Readiness, *skill.Manager, *prompt.Manager, error) {
 
 // toolLoadingSetup holds tool proxy and dynamic tool loading initialization results.
 type toolLoadingSetup struct {
-	toolProxy         *toolproxy.ToolProxy
+	toolProxies       toolproxy.ToolProxies
 	dynamicToolFilter trpctool.FilterFunc
 }
 
@@ -246,15 +251,25 @@ func buildToolLoading(clientSet *client.ClientSet, toolsCfg cc.AgentToolsConfig,
 	var toolProxyActive bool
 
 	// 1. MCP工具代理：仅 graph 模式下支持，通过三个元工具替代全量 MCP 工具注册，降低 token 消耗
+	// 每个意图场景构建独立的 scene proxy（含 host_apply），不再维护全量 main proxy
 	tpCfg := toolsCfg.ToolProxy
-	if tpCfg != nil && tpCfg.Enabled {
-		if agentMode == enumor.AgentModeGraph {
-			var err error
-			setup.toolProxy, toolProxyActive, err = buildToolProxy(clientSet, tpCfg, mcpToolSets, aidevGW)
+	if tpCfg != nil && tpCfg.Enabled && agentMode == enumor.AgentModeGraph {
+		for _, scene := range enumor.GetAllIntentTypes() {
+			sceneToolSets := mcpToolSets.FilterByScene(string(scene))
+			sceneProxy, sceneActive, err := buildToolProxy(clientSet, tpCfg, sceneToolSets, aidevGW)
 			if err != nil {
-				logs.Errorf("build tool proxy: %v", err)
+				logs.Errorf("build %s tool proxy: %v", scene, err)
 				return setup, err
 			}
+			if !sceneActive || sceneProxy == nil {
+				logs.Warnf("%s tool proxy build failed, scene proxy will be nil", scene)
+				continue
+			}
+			if setup.toolProxies.Scene == nil {
+				setup.toolProxies.Scene = make(map[enumor.IntentType]*toolproxy.ToolProxy)
+			}
+			setup.toolProxies.Scene[scene] = sceneProxy
+			toolProxyActive = true
 		}
 	}
 
@@ -323,7 +338,7 @@ func buildRunnerOpts(sessionSvc session.Service, memorySvc memory.Service) []run
 }
 
 func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Model, mcpToolSets *tool.MCPToolSet,
-	skillMgr *skill.Manager, promptStore *prompt.Store, runnerOpts []runner.Option, toolProxy *toolproxy.ToolProxy,
+	skillMgr *skill.Manager, promptStore *prompt.Store, runnerOpts []runner.Option, toolProxies *toolproxy.ToolProxies,
 	checkpointSaver graph.CheckpointSaver, clientSet *client.ClientSet) (runner.Runner, error) {
 
 	aguiCfg := cc.AgentServer().AGUI
@@ -342,12 +357,12 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 	var agt trpcagent.Agent
 	switch aguiCfg.Model.Mode {
 	case enumor.AgentModeGraph:
-		compiledGraph, err := agent.BuildGraph(defaultMdl, skillRepo, mcpToolSets, toolProxy,
-			aguiCfg.AppName, aguiCfg.Model, promptStore, clientSet)
+		compiledGraph, subAgents, err := agent.BuildGraph(defaultMdl, skillRepo, mcpToolSets, toolProxies,
+			aguiCfg.AppName, aguiCfg.Model, promptStore, clientSet, checkpointSaver)
 		if err != nil {
 			return nil, fmt.Errorf("build graph: %w", err)
 		}
-		agt, err = agent.NewGraphAgent(aguiCfg.AppName, compiledGraph, checkpointSaver)
+		agt, err = agent.NewGraphAgent(aguiCfg.AppName, compiledGraph, checkpointSaver, subAgents)
 		if err != nil {
 			return nil, fmt.Errorf("create graph agent: %w", err)
 		}
@@ -366,8 +381,8 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 func (rt *Runtime) Close() error {
 	var err error
 	rt.closeOnce.Do(func() {
-		if rt.toolProxy != nil {
-			rt.toolProxy.StopRefresh()
+		if rt.toolProxies != nil {
+			rt.toolProxies.StopRefresh()
 		}
 		if rt.aguiMemorySvc != nil {
 			if cerr := rt.aguiMemorySvc.Close(); cerr != nil {
