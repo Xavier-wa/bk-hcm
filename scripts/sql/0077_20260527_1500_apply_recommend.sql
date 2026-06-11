@@ -18,7 +18,7 @@
  */
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9
+    SQLVER=0077,HCMVER=v1.8.11.19
 
     Notes:
     1. 新增用户维度申领推荐表 ziyan_cvm_apply_user_recommend，存储按 (bk_biz_id, bk_username) 分组的 Top-K 推荐三元组
@@ -72,6 +72,6 @@ VALUES ('ziyan_cvm_apply_user_recommend', '0'),
        ('ziyan_cvm_apply_biz_recommend', '0');
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.8.11.19' as `hcm_ver`, '0077' as `sql_ver`;
 
 COMMIT;

@@ -11,7 +11,7 @@
 
 - [x] 3.1 修改 `pkg/dal/table/cloud/image/image.go` 的 `ImageModel` 结构体，新增 `BizID int64` 字段（db tag: `biz_id`, json tag: `biz_id`）
 - [x] 3.2 修改 `pkg/dal/table/cloud/image/image.go` 的 `ImageColumnDescriptor`，增加 `biz_id` 列描述
-- [x] 3.3 编写数据库变更 SQL：`scripts/sql/9999_20260416_1630_image_biz_id.sql`
+- [x] 3.3 编写数据库变更 SQL：`scripts/sql/0076_20260416_1630_image_biz_id.sql`
 - [x] 3.4 修改 `pkg/api/core/cloud/image/image.go` 的 `BaseImage` 结构体，新增 `BizID`字段
 - [x] 3.5 修改 `cmd/data-service/service/cloud/image/conv.go` 的 `toProtoImageExtResult()` 和 `toProtoImageResult()` 函数，添加 `BizID` 字段映射
 

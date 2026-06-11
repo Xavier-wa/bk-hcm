@@ -1,6 +1,6 @@
 ## 1. SQL 与表名注册
 
-- [x] 1.1 创建 `scripts/sql/9999_20260527_1500_apply_recommend.sql`，包含 `ziyan_cvm_apply_user_recommend` 和 `ziyan_cvm_apply_biz_recommend` 建表语句，以及两个资源的 `id_generator` 注册（SQLVER=9999, HCMVER=v9.9.9）
+- [x] 1.1 创建 `scripts/sql/0077_20260527_1500_apply_recommend.sql`，包含 `ziyan_cvm_apply_user_recommend` 和 `ziyan_cvm_apply_biz_recommend` 建表语句，以及两个资源的 `id_generator` 注册（SQLVER=9999, HCMVER=v9.9.9）
 - [x] 1.2 在 `pkg/dal/table/table.go` 新增 `ZiyanCvmApplyUserRecommendTable` / `ZiyanCvmApplyBizRecommendTable` 常量并加入 `TableMap`
 
 ## 2. 数据模型层（pkg/dal/table）

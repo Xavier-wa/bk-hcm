@@ -18,7 +18,7 @@
  */
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9
+    SQLVER=0076,HCMVER=v1.8.11.19
 
     Notes:
     1. 为image表添加bk_biz_id字段，用于私有镜像关联业务
@@ -37,6 +37,6 @@ ALTER TABLE `image`
     ADD INDEX `idx_vendor_region_biz` (`vendor`, `region`, `bk_biz_id`);
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.8.11.19' as `hcm_ver`, '0076' as `sql_ver`;
 
 COMMIT;

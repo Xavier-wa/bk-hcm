@@ -83,7 +83,7 @@ type ImageModel struct {
 }
 ```
 
-**SQL 脚本**（`scripts/sql/9999_20260416_1630_image_biz_id.sql`）：
+**SQL 脚本**（`scripts/sql/0076_20260416_1630_image_biz_id.sql`）：
 
 ```sql
 ALTER TABLE `image` ADD COLUMN `biz_id` bigint(1) DEFAULT NULL 

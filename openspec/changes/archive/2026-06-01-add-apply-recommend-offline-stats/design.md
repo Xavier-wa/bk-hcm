@@ -133,7 +133,7 @@ biz 表每业务行数 ≤ `maxRows`（默认 5），全量拉回开销可忽略
 
 ## Migration Plan
 
-1. 执行 `scripts/sql/9999_20260527_1500_apply_recommend.sql` 建表（无历史数据迁移）
+1. 执行 `scripts/sql/0077_20260527_1500_apply_recommend.sql` 建表（无历史数据迁移）
 2. 部署 data-service（新增路由）
 3. 部署 woa-server（新增 cron 任务 + Top-N 查询接口 + 手动触发接口）
 4. 首次 cron 执行后两张表才有数据；HTTP 接口在首次执行前返回空数组，不报错
