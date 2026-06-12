@@ -273,6 +273,14 @@ const (
 	// AccountSelectInterruptKey is the key used for graph.Interrupt when multiple accounts are
 	// detected and the user must choose one to proceed with the CVM apply workflow.
 	AccountSelectInterruptKey = "account_select.interrupt"
+
+	// AfterToolHITLRecommendSelectInterruptKey 推荐方案选择场景的中断 key
+	AfterToolHITLRecommendSelectInterruptKey = "after_tool_hitl.recommend_select.interrupt"
+	// AfterToolHITLRecommendSuborderConfirmInterruptKey 推荐方案拆单试算确认场景的中断key
+	AfterToolHITLRecommendSuborderConfirmInterruptKey = "after_tool_hitl.recommend_suborder_confirm.interrupt"
+
+	// AfterToolHITLResumeForwardedEventName 中断恢复时携带前端 forwardedProps 结构化回复的自定义事件名。
+	AfterToolHITLResumeForwardedEventName = "after_tool_hitl.resume_forwarded"
 )
 
 // CVM apply graph state keys
@@ -280,6 +288,22 @@ const (
 	// AccountSelectNextNodeKey is an internal routing key written by the account_select node so the
 	// conditional edge function can decide the next node.
 	AccountSelectNextNodeKey = "account_select.next"
+
+	// StateKeyRecommendCandidates 累积推荐候选的 graph state key。
+	StateKeyRecommendCandidates = "recommend:candidates"
+)
+
+// Apply recommend tools (MCP) consumed by the host_apply agent.
+const (
+	// RecommendByStaticToolName 离线偏好 + 库存在线推荐。
+	RecommendByStaticToolName = "get_biz_apply_recommend_by_static"
+	// RecommendByPlanToolName 预测余量 + 库存在线推荐。
+	RecommendByPlanToolName = "get_biz_apply_recommend_by_plan"
+	// RecommendSplitSuborderToolName 主机申请单据拆分试算。
+	RecommendSplitSuborderToolName = "get_biz_apply_recommend_split_suborder"
+
+	// DefaultRecommendLimit 推荐返回方案数缺省值。
+	DefaultRecommendLimit = 5
 )
 
 // tool confirm gate constants

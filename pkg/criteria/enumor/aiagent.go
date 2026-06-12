@@ -227,13 +227,15 @@ const (
 	CvmApplyNodeFallback CvmApplyNode = "fallback"
 	// CvmApplyNodeTool is the tool node.
 	CvmApplyNodeTool CvmApplyNode = "tool"
-
+	// CvmApplyNodeAfterToolHITL is the after-tool human-in-the-loop node, which interrupts
+	// after recommend tools to let the user pick a plan.
+	CvmApplyNodeAfterToolHITL CvmApplyNode = "after_tool_hitl"
 )
 
 // Validate validates the CVM apply node.
 func (n CvmApplyNode) Validate() error {
 	switch n {
-	case CvmApplyNodeLLM, CvmApplyNodeAccountSelect, CvmApplyNodeFallback, CvmApplyNodeTool:
+	case CvmApplyNodeLLM, CvmApplyNodeAccountSelect, CvmApplyNodeFallback, CvmApplyNodeTool,CvmApplyNodeAfterToolHITL:
 	default:
 		return fmt.Errorf("unsupported CVM apply node: %s", n)
 	}

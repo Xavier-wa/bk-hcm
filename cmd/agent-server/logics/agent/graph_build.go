@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"strings"
 
+	"hcm/cmd/agent-server/logics/agent/aftertool"
 	cvmapply "hcm/cmd/agent-server/logics/agent/cvm_apply"
 	"hcm/cmd/agent-server/logics/agent/hitl"
 	"hcm/cmd/agent-server/logics/agent/intent"
@@ -145,6 +146,11 @@ func BuildGraph(mdl trpcmodel.Model, skillRepos *skill.SkillRepos, toolset *agen
 	subAgents := []trpcagent.Agent{haSubAgent, rqSubAgent}
 
 	// Entry point: every new run starts with scene_dispatch.
+	// 8. After Tool HITL Node: after recommend tools (by_static / by_plan / split_suborder),
+	// decides whether to interrupt for user plan selection based on the tool result.
+	stateGraph.AddNode(string(enumor.CvmApplyNodeAfterToolHITL), aftertool.GetNode())
+
+	// Entry point: every new run starts with intent recognition.
 	stateGraph.SetEntryPoint("scene_dispatch")
 
 	// scene_dispatch → host_apply / resource_query / fallback / intent_recognition
@@ -164,6 +170,27 @@ func BuildGraph(mdl trpcmodel.Model, skillRepos *skill.SkillRepos, toolset *agen
 
 	// After resource_query subgraph finishes, enter main fallback.
 	stateGraph.AddEdge(string(enumor.ResourceQueryGraphNode), "fallback")
+	// llm → hitl / tool / fallback based on tool_calls in the last message
+	stateGraph.AddConditionalEdges(string(enumor.CvmApplyNodeLLM), makeRoutingFunc(hitlReg), map[string]string{
+		"hitl":                          "hitl",
+		string(enumor.CvmApplyNodeTool): string(enumor.CvmApplyNodeTool),
+		"fallback":                      "fallback",
+	})
+
+	// hitl → tool (confirmed gate) / llm (question answered or cancelled) based on the resume decision.
+	stateGraph.AddConditionalEdges("hitl", hitl.MakeRoutingFunc(), map[string]string{
+		string(enumor.CvmApplyNodeTool): string(enumor.CvmApplyNodeTool),
+		string(enumor.CvmApplyNodeLLM):  string(enumor.CvmApplyNodeLLM),
+	})
+
+	// tool → after_tool_hitl (recommend tools by_static / by_plan / split_suborder) / llm (other tools).
+	stateGraph.AddConditionalEdges("tool", aftertool.MakeRoutingFunc(), map[string]string{
+		string(enumor.CvmApplyNodeAfterToolHITL): string(enumor.CvmApplyNodeAfterToolHITL),
+		"llm":                                    "llm",
+	})
+
+	// after_tool_hitl loops back to llm (both interrupt-resume and pass-through paths).
+	stateGraph.AddEdge(string(enumor.CvmApplyNodeAfterToolHITL), "llm")
 
 	// fallback always returns to scene_dispatch so the unified routing hub handles
 	// the next user message regardless of whether the session already has a tag.
