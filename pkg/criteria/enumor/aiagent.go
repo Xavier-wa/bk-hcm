@@ -199,6 +199,14 @@ func (m MCPFilterMode) Validate() error {
 	return nil
 }
 
+// ResourceQueryNode is the name of a graph node in the resource query workflow.
+type ResourceQueryNode string
+
+const (
+	// ResourceQueryGraphNode is the name of the graph node in the resource query workflow.
+	ResourceQueryGraphNode ResourceQueryNode = "resource_query"
+)
+
 // CvmApplyNode is the name of a graph node in the CVM apply workflow.
 type CvmApplyNode string
 

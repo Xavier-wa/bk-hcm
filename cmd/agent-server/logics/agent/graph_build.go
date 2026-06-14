@@ -23,7 +23,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	cvmapply "hcm/cmd/agent-server/logics/agent/cvm_apply"
 	"hcm/cmd/agent-server/logics/agent/hitl"
@@ -137,7 +139,7 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 		return nil, nil, fmt.Errorf("build resource_query subgraph: %w", err)
 	}
 	rqSubAgent, err := graphagent.New(
-		"resource_query",
+		string(enumor.ResourceQueryGraphNode),
 		rqSubgraph,
 		graphagent.WithDescription("HCM resource query ReAct subgraph agent"),
 		graphagent.WithCheckpointSaver(saver),
@@ -149,16 +151,13 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 	subAgents := []trpcagent.Agent{rqSubAgent}
 
 	// Register resource_query as a subgraph node.
+	// WithSubgraphInputMapper 给子图按轮次分配独立 checkpoint namespace，避免下一轮复用上一轮
+	// 已完成（NextNodes=[__end__]）的子图 checkpoint 而直接 resume 到结束、子图什么都不做。
 	// WithSubgraphOutputMapper merges the subgraph's final messages back into the main graph,
 	// so the fallback node can read the subgraph's assistant reply via resolveFallbackLastResp.
-	stateGraph.AddSubgraphNode("resource_query",
-		graph.WithSubgraphOutputMapper(func(_ graph.State, r graph.SubgraphResult) graph.State {
-			msgs, ok := r.FinalState[graph.StateKeyMessages].([]trpcmodel.Message)
-			if !ok || len(msgs) == 0 {
-				return nil
-			}
-			return graph.State{graph.StateKeyMessages: msgs}
-		}),
+	stateGraph.AddSubgraphNode(string(enumor.ResourceQueryGraphNode),
+		graph.WithSubgraphInputMapper(makeResourceQueryInputMapper()),
+		graph.WithSubgraphOutputMapper(makeResourceQueryOutputMapper()),
 	)
 
 	// 7. Account Select Node: queries biz accounts and auto-selects or triggers HITL.
@@ -215,6 +214,96 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 		return nil, nil, err
 	}
 	return compiledGraph, subAgents, nil
+}
+
+// makeResourceQueryInputMapper 返回 resource_query 子图的输入映射函数，给子图按「轮次」分配
+// 独立的 checkpoint namespace。
+//
+// 默认情况下框架以子 agent 名作为子图 checkpoint namespace，而父图 lineage 在整轮会话内稳定。
+// 子图正常结束后会留下一个「已完成」(NextNodes=[__end__]) 的 checkpoint；下一轮再次进入子图时，
+// 子图 executor 以空 checkpoint_id 取该 (lineage, namespace) 的最新 checkpoint，命中的正是上一轮
+// 的完成态，于是直接 resume 到 __end__、子图什么都不做。
+//
+// 这里以「进入子图时的消息条数」区分轮次（会话内单调递增），使每轮对应一个全新 namespace、
+// 找不到旧的完成态 checkpoint，从而每轮都从入口节点重新执行。轮内若触发 hitl 中断/恢复，框架会用
+// 中断时记录的 namespace 覆盖（applyCheckpointResumeFields），不影响同一轮内的中断恢复。
+//
+// 注意：提供 InputMapper 后框架不再执行默认的 copyRuntimeStateFiltered，需要在此复刻其
+// 「过滤内部/临时 state key」的行为，否则会把 exec_context、callbacks 等不可传播的 key 带入子图。
+func makeResourceQueryInputMapper() graph.SubgraphInputMapper {
+	return func(parent graph.State) graph.State {
+		child := make(graph.State, len(parent))
+		for k, v := range parent {
+			if isFrameworkInternalStateKey(k) {
+				continue
+			}
+			child[k] = v
+		}
+		// 对齐框架默认行为：进入子图前清掉父图残留的 checkpoint_id，避免子图误用父图 checkpoint。
+		delete(child, graph.CfgKeyCheckpointID)
+		// 按轮次分配独立 namespace。
+		msgs, _ := parent[graph.StateKeyMessages].([]trpcmodel.Message)
+		child[graph.CfgKeyCheckpointNS] = fmt.Sprintf("%s_%d", enumor.ResourceQueryGraphNode, len(msgs))
+		return child
+	}
+}
+
+// isFrameworkInternalStateKey 复刻 trpc-agent-go 的 copyRuntimeStateFiltered/isInternalStateKey 行为：
+// 内部/临时 state key 不应传播给子图。框架内部 key 分两类：
+//   - 以 "_" 开头的（__command__、__resume_map__、各类 _xxx_metadata、__current_trace_step_id__ 等），
+//     遵循框架统一命名约定，用前缀判断可同时覆盖未来新增的同类 key；
+//   - 少数无前缀的不可序列化/会话级 key（exec_context、parent_agent、各类 callbacks、
+//     current_node_id、session），逐一列出（均为框架导出常量）。
+//
+// 版本升级时如框架新增「无 "_" 前缀」的内部 key，需同步此列表。
+func isFrameworkInternalStateKey(key string) bool {
+	if strings.HasPrefix(key, "_") {
+		return true
+	}
+	switch key {
+	case graph.StateKeyExecContext,
+		graph.StateKeyParentAgent,
+		graph.StateKeyNodeCallbacks,
+		graph.StateKeyToolCallbacks,
+		graph.StateKeyModelCallbacks,
+		graph.StateKeyAgentCallbacks,
+		graph.StateKeyCurrentNodeID,
+		graph.StateKeySession:
+		return true
+	default:
+		return false
+	}
+}
+
+// makeResourceQueryOutputMapper 返回 resource_query 子图的输出映射函数，
+// 负责把子图最终的 messages 合并回主图，使主图 fallback 能读到子图的 assistant 回复。
+//
+// 注意：r.FinalState 是框架对子图完成事件 StateDelta 做 JSON 解码重建出来的，
+// StateKeyMessages 实际类型为 []interface{}（元素为 map[string]interface{}），无法直接断言为
+// []trpcmodel.Message。原始字节保存在 r.RawStateDelta 中，用 json.Unmarshal 还原为 []trpcmodel.Message。
+func makeResourceQueryOutputMapper() graph.SubgraphOutputMapper {
+	const logPrefix = "[rq subgraph output mapper]"
+	return func(_ graph.State, r graph.SubgraphResult) graph.State {
+		// 从 RawStateDelta 的原始 JSON 字节解码出完整 messages。
+		raw, exist := r.RawStateDelta[graph.StateKeyMessages]
+		if !exist {
+			logs.Warnf("%s RawStateDelta has no %s key, give up merge", logPrefix, graph.StateKeyMessages)
+			return nil
+		}
+		var decoded []trpcmodel.Message
+		if err := json.Unmarshal(raw, &decoded); err != nil {
+			logs.Errorf("%s decode RawStateDelta[messages] failed, err: %v, raw: %s",
+				logPrefix, err, string(raw))
+			return nil
+		}
+		if len(decoded) == 0 {
+			logs.Warnf("%s decoded messages from RawStateDelta is empty, give up merge", logPrefix)
+			return nil
+		}
+		logs.Infof("%s decoded %d messages from RawStateDelta, last role=%s, last content len=%d",
+			logPrefix, len(decoded), decoded[len(decoded)-1].Role, len(decoded[len(decoded)-1].Content))
+		return graph.State{graph.StateKeyMessages: decoded}
+	}
 }
 
 // makeSceneDispatchNode returns the scene_dispatch node function.
