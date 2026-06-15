@@ -39,6 +39,7 @@ import (
 	authlogic "hcm/cmd/agent-server/logics/auth"
 	"hcm/cmd/agent-server/logics/prompt"
 	"hcm/cmd/agent-server/logics/skill"
+	"hcm/cmd/agent-server/service/a2a"
 	aguievent "hcm/cmd/agent-server/service/agui-event"
 	"hcm/cmd/agent-server/service/capability"
 	configsvc "hcm/cmd/agent-server/service/config"
@@ -193,6 +194,14 @@ func (s *Service) ListenAndServeRest() error {
 		return err
 	}
 
+	// Mount A2A endpoint when enabled. A2A 与 AG-UI 完全独立：
+	// 路径前缀虽然都在 /api/v1/agent 之下，但 A2A 走自己的中间件链
+	// （mcpCallerOrigin → bkapi-context → readiness），不复用 AG-UI 的 session
+	// resolver 与 IAM 鉴权，避免对现有链路造成影响。
+	if err := s.mountA2A(root); err != nil {
+		return err
+	}
+
 	root.HandleFunc("/", s.apiSet().ServeHTTP)
 	root.HandleFunc("/healthz", s.Healthz)
 	root.HandleFunc("/alivez", s.Alivez)
@@ -330,6 +339,74 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 	}
 
 	return nil
+}
+
+// mountA2A mounts the A2A protocol endpoints onto the provided mux when enabled.
+//
+// 端点（默认 basePath="/api/v1/agent"）：
+//   - POST /api/v1/agent/a2a                                 → JSON-RPC 入口
+//   - GET  /api/v1/agent/.well-known/agent-card.json         → A2A v0.2.2 AgentCard
+//   - GET  /api/v1/agent/.well-known/agent.json              → A2A 0.1.x 兼容 AgentCard
+//
+// 中间件链（从外到内）：
+//
+//	mcpCallerOrigin → bkapiContext → readiness → a2a.Handler
+//
+// 其中 mcpCallerOrigin 校验上游 X-Bkhcm-Caller-Source；bkapiContext 注入
+// bk_username 等到 ctx，使 internal MCP toolset 能正确拼装下游请求头；
+// readiness 保证 skill/prompt 完成首轮同步后才放行。
+func (s *Service) mountA2A(mux *http.ServeMux) error {
+	cfg := cc.AgentServer().A2A
+	if !cfg.Enable {
+		return nil
+	}
+
+	srv, err := a2a.New(cfg, s.runTime.AGUIRunner, cc.AgentServer().AGUI.Model.Stream)
+	if err != nil {
+		return fmt.Errorf("create A2A server failed: %v", err)
+	}
+
+	h := srv.Handler()
+	h = readinessMiddleware(s.runTime.Readiness(), h)
+	h = bkapiContextMiddleware(h)
+	h = mcpCallerOriginMiddleware(cfg.EnforceCallerOrigin, h)
+
+	srv.RegisterHandlers(mux, h)
+	logs.Infof("a2a: endpoints mounted, jsonRPCPath=%s, cardPath=%s, legacyCardPath=%s, "+
+		"enforceCallerOrigin=%v",
+		srv.JSONRPCPath(), srv.AgentCardPath(), srv.AgentLegacyCardPath(),
+		cfg.EnforceCallerOrigin)
+	return nil
+}
+
+// mcpCallerOriginMiddleware 校验请求头 X-Bkhcm-Caller-Source 是否为 api-server。
+//
+// 行为：
+//   - enforce=true：缺失或不匹配时直接返回 HTTP 403；
+//   - enforce=false（默认）：仅记录 warn 日志便于联调期监控，不拦截。
+//
+// 该中间件仅作用于 A2A 入口，不会影响 AG-UI 链路。
+func mcpCallerOriginMiddleware(enforce bool, next http.Handler) http.Handler {
+	expected := string(cc.APIServerName)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get(constant.MCPCallerSourceHeader)
+		if origin != expected {
+			rid := r.Header.Get(constant.RidKey)
+			if enforce {
+				logs.Errorf("a2a: caller origin check failed, expect=%q got=%q, "+
+					"path=%s, rid: %s", expected, origin, r.URL.Path, rid)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				rest.WriteResp(w, rest.NewBaseResp(errf.PermissionDenied,
+					"caller origin is not allowed for A2A endpoint"))
+				return
+			}
+			logs.Warnf("a2a: caller origin missing or mismatched, expect=%q got=%q, "+
+				"path=%s, rid: %s (enforcement disabled)",
+				expected, origin, r.URL.Path, rid)
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Service) apiSet() *restful.Container {

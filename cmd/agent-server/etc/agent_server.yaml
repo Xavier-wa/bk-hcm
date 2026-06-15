@@ -199,7 +199,11 @@ tools:
   # 每个条目对应一个独立的 MCP server。
   mcp:
     - name: "my-mcp"             # toolset 唯一标识（用于冲突解决）
-      type: ""                   # 可选类型：留空=普通；bkaidev=自动注入 BK 鉴权头
+      # 可选类型：
+      #   留空     — 普通 MCP，不注入任何认证 header；
+      #   bkaidev  — 自动注入 X-Bkapi-Authorization（基于 tools.bkAIDev + 请求 bk_ticket）；
+      #   internal — 仅注入 X-Bkapi-User-Name（来自请求 ctx），用于内部 HCM MCP 直连。
+      type: ""
       transport: "streamable_http"  # 传输方式：stdio | sse | streamable_http
       serverUrl: "http://localhost:3000/mcp"   # MCP server URL（sse/streamable_http 必填）
       timeout: "30s"             # 每次请求超时，留空表示不限制
@@ -267,6 +271,39 @@ tools:
     # toolTags:                  # 工具标签（key 为 MCP 原始工具名，value 为额外检索关键词）
     #   list_cvms: ["CVM", "云服务器", "主机"]
     #   query_bill: ["账单", "费用", "计费"]
+
+# A2A（Agent2Agent）协议端点。
+# enable=false（默认）时不挂载任何 A2A 路径，对现有 AG-UI 链路零影响。
+# 启用后，端点在 basePath 下挂载：
+#   POST <basePath>/a2a                                 — JSON-RPC 入口
+#   GET  <basePath>/.well-known/agent-card.json         — A2A v0.2.2 AgentCard
+#   GET  <basePath>/.well-known/agent.json              — A2A 0.1.x 兼容 AgentCard
+#
+# A2A 协议的 contextId 在 trpc-agent-go 内部直接作为 runner.Run 的
+# sessionID（threadId）传入，agent-server 无需做额外的 contextId → threadId 转换。
+a2a:
+  enable: false                  # 是否启用 A2A 端点
+  basePath: "/api/v1/agent"      # 路径前缀，默认与 AG-UI 端点同前缀
+  # enforceCallerOrigin=true 时，校验请求头 X-Bkhcm-Caller-Source 必须为
+  # "api-server"，缺失或不匹配返回 403；false 时仅打 warn 日志，便于联调期间放行。
+  enforceCallerOrigin: false
+  card:
+    name: "HCM Agent"
+    description: "BlueKing Hybrid Cloud Management AI Agent"
+    version: "1.0.0"
+    url: ""                      # 对外可访问的 base URL，会填入 AgentCard.url
+    # A2A v0.2.2 要求 AgentCard.skills 必填，启用 A2A 时请至少配置一个 skill。
+    skills:
+      - id: "hcm-agent"
+        name: "HCM Agent"
+        description: "HCM 海垒混合云管理智能助手"
+        tags: ["hcm", "cloud", "agent"]
+        # examples:                # 可选用法示例
+        #   - "列出我的 CVM 实例"
+        # inputModes:              # 默认与 AgentCard.defaultInputModes 相同
+        #   - "text"
+        # outputModes:
+        #   - "text"
 
 # skill 仓库及同步配置。
 skills:

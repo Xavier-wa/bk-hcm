@@ -33,6 +33,7 @@ import (
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/logs"
+	pkgversion "hcm/pkg/version"
 )
 
 var (
@@ -1046,7 +1047,7 @@ type AgentMCPToolSet struct {
 	// automatically injects an X-Bkapi-Authorization header on every MCP request
 	// using tools.bkAIDev credentials (appCode, appSecret) and the bk_ticket
 	// extracted from the incoming HTTP request Cookie.
-	Type string `yaml:"type"`
+	Type constant.MCPToolSetType `yaml:"type"`
 	// Transport is the connection method: "stdio", "sse", or "streamable_http".
 	Transport string `yaml:"transport"`
 	// ServerURL is the MCP server base URL (required for sse / streamable_http).
@@ -1075,6 +1076,12 @@ func (s *AgentMCPToolSet) Validate() error {
 			return err
 		}
 	}
+
+	if err := s.Type.Validate(); err != nil {
+		return err
+	}
+	s.Type = s.Type.Normalize()
+
 	return nil
 }
 
@@ -1281,7 +1288,7 @@ func (s *AgentToolsConfig) trySetDefault() {
 	}
 }
 
-// Validate validates the tools config.
+// Validate 校验 MCP ToolSet 配置。
 func (s *AgentToolsConfig) Validate() error {
 	for _, cfg := range s.MCPToolSets {
 		if err := cfg.Validate(); err != nil {
@@ -1300,7 +1307,7 @@ func (s *AgentToolsConfig) Validate() error {
 // NeedToRefreshToolSetsOnRun bkaidev 类型 MCP 需要用户的 token 进行鉴权，因此无法在启动时加载工具集，需要在每次运行时刷新。
 func (s AgentToolsConfig) NeedToRefreshToolSetsOnRun() bool {
 	for _, cfg := range s.MCPToolSets {
-		if strings.EqualFold(strings.TrimSpace(cfg.Type), constant.MCPTypeBKAIDev) {
+		if cfg.Type.IsBKAIDev() {
 			return true
 		}
 	}
@@ -1649,6 +1656,144 @@ func (a AgentAGUI) ModelContextWindows() map[string]int {
 	return m
 }
 
+// A2ACardSkillConfig 描述 AgentCard.skills[] 中单个 skill 的静态配置。
+// 字段含义与 A2A v0.2.2 规范 AgentSkill 一一对应。
+type A2ACardSkillConfig struct {
+	// ID 是 skill 的唯一标识，必填。
+	ID string `yaml:"id"`
+	// Name 是 skill 的可读名称，必填。
+	Name string `yaml:"name"`
+	// Description 是可选的详细描述。
+	Description string `yaml:"description"`
+	// Tags 是 skill 的分类标签，至少一个；用于客户端分组与检索。
+	Tags []string `yaml:"tags"`
+	// Examples 是可选的使用示例。
+	Examples []string `yaml:"examples"`
+	// InputModes 是支持的输入数据模式列表（例如 "text"）；为空时使用 AgentCard.defaultInputModes。
+	InputModes []string `yaml:"inputModes"`
+	// OutputModes 是支持的输出数据模式列表；为空时使用 AgentCard.defaultOutputModes。
+	OutputModes []string `yaml:"outputModes"`
+}
+
+// A2ACardConfig 是 AgentCard 的静态元数据配置。
+// 启动时一次性构建 AgentCard 后，运行期不变。
+type A2ACardConfig struct {
+	// Name 是 agent 的可读名称（AgentCard.name），未配置时使用默认值 "HCM Agent"。
+	Name string `yaml:"name"`
+	// Description 是 agent 的描述（AgentCard.description），未配置时使用默认值。
+	Description string `yaml:"description"`
+	// Version 是 agent 的版本号（AgentCard.version），未配置时使用默认值 "1.0.0"。
+	Version string `yaml:"version"`
+	// URL 是 agent 对外可访问的基础 URL，将填到 AgentCard.url。
+	URL string `yaml:"url"`
+	// Skills 声明对外暴露的 AgentSkill 列表。启用 A2A 时必须显式配置至少一项。
+	Skills []A2ACardSkillConfig `yaml:"skills"`
+}
+
+// trySetDefault 为 A2ACardConfig 补齐默认值。
+func (c *A2ACardConfig) trySetDefault() {
+	c.Name = strings.TrimSpace(c.Name)
+	if c.Name == "" {
+		c.Name = defaultA2ACardName
+	}
+
+	c.Description = strings.TrimSpace(c.Description)
+	if c.Description == "" {
+		c.Description = defaultA2ACardDescription
+	}
+
+	c.Version = strings.TrimSpace(c.Version)
+	if c.Version == "" {
+		if v := strings.TrimSpace(pkgversion.VERSION); v != "" && v != "debug" {
+			c.Version = v
+		} else {
+			c.Version = defaultA2ACardVersion
+		}
+	}
+
+}
+
+// Validate 校验 A2ACardConfig。
+func (c A2ACardConfig) Validate() error {
+	if strings.TrimSpace(c.Name) == "" {
+		return errors.New("a2a.card.name is empty")
+	}
+	if strings.TrimSpace(c.Description) == "" {
+		return errors.New("a2a.card.description is empty")
+	}
+	if strings.TrimSpace(c.Version) == "" {
+		return errors.New("a2a.card.version is empty")
+	}
+
+	if len(c.Skills) == 0 {
+		return errors.New("a2a.card.skills is empty")
+	}
+
+	for i, sk := range c.Skills {
+		if strings.TrimSpace(sk.ID) == "" {
+			return fmt.Errorf("a2a.card.skills[%d].id is empty", i)
+		}
+		if strings.TrimSpace(sk.Name) == "" {
+			return fmt.Errorf("a2a.card.skills[%d].name is empty", i)
+		}
+		// A2A v0.2.2 规范要求 tags 字段必填。
+		if len(sk.Tags) == 0 {
+			return fmt.Errorf("a2a.card.skills[%d].tags is empty (A2A v0.2.2 requires tags)", i)
+		}
+	}
+	return nil
+}
+
+const (
+	defaultA2ACardName        = "HCM Agent"
+	defaultA2ACardDescription = "BlueKing Hybrid Cloud Management AI Agent"
+	defaultA2ACardVersion     = "1.0.0"
+)
+
+// A2ASetting 描述 A2A 协议服务端的全部配置。
+//
+// 当 Enable=false（默认）时，agent-server 不挂载任何 A2A 端点；
+// 此时整个 A2A 子系统不会被初始化，对现有 AG-UI 链路零影响。
+type A2ASetting struct {
+	// Enable 控制是否挂载 A2A 端点。默认 false。
+	Enable bool `yaml:"enable"`
+	// BasePath 是所有 A2A 端点的路径前缀。
+	// 未配置时使用默认值 constant.A2ABasePathDefault（"/api/v1/agent"），与 AG-UI 端点同前缀。
+	BasePath string `yaml:"basePath"`
+	// EnforceCallerOrigin 控制是否强制校验 X-Bkhcm-Caller-Source: api-server。
+	// 默认 false：仅记录 warn 日志，不拦截，便于上线初期联调；
+	// true：缺失或不匹配时直接返回 HTTP 403。
+	EnforceCallerOrigin bool `yaml:"enforceCallerOrigin"`
+	// Card 是 AgentCard 的静态元数据。
+	Card A2ACardConfig `yaml:"card"`
+}
+
+// trySetDefault 为 A2ASetting 补齐默认值。未启用时不做强校验。
+func (a *A2ASetting) trySetDefault() {
+	if strings.TrimSpace(a.BasePath) == "" {
+		a.BasePath = constant.A2ABasePathDefault
+	}
+
+	a.Card.trySetDefault()
+}
+
+// Validate 校验 A2ASetting。仅在 Enable=true 时执行严格校验。
+func (a A2ASetting) Validate() error {
+	if !a.Enable {
+		return nil
+	}
+	if strings.TrimSpace(a.BasePath) == "" {
+		return errors.New("a2a.basePath is empty")
+	}
+	if !strings.HasPrefix(a.BasePath, "/") {
+		return fmt.Errorf("a2a.basePath must start with '/': %q", a.BasePath)
+	}
+	if err := a.Card.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // AgentServerSetting defines agent server used setting options.
 type AgentServerSetting struct {
 	Network   Network              `yaml:"network"`
@@ -1660,6 +1805,8 @@ type AgentServerSetting struct {
 	AGUI      AgentAGUI            `yaml:"agui"`
 	// Intent configures the intent recognition node. Only used when AGUI.Model.Mode is "graph".
 	Intent AgentIntentConfig `yaml:"intent"`
+	// A2A 配置 A2A 协议端点；默认关闭（Enable=false），开启时与 AG-UI 并行挂载。
+	A2A A2ASetting `yaml:"a2a"`
 	// Skills holds all skill configuration: filesystem paths and BKAIDev sync parameters.
 	Skills AgentBKAIDevSyncSkillsConfig `yaml:"skills"`
 	// Prompt configures prompt files or BKAIDev-hosted prompt sync.
@@ -1693,6 +1840,7 @@ func (s *AgentServerSetting) trySetDefault() {
 	s.Intent.trySetDefault()
 	s.Storage.trySetDefault()
 	s.Tools.trySetDefault()
+	s.A2A.trySetDefault()
 	if s.SkillSyncEnabled() {
 		s.Skills.trySetDefault()
 	}
@@ -1715,6 +1863,10 @@ func (s AgentServerSetting) Validate() error {
 
 	if err := s.AGUI.Validate(); err != nil {
 		return err
+	}
+
+	if err := s.A2A.Validate(); err != nil {
+		return fmt.Errorf("a2a: %w", err)
 	}
 
 	if s.SkillSyncEnabled() || s.PromptSyncEnabled() {

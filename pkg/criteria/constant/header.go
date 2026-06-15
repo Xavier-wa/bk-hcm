@@ -57,6 +57,10 @@ const (
 
 	// BkBizIDKey is the bk biz ID header key.
 	BkBizIDKey = "X-Bk-Biz-Id"
+
+	// MCPCallerSourceHeader 标识 MCP/A2A 等内部调用的来源服务名，
+	// 取值为 cc.Name 字符串（例如 cc.APIServerName）。
+	MCPCallerSourceHeader = "X-Bkhcm-Caller-Source"
 )
 
 const (

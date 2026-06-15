@@ -129,28 +129,39 @@ func buildOneMCPToolSet(cfg cc.AgentMCPToolSet) (tool.ToolSet, error) {
 		trpcmcp.WithHTTPReqHandler(logger.NewMCPHTTPLoggingHandler(trpcmcp.NewDefaultHTTPReqHandler(), cfg.Name)),
 	))
 
-	if !strings.EqualFold(strings.TrimSpace(cfg.Type), constant.MCPTypeBKAIDev) {
-		return mcp.NewMCPToolSet(conn, opts...), nil
+	// 按 cfg.Type 分派认证 / 身份注入 hook：
+	//   - bkaidev  : 注入 X-Bkapi-Authorization（bk_ticket 优先，access_token 兜底）
+	//   - internal : 仅注入 X-Bkapi-User-Name，用于 agent-server LLM → api-server 内置 HCM MCP 等内网直连场景
+	//   - 其他     : 不注入任何 header，保持默认透传行为
+	switch cfg.Type.Normalize() {
+	case constant.MCPTypeBKAIDev:
+		opts = appendBKAIDevAuthHook(opts, cfg.Name)
+	case constant.MCPTypeInternal:
+		opts = appendInternalAuthHook(opts, cfg.Name)
 	}
 
+	return mcp.NewMCPToolSet(conn, opts...), nil
+}
+
+// appendBKAIDevAuthHook 注入 bkaidev 类型 MCP toolset 的鉴权 header。
+// 优先使用 ctx 中的 bk_ticket（基于 appCode/appSecret 签名），否则回退到 access_token。
+func appendBKAIDevAuthHook(opts []mcp.ToolSetOption, name string) []mcp.ToolSetOption {
 	bkaidevCfg := cc.AgentServer().Tools.BKAIDev
 	appCode := bkaidevCfg.AppCode
 	appSecret := bkaidevCfg.AppSecret
-	logs.Infof("AGUI MCP toolset %q: bkaidev auth hook registered (appCode=%q)", cfg.Name, appCode)
-	opts = append(opts, mcp.WithMCPOptions(
+	logs.Infof("AGUI MCP toolset %q: bkaidev auth hook registered (appCode=%q)", name, appCode)
+
+	return append(opts, mcp.WithMCPOptions(
 		trpcmcp.WithHTTPBeforeRequest(func(ctx context.Context, req *http.Request) error {
 			rid := rest.RidFromContext(ctx)
-			ticket := auth.BKTicketFromContext(ctx)
-			if ticket != "" {
+			if ticket := auth.BKTicketFromContext(ctx); ticket != "" {
 				req.Header.Set(constant.BKGWAuthKey,
 					auth.BKApiAuthHeaderValue(appCode, appSecret, auth.BKUsernameFromContext(ctx), ticket))
 				logs.Infof("bkaidev MCP hook: injected bk_ticket auth header for %s %s, rid: %s",
 					req.Method, req.URL.Path, rid)
 				return nil
 			}
-
-			token := auth.AccessTokenFromContext(ctx)
-			if token != "" {
+			if token := auth.AccessTokenFromContext(ctx); token != "" {
 				req.Header.Set(constant.BKGWAuthKey, auth.AccessTokenAuthHeaderValue(token))
 				logs.Infof("bkaidev MCP hook: injected access_token auth header for %s %s, rid: %s",
 					req.Method, req.URL.Path, rid)
@@ -161,6 +172,27 @@ func buildOneMCPToolSet(cfg cc.AgentMCPToolSet) (tool.ToolSet, error) {
 			return nil
 		}),
 	))
+}
 
-	return mcp.NewMCPToolSet(conn, opts...), nil
+// appendInternalAuthHook 注入 internal 类型 MCP toolset 的身份 header。
+// 仅写入 X-Bkapi-User-Name（来自 ctx 中的 bk_username），不读取 / 不注入
+// X-Bkapi-Authorization、bk_ticket、access_token；适用于 agent-server LLM →
+// api-server 内置 HCM MCP 等内网直连场景。
+func appendInternalAuthHook(opts []mcp.ToolSetOption, name string) []mcp.ToolSetOption {
+	logs.Infof("A2A MCP toolset %q: internal auth hook registered (bk_username only)", name)
+	return append(opts, mcp.WithMCPOptions(
+		trpcmcp.WithHTTPBeforeRequest(func(ctx context.Context, req *http.Request) error {
+			rid := rest.RidFromContext(ctx)
+			username := auth.BKUsernameFromContext(ctx)
+			if username == "" {
+				logs.Warnf("internal MCP hook: no bk_username in context for %s %s, "+
+					"calling without identity, rid: %s", req.Method, req.URL.Path, rid)
+				return nil
+			}
+			req.Header.Set(constant.UserKey, username)
+			logs.V(4).Infof("internal MCP hook: injected X-Bkapi-User-Name=%s for %s %s, rid: %s",
+				username, req.Method, req.URL.Path, rid)
+			return nil
+		}),
+	))
 }

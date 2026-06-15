@@ -19,7 +19,11 @@
 
 package constant
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 // AG-UI
 const (
@@ -31,15 +35,78 @@ const (
 	AGUIHistoryPath = "/api/v1/agent/history"
 )
 
+// MCPToolSetType is the enum-like type for MCP toolset category.
+type MCPToolSetType string
+
 // MCP
 const (
-	// MCPTypeBKAIDev is the MCP toolset type that enables automatic
-	// X-Bkapi-Authorization header injection for BK AI Dev gateways.
-	MCPTypeBKAIDev = "bkaidev"
+	// MCPTypeBKAIDev enables automatic X-Bkapi-Authorization
+	// header injection for BK AI Dev gateways.
+	MCPTypeBKAIDev MCPToolSetType = "bkaidev"
+
+	// MCPTypeInternal is for internal HCM MCP calls
+	// (e.g. agent-server LLM → api-server 内置 HCM MCP).
+	// 仅注入 X-Bkapi-User-Name（来自 request context 中的 bk_username），
+	// 不注入 X-Bkapi-Authorization / bk_ticket / access_token；基于内网信任的纯内部微服务调用。
+	MCPTypeInternal MCPToolSetType = "internal"
 
 	// DefaultProviderName is the well-known provider name that the "aidev" config
 	// section is mapped to. Models without an explicit provider use this one.
-	DefaultProviderName = MCPTypeBKAIDev
+	DefaultProviderName = string(MCPTypeBKAIDev)
+)
+
+// Normalize returns canonical enum value for compatible inputs.
+func (t MCPToolSetType) Normalize() MCPToolSetType {
+	raw := strings.TrimSpace(string(t))
+	switch {
+	case raw == "":
+		return ""
+	case strings.EqualFold(raw, string(MCPTypeBKAIDev)):
+		return MCPTypeBKAIDev
+	case strings.EqualFold(raw, string(MCPTypeInternal)):
+		return MCPTypeInternal
+	default:
+		return MCPToolSetType(raw)
+	}
+}
+
+// Validate validates the MCP toolset type value.
+func (t MCPToolSetType) Validate() error {
+	nt := t.Normalize()
+	if nt == "" {
+		return nil
+	}
+	switch nt {
+	case MCPTypeBKAIDev, MCPTypeInternal:
+		return nil
+	default:
+		return fmt.Errorf("mcp type %q is invalid, expect one of [%q, %q]",
+			string(t), string(MCPTypeBKAIDev), string(MCPTypeInternal))
+	}
+}
+
+// IsBKAIDev reports whether type is bkaidev.
+func (t MCPToolSetType) IsBKAIDev() bool {
+	return t.Normalize() == MCPTypeBKAIDev
+}
+
+// A2A protocol
+const (
+	// A2ABasePathDefault is the default base path for A2A endpoints, kept
+	// consistent with the AG-UI endpoint prefix.
+	A2ABasePathDefault = "/api/v1/agent"
+
+	// A2AJSONRPCSubPath is the JSON-RPC entry sub-path under A2A basePath.
+	// Final path = <basePath>/a2a (e.g. /api/v1/agent/a2a).
+	A2AJSONRPCSubPath = "/a2a"
+
+	// A2AWellKnownAgentCardPath is the A2A v0.2.2 AgentCard discovery path.
+	A2AWellKnownAgentCardPath = "/.well-known/agent-card.json"
+
+	// A2AWellKnownAgentLegacyPath is the legacy AgentCard discovery path kept
+	// for client compatibility with A2A 0.1.x.
+	A2AWellKnownAgentLegacyPath = "/.well-known/agent.json"
+
 )
 
 // Skill
