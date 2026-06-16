@@ -22,3 +22,6 @@ export * from './scheme';
 export * from './loadbalancer';
 export * from './task';
 export * from './rolling-server-usage';
+export * from './cloud-account-manage/secondary-account';
+export * from './cloud-account-manage/tertiary-account';
+export * from './cloud-account-manage/cloud-secret';

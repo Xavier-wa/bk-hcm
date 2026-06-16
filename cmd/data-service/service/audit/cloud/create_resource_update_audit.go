@@ -97,14 +97,22 @@ func (ad Audit) buildUpdateAuditInfo(kt *kit.Kit, resType enumor.AuditResourceTy
 		audits, err = ad.loadBalancer.LoadBalancerUpdateAuditBuild(kt, updates)
 	case enumor.UrlRuleAuditResType:
 		audits, err = ad.loadBalancer.UrlRuleUpdateAuditBuild(kt, parentID, updates)
+	case enumor.SubAccountSecretAuditResType:
+		audits, err = ad.subAccountSecretUpdateAuditBuild(kt, updates)
+	case enumor.PermissionPolicyLibraryAuditResType:
+		audits, err = ad.permissionPolicyLibraryUpdateAuditBuild(kt, updates)
+	case enumor.AccountSecretAuditResType:
+		audits, err = ad.accountSecretUpdateAuditBuild(kt, updates)
+	case enumor.SubAccountAuditResType:
+		audits, err = ad.subAccountUpdateAuditBuild(kt, updates)
+	case enumor.PermissionTemplateAuditResType:
+		audits, err = ad.permissionTemplateUpdateAuditBuild(kt, updates)
 	case enumor.RsAppliedRecordAuditResType:
 		audits, err = ad.rsAppliedRecord.RsAppliedRecordUpdateAuditBuild(kt, updates)
 	case enumor.ResPlanGPUDemandsOrderAuditResType:
 		audits, err = ad.resourcePlan.ResPlanDemandGpuOrderUpdateAuditBuild(kt, updates)
 	case enumor.ResPlanGPUDemandsSuborderAuditResType:
 		audits, err = ad.resourcePlan.ResPlanDemandGpuSubOrderUpdateAuditBuild(kt, updates)
-	case enumor.PermissionPolicyLibraryAuditResType:
-		audits, err = ad.permissionPolicyLibraryUpdateAuditBuild(kt, updates)
 
 	default:
 		return nil, fmt.Errorf("cloud resource type: %s not support", resType)

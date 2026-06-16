@@ -249,9 +249,8 @@ func (svc *securityGroupSvc) BatchUpdateBizSGRule(cts *rest.Contexts) (interface
 	return svc.batchUpdateSGRule(cts, handler.BizOperateAuth)
 }
 
-func (svc *securityGroupSvc) batchUpdateSGRule(cts *rest.Contexts,
-	validHandler handler.ValidWithAuthHandler) (interface{},
-	error) {
+func (svc *securityGroupSvc) batchUpdateSGRule(cts *rest.Contexts, validHandler handler.ValidWithAuthHandler) (
+	interface{}, error) {
 
 	vendor := enumor.Vendor(cts.PathParameter("vendor").String())
 	if len(vendor) == 0 {
@@ -274,6 +273,11 @@ func (svc *securityGroupSvc) batchUpdateSGRule(cts *rest.Contexts,
 		Action: meta.Update, BasicInfo: sgBaseInfo})
 	if err != nil {
 		return nil, err
+	}
+
+	if sgBaseInfo.Vendor != vendor {
+		return nil, errf.Newf(errf.InvalidParameter, "security group vendor: %s not match, request vendor: %s",
+			sgBaseInfo.Vendor, vendor)
 	}
 
 	switch vendor {

@@ -14,15 +14,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { provide, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ApplicationsType } from './typings';
 import { QueryRuleOPEnum } from '@/typings';
 import HostApply from './children/host-apply';
-import PublicCloud from './children/public-cloud';
 import HostRecycle from './children/host-recycle';
 import ResourcePlanList from './children/resource-plan/list/list-biz.vue';
+import CommonTable from './children/common-table.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -33,6 +33,7 @@ const applyType = ref(route.query?.type || 'all');
 const saveActiveType = (val: string) => {
   router.replace({ query: { ...route.query, type: val, filter: undefined } });
 };
+
 const tabList = ref<ApplicationsType[]>([
   {
     label: t('主机申请'),
@@ -40,32 +41,75 @@ const tabList = ref<ApplicationsType[]>([
     Component: HostApply,
   },
   {
+    label: t('资源预测'),
+    name: 'resource_plan',
+    Component: ResourcePlanList,
+    rules: [],
+  },
+  {
     label: t('主机回收'),
     name: 'host_recycle',
     Component: HostRecycle,
   },
   {
+    label: t('账号'),
+    name: 'account',
+    rules: [
+      {
+        field: 'operation',
+        op: QueryRuleOPEnum.IN,
+        value: [
+          'add_account',
+          'create_main_account',
+          'update_main_account',
+          'create_sub_account',
+          'update_sub_account',
+          'delete_sub_account',
+          'create_sub_account_secret',
+          'delete_sub_account_secret',
+          'update_sub_account_secret',
+          'apply_permission_policy_library_create',
+          'apply_permission_policy_library_update',
+          'create_permission_template',
+          'update_permission_template',
+          'delete_permission_template',
+        ],
+      },
+    ],
+    Component: CommonTable,
+  },
+  {
     label: t('硬盘'),
     name: 'disk',
-    Component: PublicCloud,
-    rules: [{ field: 'type', op: QueryRuleOPEnum.IN, value: ['create_disk'] }],
+    rules: [
+      {
+        field: 'operation',
+        op: QueryRuleOPEnum.IN,
+        value: ['create_disk'],
+      },
+    ],
+    Component: CommonTable,
   },
   {
     label: t('VPC'),
     name: 'vpc',
-    Component: PublicCloud,
-    rules: [{ field: 'type', op: QueryRuleOPEnum.IN, value: ['create_vpc'] }],
-  },
-  {
-    label: t('安全组'),
-    name: 'security_group',
-    Component: PublicCloud,
     rules: [
       {
-        field: 'type',
+        field: 'operation',
+        op: QueryRuleOPEnum.IN,
+        value: ['create_vpc'],
+      },
+    ],
+    Component: CommonTable,
+  },
+  {
+    label: '安全组',
+    name: 'security-group',
+    rules: [
+      {
+        field: 'operation',
         op: QueryRuleOPEnum.IN,
         value: [
-          'create_security_group',
           'create_security_group',
           'update_security_group',
           'delete_security_group',
@@ -77,25 +121,37 @@ const tabList = ref<ApplicationsType[]>([
         ],
       },
     ],
+    Component: CommonTable,
   },
   {
-    label: t('负载均衡'),
-    name: 'load_balancer',
-    Component: PublicCloud,
-    rules: [{ field: 'type', op: QueryRuleOPEnum.IN, value: ['create_load_balancer'] }],
-  },
-  {
-    label: t('资源预测'),
-    name: 'resource_plan',
-    Component: ResourcePlanList,
-    rules: [],
+    label: '负载均衡',
+    name: 'load-balancer',
+    rules: [
+      {
+        field: 'operation',
+        op: QueryRuleOPEnum.IN,
+        value: ['create_load_balancer'],
+      },
+    ],
+    Component: CommonTable,
   },
 ]);
+
+provide('isBusinessPage', true);
 </script>
 
 <style lang="scss" scoped>
 .tab-container {
   height: 100%;
   padding: 24px;
+}
+
+:global(.bk-tab) {
+  height: 100%;
+
+  :global(.bk-tab-content) {
+    height: calc(100% - 40px);
+    padding: 0;
+  }
 }
 </style>

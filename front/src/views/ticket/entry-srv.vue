@@ -9,7 +9,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { provide, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ApplicationsType } from './typings';
@@ -28,32 +28,29 @@ const saveActiveType = (val: string) => {
 };
 
 const tabList = ref<ApplicationsType[]>([
-  // {
-  //   label: t('全部'),
-  //   name: 'all',
-  //   rules: [],
-  //   Component: CommonTable,
-  // },
-  // {
-  //   label: t('云主机'),
-  //   name: 'cloudMachines',
-  //   rules: [
-  //     {
-  //       field: 'type',
-  //       op: QueryRuleOPEnum.IN,
-  //       value: ['create_cvm'],
-  //     },
-  //   ],
-  //   Component: CommonTable,
-  // },
   {
     label: t('账号'),
     name: 'account',
     rules: [
       {
-        field: 'type',
+        field: 'operation',
         op: QueryRuleOPEnum.IN,
-        value: ['add_account', 'create_main_account', 'update_main_account'],
+        value: [
+          'add_account',
+          'create_main_account',
+          'update_main_account',
+          'create_sub_account',
+          'update_sub_account',
+          'delete_sub_account',
+          'create_sub_account_secret',
+          'delete_sub_account_secret',
+          'update_sub_account_secret',
+          'apply_permission_policy_library_create',
+          'apply_permission_policy_library_update',
+          'create_permission_template',
+          'update_permission_template',
+          'delete_permission_template',
+        ],
       },
     ],
     Component: CommonTable,
@@ -64,64 +61,9 @@ const tabList = ref<ApplicationsType[]>([
     rules: [],
     Component: ResourcePlanList,
   },
-  // {
-  //   label: t('硬盘'),
-  //   name: 'disk',
-  //   rules: [
-  //     {
-  //       field: 'type',
-  //       op: QueryRuleOPEnum.IN,
-  //       value: ['create_disk'],
-  //     },
-  //   ],
-  //   Component: CommonTable,
-  // },
-  // {
-  //   label: t('VPC'),
-  //   name: 'vpc',
-  //   rules: [
-  //     {
-  //       field: 'type',
-  //       op: QueryRuleOPEnum.IN,
-  //       value: ['create_disk'],
-  //     },
-  //   ],
-  //   Component: CommonTable,
-  // },
-  // {
-  //   label: '安全组',
-  //   name: 'securityGroup',
-  //   rules: [
-  //     {
-  //       field: 'type',
-  //       op: QueryRuleOPEnum.IN,
-  //       value: [
-  //         'create_security_group',
-  //         'update_security_group',
-  //         'delete_security_group',
-  //         'associate_security_group',
-  //         'disassociate_security_group',
-  //         'create_security_group_rule',
-  //         'update_security_group_rule',
-  //         'delete_security_group_rule',
-  //       ],
-  //     },
-  //   ],
-  //   Component: CommonTable,
-  // },
-  // {
-  //   label: '负载均衡',
-  //   name: 'load_balancer',
-  //   rules: [
-  //     {
-  //       field: 'type',
-  //       op: QueryRuleOPEnum.IN,
-  //       value: ['create_load_balancer'],
-  //     },
-  //   ],
-  //   Component: CommonTable,
-  // },
 ]);
+
+provide('isServicePage', true);
 </script>
 
 <style lang="scss" scoped>

@@ -49,7 +49,7 @@ const formModel = reactive({
 });
 
 const details = ref<IApplyOrderItem>();
-const unProductNum = computed(() => (!details.value ? 0 : details.value.origin_num - details.value.product_num));
+const unProductNum = computed(() => (!details.value ? 0 : details.value.total_num - details.value.product_num));
 
 const chargeType = computed(() => details.value?.spec.charge_type);
 const chargeMonths = computed(() => details.value?.spec.charge_months);
@@ -67,13 +67,13 @@ const getDetails = async () => {
 onBeforeMount(async () => {
   await getDetails();
   // 初始化表单
-  const { origin_num, product_num } = details.value || {};
+  const { total_num, product_num } = details.value || {};
   const { zones, res_assign, device_type, vpc, subnet, bk_asset_id, inherit_instance_id } = details.value?.spec || {};
   Object.assign(formModel, {
     zones,
     res_assign,
     device_type,
-    replicas: origin_num - product_num,
+    replicas: total_num - product_num,
     vpc,
     subnet,
     bk_asset_id,
@@ -162,7 +162,7 @@ const originDemandFields: ModelPropertyDisplay[] = [
   { id: 'spec.subnet', name: '所属子网', type: 'string' },
 ];
 const productionFields: ModelPropertyDisplay[] = [
-  { id: 'origin_num', name: '需求总数', type: 'number' },
+  { id: 'total_num', name: '需求总数', type: 'number' },
   { id: 'product_num', name: '已生产数', type: 'number' },
   {
     id: 'un_product_num',
@@ -368,7 +368,7 @@ const handleBack = () => {
               ，将共计生产
               <span class="text-danger">{{ details?.product_num + formModel.replicas }}</span>
               后（原单据需求数为
-              <span class="text-danger">{{ details?.origin_num }}</span>
+              <span class="text-danger">{{ details?.total_num }}</span>
               ），该单据会自动结单，不可以再重试修改
             </div>
           </div>

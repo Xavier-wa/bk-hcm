@@ -24,7 +24,7 @@ watch(
 </script>
 
 <template>
-  <grid-container :column="3" :content-min-width="'min-content'" :label-width="110">
+  <grid-container :column="3" :content-min-width="0" :label-width="110">
     <grid-item v-for="field in fields" :key="field.id" :label="field.name">
       <display-value
         :property="field"

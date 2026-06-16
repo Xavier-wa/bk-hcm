@@ -37,6 +37,7 @@ export default defineComponent({
               />
             )}
             <span class='breadcrumb-name'>{this.currentTitle}</span>
+            <div id='breadcrumbLeft'></div>
           </div>
           <div id='breadcrumbHead' class='breadcrumb-head'></div>
           <div id='breadcrumbExtra' class='breadcrumb-extra'></div>

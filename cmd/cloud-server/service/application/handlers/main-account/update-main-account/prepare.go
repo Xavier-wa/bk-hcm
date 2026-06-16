@@ -22,6 +22,7 @@ package mainaccount
 import (
 	"strings"
 
+	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/thirdparty/api-gateway/itsm"
 )
@@ -43,7 +44,9 @@ func (a *ApplicationOfUpdateMainAccount) PrepareReqFromContent() error {
 }
 
 // GetItsmApprover 获取itsm审批人信息
-func (a *ApplicationOfUpdateMainAccount) GetItsmApprover(managers []string) []itsm.VariableApprover {
+func (a *ApplicationOfUpdateMainAccount) GetItsmApprover(kt *kit.Kit, managers []string) (
+	[]itsm.VariableApprover, error) {
+
 	approvers := []itsm.VariableApprover{
 		{
 			Variable:  "platform_manager",
@@ -56,8 +59,10 @@ func (a *ApplicationOfUpdateMainAccount) GetItsmApprover(managers []string) []it
 	if a.req.OpProductID == 0 || a.req.OpProductID == -1 {
 		account, err := a.Client.DataService().Global.MainAccount.GetBasicInfo(a.Cts.Kit, a.req.ID)
 		if err != nil {
-			logs.Errorf("get main account failed when update main account ticket create, err: %s, rid: %s", err, a.Cts.Kit.Rid)
-			return approvers
+			logs.Errorf("get main account failed when update main account ticket create, err: %s, rid: %s", err,
+				a.Cts.Kit.Rid)
+			// NOTE：此处 error 返回为后添加，为避免影响代码原有行为，此处先保持原逻辑静默，不返回error
+			return approvers, nil
 		}
 		productId = account.OpProductID
 	} else {
@@ -68,7 +73,8 @@ func (a *ApplicationOfUpdateMainAccount) GetItsmApprover(managers []string) []it
 	opManager, err := a.GetOperationProductManager(productId)
 	if err != nil {
 		logs.Errorf("get operation product manager failed, err: %s, rid: %s", err, a.Cts.Kit.Rid)
-		return approvers
+		// NOTE：此处 error 返回为后添加，为避免影响代码原有行为，此处先保持原逻辑静默，不返回error
+		return approvers, nil
 	}
 
 	opManagers := strings.Split(opManager, ";")
@@ -80,7 +86,7 @@ func (a *ApplicationOfUpdateMainAccount) GetItsmApprover(managers []string) []it
 		})
 	}
 
-	return approvers
+	return approvers, nil
 }
 
 // GetBkBizIDs 获取当前的业务IDs
