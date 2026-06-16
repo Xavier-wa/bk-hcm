@@ -243,7 +243,7 @@ func (a *accountSvc) updateForTCloudZiyan(cts *rest.Contexts, req *proto.Account
 	var shouldUpdatedExtension *dataproto.TCloudAccountExtensionUpdateReq = nil
 	if req.Extension != nil {
 		shouldUpdatedExtension = &dataproto.TCloudAccountExtensionUpdateReq{
-			CloudSubAccountID: extension.CloudSubAccountID,
+			CloudSubAccountID: &extension.CloudSubAccountID,
 			CloudSecretID:     &extension.CloudSecretID,
 			CloudSecretKey:    &extension.CloudSecretKey,
 		}

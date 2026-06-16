@@ -183,6 +183,7 @@ func (a ApplicationOperation) Validate() error {
 	return nil
 }
 
+// TODO
 const (
 	// OpAddAccount 新增账号
 	OpAddAccount ApplicationOperation = "add_account"

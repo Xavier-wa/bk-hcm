@@ -90,8 +90,6 @@ type CvmBatchUpdate struct {
 	Name                 string   `json:"name"`
 	BkBizID              int64    `json:"bk_biz_id" validate:"required"`
 	BkAssetID            string   `json:"bk_asset_id"`
-	Region               string   `yaml:"region"`
-	Zone                 string   `yaml:"zone"`
 	BkHostID             int64    `json:"bk_host_id" validate:"required"`
 	BkCloudID            *int64   `json:"bk_cloud_id"`
 	CloudVpcIDs          []string `json:"cloud_vpc_ids"`
@@ -106,7 +104,6 @@ type CvmBatchUpdate struct {
 	PrivateIPv6Addresses []string `json:"private_ipv6_addresses"`
 	PublicIPv4Addresses  []string `json:"public_ipv4_addresses"`
 	PublicIPv6Addresses  []string `json:"public_ipv6_addresses"`
-	CloudCreatedTime     string   `yaml:"cloud_created_time"`
 	CloudLaunchedTime    string   `json:"cloud_launched_time"`
 	CloudExpiredTime     string   `json:"cloud_expired_time"`
 	OsName               string   `json:"os_name"`

@@ -51,6 +51,33 @@ func (req *TCloudAccountExtensionCreateReq) Validate(accountType enumor.AccountT
 	return nil
 }
 
+// TCloudZiyanAccountExtensionCreateReq TODO tcloud当前使用新版本账号管理，自研云暂不支持。因此使用独立的 req 结构，后续需统一
+type TCloudZiyanAccountExtensionCreateReq struct {
+	CloudMainAccountID string `json:"cloud_main_account_id" validate:"required"`
+	CloudSubAccountID  string `json:"cloud_sub_account_id" validate:"required"`
+	CloudSecretID      string `json:"cloud_secret_id" validate:"omitempty"`
+	CloudSecretKey     string `json:"cloud_secret_key" validate:"omitempty"`
+}
+
+// Validate ...
+func (req *TCloudZiyanAccountExtensionCreateReq) Validate(accountType enumor.AccountType) error {
+	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+
+	// 登记账号密钥可为空，其他类型则必填
+	if accountType != enumor.RegistrationAccount && !req.IsFull() {
+		return secretEmptyError
+	}
+
+	return nil
+}
+
+// IsFull 对于不同账号类型，有些字段是允许为空的，这里返回是否所有字段都有值
+func (req *TCloudZiyanAccountExtensionCreateReq) IsFull() bool {
+	return req.CloudSecretID != "" && req.CloudSecretKey != ""
+}
+
 // AwsAccountExtensionCreateReq ...
 type AwsAccountExtensionCreateReq struct {
 	CloudAccountID   string `json:"cloud_account_id" validate:"required"`

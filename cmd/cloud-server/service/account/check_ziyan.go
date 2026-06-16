@@ -32,9 +32,9 @@ import (
 
 // ParseAndCheckTCloudZiyanExtension  联通性校验，并检查字段是否匹配
 func ParseAndCheckTCloudZiyanExtension(cts *rest.Contexts, client *client.ClientSet, accountType enumor.AccountType,
-	reqExtension json.RawMessage) (*proto.TCloudAccountExtensionCreateReq, error) {
+	reqExtension json.RawMessage) (*proto.TCloudZiyanAccountExtensionCreateReq, error) {
 	// 解析Extension
-	extension := new(proto.TCloudAccountExtensionCreateReq)
+	extension := new(proto.TCloudZiyanAccountExtensionCreateReq)
 	if err := common.DecodeExtension(cts.Kit, reqExtension, extension); err != nil {
 		return nil, err
 	}

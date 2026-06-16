@@ -23,6 +23,7 @@ import (
 	ziyanlogic "hcm/cmd/cloud-server/logics/ziyan"
 	hclb "hcm/pkg/api/hc-service/load-balancer"
 	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/thirdparty/api-gateway/cmdb"
 	"hcm/pkg/thirdparty/api-gateway/itsm"
@@ -59,8 +60,8 @@ func (a *ApplicationOfCreateZiyanLB) PrepareReqFromContent() error {
 }
 
 // GetItsmApprover 获取itsm审批人
-func (a *ApplicationOfCreateZiyanLB) GetItsmApprover(managers []string) []itsm.VariableApprover {
-	return a.GetItsmPlatformAndAccountApprover(managers, a.req.AccountID)
+func (a *ApplicationOfCreateZiyanLB) GetItsmApprover(kt *kit.Kit, managers []string) ([]itsm.VariableApprover, error) {
+	return a.GetItsmPlatformAndAccountApprover(kt, managers, a.req.AccountID)
 }
 
 // GetBkBizIDs return biz ids
