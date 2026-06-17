@@ -112,6 +112,17 @@ func genResManagementActionGroups() []client.ActionGroup {
 						{ID: BizCosBucketDelete},
 					},
 				},
+				{
+					Name:   "云账号",
+					NameEn: "Cloud Account",
+					Actions: []client.ActionWithID{
+						{ID: BizAccountOperate},
+						{ID: BizSubAccountOperate},
+						{ID: BizSubAccountSecretOperate},
+						{ID: BizPermissionTemplateOperate},
+						{ID: BizPermissionPolicyLibraryOperate},
+					},
+				},
 			},
 		},
 	}

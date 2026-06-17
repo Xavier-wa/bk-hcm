@@ -51,6 +51,7 @@ import (
 	cloudselection "hcm/cmd/data-service/service/cloud-selection"
 	"hcm/cmd/data-service/service/cloud/account"
 	accountbizrel "hcm/cmd/data-service/service/cloud/account-biz-rel"
+	accountsecret "hcm/cmd/data-service/service/cloud/account-secret"
 	argstpl "hcm/cmd/data-service/service/cloud/argument-template"
 	"hcm/cmd/data-service/service/cloud/bill"
 	"hcm/cmd/data-service/service/cloud/cert"
@@ -64,6 +65,7 @@ import (
 	loadbalancer "hcm/cmd/data-service/service/cloud/load-balancer"
 	networkinterface "hcm/cmd/data-service/service/cloud/network-interface"
 	networkcvmrel "hcm/cmd/data-service/service/cloud/network-interface-cvm-rel"
+	"hcm/cmd/data-service/service/cloud/permission-template"
 	"hcm/cmd/data-service/service/cloud/permission-policy-library"
 	"hcm/cmd/data-service/service/cloud/region"
 	resusagebizrel "hcm/cmd/data-service/service/cloud/res-usage-biz-rel"
@@ -73,6 +75,7 @@ import (
 	sgcomrel "hcm/cmd/data-service/service/cloud/security-group-common-rel"
 	sgcvmrel "hcm/cmd/data-service/service/cloud/security-group-cvm-rel"
 	subaccount "hcm/cmd/data-service/service/cloud/sub-account"
+	subaccountsecret "hcm/cmd/data-service/service/cloud/sub-account-secret"
 	sync "hcm/cmd/data-service/service/cloud/sync"
 	"hcm/cmd/data-service/service/cloud/zone"
 	"hcm/cmd/data-service/service/cos"
@@ -269,6 +272,8 @@ func (s *Service) apiSet() *restful.Container {
 	zone.InitZoneService(capability)
 	image.InitService(capability)
 	cvm.InitService(capability)
+	accountsecret.InitService(capability)
+	subaccountsecret.InitService(capability)
 	sgcvmrel.InitService(capability)
 	routetable.InitRouteTableService(capability)
 	application.InitApplicationService(capability)
@@ -331,6 +336,7 @@ func (s *Service) apiSet() *restful.Container {
 	tenant.InitService(capability)
 
 	resusagebizrel.InitService(capability)
+	permissiontemplate.InitService(capability)
 	permissionpolicylibrary.InitService(capability)
 	devicecapacity.InitService(capability)
 

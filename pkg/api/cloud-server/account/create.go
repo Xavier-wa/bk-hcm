@@ -35,13 +35,32 @@ import (
 // TCloudAccountExtensionCreateReq ...
 type TCloudAccountExtensionCreateReq struct {
 	CloudMainAccountID string `json:"cloud_main_account_id" validate:"required"`
+	CloudSubAccountID  string `json:"cloud_sub_account_id" validate:"omitempty"`
+}
+
+// Validate ...
+func (req *TCloudAccountExtensionCreateReq) Validate(accountType enumor.AccountType) error {
+	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+
+	if accountType != enumor.ResourceAccount && req.CloudSubAccountID == "" {
+		return errors.New("cloud_sub_account_id is required")
+	}
+
+	return nil
+}
+
+// TCloudZiyanAccountExtensionCreateReq TODO tcloud当前使用新版本账号管理，自研云暂不支持。因此使用独立的 req 结构，后续需统一
+type TCloudZiyanAccountExtensionCreateReq struct {
+	CloudMainAccountID string `json:"cloud_main_account_id" validate:"required"`
 	CloudSubAccountID  string `json:"cloud_sub_account_id" validate:"required"`
 	CloudSecretID      string `json:"cloud_secret_id" validate:"omitempty"`
 	CloudSecretKey     string `json:"cloud_secret_key" validate:"omitempty"`
 }
 
 // Validate ...
-func (req *TCloudAccountExtensionCreateReq) Validate(accountType enumor.AccountType) error {
+func (req *TCloudZiyanAccountExtensionCreateReq) Validate(accountType enumor.AccountType) error {
 	if err := validator.Validate.Struct(req); err != nil {
 		return err
 	}
@@ -55,7 +74,7 @@ func (req *TCloudAccountExtensionCreateReq) Validate(accountType enumor.AccountT
 }
 
 // IsFull 对于不同账号类型，有些字段是允许为空的，这里返回是否所有字段都有值
-func (req *TCloudAccountExtensionCreateReq) IsFull() bool {
+func (req *TCloudZiyanAccountExtensionCreateReq) IsFull() bool {
 	return req.CloudSecretID != "" && req.CloudSecretKey != ""
 }
 
@@ -189,14 +208,15 @@ func (req *AzureAccountExtensionCreateReq) IsFull() bool {
 
 // AccountCommonInfoCreateReq ...
 type AccountCommonInfoCreateReq struct {
-	Vendor      enumor.Vendor          `json:"vendor" validate:"required"`
-	Name        string                 `json:"name" validate:"required,min=3,max=255"`
-	Managers    []string               `json:"managers" validate:"required,max=5"`
-	Type        enumor.AccountType     `json:"type" validate:"required"`
-	Site        enumor.AccountSiteType `json:"site" validate:"required"`
-	Memo        *string                `json:"memo" validate:"omitempty"`
-	BkBizID     int64                  `json:"bk_biz_id" validate:"omitempty"`
-	UsageBizIDs []int64                `json:"usage_biz_ids" validate:"required"`
+	Vendor           enumor.Vendor          `json:"vendor" validate:"required"`
+	Name             string                 `json:"name" validate:"required,min=3,max=255"`
+	Managers         []string               `json:"managers" validate:"required,max=5"`
+	SecurityManagers []string               `json:"security_managers,omitempty" validate:"omitempty"`
+	Type             enumor.AccountType     `json:"type" validate:"required"`
+	Site             enumor.AccountSiteType `json:"site" validate:"required"`
+	Memo             *string                `json:"memo" validate:"omitempty"`
+	BkBizID          int64                  `json:"bk_biz_id" validate:"omitempty"`
+	UsageBizIDs      []int64                `json:"usage_biz_ids" validate:"required"`
 }
 
 // Validate ...
@@ -243,7 +263,9 @@ func (req *AccountCommonInfoCreateReq) Validate() error {
 }
 
 // validateBizIDAndUsageBizIDs 校验管理业务和使用业务的合法性
-func (req *AccountCommonInfoCreateReq) validateBizIDAndUsageBizIDs(bizID int64, usageBizIDs []int64, accountType enumor.AccountType) error {
+func (req *AccountCommonInfoCreateReq) validateBizIDAndUsageBizIDs(bizID int64, usageBizIDs []int64,
+	accountType enumor.AccountType) error {
+
 	// 资源账号需要进一步对管理业务和使用业务进行校验
 	if accountType == enumor.ResourceAccount {
 		if err := req.validateResAccountBizIDs(); err != nil {

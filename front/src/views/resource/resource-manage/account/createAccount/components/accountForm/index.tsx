@@ -17,12 +17,12 @@ import { ValidateStatus, useSecretExtension } from './useSecretExtension';
 const { FormItem } = Form;
 const { BK_HCM_AJAX_URL_PREFIX } = window.PROJECT_CONFIG;
 
-export const VENDORS_INFO = [
-  {
-    vendor: VendorEnum.TCLOUD,
-    name: '腾讯云',
-    icon: tcloudVendor,
-  },
+export const VENDORS_INFO: Array<{
+  vendor: VendorEnum;
+  name: string;
+  icon: string;
+  disabled?: boolean;
+}> = [
   {
     vendor: VendorEnum.AWS,
     name: '亚马逊云',
@@ -47,6 +47,12 @@ export const VENDORS_INFO = [
     vendor: VendorEnum.ZIYAN,
     name: '自研云',
     icon: tcloudVendor,
+  },
+  {
+    vendor: VendorEnum.TCLOUD,
+    name: '腾讯云',
+    icon: tcloudVendor,
+    disabled: true,
   },
 ];
 
@@ -73,7 +79,7 @@ export default defineComponent({
     const userStore = useUserStore();
     const formModel = reactive({
       site: 'international' as 'china' | 'international', // 站点
-      vendor: VendorEnum.TCLOUD, // 云厂商
+      vendor: VendorEnum.AWS, // 云厂商
       name: '', // 账号别名
       managers: [], // 责任人
       type: 'resource', // 账号类型，当前产品形态固定为 resource，资源账号
@@ -190,12 +196,26 @@ export default defineComponent({
             <Form formType='vertical'>
               <FormItem label='厂商选择' required>
                 <div class={'account-vendor-selector'}>
-                  {VENDORS_INFO.map(({ vendor, name, icon }) => (
+                  {VENDORS_INFO.map(({ vendor, name, icon, disabled }) => (
                     <div
-                      class={`account-vendor-option ${
-                        vendor === formModel.vendor ? 'account-vendor-option-active' : ''
-                      }`}
-                      onClick={() => (formModel.vendor = vendor)}>
+                      v-bk-tooltips={{
+                        content:
+                          vendor === VendorEnum.TCLOUD && disabled
+                            ? '腾讯云资源账号接入已迁移到菜单“资源管理-云账号管理-二级账号-录入账号”'
+                            : '',
+                        disabled: !disabled,
+                      }}
+                      class={[
+                        'account-vendor-option',
+                        vendor === formModel.vendor && 'account-vendor-option-active',
+                        disabled && 'account-vendor-option-disabled',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => {
+                        if (disabled) return;
+                        formModel.vendor = vendor;
+                      }}>
                       <img src={icon} alt={name} class={'account-vendor-option-icon'} />
                       <p class={'account-vendor-option-text'}>{name}</p>
                       {formModel.vendor === vendor ? <Success fill='#3A84FF' class={'active-icon'} /> : null}

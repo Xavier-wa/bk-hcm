@@ -90,8 +90,6 @@ type CvmBatchUpdate struct {
 	Name                 string   `json:"name"`
 	BkBizID              int64    `json:"bk_biz_id" validate:"required"`
 	BkAssetID            string   `json:"bk_asset_id"`
-	Region               string   `yaml:"region"`
-	Zone                 string   `yaml:"zone"`
 	BkHostID             int64    `json:"bk_host_id" validate:"required"`
 	BkCloudID            *int64   `json:"bk_cloud_id"`
 	CloudVpcIDs          []string `json:"cloud_vpc_ids"`
@@ -106,11 +104,16 @@ type CvmBatchUpdate struct {
 	PrivateIPv6Addresses []string `json:"private_ipv6_addresses"`
 	PublicIPv4Addresses  []string `json:"public_ipv4_addresses"`
 	PublicIPv6Addresses  []string `json:"public_ipv6_addresses"`
-	CloudCreatedTime     string   `yaml:"cloud_created_time"`
 	CloudLaunchedTime    string   `json:"cloud_launched_time"`
 	CloudExpiredTime     string   `json:"cloud_expired_time"`
 	OsName               string   `json:"os_name"`
 	MachineType          string   `json:"machine_type"`
+	// Region 云上地域，由上游同步直接下发
+	Region string `json:"region"`
+	// Zone 云上可用区，由上游同步直接下发
+	Zone string `json:"zone"`
+	// CloudCreatedTime 云上创建时间，由上游同步直接下发
+	CloudCreatedTime string `json:"cloud_created_time"`
 }
 
 // CvmBatchUpdateWithExtension cvm batch update with extension.
@@ -131,6 +134,9 @@ func (req *CvmBatchUpdateReq[T]) Validate() error {
 // CvmCommonInfoBatchUpdateReq define cvm common info batch update req.
 type CvmCommonInfoBatchUpdateReq struct {
 	Cvms []CvmCommonInfoBatchUpdateData `json:"cvms" validate:"required"`
+	// SetOperator 标识本次更新是否为"分配主机到业务"（创建语义），为 true 时同步 CMDB 会推导并下发 operator
+	// （购买机取 creator、云上同步增量机取二级账号负责人）；res-sync 等修改语义场景保持 false，不下发 operator。
+	SetOperator bool `json:"set_operator"`
 }
 
 // Validate cvm common info batch update req.

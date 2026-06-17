@@ -149,7 +149,15 @@ const handleClick = async () => {
               resources.some((resource) =>
                 [String(resource.bk_biz_id), String(resource.resource_id)].includes(String(instance.id)),
               ),
-            ),
+            )
+            .reduce((acc, current) => {
+              // 创建唯一的标识符，去重
+              const key = current.type + current.id;
+              if (!acc.find((item) => item.type + item.id === key)) {
+                acc.push(current);
+              }
+              return acc;
+            }, []),
         ].filter(Boolean),
       })),
     }));

@@ -386,6 +386,17 @@ const isJSON = (str: any) => {
   }
 };
 
+const formatJSON = (value: string | Record<string, unknown> | unknown[], indent = 2): string => {
+  if (typeof value !== 'string') {
+    return JSON.stringify(value, null, indent);
+  }
+  try {
+    return JSON.stringify(JSON.parse(value), null, indent);
+  } catch {
+    return value;
+  }
+};
+
 export {
   getAuthSignByBusinessId,
   getInstVip,
@@ -406,4 +417,5 @@ export {
   isPortValid,
   formatDisplayNumber,
   isJSON,
+  formatJSON,
 };

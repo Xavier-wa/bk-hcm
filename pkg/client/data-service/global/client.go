@@ -40,6 +40,7 @@ type Client struct {
 	NetworkInterface       *NetworkInterfaceClient
 	NetworkInterfaceCvmRel *NetworkInterfaceCvmRelClient
 	SubAccount             *SubAccountClient
+	SubAccountSecret       *SubAccountSecretClient
 	AccountSyncDetail      *AccountSyncDetailClient
 
 	Auth          *AuthClient
@@ -68,15 +69,22 @@ type Client struct {
 	Tenant         *TenantClient
 	ResourcePlan   *ResourcePlanClient
 
-	GlobalConfig               *GlobalConfigsClient
+	AccountSecret *AccountSecretClient
+
+	GlobalConfig *GlobalConfigsClient
+
+	ResUsageBizRel *ResUsageBizRelClient
+
+	PermissionTemplate *PermissionTemplateClient
+
+	PermissionPolicyLibrary *PermissionPolicyLibraryClient
+
 	ApplyOrderStatisticsConfig *ApplyOrderStatisticsConfigClient
 	OrgTopo                    *OrgTopoClient
 	Meta                       *MetaClient
-	ResUsageBizRel             *ResUsageBizRelClient
 	DeviceCapacity             *DeviceCapacityClient
 	TCloudZiyanPmDeviceType    *TCloudZiyanPmDeviceTypeClient
 	DeviceType                 *DeviceTypeClient
-	PermissionPolicyLibrary    *PermissionPolicyLibraryClient
 }
 
 type restClient struct {
@@ -100,6 +108,7 @@ func NewClient(client rest.ClientInterface) *Client {
 		NetworkInterface:       NewNetworkInterfaceClient(client),
 		NetworkInterfaceCvmRel: NewNetworkInterfaceCvmRelClient(client),
 		SubAccount:             NewSubAccountClient(client),
+		SubAccountSecret:       NewSubAccountSecretClient(client),
 		AccountSyncDetail:      NewAccountSyncDetailClient(client),
 
 		Auth:          NewAuthClient(client),
@@ -122,18 +131,21 @@ func NewClient(client rest.ClientInterface) *Client {
 		Cos:            NewCosClient(client),
 		RollingServer:  NewRollingServerClient(client),
 
-		TaskDetail:                 NewTaskDetailClient(client),
-		TaskManagement:             NewTaskManagementClient(client),
-		Tenant:                     NewTenantClient(client),
-		GlobalConfig:               NewGlobalConfigClient(client),
+		TaskDetail:     NewTaskDetailClient(client),
+		TaskManagement: NewTaskManagementClient(client),
+		Tenant:         NewTenantClient(client),
+		AccountSecret: NewAccountSecretClient(client),
+		GlobalConfig:       NewGlobalConfigClient(client),
+		ResUsageBizRel:     NewResUsageBizRelRelClient(client),
+		PermissionTemplate: NewPermissionTemplateClient(client),
+		PermissionPolicyLibrary: NewPermissionPolicyLibraryClient(client),
+
 		ApplyOrderStatisticsConfig: NewApplyOrderStatisticsConfigClient(client),
-		ResUsageBizRel:             NewResUsageBizRelRelClient(client),
 		ResourcePlan:               NewResourcePlanClient(client),
 		OrgTopo:                    NewOrgTopoClient(client),
 		Meta:                       NewMetaClient(client),
 		DeviceCapacity:             NewDeviceCapacityClient(client),
 		TCloudZiyanPmDeviceType:    NewTCloudZiyanPmDeviceTypeClient(client),
 		DeviceType:                 NewDeviceTypeClient(client),
-		PermissionPolicyLibrary:    NewPermissionPolicyLibraryClient(client),
 	}
 }
