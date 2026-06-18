@@ -6,6 +6,7 @@ import { useMessage } from './use-message';
 import { useEventHandler } from './use-event';
 import { useStream } from './use-stream';
 import { useSession } from './use-session';
+import { useAccountSelect } from './use-account-select';
 
 export type { ChatSession } from './types';
 
@@ -38,8 +39,14 @@ export function useChatbot(options: UseChatbotOptions = {}) {
     fetchHistory: streamModule.fetchHistory,
     sceneTag,
   });
+  const accountSelectModule = useAccountSelect(messageModule.messages);
 
-  const sendMessage = async (content: string, sessionTag = sceneTag) => {
+  const sendMessage = async (
+    content: string,
+    sessionTag = sceneTag,
+    resumeValue?: string,
+    forwardedProps?: Record<string, unknown>,
+  ) => {
     // 首页空态（无选中会话）发送：先惰性创建/复用会话，避免清空消息时丢失刚加入的用户消息。
     // 创建失败（如无 bizId）时直接返回，不发送。
     // sessionTag 为场景标识（如 host_apply），通过 create_session 的 session_tag 入参传递。
@@ -54,7 +61,7 @@ export function useChatbot(options: UseChatbotOptions = {}) {
       session.sessionName = newName;
       sessionApi.updateSession(getBizsId(), session.sessionCode, newName).catch(() => {});
     }
-    await streamModule.streamChat([{ role: 'user', content }]);
+    await streamModule.streamChat([{ role: 'user', content }], resumeValue, forwardedProps);
     sessionModule.saveCurrentSession();
     if (session) {
       session.sessionContentCount += 1;
@@ -117,5 +124,6 @@ export function useChatbot(options: UseChatbotOptions = {}) {
     initSessions: sessionModule.initSessions,
     reloadSessions: sessionModule.reloadSessions,
     clearMessages: messageModule.clearMessages,
+    selectedAccountEcho: accountSelectModule.selectedAccountEcho,
   };
 }

@@ -9,10 +9,11 @@ import { InfoBox } from 'bkui-vue';
 import { MessageRole } from '@blueking/chat-x';
 
 import { useChatbot, extractText, type ChatSession } from '@/hooks/chatbot/use-chatbot';
-import { ChatbotKey } from '@/hooks/chatbot/provide';
+import { ChatbotKey, ChatbotModeKey } from '@/hooks/chatbot/provide';
 import { useUserStore } from '@/store/user';
 import ChatMessageList from '@/components/chatbot/chat-message-list.vue';
 import ChatInputBox from '@/components/chatbot/chat-input-box.vue';
+import AccountSelectEcho from '@/components/chatbot/account-select-echo.vue';
 import SessionSidebarItem from './children/session-sidebar-item.vue';
 import { GLOBAL_BIZS_KEY } from '@/common/constant';
 import { ASSISTANT_CONTACT, BIG_CARDS, PROMPT_CHIPS, type BigCard, type PromptChip } from './constants';
@@ -26,6 +27,7 @@ const userStore = useUserStore();
 const chatbot = useChatbot();
 // 容器持有 useChatbot 实例并 provide，供 chat-message-list / chat-input-box 等原子 inject 复用同一会话内核
 provide(ChatbotKey, chatbot);
+provide(ChatbotModeKey, 'fullpage');
 
 const {
   messages,
@@ -41,6 +43,7 @@ const {
   goHome,
   initSessions,
   reloadSessions,
+  selectedAccountEcho,
 } = chatbot;
 
 const readRouteSessionCode = () => {
@@ -586,6 +589,8 @@ onMounted(() => {
     </aside>
     <div class="chatbot-main">
       <div class="chatbot-chat">
+        <!-- 云账号选择吸顶回显：通栏铺满主内容区，固定在消息滚动区上方 -->
+        <AccountSelectEcho v-if="selectedAccountEcho" :echo="selectedAccountEcho" class="chatbot-account-echo" />
         <div class="chatbot-chat-messages">
           <div v-if="isLoadingHistory" class="chat-loading">
             <div class="loading-spinner" />
@@ -985,12 +990,22 @@ onMounted(() => {
   min-height: 0;
   overflow: hidden;
 
+  .chatbot-account-echo {
+    flex-shrink: 0;
+  }
+
   .chatbot-chat-messages {
     flex: 1;
     padding: 16px 0 16px 16px;
     overflow-y: auto;
     scrollbar-color: var(--chat-scroll-thumb) transparent;
     scrollbar-width: thin;
+
+    // 全页态：自定义消息卡用投影、去描边（浮窗态保留卡片自身的 1px 描边）
+    :deep(.custom-msg-card) {
+      border: none;
+      box-shadow: 0 12px 32px 0 rgb(0 0 0 / 4%);
+    }
 
     &::-webkit-scrollbar {
       width: 6px;

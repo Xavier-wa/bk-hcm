@@ -2,7 +2,20 @@ import { ref } from 'vue';
 import { MessageRole, MessageStatus, type Message } from '@blueking/chat-x';
 
 import * as agentApi from '@/store/chatbot/agent';
-import { EventType, type HitlInterruptValue } from './types';
+import {
+  EventType,
+  HOST_APPLY_CONFIRM_EVENT,
+  HOST_APPLY_RECOMMEND_EVENT,
+  HOST_APPLY_SUBMIT_EVENT,
+  type AccountSelectInterruptValue,
+  type AccountSelectOption,
+  type HitlInterruptValue,
+  type HostApplyRecommendation,
+  type HostApplyPreorderValue,
+  type HostApplyRecommendValue,
+  type HostApplySubmitValue,
+  type HostApplySuborder,
+} from './types';
 import { genId, type MessageModule } from './use-message';
 import type { EventModule } from './use-event';
 
@@ -115,6 +128,119 @@ export function useStream(msg: MessageModule, event: EventModule) {
     };
   };
 
+  const parseAccountSelectInterruptValue = (input: unknown): AccountSelectInterruptValue | null => {
+    let parsed = input;
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch {
+        return null;
+      }
+    }
+
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const raw = parsed as Partial<AccountSelectInterruptValue>;
+    const options = raw.value?.options;
+    if (!Array.isArray(options)) return null;
+
+    const normalizedOptions = options.filter(
+      (item): item is AccountSelectOption =>
+        !!item && typeof item === 'object' && typeof (item as AccountSelectOption).account_id === 'string',
+    );
+    if (normalizedOptions.length === 0) return null;
+
+    return {
+      checkpoint_id: typeof raw.checkpoint_id === 'string' ? raw.checkpoint_id : '',
+      lineage_id: typeof raw.lineage_id === 'string' ? raw.lineage_id : '',
+      value: {
+        type: 'account_select.interrupt',
+        options: normalizedOptions,
+      },
+    };
+  };
+
+  const parseHostApplyRecommendValue = (input: unknown): HostApplyRecommendValue | null => {
+    let parsed = input;
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch {
+        return null;
+      }
+    }
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const raw = parsed as Partial<HostApplyRecommendValue>;
+    const recommendations = raw.value?.recommendations;
+    if (!Array.isArray(recommendations)) return null;
+
+    const normalizedRecommendations = recommendations.filter(
+      (item): item is HostApplyRecommendation =>
+        !!item && typeof item === 'object' && typeof (item as HostApplyRecommendation).suborder === 'object',
+    );
+    if (normalizedRecommendations.length === 0) return null;
+
+    return {
+      checkpoint_id: typeof raw.checkpoint_id === 'string' ? raw.checkpoint_id : '',
+      lineage_id: typeof raw.lineage_id === 'string' ? raw.lineage_id : '',
+      value: {
+        recommendations: normalizedRecommendations,
+      },
+    };
+  };
+
+  const parseHostApplyPreorderValue = (input: unknown): HostApplyPreorderValue | null => {
+    let parsed = input;
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch {
+        return null;
+      }
+    }
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const raw = parsed as Partial<HostApplyPreorderValue>;
+    const suborders = raw.value?.suborders;
+    if (!Array.isArray(suborders)) return null;
+
+    const normalizedSuborders = suborders.filter(
+      (item): item is HostApplySuborder => !!item && typeof item === 'object',
+    );
+    if (normalizedSuborders.length === 0) return null;
+
+    return {
+      checkpoint_id: typeof raw.checkpoint_id === 'string' ? raw.checkpoint_id : '',
+      lineage_id: typeof raw.lineage_id === 'string' ? raw.lineage_id : '',
+      value: {
+        suborders: normalizedSuborders,
+      },
+    };
+  };
+
+  const parseHostApplySubmitValue = (input: unknown): HostApplySubmitValue | null => {
+    let parsed = input;
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch {
+        return null;
+      }
+    }
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const raw = parsed as HostApplySubmitValue;
+    const suborders = raw.value?.data?.body_param?.suborders;
+    if (!Array.isArray(suborders) || suborders.length === 0) return null;
+
+    return {
+      checkpoint_id: typeof raw.checkpoint_id === 'string' ? raw.checkpoint_id : '',
+      lineage_id: typeof raw.lineage_id === 'string' ? raw.lineage_id : '',
+      value: raw.value,
+    };
+  };
+
   const toHistoryMessage = (raw: Record<string, unknown>): Message => {
     const id = (raw.id as string) || genId();
     const role = raw.role as string;
@@ -140,6 +266,54 @@ export function useStream(msg: MessageModule, event: EventModule) {
         }
       }
 
+      if (content?.name === 'account_select.interrupt') {
+        const parsed = parseAccountSelectInterruptValue(content.value);
+        if (parsed) {
+          return {
+            role: MessageRole.Assistant,
+            content: parsed as unknown as Message['content'],
+            __type: 'account_select.interrupt',
+            ...base,
+          } as Message;
+        }
+      }
+
+      if (content?.name === HOST_APPLY_RECOMMEND_EVENT) {
+        const parsed = parseHostApplyRecommendValue(content.value);
+        if (parsed) {
+          return {
+            role: MessageRole.Assistant,
+            content: parsed as unknown as Message['content'],
+            __type: 'host_apply.recommend',
+            ...base,
+          } as Message;
+        }
+      }
+
+      if (content?.name === HOST_APPLY_CONFIRM_EVENT) {
+        const parsed = parseHostApplyPreorderValue(content.value);
+        if (parsed) {
+          return {
+            role: MessageRole.Assistant,
+            content: parsed as unknown as Message['content'],
+            __type: 'host_apply.preorder',
+            ...base,
+          } as Message;
+        }
+      }
+
+      if (content?.name === HOST_APPLY_SUBMIT_EVENT) {
+        const parsed = parseHostApplySubmitValue(content.value);
+        if (parsed) {
+          return {
+            role: MessageRole.Assistant,
+            content: parsed as unknown as Message['content'],
+            __type: 'host_apply.submit',
+            ...base,
+          } as Message;
+        }
+      }
+
       return {
         role: MessageRole.Assistant,
         content: typeof content?.name === 'string' ? `活动消息：${content.name}` : '活动消息',
@@ -158,13 +332,23 @@ export function useStream(msg: MessageModule, event: EventModule) {
     } as Message;
   };
 
-  const streamChat = async (userMessages: { role: string; content: string }[]) => {
+  const streamChat = async (
+    userMessages: { role: string; content: string }[],
+    resumeValue?: string,
+    forwardedProps?: Record<string, unknown>,
+  ) => {
     const controller = new AbortController();
     abortController = controller;
     isChatting.value = true;
 
     try {
-      const response = await agentApi.streamChat(sessionCode.value, userMessages, controller.signal);
+      const response = await agentApi.streamChat(
+        sessionCode.value,
+        userMessages,
+        controller.signal,
+        resumeValue,
+        forwardedProps,
+      );
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 

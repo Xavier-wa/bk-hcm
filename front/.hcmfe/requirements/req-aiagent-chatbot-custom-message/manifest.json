@@ -1,0 +1,30 @@
+{
+  "id": "req-aiagent-chatbot-custom-message",
+  "title": "aiagent - chatbot自定义消息展示",
+  "createdAt": "2026-06-10T09:42:55.321Z",
+  "updatedAt": "2026-06-11T09:32:30.117Z",
+  "external": {
+    "tapd": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598134649873",
+    "tapd_parent_id": "1069995598134649873"
+  },
+  "iterations": [
+    {
+      "wfId": "iter-chatbot-custom-msg-jsonschema",
+      "status": "prd",
+      "branch": "feat-chatbot-custom-message",
+      "title": "aiagent - chatbot自定义消息展示 - jsonschema模式",
+      "createdAt": "2026-06-10T09:43:06.910Z"
+    },
+    {
+      "wfId": "iter-chatbot-custom-msg-command-template",
+      "status": "prd",
+      "title": "aiagent - chatbot自定义消息展示 - 指令模板模式",
+      "createdAt": "2026-06-11T09:32:30.061Z"
+    }
+  ],
+  "aggregatedArtifacts": {},
+  "codeScope": {
+    "globs": [],
+    "autoLearned": true
+  }
+}

@@ -2,9 +2,10 @@
 import { computed, onBeforeUnmount, onMounted, provide, ref, useTemplateRef } from 'vue';
 
 import { useChatbot } from '@/hooks/chatbot/use-chatbot';
-import { ChatbotKey } from '@/hooks/chatbot/provide';
+import { ChatbotKey, ChatbotModeKey } from '@/hooks/chatbot/provide';
 import ChatMessageList from '@/components/chatbot/chat-message-list.vue';
 import ChatInputBox from '@/components/chatbot/chat-input-box.vue';
+import AccountSelectEcho from '@/components/chatbot/account-select-echo.vue';
 import DraggableContainer from './draggable-container.vue';
 import AiAssistantHeader from './header.vue';
 import AiAssistantNimbus from './nimbus.vue';
@@ -37,9 +38,19 @@ const props = withDefaults(
 // 传入 sceneTag 使会话列表按场景加载、新会话归入对应场景。
 const chatbot = useChatbot({ sceneTag: props.sceneTag });
 provide(ChatbotKey, chatbot);
+provide(ChatbotModeKey, 'floating');
 
-const { messages, isLoadingHistory, sessions, currentSessionCode, sendMessage, goHome, switchSession, initSessions } =
-  chatbot;
+const {
+  messages,
+  isLoadingHistory,
+  sessions,
+  currentSessionCode,
+  sendMessage,
+  goHome,
+  switchSession,
+  initSessions,
+  selectedAccountEcho,
+} = chatbot;
 
 const draggableContainerRef = useTemplateRef<InstanceType<typeof DraggableContainer>>('draggableContainerRef');
 
@@ -157,6 +168,8 @@ defineExpose<AiAssistantExpose>({
             @toggle-compression="handleToggleCompression"
           />
           <div class="ai-assistant-content">
+            <!-- 云账号选择吸顶回显：通栏铺满浮窗主内容区 -->
+            <AccountSelectEcho v-if="selectedAccountEcho" :echo="selectedAccountEcho" class="aa-account-echo" />
             <div class="ai-assistant-body">
               <div v-if="isLoadingHistory" class="aa-loading">
                 <div class="aa-loading-spinner" />
@@ -188,6 +201,15 @@ defineExpose<AiAssistantExpose>({
     </div>
   </teleport>
 </template>
+
+<style lang="scss">
+// 浮窗面板 z-index 10000；chat-x 的操作按钮 tooltip 由 tippy 挂到 body（默认 z-index 9999），
+// 会被面板遮挡。此处提升 chat-x（ai-chat-box 主题）tooltip 的层级，使其浮于面板之上。
+// 注意：tippy 弹层挂在 body 上、不在组件作用域内，故此样式块不加 scoped。
+[data-tippy-root]:has(.tippy-box[data-theme*='ai-chat-box']) {
+  z-index: 10001 !important;
+}
+</style>
 
 <style lang="scss" scoped>
 .ai-assistant {
@@ -226,6 +248,10 @@ defineExpose<AiAssistantExpose>({
   flex: 1;
   flex-direction: column;
   min-height: 0;
+
+  .aa-account-echo {
+    flex-shrink: 0;
+  }
 }
 
 .ai-assistant-body {
@@ -239,6 +265,11 @@ defineExpose<AiAssistantExpose>({
   overflow-y: auto;
   scrollbar-color: #dcdee5 transparent;
   scrollbar-width: thin;
+
+  // 浮窗态：自定义消息卡自身 padding 收紧（卡片自身 padding 无法被自身的 @container 命中）
+  :deep(.custom-msg-card) {
+    padding: 8px 12px;
+  }
 }
 
 .aa-loading {

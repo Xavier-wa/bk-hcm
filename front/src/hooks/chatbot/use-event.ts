@@ -1,6 +1,16 @@
 import { MessageContentType, MessageRole, MessageStatus, type Message, type ToolCall } from '@blueking/chat-x';
 
-import { EventType, type HitlInterruptValue } from './types';
+import {
+  EventType,
+  HOST_APPLY_CONFIRM_EVENT,
+  HOST_APPLY_RECOMMEND_EVENT,
+  HOST_APPLY_SUBMIT_EVENT,
+  type AccountSelectInterruptValue,
+  type HitlInterruptValue,
+  type HostApplyPreorderValue,
+  type HostApplyRecommendValue,
+  type HostApplySubmitValue,
+} from './types';
 import { genId, type MessageModule } from './use-message';
 
 export function useEventHandler(msg: MessageModule) {
@@ -183,7 +193,48 @@ export function useEventHandler(msg: MessageModule) {
             status: MessageStatus.Complete,
             __type: 'hitl.interrupt',
           } as Message);
+        } else if (name === 'account_select.interrupt') {
+          const rawValue = JSON.parse(event.value as string) as AccountSelectInterruptValue;
+          msg.messages.value.push({
+            role: MessageRole.Assistant,
+            content: rawValue as any,
+            id: genId(),
+            messageId: genId(),
+            status: MessageStatus.Complete,
+            __type: 'account_select.interrupt',
+          } as Message);
+        } else if (name === HOST_APPLY_RECOMMEND_EVENT) {
+          const rawValue = JSON.parse(event.value as string) as HostApplyRecommendValue;
+          msg.messages.value.push({
+            role: MessageRole.Assistant,
+            content: rawValue as any,
+            id: genId(),
+            messageId: genId(),
+            status: MessageStatus.Complete,
+            __type: 'host_apply.recommend',
+          } as Message);
+        } else if (name === HOST_APPLY_CONFIRM_EVENT) {
+          const rawValue = JSON.parse(event.value as string) as HostApplyPreorderValue;
+          msg.messages.value.push({
+            role: MessageRole.Assistant,
+            content: rawValue as any,
+            id: genId(),
+            messageId: genId(),
+            status: MessageStatus.Complete,
+            __type: 'host_apply.preorder',
+          } as Message);
+        } else if (name === HOST_APPLY_SUBMIT_EVENT) {
+          const rawValue = JSON.parse(event.value as string) as HostApplySubmitValue;
+          msg.messages.value.push({
+            role: MessageRole.Assistant,
+            content: rawValue as any,
+            id: genId(),
+            messageId: genId(),
+            status: MessageStatus.Complete,
+            __type: 'host_apply.submit',
+          } as Message);
         }
+        // 其余约定外的 CUSTOM 事件名不处理，保持原生（伴随的 TEXT_MESSAGE 文本气泡）输出
         break;
       }
       case EventType.Raw:

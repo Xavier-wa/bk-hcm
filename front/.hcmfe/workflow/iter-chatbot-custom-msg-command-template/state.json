@@ -1,0 +1,93 @@
+{
+  "id": "iter-chatbot-custom-msg-command-template",
+  "title": "aiagent - chatbot自定义消息展示 - 指令模板模式",
+  "currentStage": "test",
+  "createdAt": "2026-06-11T09:32:30.061Z",
+  "updatedAt": "2026-06-17T16:16:50.911Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/iter-chatbot-custom-msg-command-template/prd.md",
+        "kind": "file",
+        "addedAt": "2026-06-11T11:37:36.053Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/iter-chatbot-custom-msg-command-template/design.md",
+        "kind": "file",
+        "addedAt": "2026-06-12T03:12:27.775Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/iter-chatbot-custom-msg-command-template/api.md",
+        "kind": "file",
+        "addedAt": "2026-06-12T06:28:01.022Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/iter-chatbot-custom-msg-command-template/coding.md",
+        "kind": "file",
+        "addedAt": "2026-06-17T07:02:00.000Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/iter-chatbot-custom-msg-command-template/test.md",
+        "kind": "file",
+        "addedAt": "2026-06-17T16:16:50.911Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-06-12T02:01:16.753Z",
+      "note": "用户确认关键决策后推进：①前端内置模板库（template_id+数据）；②与 jsonschema 统一 CUSTOM event 靠 name 区分；③本迭代落地主机申领相关模板（接云账号选择下一步）同时建立按指令→模板库解析机制；④设计稿 design 阶段提供（已提供 PNG）。Q5 字段/Schema 结构留 api 阶段。"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-06-12T06:19:42.460Z",
+      "note": "用户确认 design 定稿：A 申领方案推荐 / B 预提单数据（agent 提交方案后返回，非前端解析）/ C 调整配置弹窗（由 B 行内编辑触发，仅左侧表单、去掉快捷切换机型）均做。两次回传：A 提交方案 id→agent 返回 B；B 确认预提单（未改回传原数据、改过回传完整配置）。添加到配置清单本迭代仅跳转+预留入口（routerAction），回填留后续需求。只读展开态+历史回放做。全页/浮窗响应式。字段/协议留 api 阶段。"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-06-12T06:57:59.477Z"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-06-17T16:14:40.565Z",
+      "note": "用户确认 coding.md 作为实现依据：模板 A 推荐方案 / B 预提单 / C 调整弹窗 / D 确认提交卡（tool_confirm.interrupt.create_cvm_apply，只读无操作列、确认提交回传整个 data）均已实现。两处 resume 承载形式为隔离假设（待后端确认，见 api.md §6）。其余约定外事件名保持原生输出。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-06-11T09:32:30.061Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-06-12T02:01:22.875Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-06-12T06:19:55.481Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-06-12T06:58:05.055Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-06-17T16:14:49.614Z"
+    }
+  ],
+  "requirementId": "req-aiagent-chatbot-custom-message"
+}

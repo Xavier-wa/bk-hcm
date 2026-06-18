@@ -15,3 +15,11 @@ export const useChatbotContext = (): ChatbotContext => {
   }
   return ctx;
 };
+
+// 渲染场景：fullpage 为全页 chatbot，floating 为右侧 AI 助手浮窗
+export type ChatbotMode = 'fullpage' | 'floating';
+
+export const ChatbotModeKey: InjectionKey<ChatbotMode> = Symbol('chatbot-mode');
+
+// useChatbotMode 注入当前渲染场景，未 provide 时默认全页
+export const useChatbotMode = (): ChatbotMode => inject(ChatbotModeKey, 'fullpage');

@@ -1,0 +1,105 @@
+{
+  "id": "iter-chatbot-custom-msg-jsonschema",
+  "title": "aiagent - chatbot自定义消息展示 - jsonschema模式",
+  "currentStage": "done",
+  "createdAt": "2026-06-10T09:43:06.910Z",
+  "updatedAt": "2026-06-11T08:25:16.268Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/iter-chatbot-custom-msg-jsonschema/prd.md",
+        "kind": "file",
+        "addedAt": "2026-06-11T01:40:50.080Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/iter-chatbot-custom-msg-jsonschema/design.md",
+        "kind": "file",
+        "addedAt": "2026-06-11T02:21:07.489Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/iter-chatbot-custom-msg-jsonschema/api.md",
+        "kind": "file",
+        "addedAt": "2026-06-11T02:47:58.373Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/iter-chatbot-custom-msg-jsonschema/coding.md",
+        "kind": "file",
+        "addedAt": "2026-06-11T03:46:07.610Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/iter-chatbot-custom-msg-jsonschema/test.md",
+        "kind": "file",
+        "addedAt": "2026-06-11T08:23:40.076Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-06-11T02:16:57.498Z",
+      "note": "用户确认 OK：目标=jsonschema 基础框架+云账号选择场景；Q1~Q10 及 Q-Figma（PNG）均已确认，Q-Schema 留到 api 阶段"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-06-11T02:42:15.351Z",
+      "note": "用户确认：QD1~QD6 + 浮窗适配均已确认。框架通用三态交互、全页/浮窗响应式、吸顶回显、vendor svg 图标文件、配额数据驱动、本迭代仅单选。Schema 字段结构留到 api 阶段"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-06-11T03:37:53.888Z",
+      "note": "API 已按真实 eventstream 核对：CUSTOM(account_select.interrupt) value.value={options,type}（无 message，提示语为普通 TEXT_MESSAGE 自然渲染）；选项内联 account_id/account_name/vendor/enabled/reason；vendor 用 VENDORS 中文名+vendor-*.svg；上行 /agui forwardedProps.resumeValue=account_id，手动输入用 content 兜底；仅 QA2 历史快照结构待后端样例，不阻塞编码。"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-06-11T08:22:57.723Z",
+      "note": "编码完成并自测联调通过：jsonschema 基础框架 + 云账号选择场景落地。CUSTOM(account_select.interrupt) 渲染三态卡片（选择/收起摘要/展开只读）、吸顶通栏回显、resumeValue 上行、历史回放只读态推断；全页投影/浮窗描边+紧凑、厂商卡 grid 靠左对齐、tooltip 层级修复。ReadLints 全部通过。"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-06-11T08:25:07.348Z",
+      "note": "用户确认：产出简化版手测清单 test.md（P0×4 + P1×5，覆盖本迭代实际落地行为），授权推进至 done。联调阶段已验证还原与选中无误。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-06-10T09:43:06.910Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-06-11T02:17:28.641Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-06-11T02:42:25.477Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-06-11T03:40:17.988Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-06-11T08:23:04.580Z"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-06-11T08:25:16.268Z"
+    }
+  ],
+  "requirementId": "req-aiagent-chatbot-custom-message",
+  "branch": "feat-chatbot-custom-message"
+}
