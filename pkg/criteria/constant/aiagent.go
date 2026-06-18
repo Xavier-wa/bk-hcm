@@ -182,6 +182,15 @@ const (
 	// expanded before each LLM call.
 	SessionBkBizIDTempKey = "session_bk_biz_id"
 
+	// SessionAccountIDTempKey is the session temp-state key written by the BeforeModel
+	// callback so that the instruction placeholder {temp:account_id?} is
+	// expanded before each LLM call.
+	SessionAccountIDTempKey = "account_id"
+
+	// SessionSelectedAccountIDStateKey 持久化 account_select 节点选定的账号，
+	// 使其跨多次 run 保留，避免重复触发账号选择。
+	SessionSelectedAccountIDStateKey = "cvm_apply:selected_account_id"
+
 	// SessionUserDisplayNameKey is the session user-state key written by the BeforeModel
 	// callback so that the instruction placeholder {user:display_name?} is
 	// expanded before each LLM call.
@@ -205,6 +214,15 @@ const StateKeySessionTag = "session_tag"
 // ForwardedPropSessionTag is the forwardedProps key used to pass the session tag into a graph run.
 const ForwardedPropSessionTag = "sessionTag"
 
+// ForwardedPropResumeValue is the forwardedProps key used by the frontend to pass structured
+// resume data (e.g. a selected account_id) when resuming from an HITL interrupt.
+const ForwardedPropResumeValue = "resumeValue"
+
+// StateKeyForwardedResumeValue is the runtime-state key that carries the structured resume value
+// from forwardedProps. It is kept separate from the resume command (which always carries the
+// free-form user input text), so nodes can consume the structured selection independently.
+const StateKeyForwardedResumeValue = "forwarded_resume_value"
+
 // HITL (Human-in-the-Loop) constants
 const (
 	// HumanConfirmToolName is the name of the human confirmation tool.
@@ -213,15 +231,27 @@ const (
 
 	// HITLInterruptKey is the key used for graph.Interrupt in HITL flow.
 	// This key is used to identify the interrupt in ResumeMap.
-	HITLInterruptKey = "human_confirm"
+	HITLInterruptKey = "hitl.interrupt"
 	// InterruptKeySeparator separates interrupt key parts.
 	InterruptKeySeparator = ":"
 
 	// FallbackInterruptKey is the key used for graph.Interrupt in fallback flow.
 	// When LLM responds without tool calls, fallback pauses here until the user sends the next message.
+	// NOTE: fallback是唯一不产生 custom 事件的 interrupt
 	FallbackInterruptKey = "fallback"
 	// FallbackInterruptKeyHashLen is the short hash length used in fallback interrupt key.
 	FallbackInterruptKeyHashLen = 16
+
+	// AccountSelectInterruptKey is the key used for graph.Interrupt when multiple accounts are
+	// detected and the user must choose one to proceed with the CVM apply workflow.
+	AccountSelectInterruptKey = "account_select.interrupt"
+)
+
+// CVM apply graph state keys
+const (
+	// AccountSelectNextNodeKey is an internal routing key written by the account_select node so the
+	// conditional edge function can decide the next node.
+	AccountSelectNextNodeKey = "account_select.next"
 )
 
 // bkaidev
@@ -244,3 +274,7 @@ const (
 
 // PermissionDeniedMsg is the message for permission denied.
 const PermissionDeniedMsg = "当前用户无权限执行该工具，请联系管理员或确认工具可见范围"
+
+// NoPermissionFallbackMessage is the fallback reply shown when no available cloud account exists
+// under the current biz, blocking the CVM apply workflow.
+const NoPermissionFallbackMessage = "当前没有可用的云账号，请联系该业务管理员开通权限：[联系管理员](wxwork://message?username=HCM)"

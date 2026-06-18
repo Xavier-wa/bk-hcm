@@ -68,4 +68,6 @@ const (
 	BKHTTPCookieLanguageKey = "blueking_language"
 	// WebSourceAppCode app code for web source
 	WebSourceAppCode = "hcm-web-server"
+	// AgentSourceAppCode app code for agent-server source
+	AgentSourceAppCode = "hcm-agent-server"
 )

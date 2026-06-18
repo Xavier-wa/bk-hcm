@@ -179,3 +179,25 @@ func (m MCPFilterMode) Validate() error {
 	}
 	return nil
 }
+
+// CvmApplyNode is the name of a graph node in the CVM apply workflow.
+type CvmApplyNode string
+
+const (
+	// CvmApplyNodeLLM is the LLM node.
+	CvmApplyNodeLLM CvmApplyNode = "llm"
+	// CvmApplyNodeAccountSelect is the account selection node.
+	CvmApplyNodeAccountSelect CvmApplyNode = "account_select"
+	// CvmApplyNodeFallback is the fallback node.
+	CvmApplyNodeFallback CvmApplyNode = "fallback"
+)
+
+// Validate validates the CVM apply node.
+func (n CvmApplyNode) Validate() error {
+	switch n {
+	case CvmApplyNodeLLM, CvmApplyNodeAccountSelect, CvmApplyNodeFallback:
+	default:
+		return fmt.Errorf("unsupported CVM apply node: %s", n)
+	}
+	return nil
+}

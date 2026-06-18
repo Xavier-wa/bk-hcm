@@ -98,7 +98,7 @@ func (s *agentServer) prepare(opt *options.Option) error {
 
 	// new api server discovery client.
 	svcOpt := serviced.NewServiceOption(cc.AgentServerName, cc.AgentServer().Network, opt.Sys)
-	discOpt := serviced.DiscoveryOption{Services: []cc.Name{cc.DataServiceName, cc.AuthServerName}}
+	discOpt := serviced.DiscoveryOption{Services: []cc.Name{cc.DataServiceName, cc.AuthServerName, cc.CloudServerName}}
 	sd, err := serviced.NewServiceD(cc.AgentServer().Service, svcOpt, discOpt)
 	if err != nil {
 		return fmt.Errorf("new serviced discovery failed, err: %v", err)

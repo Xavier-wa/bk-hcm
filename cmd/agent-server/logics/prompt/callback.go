@@ -165,6 +165,9 @@ type instructionTemplateData struct {
 	// BkBizID is the business ID bound to the current session. Empty when the session is
 	// platform-level (bk_biz_id = -1) or when the value has not been set.
 	BkBizID string
+	// AccountID is the cloud account ID identified by the account_select graph node.
+	// Empty when no account has been selected yet.
+	AccountID string
 }
 
 // renderInstructionTemplate executes the instruction Go template with runtime values
@@ -186,6 +189,9 @@ func renderInstructionTemplate(ctx context.Context, tmpl string) string {
 	if inv, ok := trpcagent.InvocationFromContext(ctx); ok && inv != nil && inv.RunOptions.RuntimeState != nil {
 		if bkBizID, ok := inv.RunOptions.RuntimeState[constant.SessionBkBizIDStateKey].(int64); ok && bkBizID > 0 {
 			data.BkBizID = strconv.FormatInt(bkBizID, 10)
+		}
+		if accountID, ok := inv.RunOptions.RuntimeState[constant.SessionAccountIDTempKey].(string); ok {
+			data.AccountID = accountID
 		}
 	}
 

@@ -748,21 +748,25 @@ func makeRunOptionResolver(saver graph.CheckpointSaver, allowedModels []string,
 		}
 
 		// Auto-detect interrupted checkpoint and prepare resume (HITL / fallback interrupt).
-		runtimeState = tryPrepareAutoResume(saver, ctx, input, runtimeState)
-
+		// resume command 承载用户输入文本；forwardedProps 的结构化值写入独立 runtime-state key。
+		var forwardedProps map[string]any
 		if props, ok := input.ForwardedProps.(map[string]any); ok {
-			if modelName, _ := props["modelName"].(string); modelName != "" {
-				modelName = strings.TrimSpace(modelName)
-				if _, ok := allowed[modelName]; !ok {
-					return nil, fmt.Errorf("model %q is not in the allowed models list", modelName)
-				}
-				opts = append(opts, agent.WithModelName(modelName))
-			}
+			forwardedProps = props
+		}
+		runtimeState = tryPrepareAutoResume(saver, ctx, input, runtimeState, forwardedProps)
 
-			// 注入会话场景标签：非空时写入 StateKeySessionTag，供 scene_dispatch 首轮直达
-			if sessionTag, _ := props[constant.ForwardedPropSessionTag].(string); sessionTag != "" {
-				runtimeState[constant.StateKeySessionTag] = enumor.IntentType(sessionTag)
+		// 注入会话场景标签：非空时写入 StateKeySessionTag，供 scene_dispatch 首轮直达
+		if sessionTag, _ := forwardedProps[constant.ForwardedPropSessionTag].(string); sessionTag != "" {
+			runtimeState[constant.StateKeySessionTag] = enumor.IntentType(sessionTag)
+		}
+
+		// ForwardedProps: model selection.
+		if modelName, _ := forwardedProps["modelName"].(string); modelName != "" {
+			modelName = strings.TrimSpace(modelName)
+			if _, ok := allowed[modelName]; !ok {
+				return nil, fmt.Errorf("model %q is not in the allowed models list", modelName)
 			}
+			opts = append(opts, agent.WithModelName(modelName))
 		}
 		opts = append(opts, agent.WithRuntimeState(runtimeState))
 
@@ -776,15 +780,18 @@ func makeRunOptionResolver(saver graph.CheckpointSaver, allowedModels []string,
 }
 
 // tryPrepareAutoResume checks if the thread has an interrupted checkpoint and, if
-// so, injects the checkpointID and the latest user message as the resume value
-// into runtimeState so the graph continues from the interrupt point.
+// so, injects the checkpointID and resume value into runtimeState so the graph
+// continues from the interrupt point.
 //
-// Auto-resume: binds lineageID to threadID so checkpoints are queryable by
-// thread. On each run, checks whether the thread has an interrupted checkpoint;
-// if so, automatically injects the checkpointID and the latest user message as
-// the resume value so the graph continues from the interrupt point.
+// resume command 始终承载最新的用户消息文本（非格式化、无法预期的自由输入）。
+// forwardedProps 中的结构化内容（如选中的 account_id）则写入独立的
+// StateKeyForwardedResumeValue，与用户输入区分开，供节点单独消费。
+//
+// NOTE: mergeInitialStateNonInternal skips keys starting with "_", so
+// StateKeyCommand (processed by processResumeCommand) must be used instead of
+// writing ResumeChannel directly.
 func tryPrepareAutoResume(saver graph.CheckpointSaver, ctx context.Context, input *adapter.RunAgentInput,
-	runtimeState map[string]any) map[string]any {
+	runtimeState map[string]any, forwardedProps map[string]any) map[string]any {
 
 	rid := rest.RidFromContext(ctx)
 	if saver == nil {
@@ -797,22 +804,36 @@ func tryPrepareAutoResume(saver graph.CheckpointSaver, ctx context.Context, inpu
 		return runtimeState
 	}
 
-	if tuple != nil && tuple.Checkpoint != nil && tuple.Checkpoint.IsInterrupted() {
-		// Thread was interrupted; resume from the latest checkpoint.
-		runtimeState[graph.CfgKeyCheckpointID] = tuple.Checkpoint.ID
+	if tuple == nil || tuple.Checkpoint == nil || !tuple.Checkpoint.IsInterrupted() {
+		return runtimeState
+	}
 
-		// Use the latest user message as the resume value.
-		if len(input.Messages) > 0 {
-			lastMsg := input.Messages[len(input.Messages)-1]
-			if lastMsg.Role == "user" && lastMsg.Content != "" {
+	runtimeState[graph.CfgKeyCheckpointID] = tuple.Checkpoint.ID
 
-				// NOTE: mergeInitialStateNonInternal skips keys starting with "_",
-				// so we must use StateKeyCommand (processed by processResumeCommand)
-				// instead of writing ResumeChannel directly.
-				runtimeState[graph.StateKeyCommand] = graph.NewResumeCommand().WithResume(lastMsg.Content)
-				logs.Infof("auto-resume: set resume value from user message: %s, rid: %s", lastMsg.Content, rid)
-			}
+	// 前端通过 forwardedProps 传入的结构化数据（如选中的 account_id）写入独立的 runtime-state key。
+	// resume command 始终承载用户自由输入文本，是非格式化、无法预期的内容，二者必须区分开，
+	// 避免结构化内容覆盖用户输入。节点可按需从 StateKeyForwardedResumeValue 单独消费结构化值。
+	forwardedResumeVal, hasForwarded := forwardedProps[constant.ForwardedPropResumeValue]
+	if hasForwarded && forwardedResumeVal != nil {
+		runtimeState[constant.StateKeyForwardedResumeValue] = forwardedResumeVal
+		logs.Infof("auto-resume: stored forwardedProps resume value into runtime state, rid: %s", rid)
+	}
+
+	// resume command 来自最新的用户消息文本；即便前端通过 forwardedProps 传结构化数据，
+	// 仍需设置 resume command 以驱动 graph 从中断点继续。
+	var userInput string
+	if len(input.Messages) > 0 {
+		lastMsg := input.Messages[len(input.Messages)-1]
+		if lastMsg.Role == "user" {
+			userInput, _ = lastMsg.Content.(string)
 		}
+	}
+	if userInput != "" {
+		// NOTE: mergeInitialStateNonInternal skips keys starting with "_",
+		// so we must use StateKeyCommand (processed by processResumeCommand)
+		// instead of writing ResumeChannel directly.
+		runtimeState[graph.StateKeyCommand] = graph.NewResumeCommand().WithResume(userInput)
+		logs.Infof("auto-resume: set resume command from user input: %q, rid: %s", userInput, rid)
 	}
 
 	return runtimeState

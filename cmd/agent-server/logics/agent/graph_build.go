@@ -24,10 +24,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"time"
 
+	cvmapply "hcm/cmd/agent-server/logics/agent/cvm_apply"
 	"hcm/cmd/agent-server/logics/agent/hitl"
 	"hcm/cmd/agent-server/logics/agent/intent"
+	"hcm/cmd/agent-server/logics/agent/message"
 	"hcm/cmd/agent-server/logics/logger"
 	"hcm/cmd/agent-server/logics/model"
 	"hcm/cmd/agent-server/logics/prompt"
@@ -36,12 +37,12 @@ import (
 	agenttool "hcm/cmd/agent-server/logics/tool"
 	"hcm/cmd/agent-server/logics/toolproxy"
 	"hcm/pkg/cc"
+	cloudserver "hcm/pkg/client/cloud-server"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 	cvt "hcm/pkg/tools/converter"
-	"hcm/pkg/tools/uuid"
 
 	"trpc.group/trpc-go/trpc-agent-go/graph"
 	trpcmodel "trpc.group/trpc-go/trpc-agent-go/model"
@@ -70,8 +71,8 @@ import (
 // The tool node executes MCP and skill tools.
 // The fallback node normalizes the LLM response and interrupts to wait for the next user message.
 func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *agenttool.MCPToolSet,
-	toolProxy *toolproxy.ToolProxy, agentName string, modelCfg cc.AgentModelGeneralConfig, promptStore *prompt.Store) (
-	*graph.Graph, error) {
+	toolProxy *toolproxy.ToolProxy, agentName string, modelCfg cc.AgentModelGeneralConfig,
+	promptStore *prompt.Store, cloudClient *cloudserver.Client) (*graph.Graph, error) {
 
 	schema := graph.MessagesStateSchema()
 	stateGraph := graph.NewStateGraph(schema)
@@ -122,18 +123,29 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 	// 6. Fallback Node: delivers LLM response, interrupts, and routes the next user message.
 	stateGraph.AddNode("fallback", makeFallbackNode())
 
-	// Entry point: every new run starts with scene dispatch.
+	// 7. Account Select Node: queries biz accounts and auto-selects or triggers HITL.
+	stateGraph.AddNode(string(enumor.CvmApplyNodeAccountSelect), cvmapply.NewAccountSelectNode(cloudClient))
+
+	// Entry point: every new run starts with intent recognition.
 	stateGraph.SetEntryPoint("scene_dispatch")
 
-	// scene_dispatch → llm (supported tag/intent) / fallback (unsupported intent) / intent_recognition (no tag, no intent)
+	// scene_dispatch → account_select (supported tag/intent) / fallback (unsupported tag/intent) /
+	// intent_recognition (no tag, no intent)
 	stateGraph.AddConditionalEdges("scene_dispatch", makeSceneDispatchRoutingFunc(), map[string]string{
-		"llm":                "llm",
+		"account_select":     string(enumor.CvmApplyNodeAccountSelect),
 		"fallback":           "fallback",
 		"intent_recognition": "intent_recognition",
 	})
 
 	// intent_recognition always returns to scene_dispatch for the routing decision.
 	stateGraph.AddEdge("intent_recognition", "scene_dispatch")
+
+	// Conditional edges from account_select: count==0 → fallback, else → llm.
+	stateGraph.AddConditionalEdges(string(enumor.CvmApplyNodeAccountSelect), makeAccountSelectRoutingFunc(),
+		map[string]string{
+			string(enumor.CvmApplyNodeFallback): string(enumor.CvmApplyNodeFallback),
+			string(enumor.CvmApplyNodeLLM):      string(enumor.CvmApplyNodeLLM),
+		})
 
 	// llm → hitl / tool / fallback based on tool_calls in the last message
 	stateGraph.AddConditionalEdges("llm", makeRoutingFunc(), map[string]string{
@@ -182,8 +194,8 @@ func makeSceneDispatchRoutingFunc() func(ctx context.Context, state graph.State)
 		rid := rest.RidFromContext(ctx)
 		tag, _ := state[constant.StateKeySessionTag].(enumor.IntentType)
 		if tag.IsSupportedScene() {
-			logs.Infof("[scene dispatch routing] session_tag=%s, route to llm, rid: %s", tag, rid)
-			return "llm", nil
+			logs.Infof("[scene dispatch routing] session_tag=%s, route to account_select, rid: %s", tag, rid)
+			return string(enumor.CvmApplyNodeAccountSelect), nil
 		}
 
 		// 本轮意图非空且不受支持：直接路由到 fallback 给出拒识回复，
@@ -191,13 +203,32 @@ func makeSceneDispatchRoutingFunc() func(ctx context.Context, state graph.State)
 		if intentStr, _ := state[constant.StateKeyIntent].(string); intentStr != "" {
 			intentType := enumor.IntentType(intentStr)
 			if !intentType.IsSupportedScene() {
-				logs.Infof("[scene dispatch routing] intent=%s unsupported, route to fallback, rid: %s", intentType, rid)
+				logs.Infof("[scene dispatch routing] intent=%s unsupported, route to fallback, rid: %s",
+					intentType, rid)
 				return "fallback", nil
 			}
 		}
 
 		logs.Infof("[scene dispatch routing] no tag/intent, route to intent_recognition, rid: %s", rid)
 		return "intent_recognition", nil
+	}
+}
+
+// makeAccountSelectRoutingFunc returns the conditional edge routing function for account_select.
+// It reads the AccountSelectNextNodeKey written by the account_select node and maps it to a
+// destination node name. Defaults to "fallback" if the key is absent.
+func makeAccountSelectRoutingFunc() func(ctx context.Context, state graph.State) (string, error) {
+	return func(ctx context.Context, state graph.State) (string, error) {
+		rid := rest.RidFromContext(ctx)
+		next, _ := state[constant.AccountSelectNextNodeKey].(enumor.CvmApplyNode)
+		switch next {
+		case enumor.CvmApplyNodeLLM:
+			logs.Infof("account_select routing: → llm, rid: %s", rid)
+			return string(enumor.CvmApplyNodeLLM), nil
+		default:
+			logs.Infof("account_select routing: → fallback (next=%q), rid: %s", next, rid)
+			return string(enumor.CvmApplyNodeFallback), nil
+		}
 	}
 }
 
@@ -328,9 +359,7 @@ func makeFallbackNode() graph.NodeFunc {
 		interruptKey := buildFallbackInterruptKey(state, lastResp)
 
 		// 上一步没有产生助手回复，需要进行emit事件封装，生成AGUI消息
-		if shouldEmitFallbackResponse(state, interruptKey, messages, lastResp) {
-			emitFallbackMessage(ctx, state, "fallback", lastResp)
-		}
+		message.EmitFallbackMessage(ctx, messages, state, interruptKey, "fallback", lastResp)
 
 		resumeValue, err := graph.Interrupt(ctx, state, interruptKey, map[string]any{
 			"last_response": lastResp,
@@ -353,7 +382,7 @@ func makeFallbackNode() graph.NodeFunc {
 		}
 		logs.Infof("fallback node: resume with user input=%s, rid: %s", userInput, rid)
 
-		return buildFallbackResumeDelta(ctx, state, messages, lastResp, userInput), nil
+		return message.BuildFallbackResumeDelta(ctx, state, messages, lastResp, userInput), nil
 	}
 }
 
@@ -367,86 +396,11 @@ func resolveFallbackLastResp(state graph.State) string {
 	if lastResp, ok := state[graph.StateKeyLastResponse].(string); ok && lastResp != "" {
 		return lastResp
 	}
+	// account_select 因当前业务无可用云账号路由到 fallback 时，返回无权限提示文案
+	if next, _ := state[constant.AccountSelectNextNodeKey].(enumor.CvmApplyNode); next == enumor.CvmApplyNodeFallback {
+		return constant.NoPermissionFallbackMessage
+	}
 	return unsupportedIntentFallbackMessage(state)
-}
-
-// shouldEmitFallbackResponse 判断 fallback 节点是否需要 emit model execution event。
-// 在 interrupt resume 重放、或消息尾部已存在 assistant 回复时，跳过 emit 防止重复输出。
-func shouldEmitFallbackResponse(state graph.State, interruptKey string, messages []trpcmodel.Message,
-	lastResp string) bool {
-
-	// 查看是否是resume重放，不能单靠下面最后一条assistant回复来判断，因为触发中断的时候，delta并不会被更新到message中
-	// 这里通过检查： 1. ResumeChannel 是否有值； 2. ResumeMap 是否有值判断是否为中断恢复
-	if graph.HasResumeValue(state, interruptKey) {
-		return false
-	}
-
-	if len(messages) > 0 && messages[len(messages)-1].Role == trpcmodel.RoleAssistant {
-		return false
-	}
-	return lastResp != ""
-}
-
-// hasAssistantTailWithContent 判断消息尾部是否已存在指定内容的 assistant 回复。
-func hasAssistantTailWithContent(messages []trpcmodel.Message, content string) bool {
-	if content == "" || len(messages) == 0 {
-		return false
-	}
-	last := messages[len(messages)-1]
-	return last.Role == trpcmodel.RoleAssistant && last.Content == content
-}
-
-// buildFallbackResumeDelta builds state delta after fallback resumes with next user input.
-// For unsupported intent turns, it rebuilds history to assistant+user to avoid stale anchoring.
-//
-// StateKeyUserInput is explicitly cleared in every resume delta. The framework's
-// mergeInitialStateNonInternal only merges keys absent from the restored checkpoint,
-// so a stale user_input written during a run that never reached the LLM node
-// (e.g. "查看预测" → fallback interrupt) persists across checkpoint/resume cycles.
-// Without the explicit clear, the LLM node's executeUserInputStage would use the
-// stale value and overwrite the correctly-rebuilt messages tail.
-func buildFallbackResumeDelta(ctx context.Context, state graph.State, messages []trpcmodel.Message, lastResp,
-	userInput string) graph.State {
-
-	rid := rest.RidFromContext(ctx)
-	delta := graph.State{
-		graph.StateKeyLastResponse: "",
-		// 清空 StateKeyUserInput：LLM 节点正常执行后会在自己的 delta 里将其置空，
-		// 但不支持意图时流程绕过了 LLMNode
-		// 旧值会残留在 checkpoint 里。若不清空，下一轮 resume 进入 LLM 节点时，
-		// executeUserInputStage 会用旧的 user_input 覆盖正确重建的 messages 末尾消息。
-		// resume的时候是把用户的输入追加到user message里面，所以这里可以清空
-		graph.StateKeyUserInput: "",
-	}
-
-	intentStr, _ := state[constant.StateKeyIntent].(string)
-	intentType := enumor.IntentType(intentStr)
-	clearingUnsupported := intentStr != "" && !intentType.IsSupportedScene()
-
-	if clearingUnsupported {
-		logs.Infof("[fallback] clear unsupported intent=%s for re-recognition, rid: %s", intentStr, rid)
-		delta[constant.StateKeyIntent] = ""
-		delta[graph.StateKeyMessages] = []graph.MessageOp{
-			graph.AppendMessages{
-				Items: []trpcmodel.Message{
-					{Role: trpcmodel.RoleAssistant, Content: lastResp},
-					{Role: trpcmodel.RoleUser, Content: userInput},
-				},
-			},
-		}
-		return delta
-	}
-
-	msgDelta := []trpcmodel.Message{{Role: trpcmodel.RoleUser, Content: userInput}}
-	if !hasAssistantTailWithContent(messages, lastResp) && lastResp != "" {
-		msgDelta = []trpcmodel.Message{
-			{Role: trpcmodel.RoleAssistant, Content: lastResp},
-			{Role: trpcmodel.RoleUser, Content: userInput},
-		}
-	}
-
-	delta[graph.StateKeyMessages] = msgDelta
-	return delta
 }
 
 // buildFallbackInterruptKey 为 fallback 节点生成稳定的 interrupt key。
@@ -484,27 +438,5 @@ func unsupportedIntentFallbackMessage(state graph.State) string {
 		return "目前AI助手仅支持主机申领相关能力，其他云资源管理功能即将上线，如需要申领主机，请直接描述您的配置需求。"
 	default:
 		return "抱歉，我暂时无法处理您的请求。"
-	}
-}
-
-// emitFallbackMessage emits the fallback text as a proper model execution event so it appears
-// as an assistant text message in the AG-UI stream. This is necessary when the graph routes
-// directly from intent_recognition to fallback (skipping the llm node), because no LLM response
-// is available to produce the TextMessage event sequence.
-func emitFallbackMessage(ctx context.Context, state graph.State, nodeID, message string) {
-	rid := rest.RidFromContext(ctx)
-	emitter := graph.GetEventEmitterWithContext(ctx, state)
-	now := time.Now()
-	responseID := uuid.UUID()
-	evt := graph.NewModelExecutionEvent(
-		graph.WithModelEventNodeID(nodeID),
-		graph.WithModelEventResponseID(responseID),
-		graph.WithModelEventOutput(message),
-		graph.WithModelEventPhase(graph.ModelExecutionPhaseComplete),
-		graph.WithModelEventStartTime(now),
-		graph.WithModelEventEndTime(now),
-	)
-	if err := emitter.Emit(evt); err != nil {
-		logs.Warnf("fallback node: emit fallback message failed, err: %v, rid: %s", err, rid)
 	}
 }

@@ -22,8 +22,8 @@ package skill
 import (
 	"context"
 	"encoding/json"
-	"time"
 
+	"hcm/cmd/agent-server/logics/agent/state"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
@@ -74,9 +74,9 @@ func MakeSkillLoadAfterToolCallback(agentName string) graph.AfterNodeCallback {
 			logs.Infof("[skill_graph] processing tool call: name=%s, rid: %s", tc.Function.Name, rid)
 			switch tc.Function.Name {
 			case constant.SkillLoadToolName:
-				recordSkillLoadedToState(ctx, tc, agentName, inv.Session, inv.SessionService)
+				recordSkillLoadedToState(ctx, tc, agentName)
 			case constant.SkillSelectDocsToolName:
-				recordSkillSelectedDocsToState(ctx, tc, agentName, inv.Session, inv.SessionService)
+				recordSkillSelectedDocsToState(ctx, tc, agentName)
 			}
 		}
 
@@ -96,42 +96,9 @@ func extractLastAssistantWithToolCalls(msgs []model.Message) *model.Message {
 	return nil
 }
 
-// persistStateToService calls svc.UpdateSessionState to write stateMap into the session backend (e.g. MySQL).
-// It also updates the in-memory sess.State for consistency within the current process.
-func persistStateToService(ctx context.Context, sess *session.Session, svc session.Service,
-	stateMap session.StateMap) {
-
-	rid := rest.RidFromContext(ctx)
-	// Log the keys being persisted for debugging.
-	keys := make([]string, 0, len(stateMap))
-	for k, v := range stateMap {
-		keys = append(keys, k)
-		// Update in-memory first for consistency within the current invocation.
-		sess.SetState(k, v)
-	}
-
-	if svc == nil {
-		logs.Warnf("[skill_graph] SessionService is nil, skip persisting state to backend, rid: %s", rid)
-		return
-	}
-	// 框架对 state 的更新存在并发且未进行加锁，如果 after callback 执行的过快，add event 对 state 的更新可能会产生覆盖，因此这里等待
-	time.Sleep(constant.SessionStateUpdateConcurrentWait)
-
-	key := session.Key{
-		AppName:   sess.AppName,
-		UserID:    sess.UserID,
-		SessionID: sess.ID,
-	}
-	if err := svc.UpdateSessionState(ctx, key, stateMap); err != nil {
-		logs.Errorf("[skill_graph] UpdateSessionState failed: key=%+v err=%v, rid: %s", key, err, rid)
-	}
-}
-
 // recordSkillLoadedToState persists the skill_load result into the session backend so that
 // the loaded skill survives process restarts.
-func recordSkillLoadedToState(ctx context.Context, tc model.ToolCall, agentName string,
-	sess *session.Session, svc session.Service) {
-
+func recordSkillLoadedToState(ctx context.Context, tc model.ToolCall, agentName string) {
 	rid := rest.RidFromContext(ctx)
 	var params struct {
 		Skill string `json:"skill"`
@@ -144,14 +111,12 @@ func recordSkillLoadedToState(ctx context.Context, tc model.ToolCall, agentName 
 		return
 	}
 	loadedKey := skillpkg.LoadedKey(agentName, params.Skill)
-	persistStateToService(ctx, sess, svc, session.StateMap{loadedKey: []byte("1")})
+	state.PersistStateToService(ctx, session.StateMap{loadedKey: []byte("1")})
 	logs.Infof("[skill_graph] skill loaded: agent=%s skill=%s, rid: %s", agentName, params.Skill, rid)
 }
 
 // recordSkillSelectedDocsToState persists the skill_select_docs result into the session backend.
-func recordSkillSelectedDocsToState(ctx context.Context, tc model.ToolCall, agentName string,
-	sess *session.Session, svc session.Service) {
-
+func recordSkillSelectedDocsToState(ctx context.Context, tc model.ToolCall, agentName string) {
 	rid := rest.RidFromContext(ctx)
 	var params struct {
 		Skill          string   `json:"skill"`
@@ -178,7 +143,7 @@ func recordSkillSelectedDocsToState(ctx context.Context, tc model.ToolCall, agen
 		val = docsBytes
 	}
 	if val != nil {
-		persistStateToService(ctx, sess, svc, session.StateMap{docsKey: val})
+		state.PersistStateToService(ctx, session.StateMap{docsKey: val})
 	}
 	logs.Infof("[skill_graph] skill docs selected: agent=%s skill=%s all=%v docs=%v, rid: %s",
 		agentName, params.Skill, params.IncludeAllDocs, params.Docs, rid)

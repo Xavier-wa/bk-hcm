@@ -23,6 +23,7 @@ import (
 	"context"
 	"testing"
 
+	"hcm/cmd/agent-server/logics/agent/message"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 
@@ -107,9 +108,9 @@ func TestMakeSceneDispatchRoutingFunc(t *testing.T) {
 		wantTarget string
 	}{
 		{
-			name:       "supported session_tag routes to llm",
+			name:       "supported session_tag routes to account_select",
 			state:      graph.State{constant.StateKeySessionTag: enumor.IntentTypeHostApply},
-			wantTarget: "llm",
+			wantTarget: string(enumor.CvmApplyNodeAccountSelect),
 		},
 		{
 			name:       "this-turn unsupported intent routes to fallback",
@@ -134,7 +135,7 @@ func TestMakeSceneDispatchRoutingFunc(t *testing.T) {
 	}
 }
 
-// TestSceneDispatchNodeThenRouting 校验节点提交标签后路由直达 llm 的组合行为。
+// TestSceneDispatchNodeThenRouting 校验节点提交标签后路由直达 account_select 的组合行为。
 func TestSceneDispatchNodeThenRouting(t *testing.T) {
 	node := makeSceneDispatchNode()
 	route := makeSceneDispatchRoutingFunc()
@@ -154,12 +155,14 @@ func TestSceneDispatchNodeThenRouting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("route() error = %v", err)
 	}
-	if target != "llm" {
-		t.Errorf("route() = %q, want llm", target)
+	if want := string(enumor.CvmApplyNodeAccountSelect); target != want {
+		t.Errorf("route() = %q, want %q", target, want)
 	}
 }
 
 func TestUnsupportedIntentFallbackMessage(t *testing.T) {
+	const unsupportedMsg = "目前AI助手仅支持主机申领相关能力，其他云资源管理功能即将上线，如需要申领主机，请直接描述您的配置需求。"
+
 	tests := []struct {
 		name   string
 		intent enumor.IntentType
@@ -168,12 +171,17 @@ func TestUnsupportedIntentFallbackMessage(t *testing.T) {
 		{
 			name:   "resource_query message",
 			intent: enumor.IntentTypeResourceQuery,
-			want:   "资源查询功能正在建设中，敬请期待。如需主机申领，请直接描述您的申领需求。",
+			want:   unsupportedMsg,
 		},
 		{
 			name:   "chat message",
 			intent: enumor.IntentTypeChat,
-			want:   "您好，当前我主要支持主机申领相关能力。如需申请主机，请描述您的配置与业务需求。",
+			want:   unsupportedMsg,
+		},
+		{
+			name:   "unknown intent uses default message",
+			intent: "unknown",
+			want:   "抱歉，我暂时无法处理您的请求。",
 		},
 	}
 
@@ -188,56 +196,6 @@ func TestUnsupportedIntentFallbackMessage(t *testing.T) {
 	}
 }
 
-func TestShouldEmitFallbackResponse(t *testing.T) {
-	fallbackText := "资源查询功能正在建设中，敬请期待。如需主机申领，请直接描述您的申领需求。"
-
-	tests := []struct {
-		name     string
-		state    graph.State
-		messages []trpcmodel.Message
-		lastResp string
-		want     bool
-	}{
-		{
-			name:     "skip emit on resume replay",
-			state:    graph.State{graph.ResumeChannel: "new user input"},
-			lastResp: fallbackText,
-			want:     false,
-		},
-		{
-			name: "skip emit when assistant tail already present",
-			messages: []trpcmodel.Message{
-				{Role: trpcmodel.RoleAssistant, Content: fallbackText},
-			},
-			lastResp: fallbackText,
-			want:     false,
-		},
-		{
-			name: "emit on first unsupported intent entry",
-			state: graph.State{
-				constant.StateKeyIntent: string(enumor.IntentTypeResourceQuery),
-			},
-			messages: []trpcmodel.Message{{Role: trpcmodel.RoleUser, Content: "查预测"}},
-			lastResp: fallbackText,
-			want:     true,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			state := make(graph.State, len(tc.state)+1)
-			for k, v := range tc.state {
-				state[k] = v
-			}
-			state[graph.StateKeyMessages] = tc.messages
-			interruptKey := buildFallbackInterruptKey(state, tc.lastResp)
-			if got := shouldEmitFallbackResponse(state, interruptKey, tc.messages, tc.lastResp); got != tc.want {
-				t.Errorf("shouldEmitFallbackResponse() = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
 func TestBuildFallbackResumeDeltaClearsUnsupportedIntentHistory(t *testing.T) {
 	fallbackText := "资源查询功能正在建设中，敬请期待。如需主机申领，请直接描述您的申领需求。"
 	state := graph.State{constant.StateKeyIntent: string(enumor.IntentTypeResourceQuery)}
@@ -245,7 +203,8 @@ func TestBuildFallbackResumeDeltaClearsUnsupportedIntentHistory(t *testing.T) {
 		{Role: trpcmodel.RoleUser, Content: "我要看一下我的预测"},
 	}
 
-	delta := buildFallbackResumeDelta(context.Background(), state, messages, fallbackText, "那帮我申领一台主机吧")
+	delta := message.BuildFallbackResumeDelta(context.Background(), state, messages, fallbackText,
+		"那帮我申领一台主机吧")
 
 	intentVal, _ := delta[constant.StateKeyIntent].(string)
 	if intentVal != "" {
@@ -306,7 +265,8 @@ func TestBuildFallbackResumeDeltaClearsUserInput(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			delta := buildFallbackResumeDelta(context.Background(), tc.state, tc.messages, fallbackText, tc.userInput)
+			delta := message.BuildFallbackResumeDelta(context.Background(), tc.state, tc.messages, fallbackText,
+				tc.userInput)
 
 			userInputVal, exists := delta[graph.StateKeyUserInput]
 			if !exists {

@@ -194,7 +194,7 @@ func New(clientSet *client.ClientSet) (*Runtime, error) {
 
 	runnerOpts := buildRunnerOpts(sessionSvc, memorySvc)
 	agUIRunner, err := newAGUIRunner(defaultMdl, modelsMap, mcpToolSets, skillMgr, promptMgr.Store, runnerOpts,
-		toolSetup.toolProxy, checkpointSaver)
+		toolSetup.toolProxy, checkpointSaver, clientSet)
 	if err != nil {
 		return nil, fmt.Errorf("build AGUI runner: %w", err)
 	}
@@ -322,7 +322,7 @@ func buildRunnerOpts(sessionSvc session.Service, memorySvc memory.Service) []run
 
 func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Model, mcpToolSets *tool.MCPToolSet,
 	skillMgr *skill.Manager, promptStore *prompt.Store, runnerOpts []runner.Option, toolProxy *toolproxy.ToolProxy,
-	checkpointSaver graph.CheckpointSaver) (runner.Runner, error) {
+	checkpointSaver graph.CheckpointSaver, clientSet *client.ClientSet) (runner.Runner, error) {
 
 	aguiCfg := cc.AgentServer().AGUI
 
@@ -341,7 +341,7 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 	switch aguiCfg.Model.Mode {
 	case enumor.AgentModeGraph:
 		compiledGraph, err := agent.BuildGraph(defaultMdl, skillRepo, mcpToolSets, toolProxy,
-			aguiCfg.AppName, aguiCfg.Model, promptStore)
+			aguiCfg.AppName, aguiCfg.Model, promptStore, clientSet.CloudServer())
 		if err != nil {
 			return nil, fmt.Errorf("build graph: %w", err)
 		}

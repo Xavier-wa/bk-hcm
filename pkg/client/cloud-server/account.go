@@ -20,6 +20,8 @@
 package cloudserver
 
 import (
+	protocloud "hcm/pkg/api/data-service/cloud"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/kit"
 	"hcm/pkg/rest"
@@ -35,6 +37,32 @@ func NewAccountClient(client rest.ClientInterface) *AccountClient {
 	return &AccountClient{
 		client: client,
 	}
+}
+
+// ListByUsageBizID lists resource accounts associated with the given biz ID.
+// It calls GET /accounts/bizs/{bk_biz_id}?account_type={account_type} on cloud-server.
+// No bk_ticket is required; the internal backend kit is sufficient.
+func (c AccountClient) ListByUsageBizID(kt *kit.Kit, bkBizID int64, accountType enumor.AccountType) (
+	[]*protocloud.AccountBizRelWithAccount, error) {
+
+	resp := new(protocloud.AccountBizRelWithAccountListResp)
+
+	err := c.client.Get().
+		WithContext(kt.Ctx).
+		SubResourcef("/accounts/bizs/%d", bkBizID).
+		WithParam("account_type", string(accountType)).
+		WithHeaders(kt.Header()).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Code != errf.OK {
+		return nil, errf.New(resp.Code, resp.Message)
+	}
+
+	return resp.Data, nil
 }
 
 // Sync 账号同步

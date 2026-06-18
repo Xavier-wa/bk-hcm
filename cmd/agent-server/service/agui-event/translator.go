@@ -27,6 +27,8 @@ import (
 	"strings"
 
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/logs"
+	"hcm/pkg/rest"
 
 	aguievents "github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/core/events"
 	"trpc.group/trpc-go/trpc-agent-go/event"
@@ -58,8 +60,8 @@ func (t *customTranslator) Translate(ctx context.Context, evt *event.Event) ([]a
 	if err != nil {
 		return nil, err
 	}
-	if hitlPayload := buildHITLPayload(evt); hitlPayload != "" {
-		out = append(out, aguievents.NewCustomEvent("hitl.interrupt", aguievents.WithValue(hitlPayload)))
+	if customEvt, ok := buildInterruptCustomEvent(ctx, evt); ok {
+		out = append(out, customEvt)
 	}
 	return out, nil
 }
@@ -73,34 +75,60 @@ func (t *customTranslator) PostRunFinalizationEvents(ctx context.Context) ([]agu
 	return finalizer.PostRunFinalizationEvents(ctx)
 }
 
-func buildHITLPayload(evt *event.Event) string {
+// buildInterruptCustomEvent extracts PregelStepMetadata from evt and emits a custom event whose
+// type equals the interrupt base key (the portion before the first ":").
+// Fallback interrupts are internal flow-control pauses and are excluded.
+// Returns (nil, false) when the event carries no interrupt or is excluded.
+func buildInterruptCustomEvent(ctx context.Context, evt *event.Event) (aguievents.Event, bool) {
+	rid := rest.RidFromContext(ctx)
+	meta, ok := extractPregelMeta(ctx, evt)
+	if !ok {
+		logs.Warnf("buildInterruptCustomEvent: failed to extract PregelStepMetadata, rid: %s", rid)
+		return nil, false
+	}
+	baseKey, _, _ := strings.Cut(meta.InterruptKey, constant.InterruptKeySeparator)
+	if baseKey == "" || baseKey == constant.FallbackInterruptKey {
+		return nil, false
+	}
+	return aguievents.NewCustomEvent(baseKey, aguievents.WithValue(marshalInterruptPayload(ctx, meta))), true
+}
+
+// extractPregelMeta parses the PregelStepMetadata embedded in evt.StateDelta.
+// Returns (meta, true) on success, (zero, false) otherwise.
+func extractPregelMeta(ctx context.Context, evt *event.Event) (graph.PregelStepMetadata, bool) {
+	rid := rest.RidFromContext(ctx)
 	if evt == nil || evt.StateDelta == nil {
-		return ""
+		logs.Warnf("extractPregelMeta: evt is nil or evt.StateDelta is nil, rid: %s", rid)
+		return graph.PregelStepMetadata{}, false
 	}
 	raw, ok := evt.StateDelta[graph.MetadataKeyPregel]
 	if !ok || len(raw) == 0 {
-		return ""
+		logs.Warnf("extractPregelMeta: evt.StateDelta[graph.MetadataKeyPregel] is nil or empty, rid: %s", rid)
+		return graph.PregelStepMetadata{}, false
 	}
 	var meta graph.PregelStepMetadata
 	if err := json.Unmarshal(raw, &meta); err != nil {
-		return ""
+		logs.Errorf("extractPregelMeta: failed to unmarshal PregelStepMetadata, err: %v, rid: %s", err, rid)
+		return graph.PregelStepMetadata{}, false
 	}
-	if !isHITLInterruptKey(meta.InterruptKey) {
-		return ""
-	}
-	payload := map[string]any{
+	return meta, true
+}
+
+// marshalInterruptPayload serializes the interrupt-relevant fields of meta to a JSON string.
+// Returns an empty string if marshalling fails.
+func marshalInterruptPayload(ctx context.Context, meta graph.PregelStepMetadata) string {
+	rid := rest.RidFromContext(ctx)
+	b, err := json.Marshal(map[string]any{
 		"value":         meta.InterruptValue,
 		"checkpoint_id": meta.CheckpointID,
 		"lineage_id":    meta.LineageID,
-	}
-	b, err := json.Marshal(payload)
+	})
 	if err != nil {
+		logs.Errorf("marshalInterruptPayload: failed to marshal PregelStepMetadata, err: %v, rid: %s", err, rid)
 		return ""
 	}
-	return string(b)
-}
 
-func isHITLInterruptKey(key string) bool {
-	return key == constant.HITLInterruptKey ||
-		strings.HasPrefix(key, constant.HITLInterruptKey+constant.InterruptKeySeparator)
+	logs.Infof("marshalInterruptPayload: marshal PregelStepMetadata success, payload: %s, rid: %s",
+		string(b), rid)
+	return string(b)
 }
