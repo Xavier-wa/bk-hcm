@@ -82,6 +82,33 @@ func (s *service) BatchDisableImageToApplyCVM(cts *rest.Contexts) (interface{}, 
 	return s.batchOpImageToApplyCVM(cts, s.logics.CvmImage().BatchDisableImageCvm)
 }
 
+// UpsertCvmImageRecommend 新增或编辑CVM镜像推荐配置
+func (s *service) UpsertCvmImageRecommend(cts *rest.Contexts) (interface{}, error) {
+	req := new(types.UpsertCvmImageRecommendReq)
+	if err := cts.DecodeInto(req); err != nil {
+		logs.Errorf("failed to decode upsert cvm image recommend request, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		logs.Errorf("failed to validate upsert cvm image recommend request, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	if err := s.authorizer.AuthorizeWithPerm(cts.Kit, meta.ResourceAttribute{Basic: &meta.Basic{
+		Type: meta.GlobalConfig, Action: meta.Create}}); err != nil {
+		logs.Errorf("upsert cvm image recommend global config auth failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	if err := s.logics.CvmImage().UpsertRecommendConfig(cts.Kit, req); err != nil {
+		logs.Errorf("failed to upsert cvm image recommend config, req: %+v, err: %v, rid: %s", req, err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return nil, nil
+}
+
 // batchOpImageToApplyCVM 批量操作镜像用于申领CVM的通用处理函数
 func (s *service) batchOpImageToApplyCVM(cts *rest.Contexts, opFunc func(*kit.Kit, []string) error) (
 	interface{}, error) {

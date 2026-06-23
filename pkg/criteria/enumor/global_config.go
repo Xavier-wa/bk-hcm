@@ -82,6 +82,8 @@ const (
 	GlobalConfigTypeSpringResPool GlobalConfigType = "spring_res_pool"
 	// GlobalConfigTypeAccountBill 账单相关配置
 	GlobalConfigTypeAccountBill GlobalConfigType = "account_bill"
+	// GlobalConfigTypeCvmImageRecommend CVM镜像推荐配置类型
+	GlobalConfigTypeCvmImageRecommend GlobalConfigType = "cvm_image_recommend"
 )
 
 // GlobalConfigResDissolveKey resource dissolve global config key
@@ -185,3 +187,10 @@ const (
 	GlobalConfigKeyHuaweiGpuInstancePrefixes GlobalConfigKeyAccountBill = "huawei_gpu_instance_prefixes"
 )
 
+// GlobalConfigKeyCvmRecommend CVM镜像推荐配置key
+type GlobalConfigKeyCvmRecommend string
+
+const (
+	// GlobalConfigKeyCvmImageRecommend CVM镜像推荐配置key
+	GlobalConfigKeyCvmImageRecommend GlobalConfigKeyCvmRecommend = "recommended_images"
+)

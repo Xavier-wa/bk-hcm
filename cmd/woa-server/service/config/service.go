@@ -82,6 +82,7 @@ func (s *service) initCvmImage(h *rest.Handler) {
 	h.Add("BatchDisableImageToApplyCVM", http.MethodPost, "/config/images/disable_cvm/batch",
 		s.BatchDisableImageToApplyCVM)
 	h.Add("UpdateImageBizTag", http.MethodPut, "/config/images/{image_id}/biz_tag", s.UpdateImageBizTag)
+	h.Add("UpsertCvmImageRecommend", http.MethodPost, "/config/images/recommend/upsert", s.UpsertCvmImageRecommend)
 }
 
 func (s *service) initCvmRestrict(h *rest.Handler) {

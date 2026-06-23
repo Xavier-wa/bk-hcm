@@ -13,17 +13,21 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 
 	types "hcm/cmd/woa-server/types/config"
 	"hcm/pkg/api/core"
 	coreimage "hcm/pkg/api/core/cloud/image"
+	cgconf "hcm/pkg/api/core/global-config"
 	dataproto "hcm/pkg/api/data-service/cloud/image"
+	datagconf "hcm/pkg/api/data-service/global_config"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/tools"
+	tablegconf "hcm/pkg/dal/table/global-config"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/runtime/filter"
@@ -42,6 +46,8 @@ type CvmImageIf interface {
 	BatchEnableImageCvm(kt *kit.Kit, imageIDs []string) error
 	// BatchDisableImageCvm disables CVM functionality for images in batch
 	BatchDisableImageCvm(kt *kit.Kit, imageIDs []string) error
+	// UpsertRecommendConfig upsert cvm image recommend config
+	UpsertRecommendConfig(kt *kit.Kit, req *types.UpsertCvmImageRecommendReq) error
 }
 
 // NewCvmImageOp creates a cvm image interface
@@ -99,6 +105,23 @@ func (i *cvmImage) GetCvmImage(kt *kit.Kit, param *types.GetCvmImageParam) (*typ
 			break
 		}
 		req.Page.Start += uint32(req.Page.Limit)
+	}
+
+	// 查询 global_config 获取推荐镜像列表
+	recommendedIDs, err := i.getRecommendedImageIDs(kt)
+	if err != nil {
+		return nil, err
+	}
+	recommendedSet := make(map[string]struct{}, len(recommendedIDs))
+	for _, id := range recommendedIDs {
+		recommendedSet[id] = struct{}{}
+	}
+
+	// 填充推荐状态
+	for _, image := range imageList {
+		if _, ok := recommendedSet[image.ImageId]; ok {
+			image.IsRecommended = true
+		}
 	}
 
 	rst := &types.GetCvmImageResult{
@@ -176,6 +199,85 @@ func buildBizCvmImageFilter(param *types.GetCvmImageParam) *filter.Expression {
 		Op:    filter.And,
 		Rules: baseRules,
 	}
+}
+
+// getRecommendedImageIDs 从 global_config 表查询推荐的镜像ID列表
+func (i *cvmImage) getRecommendedImageIDs(kt *kit.Kit) ([]string, error) {
+	cfg, exist, err := i.getRecommendConfig(kt)
+	if err != nil {
+		logs.Errorf("get recommended image config failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+	if !exist {
+		return nil, nil
+	}
+
+	var imageIDs []string
+	if err = json.Unmarshal([]byte(cfg.ConfigValue), &imageIDs); err != nil {
+		logs.Errorf("unmarshal recommended image ids failed, err: %v, value: %s, rid: %s",
+			err, string(cfg.ConfigValue), kt.Rid)
+		return nil, fmt.Errorf("recommended image config value is invalid, err: %v", err)
+	}
+
+	return imageIDs, nil
+}
+
+// UpsertRecommendConfig upsert cvm image recommend config
+func (i *cvmImage) UpsertRecommendConfig(kt *kit.Kit, req *types.UpsertCvmImageRecommendReq) error {
+	if err := req.Validate(); err != nil {
+		return errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	existingConfig, exist, err := i.getRecommendConfig(kt)
+	if err != nil {
+		logs.Errorf("failed to get existing cvm image recommend config, err: %v, rid: %s", err, kt.Rid)
+		return err
+	}
+
+	if exist {
+		updateReq := &datagconf.BatchUpdateReq{
+			Configs: []cgconf.GlobalConfig{{ID: existingConfig.ID, ConfigValue: req.ImageIDs}},
+		}
+		if err = i.client.DataService().Global.GlobalConfig.BatchUpdate(kt, updateReq); err != nil {
+			logs.Errorf("failed to update cvm image recommend config, req: %+v, err: %v, rid: %s",
+				req, err, kt.Rid)
+			return err
+		}
+		return nil
+	}
+
+	createReq := &datagconf.BatchCreateReq{
+		Configs: []cgconf.GlobalConfig{{
+			ConfigType:  string(enumor.GlobalConfigTypeCvmImageRecommend),
+			ConfigKey:   string(enumor.GlobalConfigKeyCvmImageRecommend),
+			ConfigValue: req.ImageIDs,
+		}},
+	}
+	if _, err = i.client.DataService().Global.GlobalConfig.BatchCreate(kt, createReq); err != nil {
+		logs.Errorf("failed to create cvm image recommend config, req: %+v, err: %v, rid: %s", req, err, kt.Rid)
+		return err
+	}
+
+	return nil
+}
+
+// getRecommendConfig 获取推荐镜像配置
+func (i *cvmImage) getRecommendConfig(kt *kit.Kit) (*tablegconf.GlobalConfigTable, bool, error) {
+	imageFilter := tools.ExpressionAnd(
+		tools.RuleEqual("config_type", string(enumor.GlobalConfigTypeCvmImageRecommend)),
+		tools.RuleEqual("config_key", string(enumor.GlobalConfigKeyCvmImageRecommend)),
+	)
+
+	dataReq := &core.ListReq{Filter: imageFilter, Page: core.NewDefaultBasePage()}
+	dataResp, err := i.client.DataService().Global.GlobalConfig.List(kt, dataReq)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(dataResp.Details) == 0 {
+		return nil, false, nil
+	}
+
+	return &dataResp.Details[0], true, nil
 }
 
 // BatchEnableImageCvm enables CVM functionality for images in batch

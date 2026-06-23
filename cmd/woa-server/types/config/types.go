@@ -215,11 +215,12 @@ type GetDeviceRestrictResult struct {
 
 // CvmImage cvm image config
 type CvmImage struct {
-	Region    string `json:"region" bson:"region"`
-	ImageId   string `json:"image_id" bson:"image_id"`
-	ImageName string `json:"image_name" bson:"image_name"`
-	Type      string `json:"type,omitempty" bson:"type"`
-	BkBizID   int64  `json:"bk_biz_id,omitempty" bson:"bk_biz_id"`
+	Region        string `json:"region" bson:"region"`
+	ImageId       string `json:"image_id" bson:"image_id"`
+	ImageName     string `json:"image_name" bson:"image_name"`
+	Type          string `json:"type,omitempty" bson:"type"`
+	BkBizID       int64  `json:"bk_biz_id,omitempty" bson:"bk_biz_id"`
+	IsRecommended bool   `json:"is_recommended" bson:"is_recommended"`
 }
 
 // GetCvmImageParam get cvm image list request param
@@ -241,6 +242,27 @@ type BatchOpImageToApplyCVMReq struct {
 // Validate ...
 func (req *BatchOpImageToApplyCVMReq) Validate() error {
 	return validator.Validate.Struct(req)
+}
+
+// UpsertCvmImageRecommendReq upsert cvm image recommend config request
+// image_ids 为空时表示清空推荐镜像列表。
+type UpsertCvmImageRecommendReq struct {
+	ImageIDs []string `json:"image_ids" validate:"max=100"`
+}
+
+// Validate ...
+func (req *UpsertCvmImageRecommendReq) Validate() error {
+	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+
+	for _, imageID := range req.ImageIDs {
+		if len(imageID) == 0 {
+			return fmt.Errorf("image_ids contains empty id")
+		}
+	}
+
+	return nil
 }
 
 // DeviceInfo cvm device info
