@@ -1506,6 +1506,7 @@ func (g *Generator) buildSingleDeviceInfo(kt *kit.Kit, item *types.DeviceInfo, o
 		ResourceType: order.ResourceType,
 		// set device type according to order specification by default
 		DeviceType:        order.Spec.DeviceType,
+		ImageID:           order.Spec.ImageId,
 		Description:       order.Description,
 		Remark:            order.Remark,
 		IsMatched:         false,

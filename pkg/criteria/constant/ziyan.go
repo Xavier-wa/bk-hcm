@@ -158,3 +158,13 @@ const CvmApplyDeviceQueryInLimit = 3000
 
 // CvmApplyDeviceExportLimit 导出CVM设备列表的数量限制
 const CvmApplyDeviceExportLimit = 5000
+
+// 在线推荐方案的磁盘默认值
+const (
+	// RecommendSystemDiskSize 默认系统盘大小，单位 GB
+	RecommendSystemDiskSize uint = 100
+	// RecommendDataDiskSize 默认数据盘大小，单位 GB
+	RecommendDataDiskSize uint = 500
+	// RecommendDiskNum 默认磁盘块数
+	RecommendDiskNum uint = 1
+)

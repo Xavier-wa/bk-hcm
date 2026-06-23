@@ -47,6 +47,7 @@ var ZiyanCvmDeviceInfoColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "require_type", NamedC: "require_type", Type: enumor.Numeric},
 	{Column: "resource_type", NamedC: "resource_type", Type: enumor.String},
 	{Column: "device_type", NamedC: "device_type", Type: enumor.String},
+	{Column: "image_id", NamedC: "image_id", Type: enumor.String},
 	{Column: "description", NamedC: "description", Type: enumor.String},
 	{Column: "remark", NamedC: "remark", Type: enumor.String},
 	{Column: "zone_name", NamedC: "zone_name", Type: enumor.String},
@@ -99,7 +100,9 @@ type ZiyanCvmDeviceInfo struct {
 	// ResourceType 资源类型(QCLOUDCVM/PM等)
 	ResourceType enumor.ResourceType `db:"resource_type" json:"resource_type" validate:"max=32"`
 	// DeviceType 设备类型/机型
-	DeviceType  string `db:"device_type" json:"device_type" validate:"max=64"`
+	DeviceType string `db:"device_type" json:"device_type" validate:"max=64"`
+	// ImageID 镜像ID
+	ImageID     string `db:"image_id" json:"image_id" validate:"max=64"`
 	Description string `db:"description" json:"description"`
 	Remark      string `db:"remark" json:"remark"`
 	// ZoneName 可用区名称(从bkcc获取并写入)

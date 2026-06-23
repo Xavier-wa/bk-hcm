@@ -57,6 +57,7 @@ type ZiyanCvmApplyUserRecommendCreateReq struct {
 	RequireType enumor.RequireType `json:"require_type"`
 	Region      string             `json:"region" validate:"max=128"`
 	DeviceType  string             `json:"device_type" validate:"max=64"`
+	ImageID     string             `json:"image_id" validate:"omitempty,max=64"`
 	Count       int                `json:"count" validate:"required,min=1"`
 }
 
@@ -119,6 +120,7 @@ type ZiyanCvmApplyUserRecommendUpdateReq struct {
 	RequireType *enumor.RequireType `json:"require_type" validate:"omitempty"`
 	Region      string              `json:"region" validate:"omitempty,max=128"`
 	DeviceType  string              `json:"device_type" validate:"omitempty,max=64"`
+	ImageID     string              `json:"image_id" validate:"omitempty,max=64"`
 	Count       int                 `json:"count" validate:"omitempty,min=1"`
 }
 
@@ -164,6 +166,7 @@ type ZiyanCvmApplyBizRecommendCreateReq struct {
 	RequireType enumor.RequireType `json:"require_type"`
 	Region      string             `json:"region" validate:"max=128"`
 	DeviceType  string             `json:"device_type" validate:"max=64"`
+	ImageID     string             `json:"image_id" validate:"omitempty,max=64"`
 	Count       int                `json:"count" validate:"required,min=1"`
 }
 
@@ -226,6 +229,7 @@ type ZiyanCvmApplyBizRecommendUpdateReq struct {
 	RequireType *enumor.RequireType `json:"require_type" validate:"omitempty"`
 	Region      string              `json:"region" validate:"omitempty,max=128"`
 	DeviceType  string              `json:"device_type" validate:"omitempty,max=64"`
+	ImageID     string              `json:"image_id" validate:"omitempty,max=64"`
 	Count       int                 `json:"count" validate:"omitempty,min=1"`
 }
 

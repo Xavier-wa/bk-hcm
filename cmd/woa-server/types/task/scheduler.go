@@ -407,6 +407,7 @@ type DeviceInfo struct {
 	RequireType  enumor.RequireType `json:"require_type" bson:"require_type"`
 	ResourceType ResourceType       `json:"resource_type" bson:"resource_type"`
 	DeviceType   string             `json:"device_type" bson:"device_type"`
+	ImageID      string             `json:"image_id" bson:"image_id"`
 	Description  string             `json:"description" bson:"description"`
 	Remark       string             `json:"remark" bson:"remark"`
 	ZoneName     string             `json:"zone_name" bson:"zone_name"`
