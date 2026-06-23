@@ -85,7 +85,7 @@ require (
 	trpc.group/trpc-go/trpc-agent-go/memory/sqlitevec v1.8.0
 	trpc.group/trpc-go/trpc-agent-go/server/agui v1.8.0
 	trpc.group/trpc-go/trpc-agent-go/session/mysql v1.8.0
-	trpc.group/trpc-go/trpc-mcp-go v0.0.14
+	trpc.group/trpc-go/trpc-mcp-go v0.0.16
 )
 
 require (

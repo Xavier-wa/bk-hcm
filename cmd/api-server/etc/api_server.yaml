@@ -43,6 +43,90 @@ service:
       # the password to decrypt the certificate.
       password:
 
+# MCP 子系统配置：北向 ingress + 桥接 + 南向内部 MCP server。
+# 三段默认全部关闭（enable: false），不影响存量 proxy 链路。
+#
+# 字段标注约定：
+#   [必填]    启用所在段（enable: true）时必须显式配置；
+#   [可选]    可省略，留空时使用注释里给出的默认值；省略示例已注释掉。
+mcp:
+  # 北向 MCP ingress：外部 OpenClaw 等 MCP 客户端经蓝鲸网关访问。
+  # 路径模板：<basePath>/<mcp_server_name>/mcp/ （streamable HTTP）。
+  ingress:
+    # [必填] 是否挂载北向 MCP ingress 路径。
+    enable: false
+    # [可选] 路径前缀，默认 /api/v1/mcp/servers
+    # basePath: /api/v1/mcp/servers
+    # [可选] MCP serverInfo.name，默认 "HCM Agent"
+    # serverName: HCM Agent
+    # [可选] MCP serverInfo.version，默认 1.0.0
+    # serverVersion: 1.0.0
+    # [可选] 北向唯一聚合工具名，默认 send_message
+    # aggregatedToolName: send_message
+    # [可选] send_message.text 入参字符上限，默认 8000（0 表示不限制）
+    # textMaxLength: 8000
+    # [可选] progressToken↔taskId 映射表最大条目数，默认 10000
+    # progressTaskMapMaxSize: 10000
+    # [可选] 映射表条目 TTL（防泄漏兜底），默认 30m
+    # progressTaskMapEntryTTL: 30m
+  # MCP↔A2A 桥接的下行 A2A client 参数。ingress.enable=true 时生效。
+  # 注：agent-server 实例地址通过 etcd 服务发现 cc.AgentServerName 获取（与 web-server proxy 同源），
+  # A2A 路径段固定为 /api/v1/agent/a2a，因此 yaml 不需要配置 agent-server URL。
+  bridge:
+    # [可选] HTTP 连接超时，默认 5s
+    # connectTimeout: 5s
+    # [可选] 长会话读超时（适配 LLM 长流），默认 300s
+    # readTimeout: 300s
+    # [可选] keep-alive 连接池大小，默认 100
+    # maxIdleConnsPerHost: 100
+  # 南向内部 HCM MCP server：仅供 agent-server LLM tool calling 调用。
+  # 部署侧必须通过 K8s NetworkPolicy 或蓝鲸网关 Path Strip 限制外部访问。
+  internal:
+    # [必填] 是否挂载南向 MCP server 路径。
+    enable: false
+    # [可选] 是否强制要求请求携带 X-Bkhcm-Caller-Source: agent-server，默认 true
+    enforceCallerSource: true
+    # [必填，internal.enable=true 时] 多内置 MCP server 配置。
+    # api-server 会为每个条目分别挂载一个独立 MCP endpoint。
+    # agent-server 可配置多个 type=internal 的 MCP toolset 分别指向这些 serverUrl，
+    # ToolProxy 会以 toolsetName/toolName 形式区分不同 MCP server 的工具。
+    servers:
+      - name: bk-hcm-devhk-tcloud-ziyan-cvm
+        basePath: /api/v1/mcp/internal/bk-hcm-devhk-tcloud-ziyan-cvm/mcp
+        #   # [可选] MCP serverInfo.version，默认 1.0.0
+        #   serverVersion: 1.0.0
+        #   # [必填] OpenAPI 3.0 yaml 文件路径（蓝鲸网关「资源配置列表」导出）。
+        #   # 相对路径优先按进程工作目录读取；若文件不存在，则按 config-file 所在目录读取。
+        openapiSpecPath: bk_apigw_resources_bk-hcm_internal_mcp.yaml
+        #   # [可选] 工具暴露白名单，支持精确匹配 + glob 通配符（如 list_*）。
+        #   # 空数组（或省略）= 暴露 openapiSpecPath 中全部 operationId。
+        includeOperationIDs:
+          - get_resource_*
+          - get_apply_*
+          - get_cvm_*
+          - get_task_*
+          - get_biz_*
+          - get_frequently_*
+          - list_config_*
+          - list_device_*
+          - list_apply_*
+          - list_biz_*
+          - list_image_*
+
+# A2A 反向代理透传：把 agent-server 的 A2A JSON-RPC 与 AgentCard 端点
+# 通过 api-server 暴露给原生 A2A 客户端。默认关闭。
+# 注：agent-server 实例地址通过 etcd 服务发现 cc.AgentServerName 获取
+# （与 web-server proxy 同源），yaml 不需要配置 agent-server URL。
+a2aPassthrough:
+  # [必填] 是否挂载 A2A 透传路径。
+  enable: false
+  # [可选] A2A 端点路径前缀，默认 /api/v1/agent
+  # basePath: /api/v1/agent
+  # [可选] 反向代理 SSE flush 间隔（毫秒），-1 表示每次写入立即 flush，默认 -1
+  # flushIntervalMS: -1
+  # [可选] 反向代理底层 HTTP 连接空闲超时，默认 600s
+  # idleTimeout: 600s
+
 # defines log's related configuration
 log:
   # log storage directory.

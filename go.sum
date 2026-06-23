@@ -788,5 +788,5 @@ trpc.group/trpc-go/trpc-agent-go/session/mysql v1.8.0 h1:4rnKTyhLutfmG1kygEt6sQf
 trpc.group/trpc-go/trpc-agent-go/session/mysql v1.8.0/go.mod h1:7Keix+m91DdIM/zphrPJBbYHKZLwz6s6ArXE+2C1Xa4=
 trpc.group/trpc-go/trpc-agent-go/storage/mysql v0.5.0 h1:0mEfSfopzlCAWUwOWlp03fVzUWz7Vf79OMAXrhLN4VY=
 trpc.group/trpc-go/trpc-agent-go/storage/mysql v0.5.0/go.mod h1:5AZIZqvwR8U15gEEw64TQGSDWZgcno0M/ADkj6xKbBw=
-trpc.group/trpc-go/trpc-mcp-go v0.0.14 h1:YrukOBlQk0BWG+5CxSPVrcu5z40NrevqxwYoHJNyUxw=
-trpc.group/trpc-go/trpc-mcp-go v0.0.14/go.mod h1:OT6rLglkdaQ17D2T1Y87Y/ckItzdsEldDbw7dHAbGEA=
+trpc.group/trpc-go/trpc-mcp-go v0.0.16 h1:y4tamDbwLCrX3amxS1ZhSeLXdGp5WCLWmhaiKdQIkS4=
+trpc.group/trpc-go/trpc-mcp-go v0.0.16/go.mod h1:OT6rLglkdaQ17D2T1Y87Y/ckItzdsEldDbw7dHAbGEA=

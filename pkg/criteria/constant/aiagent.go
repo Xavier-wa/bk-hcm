@@ -90,6 +90,30 @@ func (t MCPToolSetType) IsBKAIDev() bool {
 	return t.Normalize() == MCPTypeBKAIDev
 }
 
+// MCP ingress / internal endpoint paths exposed by api-server.
+const (
+	// MCPIngressBasePathDefault 是对外部提供服务的 MCP ingress 的路径前缀。
+	// 完整路径 = <basePath>/<mcp_server_name>/mcp/（streamable HTTP）。
+	MCPIngressBasePathDefault = "/api/v1/mcp/servers"
+
+	// MCPInternalDefaultServerName 是对内部提供服务的 HCM MCP server 的默认服务名称
+	MCPInternalDefaultServerName = "hcm-internal-mcp"
+
+	// MCPInternalBasePathDefault 是对内部提供服务的 HCM MCP server 的路径前缀，
+	// 仅供 agent-server 等内部组件调用，外部不可达。
+	MCPInternalBasePathDefault = "/api/v1/mcp/internal/hcm/mcp"
+
+	// MCPIngressAggregatedToolName 是对外提供服务的 MCP ingress 对外暴露的唯一聚合工具名，
+	// MCP 客户端通过该工具向 HCM agent 发送自然语言指令。
+	MCPIngressAggregatedToolName = "send_message"
+
+	// MCPInternalServerDefaultVersion 是对内部提供服务的 HCM MCP server的默认版本号。
+	MCPInternalServerDefaultVersion = "1.0.0"
+)
+
+// 注：MCP/A2A 调用来源 header 名 MCPCallerSourceHeader 见 header.go；
+// 取值字面量请使用 cc.APIServerName / cc.AgentServerName，避免重复维护。
+
 // A2A protocol
 const (
 	// A2ABasePathDefault is the default base path for A2A endpoints, kept
@@ -106,7 +130,6 @@ const (
 	// A2AWellKnownAgentLegacyPath is the legacy AgentCard discovery path kept
 	// for client compatibility with A2A 0.1.x.
 	A2AWellKnownAgentLegacyPath = "/.well-known/agent.json"
-
 )
 
 // Skill

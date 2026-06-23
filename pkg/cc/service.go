@@ -94,6 +94,12 @@ type ApiServerSetting struct {
 	Service Service      `yaml:"service"`
 	Log     LogOption    `yaml:"log"`
 	Tenant  TenantConfig `yaml:"tenant"`
+	// MCP 配置对外部提供服务的 MCP ingress、MCP↔A2A bridge、对内部提供服务的 HCM MCP server。
+	// 三段子配置默认全部关闭（Enable=false），对存量部署零影响。
+	MCP MCPServerSetting `yaml:"mcp"`
+	// A2APassthrough 配置 A2A 反向代理（A2A JSON-RPC + AgentCard 透传）。
+	// 默认关闭（Enable=false），不影响现有 proxy 链路。
+	A2APassthrough A2APassthroughSetting `yaml:"a2aPassthrough"`
 }
 
 // trySetFlagBindIP try set flag bind ip.
@@ -106,6 +112,8 @@ func (s *ApiServerSetting) trySetDefault() {
 	s.Network.trySetDefault()
 	s.Service.trySetDefault()
 	s.Log.trySetDefault()
+	s.MCP.trySetDefault()
+	s.A2APassthrough.trySetDefault()
 
 	return
 }
@@ -119,6 +127,14 @@ func (s ApiServerSetting) Validate() error {
 
 	if err := s.Service.validate(); err != nil {
 		return err
+	}
+
+	if err := s.MCP.Validate(); err != nil {
+		return fmt.Errorf("mcp: %w", err)
+	}
+
+	if err := s.A2APassthrough.Validate(); err != nil {
+		return fmt.Errorf("a2aPassthrough: %w", err)
 	}
 
 	return nil
@@ -1805,8 +1821,6 @@ type AgentServerSetting struct {
 	AGUI      AgentAGUI            `yaml:"agui"`
 	// Intent configures the intent recognition node. Only used when AGUI.Model.Mode is "graph".
 	Intent AgentIntentConfig `yaml:"intent"`
-	// A2A 配置 A2A 协议端点；默认关闭（Enable=false），开启时与 AG-UI 并行挂载。
-	A2A A2ASetting `yaml:"a2a"`
 	// Skills holds all skill configuration: filesystem paths and BKAIDev sync parameters.
 	Skills AgentBKAIDevSyncSkillsConfig `yaml:"skills"`
 	// Prompt configures prompt files or BKAIDev-hosted prompt sync.
@@ -1814,6 +1828,8 @@ type AgentServerSetting struct {
 	// BKAIDevSyncAPIGateway holds the BKAIDev API gateway credentials shared by all
 	// sync domains (skills, prompts, etc.).
 	BKAIDevSyncAPIGateway ApiGateway `yaml:"bkaidevSyncApiGateway"`
+	// A2A 配置 A2A 协议端点；默认关闭（Enable=false），开启时与 AG-UI 并行挂载。
+	A2A A2ASetting `yaml:"a2a"`
 }
 
 // SkillSyncEnabled reports whether BKAIDev skill sync is turned on.
