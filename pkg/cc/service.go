@@ -1294,6 +1294,8 @@ type AgentToolsConfig struct {
 	DynamicToolLoading *AgentDynamicToolLoadingConfig `yaml:"dynamicToolLoading"`
 	// ToolProxy configures MCP tool proxy meta-tools (Graph mode MVP).
 	ToolProxy *AgentToolProxyConfig `yaml:"toolProxy"`
+	// ConfirmGate configures the engineering tool-call confirm gate.
+	ConfirmGate AgentConfirmGateConfig `yaml:"confirmGate"`
 }
 
 func (s *AgentToolsConfig) trySetDefault() {
@@ -1302,6 +1304,7 @@ func (s *AgentToolsConfig) trySetDefault() {
 	if s.ToolProxy != nil {
 		s.ToolProxy.trySetDefault()
 	}
+
 }
 
 // Validate 校验 MCP ToolSet 配置。
@@ -1318,6 +1321,17 @@ func (s *AgentToolsConfig) Validate() error {
 		}
 	}
 	return nil
+}
+
+// AgentConfirmGateConfig configures the tool-call confirm gate on top of the code registry.
+// The set of gated tools is sourced from the registry (a tool is gated only if it has a
+// registered Gate implementation); this config toggles them on/off for grayscale or rollback.
+type AgentConfirmGateConfig struct {
+	// Enabled toggles the confirm gate as a whole. Set enabled: false to disable.
+	Enabled bool `yaml:"enabled"`
+	// Tools optionally restricts which registered tools are active. Empty means all
+	// registered gated tools are active.
+	Tools []string `yaml:"tools"`
 }
 
 // NeedToRefreshToolSetsOnRun bkaidev 类型 MCP 需要用户的 token 进行鉴权，因此无法在启动时加载工具集，需要在每次运行时刷新。

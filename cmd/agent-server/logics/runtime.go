@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"hcm/cmd/agent-server/logics/agent"
+	"hcm/cmd/agent-server/logics/agent/toolgate"
 	"hcm/cmd/agent-server/logics/auth"
 	"hcm/cmd/agent-server/logics/embedding"
 	"hcm/cmd/agent-server/logics/model"
@@ -177,7 +178,8 @@ func New(clientSet *client.ClientSet) (*Runtime, error) {
 	}
 
 	// Build MCP toolsets from configuration.
-	mcpToolSets, err := tool.BuildMCPToolSets()
+	gateSkip := toolgate.GetEnabledGateToolNames(toolsCfg.ConfirmGate)
+	mcpToolSets, err := tool.BuildMCPToolSets(gateSkip)
 	if err != nil {
 		return nil, fmt.Errorf("build MCP toolsets: %w", err)
 	}
@@ -341,7 +343,7 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 	switch aguiCfg.Model.Mode {
 	case enumor.AgentModeGraph:
 		compiledGraph, err := agent.BuildGraph(defaultMdl, skillRepo, mcpToolSets, toolProxy,
-			aguiCfg.AppName, aguiCfg.Model, promptStore, clientSet.CloudServer())
+			aguiCfg.AppName, aguiCfg.Model, promptStore, clientSet)
 		if err != nil {
 			return nil, fmt.Errorf("build graph: %w", err)
 		}

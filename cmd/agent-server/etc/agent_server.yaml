@@ -271,6 +271,11 @@ tools:
     # toolTags:                  # 工具标签（key 为 MCP 原始工具名，value 为额外检索关键词）
     #   list_cvms: ["CVM", "云服务器", "主机"]
     #   query_bill: ["账单", "费用", "计费"]
+  # 触发调用前确认的工具集
+  confirmGate:
+    enabled: true
+    tools:
+      - create_biz_apply
 
 # A2A（Agent2Agent）协议端点。
 # enable=false（默认）时不挂载任何 A2A 路径，对现有 AG-UI 链路零影响。

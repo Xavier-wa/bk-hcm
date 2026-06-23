@@ -147,7 +147,7 @@ func (g *Generator) GenerateCVM(kt *kit.Kit, order *types.ApplyOrder) error {
 		order.Stage, order.Status, kt.Rid)
 
 	// 获取该申请单的可用区
-	orderZones, err := g.getApplyOrderMultiZones(kt, order)
+	orderZones, err := g.GetApplyOrderMultiZones(kt, order)
 	if err != nil {
 		logs.Errorf("failed to get apply order zone list, subOrderID: %s, err: %v, rid: %s",
 			order.SubOrderId, err, kt.Rid)
@@ -174,8 +174,10 @@ func (g *Generator) GenerateCVM(kt *kit.Kit, order *types.ApplyOrder) error {
 	return nil
 }
 
-// getApplyOrderMultiZones 获取多可用区
-func (g *Generator) getApplyOrderMultiZones(kt *kit.Kit, order *types.ApplyOrder) ([]string, error) {
+// GetApplyOrderMultiZones resolves the effective candidate zone list for a CVM apply order.
+// This is the single source of truth for zone resolution used by both production generation
+// and read-only pre-check paths.
+func (g *Generator) GetApplyOrderMultiZones(kt *kit.Kit, order *types.ApplyOrder) ([]string, error) {
 	if order.Spec == nil {
 		return nil, fmt.Errorf("order spec is nil")
 	}

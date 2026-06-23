@@ -19,7 +19,9 @@
 
 package enumor
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // AIModel is the identifier of an AI language model supported by the platform.
 type AIModel string
@@ -190,12 +192,15 @@ const (
 	CvmApplyNodeAccountSelect CvmApplyNode = "account_select"
 	// CvmApplyNodeFallback is the fallback node.
 	CvmApplyNodeFallback CvmApplyNode = "fallback"
+	// CvmApplyNodeTool is the tool node.
+	CvmApplyNodeTool CvmApplyNode = "tool"
+
 )
 
 // Validate validates the CVM apply node.
 func (n CvmApplyNode) Validate() error {
 	switch n {
-	case CvmApplyNodeLLM, CvmApplyNodeAccountSelect, CvmApplyNodeFallback:
+	case CvmApplyNodeLLM, CvmApplyNodeAccountSelect, CvmApplyNodeFallback, CvmApplyNodeTool:
 	default:
 		return fmt.Errorf("unsupported CVM apply node: %s", n)
 	}

@@ -17,18 +17,18 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-// Package hitl provides Human-in-the-Loop (HITL) functionality for the agent graph.
-// It enables the LLM to request user confirmation or choices during execution.
+// Package hitl 为 agent 图提供统一的人在环（Human-in-the-Loop, HITL）中断节点。
 //
-// The HITL flow works as follows:
-//  1. LLM calls the human_confirm tool when it needs user input
-//  2. The graph routes to the hitl node via conditional edges
-//  3. The hitl node calls graph.Interrupt, pausing execution and saving checkpoint
-//  4. Frontend receives the interrupt event and displays the confirmation UI
-//  5. User makes a choice, frontend sends resume request with the choice
-//  6. Graph resumes from checkpoint, hitl node receives the choice
-//  7. hitl node appends the choice as a user message and returns to llm node
-//  8. LLM continues reasoning with the user's choice in context
+// 单个节点处理所有需要人工中断的工具调用，由以工具名为键的 Handler 注册表分派。两类 handler 共用该节点：
+//   - LLM 主动发起的提问（human_confirm）：向用户提问，随后在 llm 节点继续。
+//   - 真实工具的执行前确认门禁（如 create_biz_apply）：在工具执行前确认，然后路由到 tool 节点（放行）
+//     或回退到 llm 节点（取消/校验未通过）。
+//
+// 整体流程如下：
+//  1. llm 节点产出一个 tool_call；当存在已注册的 Handler 时，路由将其送往 hitl 节点。
+//  2. 节点构造 handler payload 并调用 graph.Interrupt，暂停执行并保存 checkpoint。
+//  3. 前端收到对应的自定义事件（hitl.interrupt / tool.confirm）并展示 UI。
+//  4. 用户响应后图恢复执行，handler 的 OnResume 产出消息增量与下一跳路由（tool / llm）。
 package hitl
 
 import (
@@ -36,27 +36,27 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/tool"
 )
 
-// declaredToolWrapper wraps a declaration as a non-callable tool.
-// This is used for pure declaration tools that have no execution logic.
+// declaredToolWrapper 将一个声明包装为不可执行工具。
+// 用于没有执行逻辑的纯声明型工具。
 type declaredToolWrapper struct{ d *tool.Declaration }
 
-// Declaration returns the declaration of the tool.
+// Declaration 返回该工具的声明。
 func (w declaredToolWrapper) Declaration() *tool.Declaration { return w.d }
 
-// GetTool returns the HITL tool declaration (human_confirm).
-// This is a pure declaration tool with no execution logic.
+// GetTool 返回 HITL 工具声明（human_confirm）。
+// 这是一个没有执行逻辑的纯声明型工具。
 func GetTool() *tool.Declaration {
 	return HumanConfirmTool()
 }
 
-// GetToolWrapper returns the HITL tool as a tool.Tool interface.
-// This allows the tool to be registered in the tool set.
+// GetToolWrapper 以 tool.Tool 接口形式返回 HITL 工具，使其可被注册进工具集。
 func GetToolWrapper() tool.Tool {
 	return declaredToolWrapper{d: HumanConfirmTool()}
 }
 
-// GetNode returns the HITL node function.
-// This node handles the interrupt logic and message injection.
-func GetNode() graph.NodeFunc {
-	return makeHITLNode()
+// GetNode 返回由给定 handler 注册表驱动的统一 HITL 节点函数。
+// 该节点处理所有存在已注册 Handler 的工具调用（human_confirm、执行前工具门禁……）：
+// 触发中断、发出对应的自定义事件，并在恢复时应用 handler 的 ResumeResult。
+func GetNode(reg *Registry) graph.NodeFunc {
+	return makeHITLNode(reg)
 }

@@ -505,6 +505,8 @@ func (s *Service) sessionCodeMiddleware(next http.Handler) http.Handler {
 		reqMap["runId"] = uuid.UUID()
 		// 将会话场景标签通过 forwardedProps 透传，供 Graph 首轮注入 StateKeySessionTag
 		if sessionMeta.SessionTag != "" {
+			logs.Infof("session tag exist, inject into forwardedProps, session_code: %s, tag: %s, rid: %s",
+				sessionCode, sessionMeta.SessionTag, kt.Rid)
 			injectForwardedSessionTag(reqMap, sessionMeta.SessionTag)
 		}
 
@@ -755,11 +757,6 @@ func makeRunOptionResolver(saver graph.CheckpointSaver, allowedModels []string,
 		}
 		runtimeState = tryPrepareAutoResume(saver, ctx, input, runtimeState, forwardedProps)
 
-		// 注入会话场景标签：非空时写入 StateKeySessionTag，供 scene_dispatch 首轮直达
-		if sessionTag, _ := forwardedProps[constant.ForwardedPropSessionTag].(string); sessionTag != "" {
-			runtimeState[constant.StateKeySessionTag] = enumor.IntentType(sessionTag)
-		}
-
 		// ForwardedProps: model selection.
 		if modelName, _ := forwardedProps["modelName"].(string); modelName != "" {
 			modelName = strings.TrimSpace(modelName)
@@ -768,6 +765,18 @@ func makeRunOptionResolver(saver graph.CheckpointSaver, allowedModels []string,
 			}
 			opts = append(opts, agent.WithModelName(modelName))
 		}
+
+		// 注入会话场景标签：非空时写入 StateKeySessionTag，供 scene_dispatch 首轮直达
+		if sessionTag, _ := forwardedProps[constant.ForwardedPropSessionTag].(string); sessionTag != "" {
+			tag := enumor.IntentType(sessionTag)
+			if tag.Validate() != nil {
+				return nil, fmt.Errorf("session tag %q is not valid", sessionTag)
+			}
+			logs.Infof("session tag is exist in forwarded, tag is %s, type is %T, rid: %s", tag, tag,
+				rest.RidFromContext(ctx))
+			runtimeState[constant.StateKeySessionTag] = tag
+		}
+
 		opts = append(opts, agent.WithRuntimeState(runtimeState))
 
 		// Dynamic tool filtering.
@@ -816,7 +825,8 @@ func tryPrepareAutoResume(saver graph.CheckpointSaver, ctx context.Context, inpu
 	forwardedResumeVal, hasForwarded := forwardedProps[constant.ForwardedPropResumeValue]
 	if hasForwarded && forwardedResumeVal != nil {
 		runtimeState[constant.StateKeyForwardedResumeValue] = forwardedResumeVal
-		logs.Infof("auto-resume: stored forwardedProps resume value into runtime state, rid: %s", rid)
+		logs.Infof("auto-resume: stored forwardedProps resume value into runtime state %v, rid: %s",
+			forwardedResumeVal, rid)
 	}
 
 	// resume command 来自最新的用户消息文本；即便前端通过 forwardedProps 传结构化数据，

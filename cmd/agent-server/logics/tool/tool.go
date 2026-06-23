@@ -49,7 +49,8 @@ type MCPToolSet struct {
 // BuildMCPToolSets constructs MCP ToolSet instances from the global configuration.
 // Each config maps 1-to-1 to a mcp.ToolSet. Errors from any entry abort the whole build.
 // BK application credentials for toolsets with Type == "bkaidev" are read from cc.AgentServer().Tools.BKAIDev.
-func BuildMCPToolSets() (*MCPToolSet, error) {
+// gateSkip 为受工程门禁守护的工具名集合，从泛化确认中排除，避免双重确认。
+func BuildMCPToolSets(gateSkip map[string]struct{}) (*MCPToolSet, error) {
 	cfgs := cc.AgentServer().Tools.MCPToolSets
 
 	sets := make([]tool.ToolSet, 0, len(cfgs))
@@ -59,7 +60,7 @@ func BuildMCPToolSets() (*MCPToolSet, error) {
 			return nil, fmt.Errorf("toolset %q: %w", cfg.Name, err)
 		}
 		if cfg.RequireConfirm {
-			ts = newConfirmToolSet(ts)
+			ts = newConfirmToolSet(ts, gateSkip)
 			logs.Infof("AGUI MCP toolset registered: name=%q type=%q transport=%q serverUrl=%q requireConfirm=true",
 				cfg.Name, cfg.Type, cfg.Transport, cfg.ServerURL)
 		} else {

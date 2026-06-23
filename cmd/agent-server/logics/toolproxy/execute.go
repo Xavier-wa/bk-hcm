@@ -33,6 +33,26 @@ import (
 	trpctool "trpc.group/trpc-go/trpc-agent-go/tool"
 )
 
+// ExecuteToolParams is the JSON envelope for the execute_tool meta-tool:
+// {tool_name, parameters, schema_token}.
+type ExecuteToolParams struct {
+	ToolName    string          `json:"tool_name"`
+	Parameters  json.RawMessage `json:"parameters"`
+	SchemaToken string          `json:"schema_token"`
+}
+
+// ParametersMap unmarshals Parameters into a map for schema validation and execution.
+func (p ExecuteToolParams) ParametersMap() (map[string]interface{}, error) {
+	if len(p.Parameters) == 0 {
+		return nil, nil
+	}
+	var parameters map[string]interface{}
+	if err := json.Unmarshal(p.Parameters, &parameters); err != nil {
+		return nil, err
+	}
+	return parameters, nil
+}
+
 // ExecuteToolTool implements the execute_tool meta-tool.
 type ExecuteToolTool struct {
 	proxy *ToolProxy
@@ -74,11 +94,7 @@ func (t *ExecuteToolTool) Declaration() *trpctool.Declaration {
 // Call validates parameters and calls the underlying MCP tool.
 func (t *ExecuteToolTool) Call(ctx context.Context, jsonArgs []byte) (any, error) {
 	rid := rest.RidFromContext(ctx)
-	var params struct {
-		ToolName    string                 `json:"tool_name"`
-		Parameters  map[string]interface{} `json:"parameters"`
-		SchemaToken string                 `json:"schema_token"`
-	}
+	var params ExecuteToolParams
 	if err := json.Unmarshal(jsonArgs, &params); err != nil {
 		logs.Errorf("execute_tool failed, err: %v, args=%s, rid: %s", err, string(jsonArgs), rid)
 		return buildErrorResult("invalid_parameters", "parameter parse failed: "+err.Error(), nil), nil
@@ -88,7 +104,12 @@ func (t *ExecuteToolTool) Call(ctx context.Context, jsonArgs []byte) (any, error
 		logs.Errorf("execute_tool failed, err: tool_name required, rid: %s", rid)
 		return buildErrorResult("invalid_parameters", "parameter tool_name is required", nil), nil
 	}
-	if params.Parameters == nil {
+	parameters, err := params.ParametersMap()
+	if err != nil {
+		logs.Errorf("execute_tool failed, err: %v, tool_name=%s, rid: %s", err, params.ToolName, rid)
+		return buildErrorResult("invalid_parameters", "parameter parameters parse failed: "+err.Error(), nil), nil
+	}
+	if parameters == nil {
 		logs.Errorf("execute_tool failed, err: parameters required, tool_name=%s, rid: %s", params.ToolName, rid)
 		return buildErrorResult("invalid_parameters", "parameter parameters is required", nil), nil
 	}
@@ -106,13 +127,13 @@ func (t *ExecuteToolTool) Call(ctx context.Context, jsonArgs []byte) (any, error
 			"schema_token 无效，请先调用 search_tools 或 get_tool_schema 获取最新 schema 和 token", nil), nil
 	}
 
-	if err = validateParameters(meta.Schema, params.Parameters); err != nil {
+	if err = validateParameters(meta.Schema, parameters); err != nil {
 		logs.Errorf("execute_tool failed, err: %v, tool_name=%s, canonical=%s, rid: %s",
 			err, params.ToolName, meta.Name, rid)
 		return buildErrorResultWithSchema("invalid_parameters", err.Error(), meta.Schema), nil
 	}
 
-	argsBytes, err := json.Marshal(params.Parameters)
+	argsBytes, err := json.Marshal(parameters)
 	if err != nil {
 		logs.Errorf("execute_tool failed, err: %v, tool_name=%s, rid: %s", err, meta.Name, rid)
 		return buildErrorResult("invalid_parameters", "参数序列化失败: "+err.Error(), nil), nil

@@ -169,6 +169,8 @@ type Interface interface {
 	CancelApplyTicketCrp(kt *kit.Kit, req *types.CancelApplyTicketCrpReq) error
 	// VerifyCvmGPUChargeMonth verify cvm gpu charge month
 	VerifyCvmGPUChargeMonth(kt *kit.Kit, subOrders []*types.Suborder) error
+	// VerifyCvmApplyTicketByRequireType veriry cvm apply order by require type
+	VerifyCvmApplyTicketByRequireType(kt *kit.Kit, param *types.ApplyReq) error
 
 	// CreateUpgradeTicketANDOrder create upgrade ticket and order
 	CreateUpgradeTicketANDOrder(kt *kit.Kit, param *types.ApplyReq) (*types.CreateUpgradeCrpOrderResult, error)
@@ -181,6 +183,10 @@ type Interface interface {
 	UpdateTicketState(kt *kit.Kit, orderId uint64, stage types.TicketStage) error
 	// InitUpgradeCVMSteps init upgrade cvm steps
 	InitUpgradeCVMSteps(kt *kit.Kit, suborderId string, total uint) error
+	// VerifyApplyCapacity checks real-time capacity for all CVM suborders in the apply request.
+	// Returns (pass, reason, error): business failures yield pass=false with a human-readable reason;
+	// system errors are returned as error.
+	VerifyApplyCapacity(kt *kit.Kit, input *types.ApplyReq) (bool, string, error)
 }
 
 // scheduler provides resource apply service
@@ -1283,6 +1289,19 @@ func (s *scheduler) processDissolveInheritance(kt *kit.Kit, param *types.ApplyRe
 		suborder.Spec.ChargeType = cvmapi.ChargeType(checkResp.InstanceChargeType)
 		suborder.Spec.InheritInstanceId = checkResp.CloudInstID
 	}
+	return nil
+}
+
+// VerifyCvmApplyTicketByRequireType applies require-type-specific in-memory validation and data fill
+// that must precede GPU charge-month and capacity checks. It mirrors processingTicketByRequireType
+// in the create path so that the check chain and create path are kept in sync.
+// The method is read-only from a persistence perspective: it only performs external read I/O
+// (e.g. bkcc host lookup for dissolve) and in-memory mutations on param.
+func (s *scheduler) VerifyCvmApplyTicketByRequireType(kt *kit.Kit, param *types.ApplyReq) error {
+	if err := s.processingTicketByRequireType(kt, param); err != nil {
+		return errf.NewFromErr(errf.CvmApplyVerifyFailed, err)
+	}
+
 	return nil
 }
 

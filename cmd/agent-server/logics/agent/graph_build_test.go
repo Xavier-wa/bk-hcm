@@ -23,7 +23,10 @@ import (
 	"context"
 	"testing"
 
+	"hcm/cmd/agent-server/logics/agent/hitl"
 	"hcm/cmd/agent-server/logics/agent/message"
+	"hcm/cmd/agent-server/logics/agent/toolgate"
+	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 
@@ -95,6 +98,132 @@ func TestMakeSceneDispatchNode(t *testing.T) {
 				t.Errorf("committed session_tag = %q, want %q", tag, tc.wantTag)
 			}
 		})
+	}
+}
+
+// newTestRegistry builds a hitl registry with human_confirm and the active confirm gates.
+func newTestRegistry(enabled bool) *hitl.Registry {
+	reg := hitl.NewRegistry()
+	reg.Register(hitl.NewHumanConfirmHandler())
+	for _, h := range toolgate.GetEnabledGateHandlers(cc.AgentConfirmGateConfig{Enabled: enabled}, nil) {
+		reg.Register(h)
+	}
+	return reg
+}
+
+func TestMakeRoutingFuncGate(t *testing.T) {
+	route := makeRoutingFunc(newTestRegistry(true))
+	ctx := context.Background()
+
+	gatedCall := trpcmodel.ToolCall{
+		ID:       "c1",
+		Function: trpcmodel.FunctionDefinitionParam{Name: constant.ToolNameCreateBizApply},
+	}
+	otherCall := trpcmodel.ToolCall{
+		ID:       "c2",
+		Function: trpcmodel.FunctionDefinitionParam{Name: "list_biz_host"},
+	}
+	confirmCall := trpcmodel.ToolCall{
+		ID:       "c3",
+		Function: trpcmodel.FunctionDefinitionParam{Name: constant.HumanConfirmToolName},
+	}
+	// 真实场景：LLM 经 proxy execute_tool 调用 create_biz_apply，真实工具名在 arguments 内。
+	proxyGatedCall := trpcmodel.ToolCall{
+		ID: "c4",
+		Function: trpcmodel.FunctionDefinitionParam{
+			Name: constant.ProxyExecuteToolFullName,
+			Arguments: []byte(`{"tool_name":"bkhcm-devhk/create_biz_apply",` +
+				`"parameters":{"path_param":{"bk_biz_id":1}},"schema_token":"t"}`),
+		},
+	}
+	proxyOtherCall := trpcmodel.ToolCall{
+		ID: "c5",
+		Function: trpcmodel.FunctionDefinitionParam{
+			Name:      constant.ProxyExecuteToolFullName,
+			Arguments: []byte(`{"tool_name":"bkhcm-devhk/list_biz_host","parameters":{},"schema_token":"t"}`),
+		},
+	}
+
+	tests := []struct {
+		name       string
+		toolCalls  []trpcmodel.ToolCall
+		wantTarget string
+		wantErr    bool
+	}{
+		{
+			name:       "gated tool alone routes to hitl",
+			toolCalls:  []trpcmodel.ToolCall{gatedCall},
+			wantTarget: "hitl",
+		},
+		{
+			name:      "gated tool with other tool errors",
+			toolCalls: []trpcmodel.ToolCall{gatedCall, otherCall},
+			wantErr:   true,
+		},
+		{
+			name:      "human_confirm with other tool errors",
+			toolCalls: []trpcmodel.ToolCall{confirmCall, otherCall},
+			wantErr:   true,
+		},
+		{
+			name:       "other tool routes to tool",
+			toolCalls:  []trpcmodel.ToolCall{otherCall},
+			wantTarget: "tool",
+		},
+		{
+			name:       "human_confirm routes to hitl",
+			toolCalls:  []trpcmodel.ToolCall{confirmCall},
+			wantTarget: "hitl",
+		},
+		{
+			name:       "proxy-wrapped gated tool routes to hitl",
+			toolCalls:  []trpcmodel.ToolCall{proxyGatedCall},
+			wantTarget: "hitl",
+		},
+		{
+			name:       "proxy-wrapped other tool routes to tool",
+			toolCalls:  []trpcmodel.ToolCall{proxyOtherCall},
+			wantTarget: "tool",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			state := graph.State{graph.StateKeyMessages: []trpcmodel.Message{
+				{Role: trpcmodel.RoleAssistant, ToolCalls: tc.toolCalls},
+			}}
+			got, err := route(ctx, state)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got target %q", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("route() error = %v", err)
+			}
+			if got != tc.wantTarget {
+				t.Errorf("route() = %q, want %q", got, tc.wantTarget)
+			}
+		})
+	}
+}
+
+func TestMakeRoutingFuncGateDisabled(t *testing.T) {
+	route := makeRoutingFunc(newTestRegistry(false))
+
+	state := graph.State{graph.StateKeyMessages: []trpcmodel.Message{
+		{Role: trpcmodel.RoleAssistant, ToolCalls: []trpcmodel.ToolCall{
+			{ID: "c1", Function: trpcmodel.FunctionDefinitionParam{Name: constant.ToolNameCreateBizApply}},
+		}},
+	}}
+	got, err := route(context.Background(), state)
+	if err != nil {
+		t.Fatalf("route() error = %v", err)
+	}
+	// When the gate is disabled the guarded tool is not registered, so it falls back to the tool path.
+	if got != "tool" {
+		t.Errorf("route() = %q, want tool (gate disabled)", got)
 	}
 }
 

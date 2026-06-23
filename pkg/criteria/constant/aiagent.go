@@ -155,6 +155,11 @@ const (
 	GetToolSchemaToolName = "get_tool_schema"
 	// ExecuteToolToolName is the meta-tool for executing an MCP tool by name.
 	ExecuteToolToolName = "execute_tool"
+
+	// ProxyExecuteToolFullName is the LLM-facing name of the proxy execute_tool meta-tool,
+	// composed as "<toolset>_<tool>" (e.g. "tool_proxy_execute_tool"). The LLM calls real MCP
+	// tools through this meta-tool, carrying the real tool name in the "tool_name" argument.
+	ProxyExecuteToolFullName = ProxyToolSetName + "_" + ExecuteToolToolName
 )
 
 // Default upper bounds for the agent invocation loop.
@@ -275,6 +280,23 @@ const (
 	// AccountSelectNextNodeKey is an internal routing key written by the account_select node so the
 	// conditional edge function can decide the next node.
 	AccountSelectNextNodeKey = "account_select.next"
+)
+
+// tool confirm gate constants
+const (
+	// ToolConfirmInterruptKey is the key prefix used for graph.Interrupt in the tool confirm gate flow.
+	// The translator emits the "tool.confirm" custom event when an interrupt key carries this prefix.
+	ToolConfirmInterruptKey = "tool_confirm"
+
+	// ToolConfirmCustomEventName is the AG-UI custom event name carrying the tool confirm card payload.
+	ToolConfirmCustomEventName = "tool.confirm"
+
+	// StateKeyHITLRoute is the graph state key recording the next node the hitl node routes to
+	// after resume. 取值为 enumor.HITLRouteTool / enumor.HITLRouteLLM。
+	StateKeyHITLRoute = "hitl_route"
+
+	// ToolNameCreateBizApply is the host apply submit tool guarded by the tool confirm gate.
+	ToolNameCreateBizApply = "create_biz_apply"
 )
 
 // bkaidev

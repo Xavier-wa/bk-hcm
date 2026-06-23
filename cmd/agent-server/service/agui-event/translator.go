@@ -132,3 +132,59 @@ func marshalInterruptPayload(ctx context.Context, meta graph.PregelStepMetadata)
 		string(b), rid)
 	return string(b)
 }
+
+func isHITLInterruptKey(key string) bool {
+	return key == constant.HITLInterruptKey ||
+		strings.HasPrefix(key, constant.HITLInterruptKey+constant.InterruptKeySeparator)
+}
+
+// buildToolConfirmEvent 当事件携带工具确认门禁中断（key 以 "tool_confirm:" 为前缀）时，
+// 构造工具确认自定义事件的名称与 payload，否则返回 ("", "")。事件名按工具维度命名
+// （tool.confirm.<tool>），便于前端路由到对应工具的确认卡片；payload 只携带门禁的结构化 data 与 actions。
+func buildToolConfirmEvent(ctx context.Context, evt *event.Event) (string, string) {
+	rid := rest.RidFromContext(ctx)
+	if evt == nil || evt.StateDelta == nil {
+		return "", ""
+	}
+	raw, ok := evt.StateDelta[graph.MetadataKeyPregel]
+	if !ok || len(raw) == 0 {
+		return "", ""
+	}
+	var meta graph.PregelStepMetadata
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		logs.Errorf("unmarshal tool confirm metadata: %v, rid: %s", err, rid)
+		return "", ""
+	}
+	if !isToolConfirmInterruptKey(meta.InterruptKey) {
+		return "", ""
+	}
+	payload := map[string]any{
+		"value":         meta.InterruptValue,
+		"checkpoint_id": meta.CheckpointID,
+		"lineage_id":    meta.LineageID,
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return "", ""
+	}
+	name := constant.ToolConfirmCustomEventName
+	if tool := toolFromInterruptKey(meta.InterruptKey); tool != "" {
+		name = name + "." + tool
+	}
+	return name, string(b)
+}
+
+func isToolConfirmInterruptKey(key string) bool {
+	return key == constant.ToolConfirmInterruptKey ||
+		strings.HasPrefix(key, constant.ToolConfirmInterruptKey+constant.InterruptKeySeparator)
+}
+
+// toolFromInterruptKey 从工具确认中断 key "tool_confirm:<tool>:<callID>" 中提取工具名（第 2 段）。
+// 缺少工具段时返回 ""。
+func toolFromInterruptKey(key string) string {
+	parts := strings.Split(key, constant.InterruptKeySeparator)
+	if len(parts) >= 2 {
+		return parts[1]
+	}
+	return ""
+}

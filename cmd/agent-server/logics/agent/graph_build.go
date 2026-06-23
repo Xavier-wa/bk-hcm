@@ -29,6 +29,7 @@ import (
 	"hcm/cmd/agent-server/logics/agent/hitl"
 	"hcm/cmd/agent-server/logics/agent/intent"
 	"hcm/cmd/agent-server/logics/agent/message"
+	"hcm/cmd/agent-server/logics/agent/toolgate"
 	"hcm/cmd/agent-server/logics/logger"
 	"hcm/cmd/agent-server/logics/model"
 	"hcm/cmd/agent-server/logics/prompt"
@@ -37,7 +38,7 @@ import (
 	agenttool "hcm/cmd/agent-server/logics/tool"
 	"hcm/cmd/agent-server/logics/toolproxy"
 	"hcm/pkg/cc"
-	cloudserver "hcm/pkg/client/cloud-server"
+	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/logs"
@@ -72,7 +73,7 @@ import (
 // The fallback node normalizes the LLM response and interrupts to wait for the next user message.
 func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *agenttool.MCPToolSet,
 	toolProxy *toolproxy.ToolProxy, agentName string, modelCfg cc.AgentModelGeneralConfig,
-	promptStore *prompt.Store, cloudClient *cloudserver.Client) (*graph.Graph, error) {
+	promptStore *prompt.Store, clientSet *client.ClientSet) (*graph.Graph, error) {
 
 	schema := graph.MessagesStateSchema()
 	stateGraph := graph.NewStateGraph(schema)
@@ -111,20 +112,28 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 		cc.AgentServer().Intent.ContextWindowSize))
 
 	// 3. LLM Node: drives the ReAct loop for supported scenes.
-	stateGraph.AddLLMNode("llm", mdl, staticPrompt, skillTools, llmOpts...)
+	stateGraph.AddLLMNode(string(enumor.CvmApplyNodeLLM), mdl, staticPrompt, skillTools, llmOpts...)
 
-	// 4. HITL Node: handles human_confirm tool calls mid-task.
-	stateGraph.AddNode("hitl", hitl.GetNode())
+	// 4. HITL Node: the unified human-in-the-loop interrupt node. It handles every tool call that
+	// has a registered handler: LLM-initiated human_confirm questions and pre-execution confirm
+	// gates of real tools (e.g. create_biz_apply). Gates are filtered by the confirm-gate config.
+	hitlReg := hitl.NewRegistry()
+	hitlReg.Register(hitl.NewHumanConfirmHandler())
+	// 注册需要进行门禁中断的工具handler
+	for _, h := range toolgate.GetEnabledGateHandlers(cc.AgentServer().Tools.ConfirmGate, clientSet) {
+		hitlReg.Register(h)
+	}
+	stateGraph.AddNode("hitl", hitl.GetNode(hitlReg))
 
 	// 5. Tool Node: executes tools when the LLM requests them.
 	toolsOpts := genToolNodeOptions(toolset, toolProxy, agentName)
-	stateGraph.AddToolsNode("tool", skillTools, toolsOpts...)
+	stateGraph.AddToolsNode(string(enumor.CvmApplyNodeTool), skillTools, toolsOpts...)
 
 	// 6. Fallback Node: delivers LLM response, interrupts, and routes the next user message.
 	stateGraph.AddNode("fallback", makeFallbackNode())
 
 	// 7. Account Select Node: queries biz accounts and auto-selects or triggers HITL.
-	stateGraph.AddNode(string(enumor.CvmApplyNodeAccountSelect), cvmapply.NewAccountSelectNode(cloudClient))
+	stateGraph.AddNode(string(enumor.CvmApplyNodeAccountSelect), cvmapply.NewAccountSelectNode(clientSet.CloudServer()))
 
 	// Entry point: every new run starts with intent recognition.
 	stateGraph.SetEntryPoint("scene_dispatch")
@@ -148,15 +157,20 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 		})
 
 	// llm → hitl / tool / fallback based on tool_calls in the last message
-	stateGraph.AddConditionalEdges("llm", makeRoutingFunc(), map[string]string{
-		"hitl":     "hitl",
-		"tool":     "tool",
-		"fallback": "fallback",
+	stateGraph.AddConditionalEdges(string(enumor.CvmApplyNodeLLM), makeRoutingFunc(hitlReg), map[string]string{
+		"hitl":                          "hitl",
+		string(enumor.CvmApplyNodeTool): string(enumor.CvmApplyNodeTool),
+		"fallback":                      "fallback",
 	})
 
-	// hitl and tool loop back to llm to continue the current task.
-	stateGraph.AddEdge("hitl", "llm")
-	stateGraph.AddEdge("tool", "llm")
+	// hitl → tool (confirmed gate) / llm (question answered or cancelled) based on the resume decision.
+	stateGraph.AddConditionalEdges("hitl", hitl.MakeRoutingFunc(), map[string]string{
+		string(enumor.CvmApplyNodeTool): string(enumor.CvmApplyNodeTool),
+		string(enumor.CvmApplyNodeLLM):  string(enumor.CvmApplyNodeLLM),
+	})
+
+	// tool loops back to llm to continue the current task.
+	stateGraph.AddEdge(string(enumor.CvmApplyNodeTool), string(enumor.CvmApplyNodeLLM))
 
 	// fallback always returns to scene_dispatch so the unified routing hub handles
 	// the next user message regardless of whether the session already has a tag.
@@ -193,6 +207,7 @@ func makeSceneDispatchRoutingFunc() func(ctx context.Context, state graph.State)
 	return func(ctx context.Context, state graph.State) (string, error) {
 		rid := rest.RidFromContext(ctx)
 		tag, _ := state[constant.StateKeySessionTag].(enumor.IntentType)
+		logs.Infof("scene dispatch routing: graph state session_tag=%s, type is %T, rid: %s", tag, tag, rid)
 		if tag.IsSupportedScene() {
 			logs.Infof("[scene dispatch routing] session_tag=%s, route to account_select, rid: %s", tag, rid)
 			return string(enumor.CvmApplyNodeAccountSelect), nil
@@ -232,13 +247,13 @@ func makeAccountSelectRoutingFunc() func(ctx context.Context, state graph.State)
 	}
 }
 
-// makeRoutingFunc returns the conditional edge routing function for the llm node.
-// It implements three-way routing based on tool_calls in the last message:
-//   - Only human_confirm → "hitl"
-//   - human_confirm + other tools → error (R1 boundary case)
-//   - Other tools (no human_confirm) → "tool"
-//   - No tool_calls → "fallback"
-func makeRoutingFunc() func(ctx context.Context, state graph.State) (string, error) {
+// makeRoutingFunc 返回 llm 节点的条件边路由函数。
+// 它依据最后一条消息中的 tool_calls 进行路由：
+//   - 无 tool_calls → "fallback"
+//   - 由 hitl 注册表处理的工具调用（human_confirm 或确认门禁）→ "hitl"；
+//     此类工具必须是该批次中唯一的 tool call，否则返回错误。
+//   - 其他工具 → CvmApplyNodeTool
+func makeRoutingFunc(hitlReg *hitl.Registry) func(ctx context.Context, state graph.State) (string, error) {
 	return func(ctx context.Context, state graph.State) (string, error) {
 		rid := rest.RidFromContext(ctx)
 		messages, _ := state[graph.StateKeyMessages].([]trpcmodel.Message)
@@ -247,37 +262,40 @@ func makeRoutingFunc() func(ctx context.Context, state graph.State) (string, err
 		}
 
 		lastMsg := messages[len(messages)-1]
-
 		if len(lastMsg.ToolCalls) == 0 {
 			logs.Infof("routing: no tool_calls, route to fallback, rid: %s", rid)
 			return "fallback", nil
 		}
 
-		hasHumanConfirm := false
-		hasOtherTools := false
+		hasHITL := false
+		execToolsName := ""
+		for i := range lastMsg.ToolCalls {
+			tc := &lastMsg.ToolCalls[i]
+			// 真实 MCP 工具经 proxy execute_tool 调用，需解出真实工具名再匹配门禁。
+			resolvedName := toolproxy.ResolveToolCall(tc).Name
+			logs.Infof("routing: toolCall name=%s, resolved=%s, id=%s, rid: %s",
+				tc.Function.Name, resolvedName, tc.ID, rid)
 
-		for _, tc := range lastMsg.ToolCalls {
-			logs.Infof("routing: toolCall name=%s, id=%s, rid: %s", tc.Function.Name, tc.ID, rid)
-			if tc.Function.Name == constant.HumanConfirmToolName {
-				hasHumanConfirm = true
-			} else {
-				hasOtherTools = true
+			// hitl注册过该工具的handler则路由到人机中断节点
+			if hitlReg.Has(resolvedName) {
+				hasHITL = true
+				execToolsName = resolvedName
+				break
 			}
 		}
-		logs.Infof("routing: hasHumanConfirm=%v, hasOtherTools=%v, rid: %s", hasHumanConfirm, hasOtherTools, rid)
 
-		// R1: human_confirm must not be combined with other tool calls
-		if hasHumanConfirm && hasOtherTools {
-			return "", fmt.Errorf("invalid tool calls: human_confirm cannot be combined with other tools")
-		}
-
-		if hasHumanConfirm {
-			logs.Infof("routing: only human_confirm, route to hitl, rid: %s", rid)
+		// 需要人机中断的工具（human_confirm / 确认门禁）必须单独成批，不能与其他工具混批。
+		if hasHITL {
+			if len(lastMsg.ToolCalls) > 1 {
+				return "", fmt.Errorf("invalid tool calls: tool %s is human interaction tool, "+
+					"must be the only tool call in one batch", execToolsName)
+			}
+			logs.Infof("routing: human interaction tool, route to hitl, rid: %s", rid)
 			return "hitl", nil
 		}
 
 		logs.Infof("routing: other tool calls, route to tool, rid: %s", rid)
-		return "tool", nil
+		return string(enumor.CvmApplyNodeTool), nil
 	}
 }
 
@@ -329,18 +347,6 @@ func genToolNodeOptions(toolset *agenttool.MCPToolSet, proxy *toolproxy.ToolProx
 	}
 
 	return opts
-}
-
-// buildPrompt 将 system prompt 与 instruction 组合成最终提示词。
-func buildPrompt(systemPrompt, instruction string) string {
-	prompt := systemPrompt
-	if instruction != "" {
-		if prompt != "" {
-			prompt += "\n\n"
-		}
-		prompt += instruction
-	}
-	return prompt
 }
 
 // makeFallbackNode 返回 fallback 节点：

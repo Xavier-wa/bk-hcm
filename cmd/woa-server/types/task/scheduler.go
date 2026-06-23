@@ -1035,6 +1035,16 @@ type CreateApplyOrderResult struct {
 	OrderId uint64 `json:"order_id"`
 }
 
+// CheckApplyOrderResp 提单前只读校验结果。
+// 用于区分"业务不通过"与"系统异常"：业务校验未通过时 Pass=false 并携带可读 Reason（HTTP 200），
+// 系统异常（DB、CRP、预测服务等调用失败）则以 error 形式返回，不会落到该结构体。
+type CheckApplyOrderResp struct {
+	// Pass 是否通过提单前置校验。
+	Pass bool `json:"pass"`
+	// Reason 业务未通过的详细原因，供调用方（含大模型）提示用户调整规格或数量；通过时为空。
+	Reason string `json:"reason"`
+}
+
 // UnifyOrderList list of unify order
 type UnifyOrderList []*UnifyOrder
 

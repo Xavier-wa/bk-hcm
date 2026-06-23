@@ -643,13 +643,8 @@ func (s *service) validateDeviceTypeForGreenAndRoll(kt *kit.Kit, input *types.Ap
 
 // createApplyOrder creates apply order
 func (s *service) createApplyOrder(kt *kit.Kit, input *types.ApplyReq) (any, error) {
-	if err := s.verifyAccordingToRequireType(kt, input); err != nil {
-		logs.Errorf("failed to verify according to require type, err: %v, rid: %s", err, kt.Rid)
-		return nil, errf.NewFromErr(errf.InvalidParameter, err)
-	}
-
-	if err := s.verifyResPlanDemand(kt, input); err != nil {
-		logs.Errorf("failed to verify res plan demand, err: %v, rid: %s", err, kt.Rid)
+	if err := s.validateApplyOrder(kt, input); err != nil {
+		logs.Errorf("failed to validate apply order before create, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
 
@@ -660,6 +655,22 @@ func (s *service) createApplyOrder(kt *kit.Kit, input *types.ApplyReq) (any, err
 	}
 
 	return rst, nil
+}
+
+// validateApplyOrder 提单前同步只读校验聚合方法，供"创建"与"校验"两条路径复用，保证逻辑同源。
+// 校验项按既有顺序为：需求类型校验（机型/绿通/DA前缀/裁撤额度）→ 预测内/外余量校验。
+func (s *service) validateApplyOrder(kt *kit.Kit, input *types.ApplyReq) error {
+	if err := s.verifyAccordingToRequireType(kt, input); err != nil {
+		logs.Errorf("failed to verify according to require type, err: %v, rid: %s", err, kt.Rid)
+		return errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	if err := s.verifyResPlanDemand(kt, input); err != nil {
+		logs.Errorf("failed to verify res plan demand, err: %v, rid: %s", err, kt.Rid)
+		return err
+	}
+
+	return nil
 }
 
 func (s *service) verifyAccordingToRequireType(kt *kit.Kit, input *types.ApplyReq) error {

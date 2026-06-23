@@ -35,12 +35,15 @@ const confirmKeyword = "确认"
 
 // confirmToolSet wraps a tool.ToolSet so that every CallableTool requires
 // explicit user confirmation ("确认") before the real call is dispatched.
+// Tools whose name is in skipNames are excluded from the generic confirmation
+// because they are guarded by the engineering tool confirm gate (avoiding double confirmation).
 type confirmToolSet struct {
-	inner tool.ToolSet
+	inner     tool.ToolSet
+	skipNames map[string]struct{}
 }
 
-func newConfirmToolSet(inner tool.ToolSet) tool.ToolSet {
-	return &confirmToolSet{inner: inner}
+func newConfirmToolSet(inner tool.ToolSet, skipNames map[string]struct{}) tool.ToolSet {
+	return &confirmToolSet{inner: inner, skipNames: skipNames}
 }
 
 // Name returns the name of the tool set.
@@ -55,7 +58,7 @@ func (s *confirmToolSet) Tools(ctx context.Context) []tool.Tool {
 	wrapped := make([]tool.Tool, 0, len(raw))
 	for _, t := range raw {
 		if ct, ok := t.(tool.CallableTool); ok {
-			wrapped = append(wrapped, &confirmTool{inner: ct})
+			wrapped = append(wrapped, &confirmTool{inner: ct, skipNames: s.skipNames})
 		} else {
 			wrapped = append(wrapped, t)
 		}
@@ -65,7 +68,8 @@ func (s *confirmToolSet) Tools(ctx context.Context) []tool.Tool {
 
 // confirmTool wraps a single CallableTool with a confirmation gate.
 type confirmTool struct {
-	inner tool.CallableTool
+	inner     tool.CallableTool
+	skipNames map[string]struct{}
 }
 
 var _ tool.CallableTool = (*confirmTool)(nil)
@@ -81,6 +85,14 @@ func (t *confirmTool) Call(ctx context.Context, jsonArgs []byte) (any, error) {
 	toolName := ""
 	if d := t.inner.Declaration(); d != nil {
 		toolName = d.Name
+	}
+
+	// 受工程门禁守护的工具跳过泛化文本确认，避免双重确认。
+	if t.skipNames != nil {
+		if _, skip := t.skipNames[toolName]; skip {
+			logs.Infof("[tool:confirm] tool=%q guarded by tool gate, skip generic confirm, rid: %s", toolName, rid)
+			return t.inner.Call(ctx, jsonArgs)
+		}
 	}
 
 	lastUserInput := lastUserMessage(ctx)

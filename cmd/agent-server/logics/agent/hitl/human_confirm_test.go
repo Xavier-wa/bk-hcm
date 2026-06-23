@@ -20,11 +20,75 @@
 package hitl
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
+
+	"trpc.group/trpc-go/trpc-agent-go/model"
 )
+
+func newConfirmToolCall() *model.ToolCall {
+	return &model.ToolCall{
+		ID: "c1",
+		Function: model.FunctionDefinitionParam{
+			Name:      constant.HumanConfirmToolName,
+			Arguments: []byte(`{"question":"确认删除？","options":["是","否"]}`),
+		},
+	}
+}
+
+func TestHumanConfirmHandlerBasics(t *testing.T) {
+	h := NewHumanConfirmHandler()
+	if h.ToolName() != constant.HumanConfirmToolName {
+		t.Errorf("tool name = %q", h.ToolName())
+	}
+	if h.EventKind() != constant.HITLInterruptKey {
+		t.Errorf("event kind = %q, want %q", h.EventKind(), constant.HITLInterruptKey)
+	}
+}
+
+func TestHumanConfirmHandlerBuildPayload(t *testing.T) {
+	h := NewHumanConfirmHandler()
+	raw, err := h.BuildPayload(context.Background(), newConfirmToolCall())
+	if err != nil {
+		t.Fatalf("BuildPayload err = %v", err)
+	}
+	payload, ok := raw.(map[string]any)
+	if !ok {
+		t.Fatalf("payload type = %T, want map", raw)
+	}
+	if payload["question"] != "确认删除？" {
+		t.Errorf("question = %v", payload["question"])
+	}
+}
+
+func TestHumanConfirmHandlerOnResume(t *testing.T) {
+	h := NewHumanConfirmHandler()
+
+	res, err := h.OnResume(context.Background(), newConfirmToolCall(), "是")
+	if err != nil {
+		t.Fatalf("OnResume err = %v", err)
+	}
+	if res.Next != enumor.CvmApplyNodeLLM {
+		t.Errorf("next = %q, want llm", res.Next)
+	}
+	if len(res.AppendMessages) != 2 {
+		t.Fatalf("append messages = %d, want 2 (tool result + user msg)", len(res.AppendMessages))
+	}
+	if res.AppendMessages[0].Role != model.RoleTool || res.AppendMessages[0].ToolID != "c1" {
+		t.Errorf("first msg = %+v, want tool result", res.AppendMessages[0])
+	}
+	if res.AppendMessages[1].Role != model.RoleUser || res.AppendMessages[1].Content != "是" {
+		t.Errorf("second msg = %+v, want user choice", res.AppendMessages[1])
+	}
+
+	if _, err := h.OnResume(context.Background(), newConfirmToolCall(), 123); err == nil {
+		t.Errorf("expected error for non-string resume value")
+	}
+}
 
 // TestHumanConfirmTool_Declaration 测试 HumanConfirmTool 返回的声明是否正确。
 func TestHumanConfirmTool_Declaration(t *testing.T) {

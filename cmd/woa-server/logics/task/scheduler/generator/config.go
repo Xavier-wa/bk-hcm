@@ -15,7 +15,6 @@ package generator
 
 import (
 	"errors"
-	"math"
 
 	cfgtype "hcm/cmd/woa-server/types/config"
 	"hcm/cmd/woa-server/types/task"
@@ -26,10 +25,8 @@ import (
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
-	"hcm/pkg/thirdparty/cvmapi"
 	cvt "hcm/pkg/tools/converter"
 	"hcm/pkg/tools/maps"
-	"hcm/pkg/tools/slice"
 )
 
 // getAvailableZoneInfo get available cvm zone info
@@ -123,45 +120,7 @@ func (g *Generator) getRegionList(kt *kit.Kit, zoneList []string) ([]*cfgtype.Zo
 func (g *Generator) getCapacity(kt *kit.Kit, order *task.ApplyOrder, zone, vpc, subnet string, orderZones []string) (
 	map[string]int64, error) {
 
-	// 小额绿通不需要查询库存
-	if order.RequireType.NotNeedVerifyCapacity() {
-		// 不是分Campus的话，直接返回
-		if len(zone) > 0 && zone != cvmapi.CvmSeparateCampus {
-			return map[string]int64{zone: math.MaxInt}, nil
-		}
-		// 是分Campus的话，返回所有zone
-		if zone == cvmapi.CvmSeparateCampus && len(orderZones) > 0 {
-			return slice.FuncToMap(orderZones, func(zone string) (string, int64) { return zone, math.MaxInt }), nil
-		}
-		return map[string]int64{}, nil
-	}
-
-	param := &cfgtype.GetCapacityParam{
-		RequireType:      order.RequireType,
-		DeviceType:       order.Spec.DeviceType,
-		Region:           order.Spec.Region,
-		Zone:             zone,
-		Vpc:              vpc,
-		Subnet:           subnet,
-		IgnorePrediction: !order.RequireType.NeedVerifyResPlan(),
-		BizID:            order.BkBizId,
-	}
-	// 计费模式,默认包年包月
-	if len(order.Spec.ChargeType) > 0 {
-		param.ChargeType = order.Spec.ChargeType
-	}
-
-	rst, err := g.configLogics.Capacity().GetCapacity(kt, param)
-	if err != nil {
-		return nil, err
-	}
-
-	zoneCapacity := make(map[string]int64)
-	for _, capInfo := range rst.Info {
-		zoneCapacity[capInfo.Zone] = capInfo.MaxNum
-	}
-
-	return zoneCapacity, nil
+	return g.QueryCapacity(kt, order, zone, vpc, subnet, orderZones, false)
 }
 
 // getCapacityDetail get resource apply capacity detail info
