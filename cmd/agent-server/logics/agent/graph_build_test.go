@@ -87,9 +87,14 @@ func TestMakeSceneDispatchNode(t *testing.T) {
 			wantTag: enumor.IntentTypeResourceQuery,
 		},
 		{
-			name:    "already tagged is no-op",
+			name:    "already tagged re-commits same tag",
 			state:   graph.State{constant.StateKeySessionTag: enumor.IntentTypeHostApply},
-			wantTag: "",
+			wantTag: enumor.IntentTypeHostApply,
+		},
+		{
+			name:    "already tagged as string re-commits same tag",
+			state:   graph.State{constant.StateKeySessionTag: string(enumor.IntentTypeHostApply)},
+			wantTag: enumor.IntentTypeHostApply,
 		},
 		{
 			name:    "unsupported intent is no-op",
@@ -113,7 +118,7 @@ func TestMakeSceneDispatchNode(t *testing.T) {
 			if !ok {
 				t.Fatalf("node() returned %T, want graph.State", got)
 			}
-			tag, _ := st[constant.StateKeySessionTag].(enumor.IntentType)
+			tag := parseSessionTag(st)
 			if tag != tc.wantTag {
 				t.Errorf("committed session_tag = %q, want %q", tag, tc.wantTag)
 			}

@@ -306,15 +306,33 @@ func makeResourceQueryOutputMapper() graph.SubgraphOutputMapper {
 	}
 }
 
+// parseSessionTag 从 graph state 中容错解析会话场景标签。
+//
+// session_tag 在 state 中的具体类型并不稳定：fresh 注入（service 层）时是 enumor.IntentType，
+// 而节点写回或经 checkpoint JSON 序列化/反序列化恢复后会变成 plain string。这里统一兼容两种类型，
+// 避免直接 .(enumor.IntentType) 断言因类型不符而拿到零值。
+func parseSessionTag(state graph.State) enumor.IntentType {
+	switch v := state[constant.StateKeySessionTag].(type) {
+	case enumor.IntentType:
+		return v
+	case string:
+		return enumor.IntentType(v)
+	default:
+		return ""
+	}
+}
+
 // makeSceneDispatchNode returns the scene_dispatch node function.
 // 场景分发节点：会话无标签但本轮意图命中受支持场景时，将其提交到 StateKeySessionTag。
 // 仅做 state 提交，不写 DB；DB 回写由 middleware 在 Run 结束后对账完成。
 func makeSceneDispatchNode() graph.NodeFunc {
 	return func(ctx context.Context, state graph.State) (any, error) {
 		rid := rest.RidFromContext(ctx)
-		tag, _ := state[constant.StateKeySessionTag].(enumor.IntentType)
+		tag := parseSessionTag(state)
 		if tag.IsSupportedScene() {
-			return graph.State{}, nil
+			return graph.State{
+				constant.StateKeySessionTag: tag,
+			}, nil
 		}
 
 		// 检查是否意图识别出来了支持的场景，是则提交到 StateKeySessionTag
@@ -344,7 +362,7 @@ func sceneNodeTarget(scene enumor.IntentType) string {
 func makeSceneDispatchRoutingFunc() func(ctx context.Context, state graph.State) (string, error) {
 	return func(ctx context.Context, state graph.State) (string, error) {
 		rid := rest.RidFromContext(ctx)
-		tag, _ := state[constant.StateKeySessionTag].(enumor.IntentType)
+		tag := parseSessionTag(state)
 		logs.Infof("scene dispatch routing: graph state session_tag=%s, type is %T, rid: %s", tag, tag, rid)
 		if tag.IsSupportedScene() {
 			target := sceneNodeTarget(tag)
