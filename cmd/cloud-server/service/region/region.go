@@ -166,9 +166,9 @@ func (svc *RegionSvc) TCloudZiyanImportRegions(kt *kit.Kit, req *protoregion.Reg
 	}
 
 	// 构建批量创建请求，设置 source 为 manually
-	regions := make([]dataprotoregion.TCloudRegionBatchCreate, 0, len(req.Regions))
+	regions := make([]dataprotoregion.TCloudZiyanRegionBatchCreate, 0, len(req.Regions))
 	for _, r := range req.Regions {
-		regions = append(regions, dataprotoregion.TCloudRegionBatchCreate{
+		regions = append(regions, dataprotoregion.TCloudZiyanRegionBatchCreate{
 			Vendor:     enumor.TCloudZiyan,
 			RegionID:   r.RegionID,
 			RegionName: r.RegionName,
@@ -178,8 +178,9 @@ func (svc *RegionSvc) TCloudZiyanImportRegions(kt *kit.Kit, req *protoregion.Reg
 		})
 	}
 
-	createReq := &dataprotoregion.TCloudRegionCreateReq{
-		Regions: regions,
+	createReq := &dataprotoregion.TCloudZiyanRegionCreateReq{
+		Regions:   regions,
+		AccountID: req.AccountID,
 	}
 
 	return svc.client.DataService().TCloudZiyan.Region.BatchCreate(kt, createReq)
