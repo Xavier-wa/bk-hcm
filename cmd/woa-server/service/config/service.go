@@ -58,6 +58,7 @@ func InitService(c *capability.Capability) {
 	s.initCapacity(h)
 	s.initSg(h)
 	s.initSpringResPool(h)
+	s.initLoadTestSubnet(h)
 
 	h.Load(c.WebService)
 }
@@ -192,4 +193,9 @@ func (s *service) initSpringResPool(h *rest.Handler) {
 		s.UpsertSpringResPoolChargeType)
 	h.Add("DeleteSpringResPoolChargeTypeGlobal", http.MethodDelete, "/config/spring_res_pool/charge_type",
 		s.DeleteSpringResPoolChargeType)
+}
+
+func (s *service) initLoadTestSubnet(h *rest.Handler) {
+	h.Add("ListLoadTestSubnets", http.MethodGet, "/config/load_test_subnets", s.ListLoadTestSubnets)
+	h.Add("UpsertLoadTestSubnets", http.MethodPost, "/config/load_test_subnets/upsert", s.UpsertLoadTestSubnets)
 }

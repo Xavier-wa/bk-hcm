@@ -84,6 +84,8 @@ const (
 	GlobalConfigTypeAccountBill GlobalConfigType = "account_bill"
 	// GlobalConfigTypeCvmImageRecommend CVM镜像推荐配置类型
 	GlobalConfigTypeCvmImageRecommend GlobalConfigType = "cvm_image_recommend"
+	// GlobalConfigTypeCvmApply 自研云主机申领相关配置
+	GlobalConfigTypeCvmApply GlobalConfigType = "cvm_apply"
 )
 
 // GlobalConfigResDissolveKey resource dissolve global config key
@@ -176,6 +178,14 @@ const (
 func GetBizSpringResPoolChargeTypeKey(bizID int64) string {
 	return string(GlobalConfigKeySpringResPoolChargeTypeBizPrefix) + strconv.FormatInt(bizID, 10)
 }
+
+// GlobalConfigKeyCvmApply cvm apply global config key
+type GlobalConfigKeyCvmApply string
+
+const (
+	// GlobalConfigKeyCvmApplyLoadTestSubnet 压测子网配置key，config_value 为 region->vpc_id->[subnet_id] 三层映射
+	GlobalConfigKeyCvmApplyLoadTestSubnet GlobalConfigKeyCvmApply = "load_test_subnet"
+)
 
 // GlobalConfigKeyAccountBill account bill global config key
 type GlobalConfigKeyAccountBill string
