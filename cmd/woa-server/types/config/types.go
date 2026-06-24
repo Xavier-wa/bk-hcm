@@ -47,12 +47,46 @@ type Region struct {
 	Region         string `json:"region" bson:"region"`
 	RegionCn       string `json:"region_cn" bson:"region_cn"`
 	CmdbRegionName string `json:"cmdb_region_name" bson:"cmdb_region_name"`
+	IsRecommended  bool   `json:"is_recommended" bson:"is_recommended"`
 }
 
 // GetRegionResult get region list result
 type GetRegionResult struct {
 	Count int64     `json:"count"`
 	Info  []*Region `json:"info"`
+}
+
+// UpsertRegionRecommendReq upsert region recommend config request
+// region_ids 为空时表示清空推荐地域列表。
+type UpsertRegionRecommendReq struct {
+	RegionIDs []string `json:"region_ids" validate:"max=100"`
+}
+
+// Validate ...
+func (req *UpsertRegionRecommendReq) Validate() error {
+	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+
+	if req.RegionIDs == nil {
+		req.RegionIDs = make([]string, 0)
+	}
+
+	dedupMap := make(map[string]struct{}, len(req.RegionIDs))
+	var uniqueRegionIDs []string
+	for _, regionID := range req.RegionIDs {
+		if len(regionID) == 0 {
+			return fmt.Errorf("region_ids contains empty id")
+		}
+		if _, exists := dedupMap[regionID]; !exists {
+			dedupMap[regionID] = struct{}{}
+			uniqueRegionIDs = append(uniqueRegionIDs, regionID)
+		}
+	}
+
+	req.RegionIDs = uniqueRegionIDs
+
+	return nil
 }
 
 // Zone qcloud resource zone config

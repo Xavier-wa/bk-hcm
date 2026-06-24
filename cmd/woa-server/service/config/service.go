@@ -145,6 +145,7 @@ func (s *service) initPmRestrict(h *rest.Handler) {
 func (s *service) initRegion(h *rest.Handler) {
 	h.Add("GetQcloudRegion", http.MethodGet, "/config/find/config/qcloud/region", s.GetQcloudRegion)
 	h.Add("GetIdcRegion", http.MethodGet, "/config/find/config/idc/region", s.GetIdcRegion)
+	h.Add("UpsertRegionRecommend", http.MethodPost, "/config/qcloud/region/recommend/upsert", s.UpsertRegionRecommend)
 }
 
 func (s *service) initRequirement(h *rest.Handler) {

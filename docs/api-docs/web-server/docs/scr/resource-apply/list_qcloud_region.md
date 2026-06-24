@@ -32,7 +32,8 @@ GET /api/v1/woa/config/find/config/qcloud/region
         "id":1,
         "region":"ap-shanghai",
         "region_cn":"华东区域(上海)",
-        "cmdb_region_name":"上海"
+        "cmdb_region_name":"上海",
+        "is_recommended": true
       },
       {
         "id":2,
@@ -69,3 +70,4 @@ GET /api/v1/woa/config/find/config/qcloud/region
 | region           | string   | 区域，英文      |
 | region_cn        | string   | 区域，中文      |
 | cmdb_region_name | string   | CC区域名       |
+| is_recommended   | bool     | 是否推荐地域     |

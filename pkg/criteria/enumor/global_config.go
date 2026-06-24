@@ -86,6 +86,8 @@ const (
 	GlobalConfigTypeCvmImageRecommend GlobalConfigType = "cvm_image_recommend"
 	// GlobalConfigTypeCvmApply 自研云主机申领相关配置
 	GlobalConfigTypeCvmApply GlobalConfigType = "cvm_apply"
+	// GlobalConfigTypeRegionRecommend 地域推荐相关配置
+	GlobalConfigTypeRegionRecommend GlobalConfigType = "region_recommend"
 )
 
 // GlobalConfigResDissolveKey resource dissolve global config key
@@ -203,4 +205,12 @@ type GlobalConfigKeyCvmRecommend string
 const (
 	// GlobalConfigKeyCvmImageRecommend CVM镜像推荐配置key
 	GlobalConfigKeyCvmImageRecommend GlobalConfigKeyCvmRecommend = "recommended_images"
+)
+
+// GlobalConfigRegionRecommendKey 地域推荐配置key
+type GlobalConfigRegionRecommendKey string
+
+const (
+	// GlobalConfigKeyRegionRecommend 地域推荐配置key
+	GlobalConfigKeyRegionRecommend GlobalConfigRegionRecommendKey = "recommended_regions"
 )
