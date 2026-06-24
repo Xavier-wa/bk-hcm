@@ -1895,10 +1895,12 @@ func (c *Controller) getProdResRemainPoolMatch(kt *kit.Kit, bkBizID int64, requi
 
 	// matching.
 	for prodResPlanKey, consumeCpuCore := range prodConsumePool {
-		// 当未显示指定预测内外时，需按 预测外 -> 预测内 的顺序依次尝试匹配
+		// 当未显示指定预测内外时，需先匹配忽略预测内外的预测池，再按 预测外 -> 预测内 的顺序依次尝试匹配
+		// 机房裁撤等"忽略预测内外"的场景，预测池 key 的 PlanType 也为空，必须先保留空类型直接匹配，
+		// 否则消耗扣减不到预测，导致预测余量虚高、校验漏拦
 		matchPlanType := []enumor.PlanTypeCode{prodResPlanKey.PlanType}
 		if prodResPlanKey.PlanType == "" {
-			matchPlanType = enumor.GetPlanTypeCodeHcmMembers()
+			matchPlanType = append(matchPlanType, enumor.GetPlanTypeCodeHcmMembers()...)
 		}
 
 		for _, planType := range matchPlanType {
@@ -1922,9 +1924,9 @@ func (c *Controller) getProdResRemainPoolMatch(kt *kit.Kit, bkBizID int64, requi
 				}
 			}
 
-			logs.Infof("biz resource plan pool is loop matched, bkBizID: %d, record: %+v, ok: %v, plan: %+v, "+
-				"prodPlanPool: %+v, maxAvailablePool: %+v, consumeCpuCore: %d, rid: %s", bkBizID, prodResPlanKey, ok,
-				planMap, prodPlanPool, prodMaxAvailablePool, consumeCpuCore, kt.Rid)
+			logs.Infof("biz resource plan pool is loop matched, bkBizID: %d, record: %+v, ok: %v, keyLoop: %+v, "+
+				"plan: %+v, prodPlanPool: %+v, maxAvailablePool: %+v, consumeCpuCore: %d, rid: %s", bkBizID,
+				prodResPlanKey, ok, keyLoop, planMap, prodPlanPool, prodMaxAvailablePool, consumeCpuCore, kt.Rid)
 		}
 	}
 
