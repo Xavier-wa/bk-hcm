@@ -68,6 +68,9 @@ type Logics interface {
 
 	// ListResPlanDemandAndOverview list res plan demand and overview.
 	ListResPlanDemandAndOverview(kt *kit.Kit, req *ptypes.ListResPlanDemandReq) (*ptypes.ListResPlanDemandResp, error)
+	// ListResPlanDemandWithDeviceTypes list res plan demand with device types.
+	ListResPlanDemandWithDeviceTypes(kt *kit.Kit, req *ptypes.ListResPlanDemandWithDeviceTypesReq) (
+		*ptypes.ListResPlanDemandWithDeviceTypesResp, error)
 	// GetResPlanDemandDetail get res plan demand detail.
 	GetResPlanDemandDetail(kt *kit.Kit, demandID string, bkBizIDs []int64) (*ptypes.GetPlanDemandDetailResp, error)
 	// QueryIEGDemands query IEG crp demands.

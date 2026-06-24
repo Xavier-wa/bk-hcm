@@ -201,6 +201,8 @@ func (s *service) initBizPlanService(h *rest.Handler) {
 
 	// demand
 	h.Add("ListBizResPlanDemand", http.MethodPost, "/plans/resources/demands/list", s.ListBizResPlanDemand)
+	h.Add("ListBizResPlanDemandWithDeviceTypes", http.MethodPost,
+		"/plans/resources/demands/list_with_device_types", s.ListBizResPlanDemandWithDeviceTypes)
 	h.Add("GetBizPlanDemandDetail", http.MethodGet, "/plans/demands/{id}", s.GetBizPlanDemandDetail)
 	h.Add("ListBizPlanDemandChangeLog", http.MethodPost, "/plans/demands/change_logs/list",
 		s.ListBizPlanDemandChangeLog)

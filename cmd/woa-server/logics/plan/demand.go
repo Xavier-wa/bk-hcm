@@ -84,8 +84,8 @@ func (c *Controller) ListResPlanDemandAndOverview(kt *kit.Kit, req *ptypes.ListR
 	// 获取当月预测消耗历史，聚合为 ResPlanConsumePool
 	startDay, endDay, err := listAllReq.ExpectTimeRange.GetTimeDate()
 	if err != nil {
-		logs.Errorf("failed to parse date range, err: %v, date range: %s - %s, rid: %s", err, req.ExpectTimeRange.Start,
-			req.ExpectTimeRange.End, kt.Rid)
+		logs.Errorf("failed to parse date range, err: %v, date range: %s - %s, rid: %s", err,
+			listAllReq.ExpectTimeRange.Start, listAllReq.ExpectTimeRange.End, kt.Rid)
 		return nil, err
 	}
 	prodConsumePool, err := c.GetProdResConsumePoolV2(kt, bkBizIDs, startDay, endDay)
@@ -172,10 +172,13 @@ func (c *Controller) extendResPlanListReq(kt *kit.Kit, req *ptypes.ListResPlanDe
 
 	return &ptypes.ListResPlanDemandReq{
 		BkBizIDs:       req.BkBizIDs,
+		DemandClasses:  req.DemandClasses,
 		OpProductIDs:   req.OpProductIDs,
 		PlanProductIDs: req.PlanProductIDs,
 		CoreTypes:      req.CoreTypes,
 		DeviceFamilies: req.DeviceFamilies,
+		ObsProjects:    req.ObsProjects,
+		RegionIDs:      req.RegionIDs,
 		ExpectTimeRange: &times.DateRange{
 			Start: startDemandTimeRange.Start,
 			End:   endDemandTimeRange.End,
@@ -338,7 +341,7 @@ func (c *Controller) convResPlanDemandRespAndFilter(kt *kit.Kit, req *ptypes.Lis
 		}
 
 		// 更新demand状态并过滤状态的查询条件
-		demandItem = c.setDemandStatus(kt, demand.ID, cvt.PtrToVal(demand.Locked), demandItem)
+		c.setDemandStatus(kt, demand.ID, cvt.PtrToVal(demand.Locked), &demandItem.ListResPlanDemandItemBase)
 		if len(req.Statuses) > 0 && !slices.Contains(req.Statuses, demandItem.Status) {
 			continue
 		}
@@ -351,7 +354,7 @@ func (c *Controller) convResPlanDemandRespAndFilter(kt *kit.Kit, req *ptypes.Lis
 }
 
 func (c *Controller) setDemandStatus(kt *kit.Kit, demandID string, demandLockedStatus enumor.CrpDemandLockStatus,
-	demandItem *ptypes.ListResPlanDemandItem) *ptypes.ListResPlanDemandItem {
+	demandItem *ptypes.ListResPlanDemandItemBase) {
 
 	// 计算demand状态，can_apply（可申领）、not_ready（未到申领时间）、expired（已过期）
 	status, demandRange, err := c.demandTime.GetDemandStatusByExpectTime(kt, demandItem.ExpectTime)
@@ -371,8 +374,6 @@ func (c *Controller) setDemandStatus(kt *kit.Kit, demandID string, demandLockedS
 		demandItem.Status = enumor.DemandStatusLocked
 	}
 	demandItem.StatusName = demandItem.Status.Name()
-
-	return demandItem
 }
 
 func calcDemandListOverview(overview *ptypes.ListResPlanDemandOverview, demandItem *ptypes.ListResPlanDemandItem,
@@ -417,7 +418,7 @@ func (c *Controller) getDemandExpendKeyFromTable(kt *kit.Kit, demand rpd.ResPlan
 		ObsProject:    demand.ObsProject,
 		RegionID:      demand.RegionID,
 	}
-	// TODO
+
 	// 机房裁撤需要忽略预测内、预测外 --story=121848852
 	if enumor.IsDissolveObsProjectForResPlan(demand.ObsProject) {
 		resPlanDemandExpendKey.PlanType = ""
@@ -430,6 +431,14 @@ func convListResPlanDemandItemByTable(table rpd.ResPlanDemandTable, expectTime s
 	returnPlanTime *string) *ptypes.ListResPlanDemandItem {
 
 	return &ptypes.ListResPlanDemandItem{
+		ListResPlanDemandItemBase: ptypes.ListResPlanDemandItemBase{
+			DemandClass:     table.DemandClass,
+			ExpectTime:      expectTime,
+			ReturnPlanTime:  returnPlanTime,
+			TotalCpuCore:    cvt.PtrToVal(table.CpuCore),
+			AppliedCpuCore:  0,
+			RemainedCpuCore: cvt.PtrToVal(table.CpuCore),
+		},
 		DemandID:         table.ID,
 		BkBizID:          table.BkBizID,
 		BkBizName:        table.BkBizName,
@@ -437,18 +446,12 @@ func convListResPlanDemandItemByTable(table rpd.ResPlanDemandTable, expectTime s
 		OpProductName:    table.OpProductName,
 		PlanProductID:    table.PlanProductID,
 		PlanProductName:  table.PlanProductName,
-		DemandClass:      table.DemandClass,
 		DemandResType:    table.DemandResType,
-		ExpectTime:       expectTime,
-		ReturnPlanTime:   returnPlanTime,
 		DeviceClass:      table.DeviceClass,
 		DeviceType:       table.DeviceType,
 		TotalOS:          table.OS.Decimal,
 		AppliedOS:        decimal.NewFromInt(0),
 		RemainedOS:       table.OS.Decimal,
-		TotalCpuCore:     cvt.PtrToVal(table.CpuCore),
-		AppliedCpuCore:   0,
-		RemainedCpuCore:  cvt.PtrToVal(table.CpuCore),
 		TotalMemory:      cvt.PtrToVal(table.Memory),
 		TotalDiskSize:    cvt.PtrToVal(table.DiskSize),
 		RemainedDiskSize: cvt.PtrToVal(table.DiskSize),
@@ -835,7 +838,7 @@ func (c *Controller) GetProdResPlanPool(kt *kit.Kit, prodID int64) (ResPlanPool,
 
 		key := ResPlanPoolKey{
 			PlanType:      enumor.PlanType(demand.InPlan).ToAnotherPlanType(),
-			AvailableTime: NewAvailableTime(demand.Year, time.Month(demand.Month)),
+			AvailableTime: ptypes.NewAvailableMonth(demand.Year, time.Month(demand.Month)),
 			DeviceType:    deviceType,
 			ObsProject:    demand.ProjectName,
 			RegionName:    demand.CityName,
@@ -982,7 +985,7 @@ func (c *Controller) getApplyOrderConsumePoolMap(kt *kit.Kit, demands []*cvmapi.
 
 			consumePoolKey := ResPlanPoolKey{
 				PlanType:      enumor.PlanType(demand.InPlan).ToAnotherPlanType(),
-				AvailableTime: NewAvailableTime(demand.Year, time.Month(demand.Month)),
+				AvailableTime: ptypes.NewAvailableMonth(demand.Year, time.Month(demand.Month)),
 				DeviceType:    demand.InstanceModel,
 				ObsProject:    demand.ProjectName,
 				RegionName:    demand.CityName,
@@ -1699,7 +1702,7 @@ func addSpecApplyOrderConsumePool(kt *kit.Kit, poolMap ResPlanConsumePool, sub *
 
 	consumePoolKey := ResPlanPoolKeyV2{
 		PlanType:      planType,
-		AvailableTime: NewAvailableTime(demandYear, demandMonth),
+		AvailableTime: ptypes.NewAvailableMonth(demandYear, demandMonth),
 		DeviceType:    sub.Spec.DeviceType,
 		ObsProject:    sub.ObsProject,
 		BkBizID:       sub.BkBizId,
@@ -1727,7 +1730,7 @@ func addPlanExpendApplyOrderConsumePool(poolMap ResPlanConsumePool, sub *tasktyp
 	for _, expendPlan := range sub.PlanExpendGroup {
 		consumePoolKey := ResPlanPoolKeyV2{
 			PlanType:      planType,
-			AvailableTime: NewAvailableTime(demandYear, demandMonth),
+			AvailableTime: ptypes.NewAvailableMonth(demandYear, demandMonth),
 			DeviceType:    expendPlan.DeviceType,
 			ObsProject:    sub.ObsProject,
 			BkBizID:       sub.BkBizId,
@@ -2022,7 +2025,7 @@ func (c *Controller) GetProdResPlanPoolMatch(kt *kit.Kit, bkBizID int64, startDa
 
 		key := ResPlanPoolKeyV2{
 			PlanType:      demand.PlanType,
-			AvailableTime: NewAvailableTime(expectTime.Year(), expectTime.Month()),
+			AvailableTime: ptypes.NewAvailableMonth(expectTime.Year(), expectTime.Month()),
 			DeviceType:    deviceType,
 			ObsProject:    demand.ObsProject,
 			BkBizID:       demand.BkBizID,

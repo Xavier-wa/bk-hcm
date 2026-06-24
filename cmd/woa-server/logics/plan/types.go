@@ -138,15 +138,6 @@ func (r *QueryIEGDemandsReq) Validate() error {
 	return nil
 }
 
-// AvailableTime available time.
-type AvailableTime string
-
-// NewAvailableTime new an available time.
-// TODO: 目前只关注年和月，未来会添加周
-func NewAvailableTime(year int, month time.Month) AvailableTime {
-	return AvailableTime(fmt.Sprintf("%04d-%02d", year, month))
-}
-
 // VerifyResPlanElem verify resource plan element.
 type VerifyResPlanElem struct {
 	// if IsPrePaid is true, Verify function will examine:
@@ -154,7 +145,7 @@ type VerifyResPlanElem struct {
 	// 2. InPlan * 120% - consumed >= applied.
 	// otherwise, it will only examine InPlan + OutPlan >= applied.
 	IsPrePaid     bool
-	AvailableTime AvailableTime
+	AvailableTime ptypes.AvailableMonth
 	DeviceType    string
 	ObsProject    enumor.ObsProject
 	RegionName    string
@@ -169,7 +160,7 @@ type VerifyResPlanElemV2 struct {
 	// 2. InPlan * 100% - consumed >= applied.(120% to be implemented)
 	// otherwise, it will only examine InPlan + OutPlan >= applied.
 	IsPrePaid     bool
-	AvailableTime AvailableTime
+	AvailableTime ptypes.AvailableMonth
 	DeviceType    string
 	ObsProject    enumor.ObsProject
 	BkBizID       int64
@@ -191,7 +182,7 @@ type VerifyResPlanResElem struct {
 // ResPlanElem resource plan element.
 type ResPlanElem struct {
 	PlanType      enumor.PlanType
-	AvailableTime AvailableTime
+	AvailableTime ptypes.AvailableMonth
 	DeviceType    string
 	ObsProject    enumor.ObsProject
 	RegionName    string
@@ -202,7 +193,7 @@ type ResPlanElem struct {
 // ResPlanPoolKey resource plan pool key.
 type ResPlanPoolKey struct {
 	PlanType      enumor.PlanType
-	AvailableTime AvailableTime
+	AvailableTime ptypes.AvailableMonth
 	DeviceType    string
 	ObsProject    enumor.ObsProject
 	RegionName    string
@@ -215,7 +206,7 @@ type ResPlanPool map[ResPlanPoolKey]int64
 // ResPlanPoolKeyV2 resource plan demand key v2.
 type ResPlanPoolKeyV2 struct {
 	PlanType      enumor.PlanTypeCode
-	AvailableTime AvailableTime
+	AvailableTime ptypes.AvailableMonth
 	DeviceType    string
 	ObsProject    enumor.ObsProject
 	BkBizID       int64

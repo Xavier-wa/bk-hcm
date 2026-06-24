@@ -176,7 +176,7 @@ func (c *Controller) fillVerifyElems(kt *kit.Kit, subOrder ttypes.Suborder, bkBi
 		logs.Errorf("failed to get demand year month, err: %v, rid: %s", err, kt.Rid)
 		return nil, errf.NewFromErr(errf.Aborted, err)
 	}
-	availableTime := NewAvailableTime(nowDemandYear, nowDemandMonth)
+	availableTime := ptypes.NewAvailableMonth(nowDemandYear, nowDemandMonth)
 
 	createElem := func(deviceType, regionID, zoneID string, cpuCore int64) VerifyResPlanElemV2 {
 
@@ -273,7 +273,7 @@ func (c *Controller) getProdRemainAvlDeviceTypeMap(kt *kit.Kit, req *ptypes.GetC
 		return nil, err
 	}
 
-	availableTime := NewAvailableTime(nowDemandYear, nowDemandMonth)
+	availableTime := ptypes.NewAvailableMonth(nowDemandYear, nowDemandMonth)
 	obsProject := req.RequireType.ToObsProject()
 	avlDeviceTypeMap := make(map[string]int64)
 
@@ -287,7 +287,7 @@ func (c *Controller) getProdRemainAvlDeviceTypeMap(kt *kit.Kit, req *ptypes.GetC
 }
 
 func getAvlDeviceTypeMap(req *ptypes.GetCvmChargeTypeDeviceTypeReq, key ResPlanPoolKeyV2,
-	remainCoreMap map[string]int64, availableTime AvailableTime, obsProject enumor.ObsProject,
+	remainCoreMap map[string]int64, availableTime ptypes.AvailableMonth, obsProject enumor.ObsProject,
 	avlDeviceTypeMap map[string]int64) map[string]int64 {
 
 	if key.AvailableTime == availableTime && key.ObsProject == obsProject &&
