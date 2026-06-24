@@ -107,12 +107,15 @@ func (svc *service) GetAccount(cts *rest.Contexts) (interface{}, error) {
 		BkBizID:            dbAccount.BkBizID,
 		UsageBizIDs:        usageBizIDs,
 		RecycleReserveTime: dbAccount.RecycleReserveTime,
+		Email:              dbAccount.Email,
+		SecurityManagers:   dbAccount.SecurityManagers,
 		Revision: core.Revision{
 			Creator:   dbAccount.Creator,
 			Reviser:   dbAccount.Reviser,
 			CreatedAt: dbAccount.CreatedAt.String(),
 			UpdatedAt: dbAccount.UpdatedAt.String(),
 		},
+		CloudCreatedAt: dbAccount.CloudCreatedAt,
 	}
 
 	// 转换为最终的数据结构
@@ -135,7 +138,6 @@ func (svc *service) GetAccount(cts *rest.Contexts) (interface{}, error) {
 	default:
 		return nil, errors.New("unknown vendor: " + string(vendor))
 	}
-
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +174,7 @@ func (svc *service) ListAccount(cts *rest.Contexts) (interface{}, error) {
 	details := make([]*protocore.BaseAccount, 0, len(daoAccountResp.Details))
 	for _, account := range daoAccountResp.Details {
 		ids = append(ids, account.ID)
-		details = append(details, &protocore.BaseAccount{
+		baseAccount := &protocore.BaseAccount{
 			ID:                 account.ID,
 			Vendor:             enumor.Vendor(account.Vendor),
 			Name:               account.Name,
@@ -184,13 +186,18 @@ func (svc *service) ListAccount(cts *rest.Contexts) (interface{}, error) {
 			Memo:               account.Memo,
 			RecycleReserveTime: account.RecycleReserveTime,
 			BkBizID:            account.BkBizID,
+			Email:              account.Email,
+			SecurityManagers:   account.SecurityManagers,
 			Revision: core.Revision{
 				Creator:   account.Creator,
 				Reviser:   account.Reviser,
 				CreatedAt: account.CreatedAt.String(),
 				UpdatedAt: account.UpdatedAt.String(),
 			},
-		})
+			CloudCreatedAt: account.CloudCreatedAt,
+		}
+
+		details = append(details, baseAccount)
 	}
 
 	// 查询账号业务信息，并赋值
@@ -334,11 +341,9 @@ func (svc *service) ListAccountWithExtension(cts *rest.Contexts) (interface{}, e
 	if err := cts.DecodeInto(req); err != nil {
 		return nil, err
 	}
-
 	if err := req.Validate(); err != nil {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
-
 	opt := &types.ListOption{
 		Filter: req.Filter,
 		Page:   req.Page,
@@ -373,38 +378,40 @@ func (svc *service) ListAccountWithExtension(cts *rest.Contexts) (interface{}, e
 		if err != nil {
 			return nil, fmt.Errorf("json unmarshal extension to vendor extension failed, err: %v", err)
 		}
-
 		ids = append(ids, account.ID)
-		details = append(details, &protocloud.BaseAccountWithExtensionListResp{
-			BaseAccount: protocore.BaseAccount{
-				ID:                 account.ID,
-				Vendor:             enumor.Vendor(account.Vendor),
-				Name:               account.Name,
-				Managers:           account.Managers,
-				Type:               enumor.AccountType(account.Type),
-				Site:               enumor.AccountSiteType(account.Site),
-				Price:              account.Price,
-				PriceUnit:          account.PriceUnit,
-				Memo:               account.Memo,
-				RecycleReserveTime: account.RecycleReserveTime,
-				BkBizID:            account.BkBizID,
-				Revision: core.Revision{
-					Creator:   account.Creator,
-					Reviser:   account.Reviser,
-					CreatedAt: account.CreatedAt.String(),
-					UpdatedAt: account.UpdatedAt.String(),
-				},
+		baseAccount := protocore.BaseAccount{
+			ID:                 account.ID,
+			Vendor:             enumor.Vendor(account.Vendor),
+			Name:               account.Name,
+			Managers:           account.Managers,
+			Type:               enumor.AccountType(account.Type),
+			Site:               enumor.AccountSiteType(account.Site),
+			Price:              account.Price,
+			PriceUnit:          account.PriceUnit,
+			Memo:               account.Memo,
+			RecycleReserveTime: account.RecycleReserveTime,
+			BkBizID:            account.BkBizID,
+			Email:              account.Email,
+			SecurityManagers:   account.SecurityManagers,
+			Revision: core.Revision{
+				Creator:   account.Creator,
+				Reviser:   account.Reviser,
+				CreatedAt: account.CreatedAt.String(),
+				UpdatedAt: account.UpdatedAt.String(),
 			},
-			Extension: extension,
+			CloudCreatedAt: account.CloudCreatedAt,
+		}
+
+		details = append(details, &protocloud.BaseAccountWithExtensionListResp{
+			BaseAccount: baseAccount,
+			Extension:   extension,
 		})
 	}
-
 	// 查询账号业务信息，并赋值
 	accountBizMap, err := svc.getAccountBizMap(cts.Kit, ids)
 	if err != nil {
 		return nil, err
 	}
-
 	for _, one := range details {
 		one.UsageBizIDs = accountBizMap[one.ID]
 	}

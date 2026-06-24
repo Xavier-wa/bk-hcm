@@ -302,12 +302,5 @@ func (uf *StrUnionFind) Connected(x, y string) bool {
 
 // GetPlanTypeByChargeType 根据计费模式，获取映射的预测内或预测外.
 func (c *Controller) GetPlanTypeByChargeType(chargeType cvmapi.ChargeType) (enumor.PlanTypeCode, error) {
-	switch chargeType {
-	case cvmapi.ChargeTypePrePaid: // 计费模式:包年包月
-		return enumor.PlanTypeCodeInPlan, nil
-	case cvmapi.ChargeTypePostPaidByHour: // 计费模式:按量计费
-		return enumor.PlanTypeCodeOutPlan, nil
-	default: // 计费模式默认:包年包月
-		return enumor.PlanTypeCodeInPlan, nil
-	}
+	return chargeType.ToPlanType(), nil
 }

@@ -39,6 +39,7 @@ var ZiyanCvmApplyBizRecommendColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "require_type", NamedC: "require_type", Type: enumor.Numeric},
 	{Column: "region", NamedC: "region", Type: enumor.String},
 	{Column: "device_type", NamedC: "device_type", Type: enumor.String},
+	{Column: "image_id", NamedC: "image_id", Type: enumor.String},
 	{Column: "count", NamedC: "count", Type: enumor.Numeric},
 	{Column: "creator", NamedC: "creator", Type: enumor.String},
 	{Column: "reviser", NamedC: "reviser", Type: enumor.String},
@@ -58,6 +59,8 @@ type ZiyanCvmApplyBizRecommend struct {
 	Region string `db:"region" json:"region" validate:"max=128"`
 	// DeviceType 机型
 	DeviceType string `db:"device_type" json:"device_type" validate:"max=64"`
+	// ImageID 镜像ID
+	ImageID string `db:"image_id" json:"image_id" validate:"max=64"`
 	// Count 历史申领次数
 	Count int `db:"count" json:"count"`
 	// Creator 创建人
@@ -88,6 +91,9 @@ func (z *ZiyanCvmApplyBizRecommend) InsertValidate() error {
 	}
 	if z.DeviceType == "" {
 		return errors.New("device_type is required")
+	}
+	if z.ImageID == "" {
+		return errors.New("image_id is required")
 	}
 	if err := z.RequireType.Validate(); err != nil {
 		return err

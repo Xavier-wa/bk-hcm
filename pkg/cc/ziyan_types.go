@@ -1126,7 +1126,7 @@ func (c *SyncDeviceTypePhysicalRel) trySetDefault() {
 	}
 }
 
-// ApplyRecommend 申领机型推荐离线统计相关配置
+// ApplyRecommend 申领机型推荐相关配置
 type ApplyRecommend struct {
 	// Interval 任务执行间隔，单位：分钟
 	Interval int `yaml:"interval"`
@@ -1134,6 +1134,8 @@ type ApplyRecommend struct {
 	LookbackDays int `yaml:"lookbackDays"`
 	// MaxRows 每分组保留 Top-K 推荐条数
 	MaxRows int `yaml:"maxRows"`
+	// DefaultApplyNum 在线推荐方案的默认申请数量
+	DefaultApplyNum int `yaml:"defaultApplyNum"`
 }
 
 // trySetDefault sets default values for ApplyRecommend.
@@ -1146,6 +1148,9 @@ func (a *ApplyRecommend) trySetDefault() {
 	}
 	if a.MaxRows <= 0 {
 		a.MaxRows = 5
+	}
+	if a.DefaultApplyNum <= 0 {
+		a.DefaultApplyNum = 10
 	}
 }
 

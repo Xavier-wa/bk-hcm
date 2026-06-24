@@ -1111,6 +1111,31 @@ paths:
           userVerifiedRequired: true
         disabledStages: []
         descriptionEn: List AWS member account SageMaker reserved capacity UltraServers via AssumeRole
+  /api/v1/account/main_accounts/list:
+    post:
+      operationId: list_main_account
+      description: 主账号列表接口
+      tags:
+        - Account
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: true
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/account/main_accounts/list
+          matchSubpath: false
+          timeout: 30
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          userVerifiedRequired: false
+        disabledStages: []
+        descriptionEn: List main accounts
 
   /api/v1/task/get_biz_recycle_order:
     post:
@@ -1798,6 +1823,84 @@ paths:
           type: HTTP
           method: post
           path: /api/v1/cloud/bizs/{bk_biz_id}/security_groups/disassociate/load_balancers/batch
+          matchSubpath: false
+          timeout: 30
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          userVerifiedRequired: true
+        disabledStages: []
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/task/apply/recommend/by_static_recommend:
+    post:
+      operationId: get_biz_apply_recommend_by_static
+      description: 离线偏好叠加库存在线推荐
+      tags:
+        - SCR
+        - Apply
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: true
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/task/apply/recommend/by_static_recommend
+          matchSubpath: false
+          timeout: 30
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          userVerifiedRequired: true
+        disabledStages: []
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/task/apply/recommend/by_plan:
+    post:
+      operationId: get_biz_apply_recommend_by_plan
+      description: 预测余量叠加库存在线推荐
+      tags:
+        - SCR
+        - Apply
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: true
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/task/apply/recommend/by_plan
+          matchSubpath: false
+          timeout: 30
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          userVerifiedRequired: true
+        disabledStages: []
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/task/apply/recommend/split_suborder:
+    post:
+      operationId: get_biz_apply_recommend_split_suborder
+      description: 主机申请单据拆分试算
+      tags:
+        - SCR
+        - Apply
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: true
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/task/apply/recommend/split_suborder
           matchSubpath: false
           timeout: 30
           upstreams: {}

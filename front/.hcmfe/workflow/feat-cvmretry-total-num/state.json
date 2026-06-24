@@ -1,0 +1,78 @@
+{
+  "id": "feat-cvmretry-total-num",
+  "title": "CVM申请-修改需求重试-数量显示优化",
+  "currentStage": "coding",
+  "createdAt": "2026-06-12T10:04:48.680Z",
+  "updatedAt": "2026-06-12T10:18:26.078Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvmretry-total-num/prd.md",
+        "kind": "file",
+        "addedAt": "2026-06-12T10:05:10.950Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvmretry-total-num/design.md",
+        "kind": "file",
+        "addedAt": "2026-06-12T10:12:32.772Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvmretry-total-num/api.md",
+        "kind": "file",
+        "addedAt": "2026-06-12T10:16:07.700Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvmretry-total-num/coding.md",
+        "kind": "file",
+        "addedAt": "2026-06-12T10:16:46.721Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-06-12T10:07:39.125Z"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-06-12T10:13:44.096Z"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-06-12T10:16:30.110Z"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-06-12T10:18:26.078Z"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-06-12T10:04:48.680Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-06-12T10:07:42.210Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-06-12T10:13:46.353Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-06-12T10:16:32.846Z"
+    }
+  ],
+  "branch": "feat-cvmretry-total-num"
+}

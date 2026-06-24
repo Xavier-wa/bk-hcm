@@ -112,6 +112,14 @@ func (ct ChargeType) GetWithDefault() ChargeType {
 	return ct
 }
 
+// ToPlanType 计费模式映射预测内/外：按量计费→预测外，其余（含包年包月/默认）→预测内。
+func (ct ChargeType) ToPlanType() enumor.PlanTypeCode {
+	if ct == ChargeTypePostPaidByHour {
+		return enumor.PlanTypeCodeOutPlan
+	}
+	return enumor.PlanTypeCodeInPlan
+}
+
 // Image cvm image specification
 type Image struct {
 	ImageId   string `json:"imageId"`

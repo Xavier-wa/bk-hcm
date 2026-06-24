@@ -28,6 +28,37 @@ import (
 type GlobalConfigType string
 
 const (
+	// GlobalConfigTypeCloudSync 云资源同步相关配置
+	GlobalConfigTypeCloudSync GlobalConfigType = "cloud_sync"
+	// GlobalConfigTypeGPUMachineType GPU 机型清单配置，config_key 为云厂商，config_value 为机型字符串数组
+	GlobalConfigTypeGPUMachineType GlobalConfigType = "gpu_machine_type"
+)
+
+// GlobalConfigKeyCloudSync cloud sync global config key
+type GlobalConfigKeyCloudSync string
+
+const (
+	// GlobalConfigKeyCloudSyncBizIDs 云资源同步业务白名单，config_value 为 JSON 对象 {"tenantID": [bizID1, bizID2], ...}
+	GlobalConfigKeyCloudSyncBizIDs GlobalConfigKeyCloudSync = "sync_biz_ids"
+)
+
+// GlobalConfigKeyGPUMachineType GPU 机型清单配置，config_key 为云厂商
+type GlobalConfigKeyGPUMachineType string
+
+const (
+	// GlobalConfigKeyHuaweiGPUPrefix 华为云GPU机型前缀
+	GlobalConfigKeyHuaweiGPUPrefix GlobalConfigKeyGPUMachineType = "huawei_gpu_machine_prefix"
+	// GlobalConfigKeyTcloudGPUPrefix 腾讯云 GPU 机型清单配置，config_key 为云厂商
+	GlobalConfigKeyTcloudGPUPrefix GlobalConfigKeyGPUMachineType = "tcloud_gpu_machine_prefix"
+	// GlobalConfigKeyGcpGPUPrefix 谷歌云 GPU 机型清单配置，config_key 为云厂商
+	GlobalConfigKeyGcpGPUPrefix GlobalConfigKeyGPUMachineType = "gcp_gpu_machine_prefix"
+	// GlobalConfigKeyAws 亚马逊云 GPU 机型清单配置，config_key 为云厂商
+	GlobalConfigKeyAws GlobalConfigKeyGPUMachineType = "aws"
+	// GlobalConfigKeyAzureGPUPrefix 微软 Azure 云 GPU 机型清单配置，config_key 为云厂商
+	GlobalConfigKeyAzureGPUPrefix GlobalConfigKeyGPUMachineType = "azure_gpu_machine_prefix"
+)
+
+const (
 	// GlobalConfigResDissolve resource dissolve global config
 	GlobalConfigResDissolve GlobalConfigType = "res_dissolve"
 	// GlobalConfigTypeRegionDefaultVpc 地域默认vpc
@@ -51,6 +82,8 @@ const (
 	GlobalConfigTypeSpringResPool GlobalConfigType = "spring_res_pool"
 	// GlobalConfigTypeAccountBill 账单相关配置
 	GlobalConfigTypeAccountBill GlobalConfigType = "account_bill"
+	// GlobalConfigTypeCvmImageRecommend CVM镜像推荐配置类型
+	GlobalConfigTypeCvmImageRecommend GlobalConfigType = "cvm_image_recommend"
 	// GlobalConfigTypeAuth auth related global config
 	GlobalConfigTypeAuth GlobalConfigType = "auth"
 )
@@ -154,6 +187,14 @@ const (
 	GlobalConfigKeyAwsGpuInstanceTypes GlobalConfigKeyAccountBill = "aws_gpu_instance_types"
 	// GlobalConfigKeyHuaweiGpuInstancePrefixes 华为 GPU 实例规格前缀列表配置key（JSON 数组字符串）
 	GlobalConfigKeyHuaweiGpuInstancePrefixes GlobalConfigKeyAccountBill = "huawei_gpu_instance_prefixes"
+)
+
+// GlobalConfigKeyCvmRecommend CVM镜像推荐配置key
+type GlobalConfigKeyCvmRecommend string
+
+const (
+	// GlobalConfigKeyCvmImageRecommend CVM镜像推荐配置key
+	GlobalConfigKeyCvmImageRecommend GlobalConfigKeyCvmRecommend = "recommended_images"
 )
 
 // GlobalConfigKeyAuth auth related global config key

@@ -9,6 +9,7 @@ interface IProps {
   displayKey?: string;
   multiple?: boolean;
   disabled?: boolean;
+  bizId?: number | string;
 }
 
 defineOptions({ name: 'form-cvm-image-selector' });
@@ -69,6 +70,7 @@ const handleChange = (value: string | string[], items: ICvmImage[]) => {
     :display-key="displayKey"
     :multiple="multiple"
     :disabled="disabled"
+    :biz-id="bizId"
     v-bind="attrs"
     @change="handleChange"
   >

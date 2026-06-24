@@ -1523,6 +1523,7 @@ export default defineComponent({
                                 class={'commonCard-form-select'}
                                 v-model={QCLOUDCVMForm.value.spec.image_id}
                                 region={[resourceForm.value.region]}
+                                biz-id={computedBiz.value}
                                 disabled={resourceForm.value.region === ''}
                                 popoverOptions={{ boundary: 'parent' }}
                               />

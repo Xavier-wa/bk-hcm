@@ -100,6 +100,9 @@ func createAccount[T protocloud.AccountExtensionCreateReq, PT protocloud.SecretE
 			RecycleReserveTime: constant.UnsetRecycleTime,
 			Creator:            cts.Kit.User,
 			Reviser:            cts.Kit.User,
+			Email:              req.Email,
+			SecurityManagers:   req.SecurityManagers,
+			CloudCreatedAt:     req.CloudCreatedAt,
 		}
 
 		accountID, err := svc.dao.Account().CreateWithTx(cts.Kit, txn, account)

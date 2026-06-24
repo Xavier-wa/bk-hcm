@@ -37,6 +37,7 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/apply/recommend/top
         "require_type": 1,
         "region": "ap-guangzhou",
         "device_type": "S5.LARGE8",
+        "image_id": "img-xxxxxxxx",
         "count": 12,
         "source": "user"
       },
@@ -44,6 +45,7 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/apply/recommend/top
         "require_type": 1,
         "region": "ap-beijing",
         "device_type": "M5.LARGE8",
+        "image_id": "img-yyyyyyyy",
         "count": 5,
         "source": "biz"
       }
@@ -73,5 +75,6 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/apply/recommend/top
 | require_type | int    | 需求类型                            |
 | region       | string | 地域                              |
 | device_type  | string | 机型                              |
+| image_id     | string | 镜像ID                     |
 | count        | int    | 历史申领次数                          |
 | source       | string | 推荐来源，`user` 表示用户维度，`biz` 表示业务维度 |

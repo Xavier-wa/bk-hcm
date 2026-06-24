@@ -241,4 +241,9 @@ func bizService(h *rest.Handler, s *service) {
 	h.Add("GetAffinityMatchDetail", http.MethodPost, "/apply/match/check", s.GetAffinityMatchDetail)
 
 	h.Add("GetBizApplyRecommendTop", http.MethodPost, "/apply/recommend/top", s.GetBizApplyRecommendTop)
+	h.Add("GetBizApplyRecommendByStatic", http.MethodPost, "/apply/recommend/by_static_recommend",
+		s.GetBizApplyRecommendByStatic)
+	h.Add("GetBizApplyRecommendByPlan", http.MethodPost, "/apply/recommend/by_plan", s.GetBizApplyRecommendByPlan)
+	h.Add("GetBizApplyRecommendSplitSubOrder", http.MethodPost, "/apply/recommend/split_suborder",
+		s.GetBizApplyRecommendSplitSubOrder)
 }

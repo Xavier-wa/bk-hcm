@@ -14,11 +14,11 @@ const props = defineProps<{
 const { t } = useI18n();
 const dissolveQuotaStore = useDissolveQuotaStore();
 const { cpuCoreSummaryLoading } = storeToRefs(dissolveQuotaStore);
-const summaryData = ref<ICpuCoreSummary>({ total_core: 0, delivered_core: 0 });
+const summaryData = ref<ICpuCoreSummary>({ total_core: 0, delivered_core: 0, available_quota: 0 });
 
 const availableCpuCoreQuota = computed(() => {
-  const { total_core = 0, delivered_core = 0 } = summaryData.value ?? {};
-  return total_core - delivered_core;
+  const { available_quota } = summaryData.value ?? {};
+  return available_quota;
 });
 
 watchEffect(async () => {

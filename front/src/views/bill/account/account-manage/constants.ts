@@ -55,24 +55,29 @@ export const searchData = [
   {
     name: '一级帐号名称',
     id: 'name',
+    async: false,
   },
   {
     name: '一级帐号ID',
     id: 'cloud_id',
+    async: false,
   },
   {
     name: '云厂商',
     id: 'vendor',
     children: BILL_VENDORS,
+    async: false,
   },
   {
     name: '帐号邮箱',
     id: 'email',
+    async: false,
   },
   {
     name: '主负责人',
     id: 'managers',
     multiple: true,
+    async: false,
   },
 ];
 
@@ -93,27 +98,33 @@ export const secondarySearchData = [
   {
     name: '二级帐号名称',
     id: 'name',
+    async: false,
   },
   {
     name: '二级帐号ID',
     id: 'cloud_id',
+    async: false,
   },
   {
     name: '所属一级帐号名称',
     id: 'parent_account_name',
+    async: false,
   },
   {
     name: '云厂商',
     id: 'vendor',
+    async: false,
   },
   {
     name: '站点类型',
     id: 'site',
     children: BILL_SITE_TYPES,
+    async: false,
   },
   {
     name: '帐号邮箱',
     id: 'accountEmail',
+    async: false,
   },
   {
     name: '运营产品',

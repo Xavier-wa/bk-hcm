@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, useAttrs } from 'vue';
-import type { ModelProperty, ModelPropertyType } from '@/model/typings';
+import type { ModelProperty, ModelPropertyType, PropertyDisplayConfig } from '@/model/typings';
 import ReqTypeValue from './req-type-value.vue';
 import EnumValue from './enum-value.vue';
 import StringValue from './string-value.vue';
@@ -15,7 +15,6 @@ import BusinessValue from './business-value.vue';
 import UserValue from './user-value.vue';
 import CloudAreaValue from './cloud-area-value.vue';
 import JsonValue from './json-value.vue';
-import { DisplayType } from './typings';
 
 defineOptions({ name: 'DisplayValue' });
 
@@ -23,7 +22,7 @@ const props = withDefaults(
   defineProps<{
     value: any;
     property: ModelProperty;
-    display?: DisplayType;
+    display?: PropertyDisplayConfig;
   }>(),
   {
     display: () => ({
@@ -86,6 +85,10 @@ const attrs = useAttrs();
     :option="property.option"
     :display="props.display"
     v-bind="attrs"
-  />
+  >
+    <template v-for="(_, slot) of $slots" #[slot]="scope">
+      <slot :name="slot" v-bind="scope" />
+    </template>
+  </component>
   <span v-else>unknown type</span>
 </template>

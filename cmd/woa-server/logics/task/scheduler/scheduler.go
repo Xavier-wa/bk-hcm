@@ -1575,24 +1575,57 @@ func (s *scheduler) ticketToUnifyOrder(tickets []*types.ApplyTicket) []*types.Un
 	unifyOrders := make([]*types.UnifyOrder, 0)
 
 	for _, ticket := range tickets {
-		total := uint(0)
-		for _, suborder := range ticket.Suborders {
-			total += suborder.Replicas
-		}
-		order := &types.UnifyOrder{
-			OrderId:     ticket.OrderId,
-			BkBizId:     ticket.BkBizId,
-			User:        ticket.User,
-			RequireType: ticket.RequireType,
-			ExpectTime:  ticket.ExpectTime,
-			Description: ticket.Remark,
-			Stage:       ticket.Stage,
-			TotalNum:    total,
-			CreateAt:    ticket.CreateAt,
-			UpdateAt:    ticket.UpdateAt,
+		// 如果没有子单数据，生成一条汇总记录（兼容历史数据）
+		if len(ticket.Suborders) == 0 {
+			order := &types.UnifyOrder{
+				OrderId:     ticket.OrderId,
+				BkBizId:     ticket.BkBizId,
+				User:        ticket.User,
+				RequireType: ticket.RequireType,
+				ExpectTime:  ticket.ExpectTime,
+				Description: ticket.Remark,
+				Stage:       ticket.Stage,
+				TotalNum:    0,
+				CreateAt:    ticket.CreateAt,
+				UpdateAt:    ticket.UpdateAt,
+			}
+			unifyOrders = append(unifyOrders, order)
+			continue
 		}
 
-		unifyOrders = append(unifyOrders, order)
+		// 将每个 Suborder 转换为独立的 UnifyOrder，保留完整的资源规格信息
+		for _, suborder := range ticket.Suborders {
+			// 转换旧版可用区到新版可用区，方便前端统一展示
+			if suborder.Spec != nil && len(suborder.Spec.Zone) > 0 && len(suborder.Spec.Zones) == 0 {
+				suborder.Spec.Zones = []string{suborder.Spec.Zone}
+				// 分Campus
+				if suborder.Spec.Zone == cvmapi.CvmSeparateCampus {
+					suborder.Spec.Zones = []string{cvmapi.CvmZoneAll}
+					suborder.Spec.ResAssign = enumor.CampusResAssign
+				}
+			}
+
+			order := &types.UnifyOrder{
+				OrderId:           ticket.OrderId,
+				BkBizId:           ticket.BkBizId,
+				User:              ticket.User,
+				RequireType:       ticket.RequireType,
+				ResourceType:      suborder.ResourceType,
+				ExpectTime:        ticket.ExpectTime,
+				Description:       ticket.Remark,
+				Remark:            suborder.Remark,
+				Spec:              suborder.Spec,
+				AntiAffinityLevel: suborder.AntiAffinityLevel,
+				EnableDiskCheck:   suborder.EnableDiskCheck,
+				Stage:             ticket.Stage,
+				OriginNum:         suborder.Replicas,
+				TotalNum:          suborder.Replicas,
+				Source:            suborder.Source,
+				CreateAt:          ticket.CreateAt,
+				UpdateAt:          ticket.UpdateAt,
+			}
+			unifyOrders = append(unifyOrders, order)
+		}
 	}
 
 	return unifyOrders

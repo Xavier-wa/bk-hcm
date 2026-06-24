@@ -60,6 +60,7 @@ func (svc *service) BatchCreateZiyanCvmDeviceInfo(cts *rest.Contexts) (interface
 				RequireType:      createReq.RequireType,
 				ResourceType:     createReq.ResourceType,
 				DeviceType:       createReq.DeviceType,
+				ImageID:          createReq.ImageID,
 				Description:      createReq.Description,
 				Remark:           createReq.Remark,
 				ZoneName:         createReq.ZoneName,

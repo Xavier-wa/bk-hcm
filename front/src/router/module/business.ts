@@ -26,6 +26,7 @@ import { gpuDemandBiz as gpuDemandBizRouteConfig } from '@/views/resource-plan/r
 import taskRouteConfig from '@/views/task/route-config';
 import { ticketRoutesBiz } from '@/views/ticket/route-config';
 import { chatbotBiz as chatbotBizRouteConfig } from '@/views/chatbot/route-config';
+import cloudAccountManageRouteConfig from '@/views/cloud-account-manage/route-config';
 import Meta from '../meta';
 
 const businessMenus: RouteRecordRaw[] = [
@@ -524,13 +525,13 @@ const businessMenus: RouteRecordRaw[] = [
       groupTitle: '其他',
     },
   },
-  // {
-  //   path: '/business',
-  //   children: [...cloudAccountManageRouteConfig],
-  //   meta: {
-  //     groupTitle: '账号',
-  //   },
-  // },
+  {
+    path: '/business',
+    children: [...cloudAccountManageRouteConfig],
+    meta: {
+      groupTitle: '账号',
+    },
+  },
   {
     path: '/business',
     children: [

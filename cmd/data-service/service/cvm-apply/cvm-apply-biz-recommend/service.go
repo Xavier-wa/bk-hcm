@@ -59,6 +59,7 @@ func (svc *service) BatchCreateZiyanCvmApplyBizRecommend(cts *rest.Contexts) (in
 				RequireType: item.RequireType,
 				Region:      item.Region,
 				DeviceType:  item.DeviceType,
+				ImageID:     item.ImageID,
 				Count:       item.Count,
 				Creator:     cts.Kit.User,
 				Reviser:     cts.Kit.User,
@@ -119,6 +120,7 @@ func (svc *service) BatchUpdateZiyanCvmApplyBizRecommend(cts *rest.Contexts) (in
 				RequireType: cvt.PtrToVal(item.RequireType),
 				Region:      item.Region,
 				DeviceType:  item.DeviceType,
+				ImageID:     item.ImageID,
 				Count:       item.Count,
 				Reviser:     cts.Kit.User,
 			}

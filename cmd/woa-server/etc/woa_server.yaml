@@ -394,7 +394,7 @@ resPlan:
   adminAuditor: []
   crpOverLimitContact: ["demo"]
 
-# 申领机型推荐离线统计配置
+# 申领机型推荐配置
 applyRecommend:
   # 任务执行间隔，单位:分钟
   interval: 720
@@ -402,6 +402,8 @@ applyRecommend:
   lookbackDays: 90
   # 每分组保留 Top-K 推荐条数
   maxRows: 5
+  # 在线推荐方案的默认申请数量
+  defaultApplyNum: 10
 
 # 开启自研云资源同步服务,单位:分钟
 resourceSync:

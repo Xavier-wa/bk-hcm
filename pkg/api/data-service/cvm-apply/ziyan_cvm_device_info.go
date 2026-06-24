@@ -66,6 +66,7 @@ type ZiyanCvmDeviceInfoCreateReq struct {
 	RequireType      enumor.RequireType     `json:"require_type" validate:"omitempty"`
 	ResourceType     tasktypes.ResourceType `json:"resource_type" validate:"max=32"`
 	DeviceType       string                 `json:"device_type" validate:"max=64"`
+	ImageID          string                 `json:"image_id" validate:"omitempty,max=64"`
 	Description      string                 `json:"description" validate:"omitempty"`
 	Remark           string                 `json:"remark" validate:"omitempty"`
 	ZoneName         string                 `json:"zone_name" validate:"max=128"`
@@ -153,6 +154,7 @@ type ZiyanCvmDeviceInfoUpdateReq struct {
 	RequireType      *enumor.RequireType     `json:"require_type" validate:"omitempty"`
 	ResourceType     *tasktypes.ResourceType `json:"resource_type" validate:"omitempty"`
 	DeviceType       string                  `json:"device_type" validate:"omitempty,max=64"`
+	ImageID          string                  `json:"image_id" validate:"omitempty,max=64"`
 	Description      string                  `json:"description" validate:"omitempty"`
 	Remark           string                  `json:"remark" validate:"omitempty"`
 	ZoneName         string                  `json:"zone_name" validate:"omitempty,max=128"`

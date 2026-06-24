@@ -118,6 +118,17 @@ func genResManagementActionGroups() []client.ActionGroup {
 						{ID: BizAgentAssistant},
 					},
 				},
+				{
+					Name:   "云账号",
+					NameEn: "Cloud Account",
+					Actions: []client.ActionWithID{
+						{ID: BizAccountOperate},
+						{ID: BizSubAccountOperate},
+						{ID: BizSubAccountSecretOperate},
+						{ID: BizPermissionTemplateOperate},
+						{ID: BizPermissionPolicyLibraryOperate},
+					},
+				},
 			},
 		},
 	}

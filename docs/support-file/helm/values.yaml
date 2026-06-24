@@ -14,7 +14,7 @@ image:
   pullPolicy: IfNotPresent
   pullSecrets: []
   # tag版本，不需要带v前缀
-  tag: 1.8.11.19-alpha.1
+  tag: 1.9.2.0
 
 apigwReleaseVersion: 1.0.0
 
@@ -1229,7 +1229,7 @@ alarm:
   app_code: xxxx
   app_secret: xxxx
 
-# 申领机型推荐离线统计配置
+# 申领机型推荐配置
 applyRecommend:
   # 任务执行间隔，单位:分钟
   interval: 720
@@ -1237,6 +1237,8 @@ applyRecommend:
   lookbackDays: 90
   # 每分组保留 Top-K 推荐条数
   maxRows: 5
+  # 在线推荐方案的默认申请数量
+  defaultApplyNum: 10
 
 # 开启自研云资源同步服务,单位:分钟
 resourceSync:

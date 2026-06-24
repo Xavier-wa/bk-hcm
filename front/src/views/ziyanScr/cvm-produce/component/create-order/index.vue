@@ -381,6 +381,7 @@ watchEffect(() => {
             v-model="formModel.spec.image_id"
             :region="[formModel.spec.region]"
             :disabled="!formModel.spec.region"
+            :biz-id="formModel.bk_biz_id"
             :popover-options="{ boundary: 'parent' }"
           />
         </bk-form-item>

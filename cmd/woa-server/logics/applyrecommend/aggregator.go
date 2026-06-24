@@ -27,21 +27,23 @@ import (
 	"hcm/pkg/criteria/enumor"
 )
 
-// userCountKey is the five-tuple key for user dimension aggregation.
+// userCountKey is the six-tuple key for user dimension aggregation.
 type userCountKey struct {
 	BkBizID     int64
 	BkUsername  string
 	RequireType enumor.RequireType
 	Region      string
 	DeviceType  string
+	ImageID     string
 }
 
-// bizCountKey is the four-tuple key for biz dimension aggregation.
+// bizCountKey is the five-tuple key for biz dimension aggregation.
 type bizCountKey struct {
 	BkBizID     int64
 	RequireType enumor.RequireType
 	Region      string
 	DeviceType  string
+	ImageID     string
 }
 
 type bizUserKey struct {
@@ -83,6 +85,7 @@ func AggregateUser(userCounts map[userCountKey]int,
 				RequireType: it.key.RequireType,
 				Region:      it.key.Region,
 				DeviceType:  it.key.DeviceType,
+				ImageID:     it.key.ImageID,
 				Count:       it.count,
 			})
 		}
@@ -122,6 +125,7 @@ func AggregateBiz(bizCounts map[bizCountKey]int,
 				RequireType: it.key.RequireType,
 				Region:      it.key.Region,
 				DeviceType:  it.key.DeviceType,
+				ImageID:     it.key.ImageID,
 				Count:       it.count,
 			})
 		}

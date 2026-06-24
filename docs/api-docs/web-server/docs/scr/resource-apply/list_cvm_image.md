@@ -38,7 +38,8 @@ POST /api/v1/woa/config/findmany/config/cvm/image
     "info":[
       {
         "image_id": "img-evitcbqz",
-        "image_name": "Tencent Linux release 2.6 (Final)"
+        "image_name": "Tencent Linux release 2.6 (Final)",
+        "is_recommended": true
       }
     ]
   }
@@ -63,7 +64,8 @@ POST /api/v1/woa/config/findmany/config/cvm/image
 
 #### data.info
 
-| 参数名称    | 参数类型   | 描述     |
-|------------|----------|----------|
-| image_id   | string   | 镜像ID   |
-| image_name | string   | 镜像名称  |
+| 参数名称        | 参数类型   | 描述       |
+|----------------|----------|-----------|
+| image_id       | string   | 镜像ID     |
+| image_name     | string   | 镜像名称    |
+| is_recommended | bool     | 是否推荐镜像 |

@@ -43,7 +43,7 @@
   - `pkg/api/data-service/cvm-apply/ziyan_cvm_apply_recommend.go`、`pkg/api/woa-server/cvm_apply_recommend.go`（请求/响应类型）
   - `pkg/client/data-service/tcloud-ziyan/`（`ziyan_cvm_apply_user_recommend.go`、`ziyan_cvm_apply_biz_recommend.go` client 方法）
 - **配置与脚本**：
-  - `scripts/sql/9999_20260527_1500_apply_recommend.sql`（建表 + id_generator 注册）
+  - `scripts/sql/0077_20260527_1500_apply_recommend.sql`（建表 + id_generator 注册）
   - `pkg/dal/table/table.go`（2 个表名常量 + `TableMap`）
   - `pkg/criteria/enumor/cron_task.go`（新增 `CronTaskApplyRecommendOffline` 常量）
   - `pkg/criteria/enumor/woa_ziyan.go`（新增 `ApplyRecommendSource` 枚举，值 `user` / `biz`）

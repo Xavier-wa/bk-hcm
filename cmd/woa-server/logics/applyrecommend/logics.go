@@ -111,7 +111,11 @@ func (l *Logics) collectCounts(kt *kit.Kit, lookbackDays int) (map[userCountKey]
 
 	for _, item := range devices {
 		if item.CloudRegion == "" {
-			logs.Errorf("cloud region is empty, id: %s, rid: %s", item.ID, kt.Rid)
+			logs.Warnf("cloud region is empty, id: %s, rid: %s", item.ID, kt.Rid)
+			continue
+		}
+		if item.ImageID == "" {
+			logs.Warnf("image id is empty, id: %s, rid: %s", item.ID, kt.Rid)
 			continue
 		}
 
@@ -121,6 +125,7 @@ func (l *Logics) collectCounts(kt *kit.Kit, lookbackDays int) (map[userCountKey]
 			RequireType: item.RequireType,
 			Region:      item.CloudRegion,
 			DeviceType:  item.DeviceType,
+			ImageID:     item.ImageID,
 		}
 		userCounts[uk]++
 
@@ -129,6 +134,7 @@ func (l *Logics) collectCounts(kt *kit.Kit, lookbackDays int) (map[userCountKey]
 			RequireType: item.RequireType,
 			Region:      item.CloudRegion,
 			DeviceType:  item.DeviceType,
+			ImageID:     item.ImageID,
 		}
 		bizCounts[bk]++
 	}

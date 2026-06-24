@@ -36,7 +36,8 @@ func NewApplicationOfCreateZiyanLB(opt *handlers.HandlerOption,
 	req *hclb.TCloudZiyanLoadBalancerCreateReq) *ApplicationOfCreateZiyanLB {
 
 	return &ApplicationOfCreateZiyanLB{
-		BaseApplicationHandler: handlers.NewBaseApplicationHandler(opt, enumor.CreateLoadBalancer, enumor.TCloudZiyan),
-		req:                    req,
+		BaseApplicationHandler: handlers.NewBaseApplicationHandler(
+			opt, enumor.CreateLoadBalancer, enumor.OpCreateLoadBalancer, enumor.TCloudZiyan),
+		req: req,
 	}
 }
