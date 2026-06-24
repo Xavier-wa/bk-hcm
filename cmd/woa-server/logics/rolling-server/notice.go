@@ -213,8 +213,14 @@ func (l *logics) getReceiverAndCC(kt *kit.Kit, bizID int64, unReturnedSubOrderMs
 		receivers = append(receivers, extraReceivers...)
 	}
 
-	if len(config.WoaServer().RollingServer.ReturnNotification.DefaultReceivers) > 0 {
-		receivers = append(receivers, config.WoaServer().RollingServer.ReturnNotification.DefaultReceivers...)
+	defaultReceivers := config.WoaServer().RollingServer.ReturnNotification.DefaultReceivers
+	// DefaultReceivers are platform admins and should be CC'd, not primary recipients.
+	if len(defaultReceivers) > 0 {
+		cc = append(cc, defaultReceivers...)
+	}
+	// 如果没有收件人，添加默认收件人到receiver列表，以免邮件无法发送
+	if len(receivers) == 0 {
+		receivers = append(receivers, defaultReceivers...)
 	}
 
 	if len(receivers) == 0 {
