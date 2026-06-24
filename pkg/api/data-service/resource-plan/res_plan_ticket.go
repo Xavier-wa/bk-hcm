@@ -27,24 +27,31 @@ import (
 
 // ResPlanTicketUpdateReq is resource plan ticket update request.
 type ResPlanTicketUpdateReq struct {
-	Remark           string             `json:"remark" validate:"omitempty"`
-	DemandClass      enumor.DemandClass `json:"demand_class" validate:"omitempty"`
-	Demands          *types.JsonField   `json:"demands" validate:"omitempty"`
-	SubmittedAt      string             `json:"submitted_at" validate:"omitempty"`
-	OriginalOS       float64            `json:"original_os" validate:"omitempty"`
-	OriginalCPUCore  int64              `json:"original_cpu_core" validate:"omitempty"`
-	OriginalMemory   int64              `json:"original_memory" validate:"omitempty"`
-	OriginalDiskSize int64              `json:"original_disk_size" validate:"omitempty"`
-	UpdatedOS        float64            `json:"updated_os" validate:"omitempty"`
-	UpdatedCPUCore   int64              `json:"updated_cpu_core" validate:"omitempty"`
-	UpdatedMemory    int64              `json:"updated_memory" validate:"omitempty"`
-	UpdatedDiskSize  int64              `json:"updated_disk_size" validate:"omitempty"`
+	Type             enumor.RPTicketType `json:"type" validate:"omitempty"`
+	Remark           string              `json:"remark" validate:"omitempty"`
+	DemandClass      enumor.DemandClass  `json:"demand_class" validate:"omitempty"`
+	Demands          *types.JsonField    `json:"demands" validate:"omitempty"`
+	SubmittedAt      string              `json:"submitted_at" validate:"omitempty"`
+	OriginalOS       float64             `json:"original_os" validate:"omitempty"`
+	OriginalCPUCore  int64               `json:"original_cpu_core" validate:"omitempty"`
+	OriginalMemory   int64               `json:"original_memory" validate:"omitempty"`
+	OriginalDiskSize int64               `json:"original_disk_size" validate:"omitempty"`
+	UpdatedOS        float64             `json:"updated_os" validate:"omitempty"`
+	UpdatedCPUCore   int64               `json:"updated_cpu_core" validate:"omitempty"`
+	UpdatedMemory    int64               `json:"updated_memory" validate:"omitempty"`
+	UpdatedDiskSize  int64               `json:"updated_disk_size" validate:"omitempty"`
 }
 
 // Validate validates ResPlanTicketUpdateReq.
 func (r *ResPlanTicketUpdateReq) Validate() error {
 	if err := validator.Validate.Struct(r); err != nil {
 		return err
+	}
+
+	if r.Type != "" {
+		if err := r.Type.Validate(); err != nil {
+			return err
+		}
 	}
 
 	if r.DemandClass != "" {

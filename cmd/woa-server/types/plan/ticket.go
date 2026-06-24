@@ -15,6 +15,7 @@ package plan
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -751,9 +752,18 @@ func (r *ListPendingResPlanTicketReq) Validate() error {
 
 // OverwriteResPlanTicketReq is overwritten resource plan ticket request.
 type OverwriteResPlanTicketReq struct {
-	DemandClass *enumor.DemandClass      `json:"demand_class" validate:"omitempty"`
-	Demands     []CreateResPlanDemandReq `json:"demands" validate:"omitempty"`
-	Remark      *string                  `json:"remark" validate:"omitempty"`
+	TicketType  *enumor.RPTicketType        `json:"ticket_type" validate:"omitempty"`
+	DemandClass *enumor.DemandClass         `json:"demand_class" validate:"omitempty"`
+	Demands     []OverwriteResPlanDemandReq `json:"demands" validate:"omitempty"`
+	Remark      *string                     `json:"remark" validate:"omitempty"`
+}
+
+// OverwriteResPlanDemandReq is overwritten resource plan demand request.
+type OverwriteResPlanDemandReq struct {
+	DemandID     string                  `json:"demand_id" validate:"omitempty"`
+	CrpDemandID  int64                   `json:"crp_demand_id" validate:"omitempty"`
+	OriginalInfo *CreateResPlanDemandReq `json:"original_info" validate:"omitempty"`
+	UpdatedInfo  *CreateResPlanDemandReq `json:"updated_info" validate:"omitempty"`
 }
 
 // Validate whether OverwriteResPlanTicketReq is valid.
@@ -768,16 +778,82 @@ func (r *OverwriteResPlanTicketReq) Validate() error {
 		}
 	}
 
-	for _, demand := range r.Demands {
-		if err := demand.Validate(); err != nil {
+	if len(r.Demands) > constant.BatchOperationMaxLimit {
+		return fmt.Errorf("demands max length is %d", constant.BatchOperationMaxLimit)
+	}
+	if len(r.Demands) > 0 {
+		if r.TicketType == nil {
+			return errors.New("ticket type is required when demands is provided")
+		}
+		if err := r.TicketType.Validate(); err != nil {
 			return err
 		}
+
+		for _, demand := range r.Demands {
+			if err := demand.Validate(cvt.PtrToVal(r.TicketType)); err != nil {
+				return err
+			}
+		}
+	} else if r.TicketType != nil {
+		return errors.New("demands is required when ticket type is provided")
 	}
 
 	if r.Remark != nil {
 		lenRemark := utf8.RuneCountInString(*r.Remark)
 		if lenRemark < 20 || lenRemark > 1024 {
 			return errors.New("len remark should be >= 20 and < 1024")
+		}
+	}
+
+	return nil
+}
+
+// Validate whether OverwriteResPlanDemandReq is valid.
+func (r *OverwriteResPlanDemandReq) Validate(ticketType enumor.RPTicketType) error {
+	if err := validator.Validate.Struct(r); err != nil {
+		return err
+	}
+
+	switch ticketType {
+	case enumor.RPTicketTypeAdd:
+		if r.OriginalInfo != nil {
+			return errors.New("original info of add ticket should be empty")
+		}
+		if r.UpdatedInfo == nil {
+			return errors.New("updated info of add ticket can not be empty")
+		}
+	case enumor.RPTicketTypeAdjust:
+		if len(r.DemandID) == 0 && r.CrpDemandID <= 0 {
+			return errors.New("demand id or crp demand id of adjust ticket can not be empty")
+		}
+		if r.OriginalInfo == nil {
+			return errors.New("original info of adjust ticket can not be empty")
+		}
+		if r.UpdatedInfo == nil {
+			return errors.New("updated info of adjust ticket can not be empty")
+		}
+	case enumor.RPTicketTypeDelete:
+		if len(r.DemandID) == 0 && r.CrpDemandID <= 0 {
+			return errors.New("demand id or crp demand id of delete ticket can not be empty")
+		}
+		if r.OriginalInfo == nil {
+			return errors.New("original info of delete ticket can not be empty")
+		}
+		if r.UpdatedInfo != nil {
+			return errors.New("updated info of delete ticket should be empty")
+		}
+	default:
+		return fmt.Errorf("unsupported resource plan ticket type: %s", ticketType)
+	}
+
+	if r.OriginalInfo != nil {
+		if err := r.OriginalInfo.Validate(); err != nil {
+			return err
+		}
+	}
+	if r.UpdatedInfo != nil {
+		if err := r.UpdatedInfo.Validate(); err != nil {
+			return err
 		}
 	}
 
