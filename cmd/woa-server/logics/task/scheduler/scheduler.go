@@ -2880,6 +2880,7 @@ func (s *scheduler) modifyOrder(kt *kit.Kit, order *types.ApplyOrder, param *typ
 		ModifyTime:        cvt.ValToPtr(order.ModifyTime + 1),
 		InheritInstanceID: param.Spec.InheritInstanceId,
 		BkAssetID:         param.Spec.BkAssetID,
+		Remark:            param.Remark,
 	}
 
 	// Marshal JSON fields

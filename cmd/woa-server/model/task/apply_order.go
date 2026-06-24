@@ -425,6 +425,7 @@ func ConvertMySQLToApplyOrder(mysqlRecord *cvmapplytable.ZiyanCvmApplySuborder) 
 		AppliedCore:   cvt.PtrToVal(mysqlRecord.AppliedCore),
 		DeliveredCore: cvt.PtrToVal(mysqlRecord.DeliveredCore),
 		ObsProject:    mysqlRecord.ObsProject,
+		Remark:        mysqlRecord.Remark,
 		RetryTime:     cvt.PtrToVal(mysqlRecord.RetryTime),
 		ModifyTime:    cvt.PtrToVal(mysqlRecord.ModifyTime),
 		CreateAt:      createdAt,
