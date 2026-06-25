@@ -1302,8 +1302,12 @@ type AgentToolsConfig struct {
 	DynamicToolLoading *AgentDynamicToolLoadingConfig `yaml:"dynamicToolLoading"`
 	// ToolProxy configures MCP tool proxy meta-tools (Graph mode MVP).
 	ToolProxy *AgentToolProxyConfig `yaml:"toolProxy"`
-	// ConfirmGate configures the engineering tool-call confirm gate.
+	// ConfirmGate configures the engineering tool-call confirm gate (global default).
 	ConfirmGate AgentConfirmGateConfig `yaml:"confirmGate"`
+	// SceneConfirmGates holds per-scene confirm gate overrides.
+	// When a scene key is present, its config takes precedence over ConfirmGate.
+	// Enumeration values such as: host_apply/resource_query/chat.
+	SceneConfirmGates map[string]AgentConfirmGateConfig `yaml:"sceneConfirmGates"`
 }
 
 func (s *AgentToolsConfig) trySetDefault() {
@@ -1340,6 +1344,15 @@ type AgentConfirmGateConfig struct {
 	// Tools optionally restricts which registered tools are active. Empty means all
 	// registered gated tools are active.
 	Tools []string `yaml:"tools"`
+}
+
+// ConfirmGateForScene returns the per-scene confirm gate config if a scene-specific override
+// exists in SceneConfirmGates; otherwise it falls back to the global ConfirmGate.
+func (s AgentToolsConfig) ConfirmGateForScene(scene enumor.IntentType) AgentConfirmGateConfig {
+	if cfg, ok := s.SceneConfirmGates[string(scene)]; ok {
+		return cfg
+	}
+	return s.ConfirmGate
 }
 
 // NeedToRefreshToolSetsOnRun bkaidev 类型 MCP 需要用户的 token 进行鉴权，因此无法在启动时加载工具集，需要在每次运行时刷新。

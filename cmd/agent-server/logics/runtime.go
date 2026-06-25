@@ -343,9 +343,17 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 
 	aguiCfg := cc.AgentServer().AGUI
 
-	var skillRepo skillpkg.Repository
+	// Build per-scene skill repositories. All scenes currently share the same underlying
+	// repository; the SkillRepos structure allows independent per-scene repos in the future.
+	var skillRepos *skill.SkillRepos
 	if skillMgr != nil {
-		skillRepo = skillMgr.Repository
+		skillRepos = skill.NewSkillRepos(skillMgr.Repository,
+			enumor.IntentTypeHostApply,
+			enumor.IntentTypeResourceQuery,
+			enumor.IntentTypeChat,
+		)
+	} else {
+		skillRepos = skill.NewSkillRepos(nil)
 	}
 
 	// When any MCP toolset requires per-request authentication (e.g. type "bkaidev"),
@@ -357,7 +365,7 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 	var agt trpcagent.Agent
 	switch aguiCfg.Model.Mode {
 	case enumor.AgentModeGraph:
-		compiledGraph, subAgents, err := agent.BuildGraph(defaultMdl, skillRepo, mcpToolSets, toolProxies,
+		compiledGraph, subAgents, err := agent.BuildGraph(defaultMdl, skillRepos, mcpToolSets, toolProxies,
 			aguiCfg.AppName, aguiCfg.Model, promptStore, clientSet, checkpointSaver)
 		if err != nil {
 			return nil, fmt.Errorf("build graph: %w", err)
@@ -368,8 +376,12 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 		}
 	default:
 		promptCfg := cc.AgentServer().Prompt
+		var llmSkillRepo skillpkg.Repository
+		if skillMgr != nil {
+			llmSkillRepo = skillMgr.Repository
+		}
 		agt = agent.NewLLMAgent(defaultMdl, modelsMap, aguiCfg.Model,
-			promptCfg.SystemPrompt, promptCfg.Instruction, skillRepo, mcpToolSets.TS,
+			promptCfg.SystemPrompt, promptCfg.Instruction, llmSkillRepo, mcpToolSets.TS,
 			refreshOnRun, promptStore)
 	}
 

@@ -207,6 +207,14 @@ const (
 	ResourceQueryGraphNode ResourceQueryNode = "resource_query"
 )
 
+// HostApplyNode is the name of the host apply subgraph node in the main graph.
+type HostApplyNode string
+
+const (
+	// HostApplyGraphNode is the name of the host apply subgraph node in the main graph.
+	HostApplyGraphNode HostApplyNode = "host_apply"
+)
+
 // CvmApplyNode is the name of a graph node in the CVM apply workflow.
 type CvmApplyNode string
 

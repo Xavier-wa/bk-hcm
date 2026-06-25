@@ -57,8 +57,8 @@ func TestSceneNodeTarget(t *testing.T) {
 		scene enumor.IntentType
 		want  string
 	}{
-		{enumor.IntentTypeHostApply, "account_select"},
-		{enumor.IntentTypeResourceQuery, "resource_query"},
+		{enumor.IntentTypeHostApply, string(enumor.HostApplyGraphNode)},
+		{enumor.IntentTypeResourceQuery, string(enumor.ResourceQueryGraphNode)},
 	}
 	for _, tc := range tests {
 		if got := sceneNodeTarget(tc.scene); got != tc.want {
@@ -137,7 +137,7 @@ func newTestRegistry(enabled bool) *hitl.Registry {
 }
 
 func TestMakeRoutingFuncGate(t *testing.T) {
-	route := makeRoutingFunc(newTestRegistry(true))
+	route := makeSubgraphRoutingFunc(newTestRegistry(true))
 	ctx := context.Background()
 
 	gatedCall := trpcmodel.ToolCall{
@@ -235,7 +235,7 @@ func TestMakeRoutingFuncGate(t *testing.T) {
 }
 
 func TestMakeRoutingFuncGateDisabled(t *testing.T) {
-	route := makeRoutingFunc(newTestRegistry(false))
+	route := makeSubgraphRoutingFunc(newTestRegistry(false))
 
 	state := graph.State{graph.StateKeyMessages: []trpcmodel.Message{
 		{Role: trpcmodel.RoleAssistant, ToolCalls: []trpcmodel.ToolCall{
@@ -262,9 +262,9 @@ func TestMakeSceneDispatchRoutingFunc(t *testing.T) {
 		wantTarget string
 	}{
 		{
-			name:       "supported session_tag routes to account_select",
+			name:       "supported session_tag routes to host_apply subgraph",
 			state:      graph.State{constant.StateKeySessionTag: enumor.IntentTypeHostApply},
-			wantTarget: string(enumor.CvmApplyNodeAccountSelect),
+			wantTarget: string(enumor.HostApplyGraphNode),
 		},
 		{
 			name:       "resource_query session_tag routes to resource_query subgraph",
@@ -312,7 +312,8 @@ func TestSceneDispatchNodeThenRouting(t *testing.T) {
 		intent     enumor.IntentType
 		wantTarget string
 	}{
-		{name: "host_apply dispatch then route to llm", intent: enumor.IntentTypeHostApply, wantTarget: "llm"},
+		{name: "host_apply dispatch then route to host_apply subgraph", intent: enumor.IntentTypeHostApply,
+			wantTarget: string(enumor.HostApplyGraphNode)},
 		{name: "resource_query dispatch then route to subgraph", intent: enumor.IntentTypeResourceQuery,
 			wantTarget: "resource_query"},
 	}

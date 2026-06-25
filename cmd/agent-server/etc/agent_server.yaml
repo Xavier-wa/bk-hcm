@@ -274,11 +274,25 @@ tools:
     # toolTags:                  # 工具标签（key 为 MCP 原始工具名，value 为额外检索关键词）
     #   list_cvms: ["CVM", "云服务器", "主机"]
     #   query_bill: ["账单", "费用", "计费"]
-  # 触发调用前确认的工具集
+  # 触发调用前确认的工具集（全局默认，场景未配置时回退到此）
   confirmGate:
     enabled: true
     tools:
       - create_biz_apply
+  # 按场景分类的调用前确认门禁，优先级高于 confirmGate。
+  # 当前三个场景全部指向相同配置，可按需独立调整。
+  sceneConfirmGates:
+    host_apply:
+      enabled: true
+      tools:
+        - create_biz_apply
+    resource_query:
+      enabled: true
+      tools:
+        - create_biz_apply
+    chat:
+      enabled: false
+      tools: []
 
 # A2A（Agent2Agent）协议端点。
 # enable=false（默认）时不挂载任何 A2A 路径，对现有 AG-UI 链路零影响。
