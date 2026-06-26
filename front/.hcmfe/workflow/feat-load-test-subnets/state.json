@@ -1,0 +1,157 @@
+{
+  "id": "feat-load-test-subnets",
+  "title": "自研云-主机申领-网络信息增加压测子网配置类型",
+  "currentStage": "done",
+  "createdAt": "2026-06-04T09:25:33.965Z",
+  "updatedAt": "2026-06-09T01:33:08.775Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-load-test-subnets/prd.md",
+        "kind": "file",
+        "addedAt": "2026-06-04T09:26:54.388Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-load-test-subnets/design.md",
+        "kind": "file",
+        "addedAt": "2026-06-04T10:02:22.313Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-load-test-subnets/api.md",
+        "kind": "file",
+        "addedAt": "2026-06-04T10:16:29.692Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": "src/views/ziyanScr/hostApplication/components/network-info-collapse-panel/index.vue",
+        "kind": "file",
+        "addedAt": "2026-06-05T01:11:04.385Z"
+      },
+      {
+        "ref": "src/views/ziyanScr/components/cvm-vpc-selector/index.vue",
+        "kind": "file",
+        "addedAt": "2026-06-05T01:11:04.385Z"
+      },
+      {
+        "ref": "src/views/ziyanScr/components/cvm-subnet-selector/index.vue",
+        "kind": "file",
+        "addedAt": "2026-06-05T01:11:04.385Z"
+      },
+      {
+        "ref": ".hcmfe/workflow/feat-load-test-subnets/design.md",
+        "kind": "desc",
+        "summary": "filter模式重构：externalOptionList → filter prop，Panel仅请求load_test_subnets接口，选择器自行管理内部请求",
+        "addedAt": "2026-06-05T01:43:00.000Z"
+      },
+      {
+        "ref": ".hcmfe/workflow/feat-load-test-subnets/coding.md",
+        "kind": "file",
+        "addedAt": "2026-06-09T01:21:54.115Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-load-test-subnets/test.md",
+        "kind": "file",
+        "addedAt": "2026-06-05T01:52:30.254Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-06-05T09:31:09.101Z",
+      "note": "US3修订：自动匹配模式VPC列表展示全部，不做排除"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-06-09T01:32:18.229Z",
+      "note": "产物修正：移除代码实现细节，仅保留UI交互设计"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-06-09T01:32:25.883Z",
+      "note": "产物修正：移除TS类型/过滤函数/slot方案，仅保留API契约"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-06-09T01:32:32.604Z",
+      "note": "代码已完成：3个文件修改，coding.md已创建并登记"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-06-09T01:32:57.628Z",
+      "note": "产物修正：P0-1/P0-2/P1-7 VPC展示描述与PRD US3对齐，测试已全部通过"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-06-04T09:25:33.965Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-06-04T09:59:00.251Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-06-04T10:06:08.601Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-06-04T10:22:18.581Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-06-05T01:51:22.488Z"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-06-05T02:07:51.630Z"
+    },
+    {
+      "from": "done",
+      "to": "prd",
+      "at": "2026-06-05T09:29:05.783Z",
+      "note": "测试反馈：自动匹配模式下VPC列表不再排除压测VPC，展示完整列表"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-06-05T09:31:12.210Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-06-05T09:31:45.890Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-06-05T09:31:55.502Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-06-09T01:32:46.329Z"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-06-09T01:33:08.775Z"
+    }
+  ],
+  "requirementId": "req-network-pressure-test-subnet",
+  "branch": "feat-load-test-subnets"
+}

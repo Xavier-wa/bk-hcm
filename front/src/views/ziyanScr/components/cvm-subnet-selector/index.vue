@@ -14,13 +14,19 @@ export interface ICvmSubnet {
   enable: boolean;
   comment: string;
 }
-type ICvmSubnetList = Array<ICvmSubnet>;
+export type ICvmSubnetList = Array<ICvmSubnet>;
 
 defineOptions({ name: 'CvmSubnetSelector' });
 
 const model = defineModel<string>();
 
-const props = defineProps<{ region: string; zone: string; vpc: string; disabled: boolean }>();
+const props = defineProps<{
+  region: string;
+  zone: string;
+  vpc: string;
+  disabled: boolean;
+  filter?: (list: ICvmSubnetList) => ICvmSubnetList;
+}>();
 
 const emit = defineEmits<(e: 'change', val: ICvmSubnet) => void>();
 
@@ -42,6 +48,8 @@ const selectedId = computed({
   },
 });
 
+const filteredOptionList = computed(() => (props.filter ? props.filter(optionList.value) : optionList.value));
+
 const findCvmSubnetBySubnetId = (subnet_id: string) => {
   return optionList.value.find((item) => item.subnet_id === subnet_id);
 };
@@ -55,7 +63,7 @@ watch(
   [() => props.region, () => props.zone, () => props.vpc],
   ([region, zone, vpc]) => {
     if (region && zone && vpc) {
-      getOptionList({ region: props.region, zone, vpc });
+      getOptionList({ region, zone, vpc });
     } else {
       optionList.value = [];
     }
@@ -69,7 +77,7 @@ defineExpose({ findCvmSubnetBySubnetId });
 <template>
   <Select class="w600" v-model="selectedId" :disabled="props.disabled" filterable>
     <Option
-      v-for="{ id, subnet_id: subnetId, subnet_name: subnetName } in optionList"
+      v-for="{ id, subnet_id: subnetId, subnet_name: subnetName } in filteredOptionList"
       :key="id"
       :id="id"
       :name="`${subnetId} | ${subnetName}`"

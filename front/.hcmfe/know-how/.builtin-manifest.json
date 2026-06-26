@@ -54,6 +54,10 @@
     },
     {
       "type": "commands",
+      "name": "archive-export.md"
+    },
+    {
+      "type": "commands",
       "name": "cherry-pick-pr.md"
     },
     {
