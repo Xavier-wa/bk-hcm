@@ -137,14 +137,63 @@ func (s *service) CreateBizResPlanTicket(cts *rest.Contexts) (interface{}, error
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
+	return s.createBizResPlanTicketCore(cts, bkBizID, req)
+}
+
+// CreateBizResPlanTicketSimple creates a biz resource plan ticket from simple request body.
+func (s *service) CreateBizResPlanTicketSimple(cts *rest.Contexts) (interface{}, error) {
+	bkBizID, err := cts.PathParameter("bk_biz_id").Int64()
+	if err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	simpleReq := new(ptypes.CreateResPlanTicketSimpleReq)
+	if err = cts.DecodeInto(simpleReq); err != nil {
+		logs.Errorf("failed to decode create resource plan ticket simple request, err: %v, rid: %s", err,
+			cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err = simpleReq.Validate(); err != nil {
+		logs.Errorf("failed to validate create resource plan ticket simple parameter, err: %v, rid: %s", err,
+			cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	_, _, deviceTypeMap, err := s.planController.Fetch().GetMetaMaps(cts.Kit)
+	if err != nil {
+		logs.Errorf("get meta maps failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.Aborted, err)
+	}
+
+	req, err := simpleReq.ToCreateResPlanTicketReq(deviceTypeMap)
+	if err != nil {
+		logs.Errorf("failed to expand simple request to create resource plan ticket request, err: %v, rid: %s",
+			err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	if err = req.Validate(); err != nil {
+		logs.Errorf("failed to validate expanded create resource plan ticket parameter, err: %v, rid: %s", err,
+			cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	return s.createBizResPlanTicketCore(cts, bkBizID, req)
+}
+
+// createBizResPlanTicketCore authorizes, validates biz rules, persists ticket, and starts audit flow.
+func (s *service) createBizResPlanTicketCore(cts *rest.Contexts, bkBizID int64, req *ptypes.CreateResPlanTicketReq) (
+	interface{}, error) {
+
 	// authorize biz resource plan operation.
 	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.ResPlan, Action: meta.Create}, BizID: bkBizID}
-	if err = s.authorizer.AuthorizeWithPerm(cts.Kit, authRes); err != nil {
+	if err := s.authorizer.AuthorizeWithPerm(cts.Kit, authRes); err != nil {
 		return nil, err
 	}
 
-	// 验证预测提报参数
-	if err = s.validateResPlanTicket(req, bkBizID); err != nil {
+	// validate biz resource plan ticket.
+	if err := s.validateResPlanTicket(req, bkBizID); err != nil {
 		return nil, err
 	}
 
