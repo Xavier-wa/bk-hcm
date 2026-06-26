@@ -51,6 +51,7 @@ function deriveDemandResType(demandResTypes: string[]): string {
 // 单个 demand 详情 → 表单结构
 function mapDemand(d: TicketByIdResult['demands'][number]): IPlanTicketDemand {
   const u = d.updated_info ?? ({} as TicketDemands);
+  const o = d.original_info;
   const uCvm = u.cvm ?? {};
   const uCbs = u.cbs ?? {};
   const demandResTypes = deriveDemandResTypes(u);
@@ -89,7 +90,10 @@ function mapDemand(d: TicketByIdResult['demands'][number]): IPlanTicketDemand {
       disk_per_size: diskPerSize,
     },
     adjustType: AdjustType.none,
-    demand_id: '',
+    demand_id: o?.demand_id || '',
+    original_info: o
+      ? { ...o, demand_res_types: o.demand_res_types?.length ? o.demand_res_types : deriveDemandResTypes(o) }
+      : null,
   };
 }
 
@@ -97,6 +101,7 @@ function mapDemand(d: TicketByIdResult['demands'][number]): IPlanTicketDemand {
 export function mapTicketDetailToPlanTicket(detail: TicketByIdResult, bizId: number): IPlanTicket {
   return {
     bk_biz_id: bizId,
+    ticket_type: detail.base_info?.type || '',
     demand_class: detail.demands?.[0]?.demand_class || detail.base_info?.demand_class || 'CVM',
     remark: detail.base_info?.remark || '',
     demands: (detail.demands || []).map(mapDemand),
