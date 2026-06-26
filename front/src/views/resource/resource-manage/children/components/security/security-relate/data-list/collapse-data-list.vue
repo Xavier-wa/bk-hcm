@@ -11,6 +11,7 @@ import {
 } from '@/store/security-group';
 import { useBusinessGlobalStore } from '@/store/business-global';
 import { transformSimpleCondition } from '@/utils/search';
+
 import {
   RELATED_RES_NAME_MAP,
   RELATED_RES_OPERATE_DISABLED_TIPS_MAP,
@@ -18,6 +19,9 @@ import {
   RELATED_RES_PROPERTIES_MAP,
   SecurityGroupRelatedResourceName,
 } from '@/constants/security-group';
+import CopyToClipboard from '@/components/copy-to-clipboard/index.vue';
+import HcmDropdown from '@/components/hcm-dropdown/index.vue';
+import { AngleDown } from 'bkui-vue/lib/icon';
 
 import dataList from './index.vue';
 import bind from '../bind/index.vue';
@@ -56,6 +60,90 @@ const isOperateDisabled = computed(() => {
   return props.tabActive === SecurityGroupRelatedResourceName.CLB;
 });
 
+// 复制按钮禁用：当前业务下无数据时置灰
+const copyDisabled = computed(() => relResList.value.length === 0);
+
+// 是否显示复制按钮（CVM 和 CLB 都支持）
+const showCopyButtons = computed(
+  () =>
+    props.tabActive === SecurityGroupRelatedResourceName.CVM ||
+    props.tabActive === SecurityGroupRelatedResourceName.CLB,
+);
+
+// CVM: 内网IPv4 / CLB: 负载均衡IPv4
+const copyIPv4Content = computed(() =>
+  props.tabActive === SecurityGroupRelatedResourceName.CVM ? getAllPrivateIPv4s : getAllPublicIPv4s,
+);
+const copyIPv4Text = computed(() =>
+  props.tabActive === SecurityGroupRelatedResourceName.CVM ? t('内网IP(ipv4)') : t('负载均衡VIP(ipv4)'),
+);
+
+// CVM: 内网IPv6 / CLB: 负载均衡IPv6
+const copyIPv6Content = computed(() =>
+  props.tabActive === SecurityGroupRelatedResourceName.CVM ? getAllPrivateIPv6s : getAllPublicIPv6s,
+);
+const copyIPv6Text = computed(() =>
+  props.tabActive === SecurityGroupRelatedResourceName.CVM ? t('内网IP(ipv6)') : t('负载均衡VIP(ipv6)'),
+);
+
+// 复制主机ID (CVM) / 负载均衡ID (CLB)
+const copyIDText = computed(() =>
+  props.tabActive === SecurityGroupRelatedResourceName.CVM ? t('主机ID') : t('负载均衡ID'),
+);
+const copyIDContent = computed(() => getAllCloudIDs);
+
+// 拉取当前业务全部关联资源（带缓存，避免重复请求）
+let allRelResCache: Promise<SecurityGroupRelResourceByBizItem[]> | null = null;
+const fetchAllRelRes = async (): Promise<SecurityGroupRelResourceByBizItem[]> => {
+  if (!allRelResCache) {
+    allRelResCache =
+      pagination.count <= pagination.limit
+        ? Promise.resolve(relResList.value) // 优化：当总数小于等于每页数量时，直接返回当前列表数据
+        : securityGroupStore.fetchAllRelatedResourcesByBiz(
+            props.detail.id,
+            props.bkBizId,
+            props.tabActive,
+            transformSimpleCondition(props.condition, RELATED_RES_PROPERTIES_MAP[props.tabActive]),
+          );
+  }
+  return allRelResCache;
+};
+
+// 复制全部内网 IPv4（CVM 专用）
+const getAllPrivateIPv4s = async () => {
+  const list = await fetchAllRelRes();
+  return list.flatMap((item) => item.private_ipv4_addresses || []).join('\n') || '--';
+};
+
+// 复制全部内网 IPv6（CVM 专用）
+const getAllPrivateIPv6s = async () => {
+  const list = await fetchAllRelRes();
+  return list.flatMap((item) => item.private_ipv6_addresses || []).join('\n') || '--';
+};
+
+// 复制全部负载均衡 IPv4（CLB 专用）
+const getAllPublicIPv4s = async () => {
+  const list = await fetchAllRelRes();
+  return list.flatMap((item) => item.public_ipv4_addresses || []).join('\n') || '--';
+};
+
+// 复制全部负载均衡 IPv6（CLB 专用）
+const getAllPublicIPv6s = async () => {
+  const list = await fetchAllRelRes();
+  return list.flatMap((item) => item.public_ipv6_addresses || []).join('\n') || '--';
+};
+
+// 复制全部资源 ID（异步拉取全量后拼接 cloud_id）
+const getAllCloudIDs = async () => {
+  const list = await fetchAllRelRes();
+  return (
+    list
+      .map((item) => item.cloud_id)
+      .filter(Boolean)
+      .join('\n') || '--'
+  );
+};
+
 const relResList = ref<SecurityGroupRelResourceByBizItem[]>([]);
 const { pagination, getPageParams } = usePage();
 
@@ -74,6 +162,7 @@ const getList = async (
   order = 'DESC',
 ) => {
   loading.value = true;
+  allRelResCache = null;
   try {
     const res = await securityGroupStore.queryRelatedResourcesByBiz(props.detail.id, props.bkBizId, tabActive, {
       filter: transformSimpleCondition(condition, RELATED_RES_PROPERTIES_MAP[props.tabActive]),
@@ -161,6 +250,36 @@ defineExpose({ isExpand, reload });
           <i class="hcm-icon bkhcm-icon-plus-circle-shape mr2"></i>
           {{ t('新增绑定') }}
         </bk-button>
+        <bk-divider direction="vertical" type="solid" class="divider" />
+        <template v-if="showCopyButtons">
+          <div class="copy-dropdown">
+            <hcm-dropdown :disabled="copyDisabled" text-button theme="primary">
+              {{ t('复制') }}
+              <angle-down class="dropdown-icon" />
+
+              <template #menus>
+                <copy-to-clipboard
+                  type="dropdown-item"
+                  :text="copyIPv4Text"
+                  :content="copyIPv4Content"
+                  :disabled="copyDisabled"
+                />
+                <copy-to-clipboard
+                  type="dropdown-item"
+                  :text="copyIPv6Text"
+                  :content="copyIPv6Content"
+                  :disabled="copyDisabled"
+                />
+                <copy-to-clipboard
+                  type="dropdown-item"
+                  :text="copyIDText"
+                  :content="copyIDContent"
+                  :disabled="copyDisabled"
+                />
+              </template>
+            </hcm-dropdown>
+          </div>
+        </template>
         <bk-button
           theme="primary"
           text
@@ -262,16 +381,29 @@ defineExpose({ isExpand, reload });
       height: 16px;
     }
 
+    .copy-dropdown {
+      .dropdown-icon {
+        font-size: 16px;
+        color: inherit;
+      }
+    }
+
     .unbind-btn {
       margin-left: auto;
     }
 
     .overview {
       margin-left: 50px;
+
       .number {
         color: #313238;
       }
     }
   }
+}
+
+.divider {
+  margin: 0 12px;
+  height: 12px;
 }
 </style>

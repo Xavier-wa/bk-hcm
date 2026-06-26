@@ -457,6 +457,29 @@ export const useSecurityGroupStore = defineStore('security-group', () => {
     }
   };
 
+  // 拉取安全组关联资源的全量数据（用于复制等场景）
+  const fetchAllRelatedResourcesByBiz = async (
+    sgId: string,
+    resBizId: number,
+    relResName: SecurityGroupRelatedResourceName,
+    filter: Record<string, any>,
+  ) => {
+    const resType = RELATED_RES_KEY_MAP[relResName];
+    const api = `/api/v1/cloud/${getBusinessApiPath()}security_groups/${sgId}/related_resources/biz_resources/${resBizId}/${resType}s/list`;
+    return rollRequest({
+      httpClient: http,
+      pageEnableCountKey: 'count',
+    }).rollReqUseCount<SecurityGroupRelResourceByBizItem>(
+      api,
+      { filter },
+      {
+        limit: 500,
+        countGetter: (res: any) => res.data.count,
+        listGetter: (res: any) => res.data.details,
+      },
+    );
+  };
+
   return {
     isFullListLoading,
     getFullList,
@@ -472,6 +495,7 @@ export const useSecurityGroupStore = defineStore('security-group', () => {
     queryRelBusiness,
     queryRelatedResourcesByBiz,
     queryRelatedResourcesBySgId,
+    fetchAllRelatedResourcesByBiz,
     isQueryRelatedResourcesCountLoading,
     queryRelatedResourcesCount,
     isUpdateMgmtAttrLoading,
