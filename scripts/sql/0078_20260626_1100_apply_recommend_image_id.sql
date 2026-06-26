@@ -18,7 +18,7 @@
  */
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9
+    SQLVER=0078,HCMVER=v1.9.2.0
 
     Notes:
     1. ziyan_cvm_device_info 新增 image_id 字段
@@ -44,6 +44,6 @@ ALTER TABLE `ziyan_cvm_apply_biz_recommend`
     ADD UNIQUE KEY `idx_uk_biz_id_require_type_region_device_type_image_id` (`bk_biz_id`, `require_type`, `region`, `device_type`, `image_id`);
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.9.2.0' as `hcm_ver`, '0078' as `sql_ver`;
 
 COMMIT;
