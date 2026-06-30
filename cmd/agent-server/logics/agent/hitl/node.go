@@ -21,6 +21,7 @@ package hitl
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -78,14 +79,18 @@ func makeHITLNode(reg *Registry) graph.NodeFunc {
 		}
 
 		var result ResumeResult
-		if forwarded := resolveHITLForwardedResumeValue(ctx); forwarded != "" {
-			// 前端通过 forwardedProps.resumeValue 返回了结构化选择：发出恢复事件并走确认路径。
-			emitHITLEvent(ctx, state, buildHITLResumeEventName(interruptKey), map[string]any{"value": forwarded}, rid)
-			logs.Infof("hitl node: resume with forwarded value for tool %q, rid: %s", toolName, rid)
-			result, err = handler.OnResume(ctx, tc, forwarded)
+		// 确认门禁（如 create_biz_apply）需要 JSON 结构化载荷；自由文本走取消路径。
+		// 结构化值从 resolveStructuredResumeValue 解析，而非直接读 RuntimeState，
+		// 因为子图 checkpoint 会持久化 RuntimeState，同轮多次中断时其中可能是更早阶段的值。
+		if structured := resolveStructuredResumeValue(resumeValue, ctx); structured != "" {
+			// 结构化确认：发出恢复事件，交给 handler 执行校验/放行。
+			emitHITLEvent(ctx, state, buildHITLResumeEventName(interruptKey),
+				map[string]any{"value": structured}, rid)
+			logs.Infof("hitl node: resume with structured value for tool %q, rid: %s", toolName, rid)
+			result, err = handler.OnResume(ctx, tc, structured)
 		} else {
 			// 无结构化回复：合成取消信号走 OnCancel 路径，并附加用户输入消息。
-			logs.Infof("hitl node: no forwarded value, treating as cancel for tool %q, rid: %s", toolName, rid)
+			logs.Infof("hitl node: no structured value, treating as cancel for tool %q, rid: %s", toolName, rid)
 			result, err = handler.OnResume(ctx, tc, CancelActionSignal)
 			if err == nil {
 				injectCancelUserMessage(&result, toolName, resumeValue)
@@ -144,10 +149,39 @@ func emitHITLEvent(ctx context.Context, state graph.State, eventName string, pay
 	}
 }
 
+// resolveStructuredResumeValue 解析确认门禁所需的结构化 resume 载荷。
+//
+// 两条数据来源的生命周期不同：
+//   - graph.Interrupt 返回的 resumeValue 来自 resume command，按请求注入，代表本轮用户操作；
+//   - RuntimeState[StateKeyForwardedResumeValue] 会随子图 checkpoint 持久化，同轮内多次
+//     中断恢复时可能仍保留更早阶段写入的值（如 account_id）。
+//
+// 因此优先读 resumeValue；仅当其不是 JSON 对象时，才 fallback 到 RuntimeState。
+// JSON 对象用于区分「前端 forwarded 的结构化载荷」与「用户自由文本 / 简单字符串 ID」。
+func resolveStructuredResumeValue(resumeValue any, ctx context.Context) string {
+	if s, ok := resumeValue.(string); ok && s != "" && isJSONObjectString(s) {
+		return s
+	}
+	if forwarded := resolveHITLForwardedResumeValue(ctx); forwarded != "" && isJSONObjectString(forwarded) {
+		return forwarded
+	}
+	return ""
+}
+
+// isJSONObjectString 判断 s 是否为 JSON 对象（map）。
+// 确认门禁的载荷（提单参数、方案 JSON）均为对象；account_id 等纯字符串、用户自然语言均不是。
+func isJSONObjectString(s string) bool {
+	var v any
+	if err := json.Unmarshal([]byte(s), &v); err != nil {
+		return false
+	}
+	_, ok := v.(map[string]any)
+	return ok
+}
+
 // resolveHITLForwardedResumeValue reads the structured resume value passed by the frontend via
-// forwardedProps. The value is stored in RuntimeState as map[string]any (parsed from JSON by the
-// AG-UI layer); this function marshals it back to a JSON string so that handlers receive a uniform
-// string contract. Returns an empty string when the value is absent or marshalling fails.
+// forwardedProps from RuntimeState. Returns an empty string when the value is absent or not a
+// non-empty string.
 func resolveHITLForwardedResumeValue(ctx context.Context) string {
 	rid := rest.RidFromContext(ctx)
 
@@ -162,7 +196,7 @@ func resolveHITLForwardedResumeValue(ctx context.Context) string {
 		return ""
 	}
 
-	logs.Infof("after_tool_hitl: forwarded resume value=%s, rid: %s", forwarded, rid)
+	logs.Infof("hitl node: forwarded resume value from runtime state, len=%d, rid: %s", len(forwarded), rid)
 	return forwarded
 }
 

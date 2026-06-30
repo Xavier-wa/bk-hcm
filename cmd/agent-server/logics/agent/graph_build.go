@@ -204,7 +204,7 @@ func BuildGraph(mdl trpcmodel.Model, skillRepos *skill.SkillRepos, toolset *agen
 }
 
 // buildHostApplySubgraph builds the host_apply ReAct subgraph.
-// The subgraph contains account_select, llm, hitl, and tool nodes (no fallback).
+// The subgraph contains account_select, llm, hitl, tool, and after_tool_hitl nodes (no fallback).
 // When account_select finds no usable accounts it routes to graph.End, returning
 // control to the main graph's fallback with the AccountSelectNextNodeKey signal intact.
 // When the llm node produces no tool_calls it routes to graph.End, finishing the subgraph
@@ -234,6 +234,7 @@ func buildHostApplySubgraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository,
 	sg.AddToolsNode(string(enumor.CvmApplyNodeTool), skillTools, toolsOpts...)
 	sg.AddNode(string(enumor.CvmApplyNodeAccountSelect),
 		cvmapply.NewAccountSelectNode(clientSet.CloudServer()))
+	sg.AddNode(string(enumor.CvmApplyNodeAfterToolHITL), aftertool.GetNode())
 
 	sg.SetEntryPoint(string(enumor.CvmApplyNodeAccountSelect))
 
@@ -257,7 +258,15 @@ func buildHostApplySubgraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository,
 		string(enumor.CvmApplyNodeLLM):  string(enumor.CvmApplyNodeLLM),
 	})
 
-	sg.AddEdge(string(enumor.CvmApplyNodeTool), string(enumor.CvmApplyNodeLLM))
+	// tool → after_tool_hitl (recommend tools: by_static/by_plan/split_suborder) / llm (other tools).
+	// Mirrors the pre-SubAgent wiring that was lost in the SubAgent migration (419da3910).
+	sg.AddConditionalEdges(string(enumor.CvmApplyNodeTool), aftertool.MakeRoutingFunc(), map[string]string{
+		string(enumor.CvmApplyNodeAfterToolHITL): string(enumor.CvmApplyNodeAfterToolHITL),
+		string(enumor.CvmApplyNodeLLM):           string(enumor.CvmApplyNodeLLM),
+	})
+
+	// after_tool_hitl loops back to llm (both interrupt-resume and pass-through paths).
+	sg.AddEdge(string(enumor.CvmApplyNodeAfterToolHITL), string(enumor.CvmApplyNodeLLM))
 
 	return sg.Compile()
 }

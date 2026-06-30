@@ -792,9 +792,11 @@ func makeRunOptionResolver(saver graph.CheckpointSaver, allowedModels []string,
 // so, injects the checkpointID and resume value into runtimeState so the graph
 // continues from the interrupt point.
 //
-// resume command 始终承载最新的用户消息文本（非格式化、无法预期的自由输入）。
-// forwardedProps 中的结构化内容（如选中的 account_id）则写入独立的
-// StateKeyForwardedResumeValue，与用户输入区分开，供节点单独消费。
+// resume command 与 StateKeyForwardedResumeValue 分工不同：
+//   - 有 forwardedProps.resumeValue 时，二者均写入该值；resume command 经 graph.Interrupt
+//     返回给中断节点，按请求注入，对应当前操作；
+//   - 无 forwarded 值时，resume command 承载用户消息自由文本（如 human_confirm 回复）。
+//   - StateKeyForwardedResumeValue 供首次进入子图时尚未触发 checkpoint 的节点读取。
 //
 // NOTE: mergeInitialStateNonInternal skips keys starting with "_", so
 // StateKeyCommand (processed by processResumeCommand) must be used instead of
@@ -819,18 +821,30 @@ func tryPrepareAutoResume(saver graph.CheckpointSaver, ctx context.Context, inpu
 
 	runtimeState[graph.CfgKeyCheckpointID] = tuple.Checkpoint.ID
 
-	// 前端通过 forwardedProps 传入的结构化数据（如选中的 account_id）写入独立的 runtime-state key。
-	// resume command 始终承载用户自由输入文本，是非格式化、无法预期的内容，二者必须区分开，
-	// 避免结构化内容覆盖用户输入。节点可按需从 StateKeyForwardedResumeValue 单独消费结构化值。
+	// forwardedProps.resumeValue 写入两处，服务不同消费场景：
+	//
+	// 1. StateKeyForwardedResumeValue — 供首次进入子图、尚未触发 checkpoint 的节点读取
+	//    （如 account_select 解析 account_id）；
+	// 2. resume command — 经 graph.Interrupt 返回给中断节点，按请求注入，代表本轮操作，
+	//    适用于子图内同轮多次中断恢复（after_tool_hitl、hitl 提单确认等）。
 	forwardedResumeVal, hasForwarded := forwardedProps[constant.ForwardedPropResumeValue]
 	if hasForwarded && forwardedResumeVal != nil {
 		runtimeState[constant.StateKeyForwardedResumeValue] = forwardedResumeVal
-		logs.Infof("auto-resume: stored forwardedProps resume value into runtime state %v, rid: %s",
+		if fwdStr, ok := forwardedResumeVal.(string); ok && fwdStr != "" {
+			// 结构化 forwarded 值同时作为 resume command，使 graph.Interrupt 能原样返回给中断节点。
+			// NOTE: mergeInitialStateNonInternal skips keys starting with "_",
+			// so we must use StateKeyCommand (processed by processResumeCommand)
+			// instead of writing ResumeChannel directly.
+			runtimeState[graph.StateKeyCommand] = graph.NewResumeCommand().WithResume(fwdStr)
+			logs.Infof("auto-resume: set resume command from forwarded value (len=%d), rid: %s",
+				len(fwdStr), rid)
+			return runtimeState
+		}
+		logs.Infof("auto-resume: stored non-string forwardedProps resume value type=%T, rid: %s",
 			forwardedResumeVal, rid)
 	}
 
-	// resume command 来自最新的用户消息文本；即便前端通过 forwardedProps 传结构化数据，
-	// 仍需设置 resume command 以驱动 graph 从中断点继续。
+	// 无 forwarded 结构化值时，用用户消息文本驱动 resume（如 human_confirm 自由文本回复）。
 	var userInput string
 	if len(input.Messages) > 0 {
 		lastMsg := input.Messages[len(input.Messages)-1]
@@ -839,9 +853,6 @@ func tryPrepareAutoResume(saver graph.CheckpointSaver, ctx context.Context, inpu
 		}
 	}
 	if userInput != "" {
-		// NOTE: mergeInitialStateNonInternal skips keys starting with "_",
-		// so we must use StateKeyCommand (processed by processResumeCommand)
-		// instead of writing ResumeChannel directly.
 		runtimeState[graph.StateKeyCommand] = graph.NewResumeCommand().WithResume(userInput)
 		logs.Infof("auto-resume: set resume command from user input: %q, rid: %s", userInput, rid)
 	}

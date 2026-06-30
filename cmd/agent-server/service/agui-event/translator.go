@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 
@@ -75,10 +76,9 @@ func (t *customTranslator) PostRunFinalizationEvents(ctx context.Context) ([]agu
 	return finalizer.PostRunFinalizationEvents(ctx)
 }
 
-// buildInterruptCustomEvent extracts PregelStepMetadata from evt and emits a custom event whose
-// type equals the interrupt base key (the portion before the first ":").
-// Fallback interrupts are internal flow-control pauses and are excluded.
-// Returns (nil, false) when the event carries no interrupt or is excluded.
+// buildInterruptCustomEvent 从 evt 提取 PregelStepMetadata，并封装为 CUSTOM 事件；
+// 事件类型取 interrupt key 的第一段（第一个 ":" 之前）。
+// 若该中断不应面向用户展示，返回 (nil, false)。
 func buildInterruptCustomEvent(ctx context.Context, evt *event.Event) (aguievents.Event, bool) {
 	rid := rest.RidFromContext(ctx)
 	meta, ok := extractPregelMeta(ctx, evt)
@@ -86,11 +86,27 @@ func buildInterruptCustomEvent(ctx context.Context, evt *event.Event) (aguievent
 		logs.Warnf("buildInterruptCustomEvent: failed to extract PregelStepMetadata, rid: %s", rid)
 		return nil, false
 	}
-	baseKey, _, _ := strings.Cut(meta.InterruptKey, constant.InterruptKeySeparator)
-	if baseKey == "" || baseKey == constant.FallbackInterruptKey {
+	name, ok := resolveInterruptCustomEventName(meta)
+	if !ok {
 		return nil, false
 	}
-	return aguievents.NewCustomEvent(baseKey, aguievents.WithValue(marshalInterruptPayload(ctx, meta))), true
+	return aguievents.NewCustomEvent(name, aguievents.WithValue(marshalInterruptPayload(ctx, meta))), true
+}
+
+// resolveInterruptCustomEventName 判断 Pregel 中断是否应转为 AG-UI CUSTOM 事件，
+// 若需要则返回事件名（interrupt key 的第一段）。
+//
+// 子图 agent 节点（host_apply、resource_query）会在内层节点中断后再次上报同一条中断；
+// 这类传播副本应跳过，仅保留内层节点发出的 CUSTOM 事件。
+func resolveInterruptCustomEventName(meta graph.PregelStepMetadata) (string, bool) {
+	if enumor.IsSubgraphAgentNode(meta.NodeID) {
+		return "", false
+	}
+	baseKey, _, _ := strings.Cut(meta.InterruptKey, constant.InterruptKeySeparator)
+	if baseKey == "" || baseKey == constant.FallbackInterruptKey {
+		return "", false
+	}
+	return baseKey, true
 }
 
 // extractPregelMeta parses the PregelStepMetadata embedded in evt.StateDelta.

@@ -24,6 +24,7 @@ package aftertool
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"hcm/cmd/agent-server/logics/agent/message"
@@ -33,7 +34,6 @@ import (
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 
-	trpcagent "trpc.group/trpc-go/trpc-agent-go/agent"
 	"trpc.group/trpc-go/trpc-agent-go/graph"
 	trpcmodel "trpc.group/trpc-go/trpc-agent-go/model"
 )
@@ -161,6 +161,13 @@ func interruptWithRecommendSuborders(ctx context.Context, state graph.State, mes
 }
 
 // doInterrupt performs the emit → interrupt → resume cycle shared by both interrupt branches.
+//
+// 恢复时以 graph.Interrupt 返回的 resumeValue 为唯一输入，不另读 RuntimeState：
+// resumeValue 经由 resume command 按请求注入，对应当前用户操作；RuntimeState 中的
+// forwarded 值会随子图 checkpoint 持久化，同轮内后续中断恢复时不一定代表本轮选择。
+//
+// 若 resumeValue 为合法 JSON，视为前端 forwarded 的结构化选择（plan_json 等），
+// 发出自定义事件供前端观测；否则视为自由文本，直接作为用户选择回灌 LLM。
 func doInterrupt(ctx context.Context, state graph.State, messages []trpcmodel.Message,
 	lastResp, baseKey string, payload map[string]any) (any, error) {
 
@@ -174,43 +181,22 @@ func doInterrupt(ctx context.Context, state graph.State, messages []trpcmodel.Me
 		return nil, err
 	}
 
-	// 优先使用前端通过 forwardedProps 传入的结构化回复（与自由文本 resumeValue 区分）：
-	// 命中时构造自定义事件携带该值，并以该值作为用户选择，忽略 resumeValue。
-	if forwarded := resolveForwardedResumeValue(ctx); forwarded != "" {
-		emitForwardedResumeEvent(ctx, state, forwarded)
-		logs.Infof("after_tool_hitl: resume with forwarded value=%s, rid: %s", forwarded, rid)
-		return message.BuildFallbackResumeDelta(ctx, state, messages, lastResp, forwarded), nil
-	}
-
 	choice, ok := resumeValue.(string)
 	if !ok || choice == "" {
 		logs.Errorf("after_tool_hitl: invalid resume value, expected non-empty string, got %T, rid: %s",
 			resumeValue, rid)
 		return nil, fmt.Errorf("after_tool_hitl: invalid resume value: expected non-empty string")
 	}
-	logs.Infof("after_tool_hitl: resume with user choice=%s, rid: %s", choice, rid)
+
+	// 合法 JSON 表示 forwarded 结构化选择，发出自定义事件；否则为自由文本用户输入。
+	var jsonCheck any
+	if json.Unmarshal([]byte(choice), &jsonCheck) == nil {
+		emitForwardedResumeEvent(ctx, state, choice)
+		logs.Infof("after_tool_hitl: resume with forwarded JSON value, rid: %s", rid)
+	} else {
+		logs.Infof("after_tool_hitl: resume with user choice=%s, rid: %s", choice, rid)
+	}
 	return message.BuildFallbackResumeDelta(ctx, state, messages, lastResp, choice), nil
-}
-
-// resolveForwardedResumeValue reads the structured resume value that the frontend passed via
-// forwardedProps (stored in RuntimeState under StateKeyForwardedResumeValue). It returns an empty
-// string when the invocation, RuntimeState, or value is absent or not a non-empty string.
-func resolveForwardedResumeValue(ctx context.Context) string {
-	rid := rest.RidFromContext(ctx)
-
-	inv, ok := trpcagent.InvocationFromContext(ctx)
-	if !ok || inv == nil || inv.RunOptions.RuntimeState == nil {
-		return ""
-	}
-
-	raw := inv.RunOptions.RuntimeState[constant.StateKeyForwardedResumeValue]
-	forwarded, ok := raw.(string)
-	if !ok || forwarded == "" {
-		return ""
-	}
-
-	logs.Infof("after_tool_hitl: forwarded resume value=%s, rid: %s", forwarded, rid)
-	return forwarded
 }
 
 // emitForwardedResumeEvent emits a custom event carrying the structured forwarded resume value,

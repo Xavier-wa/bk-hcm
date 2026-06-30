@@ -85,9 +85,13 @@ func NewAccountSelectNode(cloudClient *cloudserver.Client) graph.NodeFunc {
 			}, nil
 		}
 
-		bkBizID, ok := inv.RunOptions.RuntimeState[constant.SessionBkBizIDStateKey].(int64)
-		if !ok || bkBizID <= 0 {
-			return nil, fmt.Errorf("account_select: bk_biz_id not found or invalid in RuntimeState, rid: %s", rid)
+		// bk_biz_id is injected as int64 into inv.RunOptions.RuntimeState by makeRunOptionResolver.
+		// On subgraph checkpoint resume, the graph State is JSON-deserialized (int64 → float64),
+		// and the subgraph inv may not carry the parent's fresh RuntimeState.
+		// parseBkBizID reads from both sources and handles both int64 and float64.
+		bkBizID := parseBkBizID(inv, state)
+		if bkBizID <= 0 {
+			return nil, fmt.Errorf("account_select: bk_biz_id not found or invalid, rid: %s", rid)
 		}
 		logs.Infof("account_select: bk_biz_id=%d, rid: %s", bkBizID, rid)
 
@@ -281,4 +285,28 @@ func getSelectedAccountIDFromSession(inv *trpcagent.Invocation) (string, bool) {
 func buildInterruptKey(state graph.State, base string) string {
 	msgs, _ := state[graph.StateKeyMessages].([]trpcmodel.Message)
 	return fmt.Sprintf("%s%s%d", base, constant.InterruptKeySeparator, len(msgs))
+}
+
+// parseBkBizID resolves bk_biz_id from two sources with type flexibility:
+//  1. inv.RunOptions.RuntimeState: populated as int64 by makeRunOptionResolver on each request.
+//  2. graph State: populated via the framework's RuntimeState→State merge and preserved by
+//     makeSubgraphInputMapper; after checkpoint JSON deserialization, the value becomes float64.
+//
+// Reads RuntimeState first (always fresh int64); falls back to graph State to handle the
+// checkpoint-resume case where the subgraph inv may not carry the parent's RuntimeState.
+func parseBkBizID(inv *trpcagent.Invocation, state graph.State) int64 {
+	if inv != nil && inv.RunOptions.RuntimeState != nil {
+		if v, ok := inv.RunOptions.RuntimeState[constant.SessionBkBizIDStateKey].(int64); ok && v > 0 {
+			return v
+		}
+	}
+	// Fall back to graph State: handle both int64 (first run) and float64 (checkpoint restore).
+	switch v := state[constant.SessionBkBizIDStateKey].(type) {
+	case int64:
+		return v
+	case float64:
+		return int64(v)
+	default:
+		return 0
+	}
 }

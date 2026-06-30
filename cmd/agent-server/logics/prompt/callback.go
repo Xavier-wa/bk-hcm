@@ -197,8 +197,16 @@ func renderInstructionTemplate(ctx context.Context, tmpl string) string {
 	}
 
 	if inv, ok := trpcagent.InvocationFromContext(ctx); ok && inv != nil && inv.RunOptions.RuntimeState != nil {
-		if bkBizID, ok := inv.RunOptions.RuntimeState[constant.SessionBkBizIDStateKey].(int64); ok && bkBizID > 0 {
-			data.BkBizID = strconv.FormatInt(bkBizID, 10)
+		// bk_biz_id is stored as int64 but becomes float64 after checkpoint JSON deserialization.
+		switch bv := inv.RunOptions.RuntimeState[constant.SessionBkBizIDStateKey].(type) {
+		case int64:
+			if bv > 0 {
+				data.BkBizID = strconv.FormatInt(bv, 10)
+			}
+		case float64:
+			if int64(bv) > 0 {
+				data.BkBizID = strconv.FormatInt(int64(bv), 10)
+			}
 		}
 		if accountID, ok := inv.RunOptions.RuntimeState[constant.SessionAccountIDTempKey].(string); ok {
 			data.AccountID = accountID

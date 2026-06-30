@@ -20,6 +20,7 @@
 package hitl
 
 import (
+	"context"
 	"testing"
 
 	agenttool "hcm/cmd/agent-server/logics/tool"
@@ -135,5 +136,40 @@ func TestRegistry(t *testing.T) {
 	}
 	if _, ok := reg.Lookup(constant.HumanConfirmToolName); !ok {
 		t.Errorf("lookup should find human_confirm handler")
+	}
+}
+
+func TestResolveStructuredResumeValue(t *testing.T) {
+	orderJSON := `{"path_param":{"bk_biz_id":"213"},"body_param":{"bk_username":"u"}}`
+
+	t.Run("prefer interrupt resume over stale runtime state", func(t *testing.T) {
+		got := resolveStructuredResumeValue(orderJSON, context.Background())
+		if got != orderJSON {
+			t.Errorf("got %q, want order JSON", got)
+		}
+	})
+
+	t.Run("free text is not structured", func(t *testing.T) {
+		if got := resolveStructuredResumeValue("确认提交", context.Background()); got != "" {
+			t.Errorf("got %q, want empty", got)
+		}
+	})
+
+	t.Run("account id string is not structured", func(t *testing.T) {
+		if isJSONObjectString("0000002b") {
+			t.Error("account id should not be treated as JSON object")
+		}
+	})
+}
+
+func TestIsJSONObjectString(t *testing.T) {
+	if !isJSONObjectString(`{"action":"cancel"}`) {
+		t.Error("JSON object should match")
+	}
+	if isJSONObjectString(`"plain"`) {
+		t.Error("JSON string should not match")
+	}
+	if isJSONObjectString("确认提交") {
+		t.Error("free text should not match")
 	}
 }

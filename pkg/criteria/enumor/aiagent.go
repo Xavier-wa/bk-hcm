@@ -215,6 +215,17 @@ const (
 	HostApplyGraphNode HostApplyNode = "host_apply"
 )
 
+// IsSubgraphAgentNode 判断 nodeID 是否为主图中的子图 agent 节点名（AddSubgraphNode / AddAgentNode）。
+// 这些节点上的中断元数据来自内层子图节点的传播副本，内层节点已单独上报过中断。
+func IsSubgraphAgentNode(nodeID string) bool {
+	switch nodeID {
+	case string(HostApplyGraphNode), string(ResourceQueryGraphNode):
+		return true
+	default:
+		return false
+	}
+}
+
 // CvmApplyNode is the name of a graph node in the CVM apply workflow.
 type CvmApplyNode string
 

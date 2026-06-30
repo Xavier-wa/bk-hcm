@@ -68,3 +68,23 @@ func TestIntentType_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestIsSubgraphAgentNode(t *testing.T) {
+	tests := []struct {
+		nodeID string
+		want   bool
+	}{
+		{nodeID: string(HostApplyGraphNode), want: true},
+		{nodeID: string(ResourceQueryGraphNode), want: true},
+		{nodeID: string(CvmApplyNodeAccountSelect), want: false},
+		{nodeID: "hitl", want: false},
+		{nodeID: "", want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.nodeID, func(t *testing.T) {
+			if got := IsSubgraphAgentNode(tc.nodeID); got != tc.want {
+				t.Errorf("IsSubgraphAgentNode(%q) = %v, want %v", tc.nodeID, got, tc.want)
+			}
+		})
+	}
+}
