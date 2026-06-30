@@ -168,15 +168,15 @@ func (c *bkaidevClient) ListSkills(kt *kit.Kit, req *ListSkillsReq) ([]SkillList
 		return nil, err
 	}
 
-	data, err := BKAIDevApiGatewayGet[[]SkillListItem](c, kt, req.QueryParams(), "/app/v1/skills/")
+	page, err := BKAIDevApiGatewayGet[BKAIDevListSkillsResp](c, kt, req.QueryParams(), "/app/v1/skills/")
 	if err != nil {
 		logs.Errorf("list skills from bkaidev failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, fmt.Errorf("list skills: %w", err)
 	}
-	if data == nil {
+	if page.Results == nil {
 		return []SkillListItem{}, nil
 	}
-	return data, nil
+	return page.Results, nil
 }
 
 // RetrieveSkill calls retrieve_app_v1_skills and returns the full skill detail.

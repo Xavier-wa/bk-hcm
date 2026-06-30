@@ -104,6 +104,15 @@ func (s BaseSkill) InstallKey() string {
 	return fmt.Sprintf("skill-%d", s.ID)
 }
 
+// BKAIDevListSkillsResp is the paginated wrapper returned by list_app_v1_skills.
+// The API wraps results in {"page":…,"num_pages":…,"count":…,"results":[…]}.
+type BKAIDevListSkillsResp struct {
+	Page     int             `json:"page"`
+	NumPages int             `json:"num_pages"`
+	Count    int             `json:"count"`
+	Results  []SkillListItem `json:"results"`
+}
+
 // SkillListItem is a single element in the list_app_v1_skills response data array.
 type SkillListItem struct {
 	BaseSkill         `json:",inline"`
