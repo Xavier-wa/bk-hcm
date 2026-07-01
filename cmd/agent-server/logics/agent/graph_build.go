@@ -170,6 +170,10 @@ func BuildGraph(mdl trpcmodel.Model, skillRepos *skill.SkillRepos, toolset *agen
 
 	// After resource_query subgraph finishes, enter main fallback.
 	stateGraph.AddEdge(string(enumor.ResourceQueryGraphNode), "fallback")
+
+	//TODO: 这里需要after_tool的PR合入后调整一下
+	hitlReg := buildHITLRegistry(
+		cc.AgentServer().Tools.ConfirmGateForScene(enumor.IntentTypeHostApply), clientSet)
 	// llm → hitl / tool / fallback based on tool_calls in the last message
 	stateGraph.AddConditionalEdges(string(enumor.CvmApplyNodeLLM), makeRoutingFunc(hitlReg), map[string]string{
 		"hitl":                          "hitl",
@@ -749,4 +753,56 @@ func unsupportedIntentFallbackMessage(state graph.State) string {
 		return "目前AI助手仅支持主机申领相关能力，其他云资源管理功能即将上线，如需要申领主机，请直接描述您的配置需求。"
 	}
 	return "抱歉，我暂时无法处理您的请求。"
+}
+
+// makeRoutingFunc 返回 llm 节点的条件边路由函数。
+// 它依据最后一条消息中的 tool_calls 进行路由：
+//   - 无 tool_calls → "fallback"
+//   - 由 hitl 注册表处理的工具调用（human_confirm 或确认门禁）→ "hitl"；
+//     此类工具必须是该批次中唯一的 tool call，否则返回错误。
+//   - 其他工具 → CvmApplyNodeTool
+func makeRoutingFunc(hitlReg *hitl.Registry) func(ctx context.Context, state graph.State) (string, error) {
+	return func(ctx context.Context, state graph.State) (string, error) {
+		rid := rest.RidFromContext(ctx)
+		messages, _ := state[graph.StateKeyMessages].([]trpcmodel.Message)
+		if len(messages) == 0 {
+			return "fallback", nil
+		}
+
+		lastMsg := messages[len(messages)-1]
+		if len(lastMsg.ToolCalls) == 0 {
+			logs.Infof("routing: no tool_calls, route to fallback, rid: %s", rid)
+			return "fallback", nil
+		}
+
+		hasHITL := false
+		execToolsName := ""
+		for i := range lastMsg.ToolCalls {
+			tc := &lastMsg.ToolCalls[i]
+			// 真实 MCP 工具经 proxy execute_tool 调用，需解出真实工具名再匹配门禁。
+			resolvedName := toolproxy.ResolveToolCall(tc).Name
+			logs.Infof("routing: toolCall name=%s, resolved=%s, id=%s, rid: %s",
+				tc.Function.Name, resolvedName, tc.ID, rid)
+
+			// hitl注册过该工具的handler则路由到人机中断节点
+			if hitlReg.Has(resolvedName) {
+				hasHITL = true
+				execToolsName = resolvedName
+				break
+			}
+		}
+
+		// 需要人机中断的工具（human_confirm / 确认门禁）必须单独成批，不能与其他工具混批。
+		if hasHITL {
+			if len(lastMsg.ToolCalls) > 1 {
+				return "", fmt.Errorf("invalid tool calls: tool %s is human interaction tool, "+
+					"must be the only tool call in one batch", execToolsName)
+			}
+			logs.Infof("routing: human interaction tool, route to hitl, rid: %s", rid)
+			return "hitl", nil
+		}
+
+		logs.Infof("routing: other tool calls, route to tool, rid: %s", rid)
+		return string(enumor.CvmApplyNodeTool), nil
+	}
 }
