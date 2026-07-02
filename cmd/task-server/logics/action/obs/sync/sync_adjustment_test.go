@@ -24,6 +24,7 @@ import (
 
 	"hcm/pkg/api/core/bill"
 	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/kit"
 
 	"github.com/shopspring/decimal"
 )
@@ -86,7 +87,7 @@ func TestGetAdjustmentCost(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getAdjustmentCost(tt.adj, tt.vendor)
+			got, err := getAdjustmentCost(kit.New(), tt.adj, tt.vendor)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("getAdjustmentCost() error = %v, wantErr %v", err, tt.wantErr)
 			}

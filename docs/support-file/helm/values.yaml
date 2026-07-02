@@ -696,6 +696,8 @@ accountserver:
     rootAccountSummarySyncDuration:
     dailySummarySyncDuration:
     monthTaskSyncDuration:
+    # OBS 账单同步并发度，即同一 sync record 内同时处于 syncing 状态的 item 数量上限，默认 5
+    obsSyncConcurrency:
   billAllocation:
     awsAIDeduct:
       - rootAccountCloudID: "1234abc"

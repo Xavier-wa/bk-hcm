@@ -86,6 +86,8 @@ var OBSBillItemAwsColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "memo", NamedC: "memo", Type: enumor.String},
 	{Column: "CityId", NamedC: "CityId", Type: enumor.Numeric},
 	{Column: "ResClassId", NamedC: "ResClassId", Type: enumor.Numeric},
+	{Column: "GpuCardCategory", NamedC: "GpuCardCategory", Type: enumor.String},
+	{Column: "APIBrandName", NamedC: "APIBrandName", Type: enumor.String},
 }
 
 // OBSBillItemAws aws bill item
@@ -140,6 +142,8 @@ type OBSBillItemAws struct {
 	Memo                                   string         `json:"memo" db:"memo"`
 	CityId                                 int32          `json:"CityId" db:"CityId"`
 	ResClassId                             int32          `json:"ResClassId" db:"ResClassId"`
+	GpuCardCategory                        string         `json:"GpuCardCategory" db:"GpuCardCategory"`
+	APIBrandName                           string         `json:"APIBrandName" db:"APIBrandName"`
 }
 
 // TableName 返回月度汇总账单表名

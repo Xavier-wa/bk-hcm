@@ -103,7 +103,7 @@ func (act SyncAction) doSyncAwsBillItem(kt *kit.Kit,
 		return fmt.Errorf("load region city map failed, err: %v", err)
 	}
 
-	awsGpuSet, err := loadAwsGpuInstanceTypes(kt)
+	awsGpuMap, err := loadAwsGpuInstanceTypes(kt)
 	if err != nil {
 		logs.Errorf("load aws gpu instance types failed, err: %v, vendor: %s, rid: %s", err, syncOpt.Vendor, kt.Rid)
 		return fmt.Errorf("load aws gpu instance types failed, err: %v", err)
@@ -131,7 +131,7 @@ func (act SyncAction) doSyncAwsBillItem(kt *kit.Kit,
 	}
 
 	// 进行插入
-	finalItems, err := act.convertAwsBill(kt, syncOpt, result, setIndex, mainAccount, regionCityMap, awsGpuSet)
+	finalItems, err := act.convertAwsBill(kt, syncOpt, result, setIndex, mainAccount, regionCityMap, awsGpuMap)
 	if err != nil {
 		logs.Warnf("convert obs aws bill failed, err %s, rid: %s", err.Error(), kt.Rid)
 		return err
@@ -153,7 +153,7 @@ func (act SyncAction) doSyncAwsBillItem(kt *kit.Kit,
 
 func (act SyncAction) convertAwsBill(kt *kit.Kit, syncOpt *SyncOption, result *databill.AwsBillItemListResult,
 	setIndex string, mainAccount *asproto.MainAccountGetResult[accountsetcore.AwsMainAccountExtension],
-	regionCityMap map[string]int32, awsGpuSet map[string]struct{}) ([]*tableobs.OBSBillItemAws, error) {
+	regionCityMap map[string]int32, awsGpuMap map[string]string) ([]*tableobs.OBSBillItemAws, error) {
 
 	yearM := syncOpt.BillYear*100 + syncOpt.BillMonth
 	item := result.Details[0]
@@ -182,7 +182,9 @@ func (act SyncAction) convertAwsBill(kt *kit.Kit, syncOpt *SyncOption, result *d
 		record := item.Extension
 
 		cityID := lookupCityID(kt, regionCityMap, record.ProductRegion, isChina)
-		isGPU := isAwsGPU(record.LineItemProductCode, record.ProductInstanceType, item.HcProductName, awsGpuSet)
+		isGPU := isAwsGPU(record.LineItemProductCode, record.ProductInstanceType, item.HcProductName, awsGpuMap)
+		gpuCardCategory := lookupAwsGpuCardCategory(record.ProductProductName, record.ProductInstanceType, awsGpuMap)
+		apiBrandName := enumor.MatchAPIBrandName(item.HcProductName)
 
 		newItem := &tableobs.OBSBillItemAws{
 			SetIndex:      setIndex,
@@ -202,7 +204,9 @@ func (act SyncAction) convertAwsBill(kt *kit.Kit, syncOpt *SyncOption, result *d
 			// OBS 要求，OBS外币金额写入line_item_unblended_cost字段中
 			LineItemUnblendedCost: item.Cost.String(),
 			CityId:                cityID,
-			ResClassId:            enumor.GetOBSResClassID(syncOpt.Vendor, isGPU),
+			ResClassId:            enumor.GetOBSResClassIDByType(syncOpt.Vendor, isGPU, apiBrandName != ""),
+			GpuCardCategory:       gpuCardCategory,
+			APIBrandName:          apiBrandName,
 
 			BillPayerAccountID:                     record.BillPayerAccountId,
 			LineItemUsageAccountID:                 record.LineItemUsageAccountId,

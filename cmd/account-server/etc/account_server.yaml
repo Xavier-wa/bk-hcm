@@ -72,6 +72,8 @@ controller:
   rootAccountSummarySyncDuration:
   dailySummarySyncDuration:
   monthTaskSyncDuration: 10m
+  # OBS 账单同步并发度，即同一 sync record 内同时处于 syncing 状态的 item 数量上限，默认 5
+  obsSyncConcurrency:
 
 # tmp file dir, default: /tmp
 tmpFileDir: /tmp

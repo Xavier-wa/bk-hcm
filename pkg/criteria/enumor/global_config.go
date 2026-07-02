@@ -193,10 +193,16 @@ const (
 type GlobalConfigKeyAccountBill string
 
 const (
-	// GlobalConfigKeyAwsGpuInstanceTypes AWS GPU 机型列表配置key（JSON 数组字符串）
+	// GlobalConfigKeyAwsGpuInstanceTypes AWS GPU 机型配置key
+	// config_value 为「实例类型 → 卡型」JSON 对象（如 {"g5.12xlarge":"A10G"}），
+	// 同时承载「判断是否 GPU」（键集合）与「获取卡型」（值）两种能力
 	GlobalConfigKeyAwsGpuInstanceTypes GlobalConfigKeyAccountBill = "aws_gpu_instance_types"
 	// GlobalConfigKeyHuaweiGpuInstancePrefixes 华为 GPU 实例规格前缀列表配置key（JSON 数组字符串）
 	GlobalConfigKeyHuaweiGpuInstancePrefixes GlobalConfigKeyAccountBill = "huawei_gpu_instance_prefixes"
+	// GlobalConfigKeyGcpGpuInstancePrefixes GCP GPU 实例族前缀映射配置key
+	// config_value 为「实例族前缀 → 短卡型名」JSON 对象（如 {"A3Ultra":"H200","G4":"RTX6000PRO"}），
+	// 作为 GCP 卡型识别 L2 实例族前缀映射，匹配采用忽略大小写 + 词边界 + 最长前缀优先
+	GlobalConfigKeyGcpGpuInstancePrefixes GlobalConfigKeyAccountBill = "gcp_gpu_instance_prefixes"
 )
 
 // GlobalConfigKeyCvmRecommend CVM镜像推荐配置key
