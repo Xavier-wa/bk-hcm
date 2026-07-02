@@ -30,6 +30,7 @@ const icon = computed(() => {
     case 'abnormal':
       return StatusAbnormal;
     case 'normal':
+    case 'enabled':
       return StatusNormal;
     default:
       return StatusUnknown;
@@ -63,10 +64,12 @@ const icon = computed(() => {
     }
   }
 }
+
 @keyframes spin {
   0% {
     transform: rotate(0deg);
   }
+
   100% {
     transform: rotate(360deg);
   }
