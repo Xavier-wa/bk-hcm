@@ -245,7 +245,7 @@ func (s *SubTicketSplitter) matchReviewedCRPDemands(kt *kit.Kit, demand rpt.ResP
 		}
 
 		// 未评审需求跳过，不记录
-		if adjustAbleD.ReviewStatus == enumor.ResPlanReviewStatusPending {
+		if adjustAbleD.ReviewStatus.IsUnreviewed() {
 			continue
 		}
 

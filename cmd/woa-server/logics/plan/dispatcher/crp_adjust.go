@@ -625,7 +625,7 @@ func (c *CrpTicketCreator) getAllCRPAdjustAbleDemands(kt *kit.Kit, ticketType en
 					ticketType != enumor.RPTicketTypeDelay {
 					continue
 				}
-			case enumor.ResPlanReviewStatusPending:
+			case enumor.ResPlanReviewStatusPending, enumor.ResPlanReviewStatusMediumLongTerm:
 				if ticketType == enumor.RPTicketTypeTransfer || ticketType == enumor.RPTicketTypeTransferExempt {
 					continue
 				}
@@ -743,7 +743,7 @@ func (c *CrpTicketCreator) prePrepareTransferableData(kt *kit.Kit, id string, de
 		}
 
 		// 未评审需求跳过，不记录
-		if transAbleD.ReviewStatus == enumor.ResPlanReviewStatusPending {
+		if transAbleD.ReviewStatus.IsUnreviewed() {
 			continue
 		}
 
@@ -816,7 +816,7 @@ func (c *CrpTicketCreator) prePrepareAdjustAbleData(kt *kit.Kit, isTransfer, isA
 
 		// 转移时，不操作未评审的预测
 		if isTransfer {
-			if adjustAbleD.ReviewStatus == enumor.ResPlanReviewStatusPending {
+			if adjustAbleD.ReviewStatus.IsUnreviewed() {
 				continue
 			}
 		}

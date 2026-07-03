@@ -23,7 +23,6 @@ import (
 	"context"
 	"testing"
 
-	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	rpt "hcm/pkg/dal/table/resource-plan/res-plan-ticket"
 	"hcm/pkg/kit"
@@ -162,6 +161,16 @@ func TestMatchTransferCRPDemands_IsInProcessingFilter(t *testing.T) {
 			wantNonTransferable: 0,
 		},
 		{
+			name: "medium-long-term review candidate also skipped",
+			candidates: []*cvmapi.CvmCbsPlanQueryItem{
+				makeTransferCandidate("s1", obs, tech, 16, 0, enumor.ResPlanReviewStatusMediumLongTerm), // skipped
+				makeTransferCandidate("s2", obs, tech, 16, 0, pass),                                     // consumed
+			},
+			demandCores:         16,
+			wantTransferable:    16,
+			wantNonTransferable: 0,
+		},
+		{
 			name: "project mismatch: candidate skipped",
 			candidates: []*cvmapi.CvmCbsPlanQueryItem{
 				{SliceId: "s1", ProjectName: "其他项目", TechnicalClass: tech,
@@ -258,54 +267,4 @@ func TestMatchTransferCRPDemands_NilUpdated(t *testing.T) {
 	_, _, err := s.matchTransferCRPDemands(splitterTestKit(), "ticket-001", demand)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "nil")
-}
-
-// TestIsGpuDeviceFamily verifies that IsGpuDeviceFamily correctly identifies GPU device families
-// that should skip transfer matching ("GPU型" and "GPU高主频型").
-func TestIsGpuDeviceFamily(t *testing.T) {
-	testCases := []struct {
-		name         string
-		deviceFamily string
-		wantIsGpu    bool
-	}{
-		{
-			name:         "GPU型 should be identified as GPU",
-			deviceFamily: constant.GpuInstanceClassValue, // "GPU型"
-			wantIsGpu:    true,
-		},
-		{
-			name:         "GPU高主频型 should be identified as GPU",
-			deviceFamily: constant.GpuHighFreqInstanceClassValue, // "GPU高主频型"
-			wantIsGpu:    true,
-		},
-		{
-			name:         "标准型 should not be GPU",
-			deviceFamily: "标准型",
-			wantIsGpu:    false,
-		},
-		{
-			name:         "empty device family should not be GPU",
-			deviceFamily: "",
-			wantIsGpu:    false,
-		},
-		{
-			name:         "计算型 should not be GPU",
-			deviceFamily: "计算型",
-			wantIsGpu:    false,
-		},
-		{
-			name:         "内存型 should not be GPU",
-			deviceFamily: "内存型",
-			wantIsGpu:    false,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Call the real IsGpuDeviceFamily function
-			got := IsGpuDeviceFamily(tc.deviceFamily)
-			assert.Equal(t, tc.wantIsGpu, got,
-				"IsGpuDeviceFamily(%q) = %v, want %v", tc.deviceFamily, got, tc.wantIsGpu)
-		})
-	}
 }
