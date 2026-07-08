@@ -204,6 +204,9 @@ tools:
       #   bkaidev  — 自动注入 X-Bkapi-Authorization（基于 tools.bkAIDev + 请求 bk_ticket）；
       #   internal — 仅注入 X-Bkapi-User-Name（来自请求 ctx），用于内部 HCM MCP 直连。
       type: ""
+      scenes: # 场景列表，留空表示适用于所有场景；仅会在意图识别到指定场景时加载该 mcp
+        - "host_apply"
+        - "resource_query"
       transport: "streamable_http"  # 传输方式：stdio | sse | streamable_http
       serverUrl: "http://localhost:3000/mcp"   # MCP server URL（sse/streamable_http 必填）
       timeout: "30s"             # 每次请求超时，留空表示不限制
@@ -344,10 +347,17 @@ skills:
 # 网关凭证由顶层 bkaidevSyncApiGateway 共用，无需在此重复配置。
 prompt:
   # 本地文件模式（默认）：从本地文件加载 prompt，服务启动时立即生效。
-  # 开启 BKAIDev 同步后（enabled: true）这两个字段被忽略。
+  # 开启 BKAIDev 同步后（enabled: true）这些字段被忽略。
   systemPromptFile: "cmd/agent-server/etc/prompts/system_prompt.md"
   instructionFile: "cmd/agent-server/etc/prompts/instruction.md"
   intentRecognitionPromptFile: "cmd/agent-server/etc/prompts/intent_recognition_prompt.md"
+  # 子场景 prompt：key 为场景名（enumor.IntentType，如 resource_query）。
+  # 新增场景只需在此追加一个块并提供 prompt 文件，无需改动 Go 代码。
+  # store key 按约定派生：{scene}_system_prompt / {scene}_instruction_prompt。
+  scenePrompts:
+    resource_query:
+      systemPromptFile: "cmd/agent-server/etc/prompts/resource_query_system_prompt.md"
+      instructionFile: "cmd/agent-server/etc/prompts/resource_query_instruction_prompt.md"
 
   # BKAIDev 托管同步模式：开启后从平台实时拉取并热更新，网关复用顶层 bkaidevSyncApiGateway。
   enabled: false
@@ -367,6 +377,13 @@ prompt:
     - id: 4
       code: intent_recognition_prompt  # 对应 IntentRecognitionPromptKey，供意图识别使用
       required: true
+    # 子场景按约定 code = {scene}_system_prompt / {scene}_instruction_prompt
+    - id: 5
+      code: resource_query_system_prompt  # resource_query 场景 system，供 subgraph LLM 使用
+      required: false
+    - id: 6
+      code: resource_query_instruction_prompt  # resource_query 场景 instruction，追加在 subgraph system message 之后
+      required: false
 
 # 意图识别节点配置（仅 agui.model.mode: graph 时生效）。
 # prompt 文件路径在上方 prompt.intentRecognitionPromptFile 中配置。

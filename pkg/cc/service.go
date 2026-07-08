@@ -1083,12 +1083,20 @@ type AgentMCPToolSet struct {
 	// RequireConfirm when true requires the user to explicitly send "确认"
 	// before any tool in this MCP toolset is actually executed.
 	RequireConfirm bool `yaml:"requireConfirm"`
+	// Scenes lists the agent scenes this toolset applies to (e.g. "host_apply", "resource_query").
+	// An empty slice means the toolset applies to all scenes (backward-compatible default).
+	Scenes []enumor.IntentType `yaml:"scenes"`
 }
 
 // Validate validates the MCP tool set config.
 func (s *AgentMCPToolSet) Validate() error {
 	if s.Filter != nil {
 		if err := s.Filter.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, scene := range s.Scenes {
+		if err := scene.Validate(); err != nil {
 			return err
 		}
 	}
@@ -1356,6 +1364,22 @@ type AgentPromptEntry struct {
 	Required bool `yaml:"required"`
 }
 
+// ScenePromptFiles configures the system+instruction prompt file paths for one scene.
+type ScenePromptFiles struct {
+	// SystemPromptFile is the path to the scene system prompt file.
+	SystemPromptFile string `yaml:"systemPromptFile"`
+	// InstructionFile is the path to the scene instruction file, appended after the system prompt.
+	InstructionFile string `yaml:"instructionFile"`
+}
+
+// ScenePromptContent holds the loaded system+instruction content for one scene.
+type ScenePromptContent struct {
+	// System is the loaded scene system prompt content.
+	System string
+	// Instruction is the loaded scene instruction content.
+	Instruction string
+}
+
 // AgentPromptConfig configures agent prompts: local file mode or BKAIDev sync mode.
 // When Enabled is true, BKAIDev sync mode is active and the file fields are ignored.
 // Gateway credentials are shared via AgentServerSetting.BKAIDevSyncAPIGateway.
@@ -1369,12 +1393,19 @@ type AgentPromptConfig struct {
 	// IntentRecognitionPromptFile is the path to the intent recognition prompt file.
 	// Required in graph mode when not using BKAIDev sync.
 	IntentRecognitionPromptFile string `yaml:"intentRecognitionPromptFile"`
+	// ScenePrompts configures per-scene system+instruction prompt files (local file mode).
+	// The map key is the scene name (an enumor.IntentType value, e.g. "resource_query").
+	// New scenes only need a yaml block here plus the prompt files, no Go code change.
+	ScenePrompts map[string]ScenePromptFiles `yaml:"scenePrompts"`
 	// SystemPrompt is the system prompt content loaded from SystemPromptFile at startup.
 	SystemPrompt string `yaml:"-"`
 	// Instruction is the instruction content loaded from InstructionFile at startup.
 	Instruction string `yaml:"-"`
 	// IntentRecognitionPrompt holds the loaded intent recognition prompt content. Not serialised to yaml.
 	IntentRecognitionPrompt string `yaml:"-"`
+	// ScenePromptContents holds the per-scene prompt content loaded from ScenePrompts at startup.
+	// Keyed by scene name, same as ScenePrompts. Not serialised to yaml.
+	ScenePromptContents map[string]ScenePromptContent `yaml:"-"`
 
 	// BKAIDev sync mode fields (ignored when Enabled=false).
 	// Enabled turns on BKAIDev prompt sync. When true, file fields above are ignored.
@@ -1409,6 +1440,16 @@ func (s *AgentPromptConfig) trySetDefault() {
 	s.SystemPrompt = loadPromptFile(s.SystemPromptFile)
 	s.Instruction = loadPromptFile(s.InstructionFile)
 	s.IntentRecognitionPrompt = loadPromptFile(s.IntentRecognitionPromptFile)
+
+	if len(s.ScenePrompts) > 0 {
+		s.ScenePromptContents = make(map[string]ScenePromptContent, len(s.ScenePrompts))
+		for scene, files := range s.ScenePrompts {
+			s.ScenePromptContents[scene] = ScenePromptContent{
+				System:      loadPromptFile(files.SystemPromptFile),
+				Instruction: loadPromptFile(files.InstructionFile),
+			}
+		}
+	}
 }
 
 // Validate validates the agent prompt config.

@@ -34,6 +34,7 @@ import (
 	"hcm/cmd/agent-server/logics/tool"
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
@@ -49,6 +50,32 @@ type ToolMetadata struct {
 	Examples    []map[string]interface{} `json:"examples,omitempty"`
 	UsageCount  int                      `json:"usage_count,omitempty"`
 	SuccessRate float64                  `json:"success_rate,omitempty"`
+}
+
+// ToolProxies bundles the per-scene tool proxies used by the graph, keyed by scene name
+// (an enumor.IntentType value); each intent has its own scoped proxy, including host_apply
+// which serves the main-graph llm/tool nodes. Bundling avoids threading a new parameter
+// through BuildGraph/newAGUIRunner each time a scene with its own scoped proxy is added.
+type ToolProxies struct {
+	// Scene maps a scene name to its scoped tool proxy for the corresponding subgraph.
+	Scene map[enumor.IntentType]*ToolProxy
+}
+
+// SceneProxy returns the scoped tool proxy for the given scene, or nil when absent.
+func (p *ToolProxies) SceneProxy(scene enumor.IntentType) *ToolProxy {
+	if p.Scene == nil {
+		return nil
+	}
+	return p.Scene[scene]
+}
+
+// StopRefresh stops the background refresh loop if running.
+func (p *ToolProxies) StopRefresh() {
+	for _, sceneProxy := range p.Scene {
+		if sceneProxy != nil {
+			sceneProxy.StopRefresh()
+		}
+	}
 }
 
 // ToolProxy manages MCP tool metadata, embedding index, and meta-tools.

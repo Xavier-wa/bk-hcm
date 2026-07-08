@@ -21,6 +21,7 @@ package enumor
 
 import (
 	"fmt"
+	"slices"
 )
 
 // AIModel is the identifier of an AI language model supported by the platform.
@@ -125,6 +126,18 @@ const (
 	IntentTypeChat IntentType = "chat"
 )
 
+// IntentTypes lists all recognised intent categories.
+var IntentTypes = []IntentType{
+	IntentTypeHostApply,
+	IntentTypeResourceQuery,
+	IntentTypeChat,
+}
+
+// GetAllIntentTypes returns a copy of all intent types to keep the internal slice immutable.
+func GetAllIntentTypes() []IntentType {
+	return slices.Clone(IntentTypes)
+}
+
 // Validate checks whether the intent type is one of the declared values.
 func (t IntentType) Validate() error {
 	switch t {
@@ -137,7 +150,12 @@ func (t IntentType) Validate() error {
 
 // IsSupportedScene reports whether the intent has an implemented scene flow.
 func (t IntentType) IsSupportedScene() bool {
-	return t == IntentTypeHostApply
+	switch t {
+	case IntentTypeHostApply, IntentTypeResourceQuery:
+		return true
+	default:
+		return false
+	}
 }
 
 // GraphCheckpointBackend is the backend type for the graph checkpoint storage.
@@ -182,6 +200,33 @@ func (m MCPFilterMode) Validate() error {
 	return nil
 }
 
+// ResourceQueryNode is the name of a graph node in the resource query workflow.
+type ResourceQueryNode string
+
+const (
+	// ResourceQueryGraphNode is the name of the graph node in the resource query workflow.
+	ResourceQueryGraphNode ResourceQueryNode = "resource_query"
+	// ResourceQueryNodeLLM is the LLM node.
+	ResourceQueryNodeLLM ResourceQueryNode = "llm"
+	// ResourceQueryNodeFallback is the fallback node.
+	ResourceQueryNodeFallback ResourceQueryNode = "fallback"
+	// ResourceQueryNodeTool is the tool node.
+	ResourceQueryNodeTool ResourceQueryNode = "tool"
+	// ResourceQueryNodeHITL is the human in the loop node.
+	ResourceQueryNodeHITL ResourceQueryNode = "hitl"
+)
+
+// Validate validates the resource query node.
+func (n ResourceQueryNode) Validate() error {
+	switch n {
+	case ResourceQueryGraphNode, ResourceQueryNodeLLM, ResourceQueryNodeFallback,
+		ResourceQueryNodeTool, ResourceQueryNodeHITL:
+	default:
+		return fmt.Errorf("unsupported resource query node: %s", n)
+	}
+	return nil
+}
+
 // CvmApplyNode is the name of a graph node in the CVM apply workflow.
 type CvmApplyNode string
 
@@ -194,7 +239,6 @@ const (
 	CvmApplyNodeFallback CvmApplyNode = "fallback"
 	// CvmApplyNodeTool is the tool node.
 	CvmApplyNodeTool CvmApplyNode = "tool"
-
 )
 
 // Validate validates the CVM apply node.

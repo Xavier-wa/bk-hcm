@@ -26,7 +26,7 @@ import (
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/enumor"
 
-	"trpc.group/trpc-go/trpc-agent-go/agent"
+	trpcagent "trpc.group/trpc-go/trpc-agent-go/agent"
 	"trpc.group/trpc-go/trpc-agent-go/agent/graphagent"
 	"trpc.group/trpc-go/trpc-agent-go/graph"
 	ckptinmem "trpc.group/trpc-go/trpc-agent-go/graph/checkpoint/inmemory"
@@ -35,7 +35,11 @@ import (
 
 // NewGraphAgent creates a graphagent.GraphAgent from a compiled graph.
 // The caller is responsible for providing a checkpoint saver (e.g. via BuildCheckpointSaver).
-func NewGraphAgent(name string, compiledGraph *graph.Graph, saver graph.CheckpointSaver) (agent.Agent, error) {
+// When subAgents is non-empty, they are registered via graphagent.WithSubAgents so the framework
+// can find the execution context for each sub-agent node (e.g. resource_query subgraph).
+func NewGraphAgent(name string, compiledGraph *graph.Graph, saver graph.CheckpointSaver,
+	subAgents []trpcagent.Agent) (trpcagent.Agent, error) {
+
 	if compiledGraph == nil {
 		return nil, fmt.Errorf("compiled graph is nil")
 	}
@@ -43,13 +47,16 @@ func NewGraphAgent(name string, compiledGraph *graph.Graph, saver graph.Checkpoi
 		return nil, fmt.Errorf("checkpoint saver is nil")
 	}
 
-	gagent, err := graphagent.New(
-		name,
-		compiledGraph,
+	opts := []graphagent.Option{
 		graphagent.WithDescription("HCM ReAct graph agent"),
 		graphagent.WithCheckpointSaver(saver),
 		graphagent.WithInitialState(graph.State{}),
-	)
+	}
+	if len(subAgents) > 0 {
+		opts = append(opts, graphagent.WithSubAgents(subAgents))
+	}
+
+	gagent, err := graphagent.New(name, compiledGraph, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create graph agent: %w", err)
 	}

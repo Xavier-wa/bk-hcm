@@ -24,6 +24,7 @@ package prompt
 import (
 	"time"
 
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/tools/localstore"
 )
 
@@ -46,4 +47,15 @@ type Store = localstore.Store[PromptEntry]
 // When path is empty the store operates in memory-only mode (no persistence).
 func NewStore(path string) *Store {
 	return localstore.NewStore[PromptEntry](path)
+}
+
+// ResolveSceneStaticPrompt reads the system prompt and instruction for the given scene
+// from the store and merges them. Returns "" when the store is nil or the keys are absent.
+func ResolveSceneStaticPrompt(s *Store, scene string) string {
+	if s == nil {
+		return ""
+	}
+	sp, _ := s.Get(constant.PromptSystemKey(scene))
+	inst, _ := s.Get(constant.PromptInstructionKey(scene))
+	return BuildSystemPrompt(sp.Content, inst.Content)
 }

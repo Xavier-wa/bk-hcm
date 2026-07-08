@@ -23,7 +23,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	cvmapply "hcm/cmd/agent-server/logics/agent/cvm_apply"
 	"hcm/cmd/agent-server/logics/agent/hitl"
@@ -45,6 +47,8 @@ import (
 	"hcm/pkg/rest"
 	cvt "hcm/pkg/tools/converter"
 
+	trpcagent "trpc.group/trpc-go/trpc-agent-go/agent"
+	"trpc.group/trpc-go/trpc-agent-go/agent/graphagent"
 	"trpc.group/trpc-go/trpc-agent-go/graph"
 	trpcmodel "trpc.group/trpc-go/trpc-agent-go/model"
 	skillpkg "trpc.group/trpc-go/trpc-agent-go/skill"
@@ -55,13 +59,14 @@ import (
 // BuildGraph constructs a ReAct graph topology with scene_dispatch as the single routing hub:
 //
 //	START → scene_dispatch → ConditionalEdge
-//	  ├─ supported session_tag (host_apply)        → llm
+//	  ├─ supported session_tag (host_apply)        → host_apply
 //	  ├─ this-turn intent recognised but unsupported → fallback
 //	  └─ no tag / no intent this turn               → intent_recognition → scene_dispatch
-//	llm → ConditionalEdge(by tool_calls)
-//	  ├─ human_confirm → hitl → llm (loop back)
-//	  ├─ other_tool_calls → tool → llm (loop back)
-//	  └─ no tool_calls → fallback (interrupt)
+//	  ├─ host_apply → llm → ConditionalEdge(by tool_calls)
+//	  │     ├─ human_confirm → hitl → llm (loop back)
+//	  │     ├─ other_tool_calls → tool → llm (loop back)
+//	  │     └─ no tool_calls → fallback (interrupt) → llm (session stays on host_apply)
+//	  ├─ resource_query → resource_query(subgraph) → fallback (interrupt) → resource_query
 //	fallback (interrupt) → scene_dispatch (re-dispatch; this-turn intent always cleared)
 //
 // The scene_dispatch node is the single routing brain: it commits a recognised supported
@@ -70,30 +75,24 @@ import (
 // The llm node drives the ReAct loop for host_apply.
 // The hitl node handles human-in-the-loop interrupts when LLM calls human_confirm.
 // The tool node executes MCP and skill tools.
+// The resource_query subgraph node handles the resource query ReAct sub-flow.
 // The fallback node normalizes the LLM response and interrupts to wait for the next user message.
+//
+// The saver parameter is required to configure checkpoint support on the resource_query sub-agent,
+// which is necessary for nested interrupt/resume when the subgraph's hitl node triggers.
 func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *agenttool.MCPToolSet,
-	toolProxy *toolproxy.ToolProxy, agentName string, modelCfg cc.AgentModelGeneralConfig,
-	promptStore *prompt.Store, clientSet *client.ClientSet) (*graph.Graph, error) {
+	proxies *toolproxy.ToolProxies, agentName string, modelCfg cc.AgentModelGeneralConfig,
+	promptStore *prompt.Store, clientSet *client.ClientSet, saver graph.CheckpointSaver) (
+	*graph.Graph, []trpcagent.Agent, error) {
 
 	schema := graph.MessagesStateSchema()
 	stateGraph := graph.NewStateGraph(schema)
 
 	staticPrompt := resolveStaticPrompt(promptStore)
-	llmOpts := genLLMNodeOptions(toolset, toolProxy, modelCfg)
+	llmOpts := genLLMNodeOptions(toolset, proxies.SceneProxy(enumor.IntentTypeHostApply), modelCfg)
 
-	// 构建 LLM 调用 callback
-	modelCb := trpcmodel.NewCallbacks()
-	modelCb.AfterModel = append(modelCb.AfterModel, logger.MakeModelLoggerCallback())
-	// 历史工具调用结果优化，减少 LLM 上下文长度
-	modelCb.BeforeModel = append(modelCb.BeforeModel, model.MakeHistoricalToolResultFilter())
-	// 远程 prompt 注入系统提示词（优先于其他要入System的提示词，如skill,time）
-	if promptStore != nil {
-		modelCb.BeforeModel = append(modelCb.BeforeModel, prompt.MakeSystemPromptReplaceCallback(promptStore))
-	}
-	// 技能上下文注入
-	modelCb.BeforeModel = append(modelCb.BeforeModel, skill.MakeSkillInjectWithModelCallback(agentName, skillRepo))
-	// 当前时间注入
-	modelCb.BeforeModel = append(modelCb.BeforeModel, timer.MakeTimeInjectCallback())
+	// 主图 LLM 回调：默认场景（host_apply）的系统提示词
+	modelCb := buildModelCallbacks(promptStore, skillRepo, agentName, "")
 	llmOpts = append(llmOpts, graph.WithModelCallbacks(modelCb))
 
 	// 构建 skill 工具集：skill 工具 + HITL 工具（声明性工具，路由到 hitl 节点）
@@ -126,13 +125,42 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 	stateGraph.AddNode("hitl", hitl.GetNode(hitlReg))
 
 	// 5. Tool Node: executes tools when the LLM requests them.
-	toolsOpts := genToolNodeOptions(toolset, toolProxy, agentName)
+	toolsOpts := genToolNodeOptions(toolset, proxies.SceneProxy(enumor.IntentTypeHostApply), agentName)
 	stateGraph.AddToolsNode(string(enumor.CvmApplyNodeTool), skillTools, toolsOpts...)
 
 	// 6. Fallback Node: delivers LLM response, interrupts, and routes the next user message.
 	stateGraph.AddNode("fallback", makeFallbackNode())
 
-	// 7. Account Select Node: queries biz accounts and auto-selects or triggers HITL.
+	// 7. Resource Query Subgraph: build and register as a subgraph node.
+	rqSubgraph, err := buildResourceQuerySubgraph(mdl, skillRepo, toolset,
+		proxies.SceneProxy(enumor.IntentTypeResourceQuery), agentName,
+		modelCfg, promptStore, clientSet)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build resource_query subgraph: %w", err)
+	}
+	rqSubAgent, err := graphagent.New(
+		string(enumor.ResourceQueryGraphNode),
+		rqSubgraph,
+		graphagent.WithDescription("HCM resource query ReAct subgraph agent"),
+		graphagent.WithCheckpointSaver(saver),
+		graphagent.WithInitialState(graph.State{}),
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("create resource_query sub-agent: %w", err)
+	}
+	subAgents := []trpcagent.Agent{rqSubAgent}
+
+	// Register resource_query as a subgraph node.
+	// WithSubgraphInputMapper 给子图按轮次分配独立 checkpoint namespace，避免下一轮复用上一轮
+	// 已完成（NextNodes=[__end__]）的子图 checkpoint 而直接 resume 到结束、子图什么都不做。
+	// WithSubgraphOutputMapper merges the subgraph's final messages back into the main graph,
+	// so the fallback node can read the subgraph's assistant reply via resolveFallbackLastResp.
+	stateGraph.AddSubgraphNode(string(enumor.ResourceQueryGraphNode),
+		graph.WithSubgraphInputMapper(makeResourceQueryInputMapper()),
+		graph.WithSubgraphOutputMapper(makeResourceQueryOutputMapper()),
+	)
+
+	// 8. Account Select Node: queries biz accounts and auto-selects or triggers HITL.
 	stateGraph.AddNode(string(enumor.CvmApplyNodeAccountSelect), cvmapply.NewAccountSelectNode(clientSet.CloudServer()))
 
 	// Entry point: every new run starts with intent recognition.
@@ -142,6 +170,7 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 	// intent_recognition (no tag, no intent)
 	stateGraph.AddConditionalEdges("scene_dispatch", makeSceneDispatchRoutingFunc(), map[string]string{
 		"account_select":     string(enumor.CvmApplyNodeAccountSelect),
+		"resource_query":     "resource_query",
 		"fallback":           "fallback",
 		"intent_recognition": "intent_recognition",
 	})
@@ -172,11 +201,125 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 	// tool loops back to llm to continue the current task.
 	stateGraph.AddEdge(string(enumor.CvmApplyNodeTool), string(enumor.CvmApplyNodeLLM))
 
+	// After resource_query subgraph finishes (no tool_calls), enter main fallback
+	// to deliver the reply and interrupt waiting for the next user message.
+	stateGraph.AddEdge("resource_query", "fallback")
+
 	// fallback always returns to scene_dispatch so the unified routing hub handles
 	// the next user message regardless of whether the session already has a tag.
 	stateGraph.AddEdge("fallback", "scene_dispatch")
 
-	return stateGraph.Compile()
+	compiledGraph, err := stateGraph.Compile()
+	if err != nil {
+		return nil, nil, err
+	}
+	return compiledGraph, subAgents, nil
+}
+
+// makeResourceQueryInputMapper 返回 resource_query 子图的输入映射函数，给子图按「轮次」分配
+// 独立的 checkpoint namespace。
+//
+// 默认情况下框架以子 agent 名作为子图 checkpoint namespace，而父图 lineage 在整轮会话内稳定。
+// 子图正常结束后会留下一个「已完成」(NextNodes=[__end__]) 的 checkpoint；下一轮再次进入子图时，
+// 子图 executor 以空 checkpoint_id 取该 (lineage, namespace) 的最新 checkpoint，命中的正是上一轮
+// 的完成态，于是直接 resume 到 __end__、子图什么都不做。
+//
+// 这里以「进入子图时的消息条数」区分轮次（会话内单调递增），使每轮对应一个全新 namespace、
+// 找不到旧的完成态 checkpoint，从而每轮都从入口节点重新执行。轮内若触发 hitl 中断/恢复，框架会用
+// 中断时记录的 namespace 覆盖（applyCheckpointResumeFields），不影响同一轮内的中断恢复。
+//
+// 注意：提供 InputMapper 后框架不再执行默认的 copyRuntimeStateFiltered，需要在此复刻其
+// 「过滤内部/临时 state key」的行为，否则会把 exec_context、callbacks 等不可传播的 key 带入子图。
+func makeResourceQueryInputMapper() graph.SubgraphInputMapper {
+	return func(parent graph.State) graph.State {
+		child := make(graph.State, len(parent))
+		for k, v := range parent {
+			if isFrameworkInternalStateKey(k) {
+				continue
+			}
+			child[k] = v
+		}
+		// 对齐框架默认行为：进入子图前清掉父图残留的 checkpoint_id，避免子图误用父图 checkpoint。
+		delete(child, graph.CfgKeyCheckpointID)
+		// 按轮次分配独立 namespace。
+		msgs, _ := parent[graph.StateKeyMessages].([]trpcmodel.Message)
+		child[graph.CfgKeyCheckpointNS] = fmt.Sprintf("%s_%d", enumor.ResourceQueryGraphNode, len(msgs))
+		return child
+	}
+}
+
+// isFrameworkInternalStateKey 复刻 trpc-agent-go 的 copyRuntimeStateFiltered/isInternalStateKey 行为：
+// 内部/临时 state key 不应传播给子图。框架内部 key 分两类：
+//   - 以 "_" 开头的（__command__、__resume_map__、各类 _xxx_metadata、__current_trace_step_id__ 等），
+//     遵循框架统一命名约定，用前缀判断可同时覆盖未来新增的同类 key；
+//   - 少数无前缀的不可序列化/会话级 key（exec_context、parent_agent、各类 callbacks、
+//     current_node_id、session），逐一列出（均为框架导出常量）。
+//
+// 版本升级时如框架新增「无 "_" 前缀」的内部 key，需同步此列表。
+func isFrameworkInternalStateKey(key string) bool {
+	if strings.HasPrefix(key, "_") {
+		return true
+	}
+	switch key {
+	case graph.StateKeyExecContext,
+		graph.StateKeyParentAgent,
+		graph.StateKeyNodeCallbacks,
+		graph.StateKeyToolCallbacks,
+		graph.StateKeyModelCallbacks,
+		graph.StateKeyAgentCallbacks,
+		graph.StateKeyCurrentNodeID,
+		graph.StateKeySession:
+		return true
+	default:
+		return false
+	}
+}
+
+// makeResourceQueryOutputMapper 返回 resource_query 子图的输出映射函数，
+// 负责把子图最终的 messages 合并回主图，使主图 fallback 能读到子图的 assistant 回复。
+//
+// 注意：r.FinalState 是框架对子图完成事件 StateDelta 做 JSON 解码重建出来的，
+// StateKeyMessages 实际类型为 []interface{}（元素为 map[string]interface{}），无法直接断言为
+// []trpcmodel.Message。原始字节保存在 r.RawStateDelta 中，用 json.Unmarshal 还原为 []trpcmodel.Message。
+func makeResourceQueryOutputMapper() graph.SubgraphOutputMapper {
+	const logPrefix = "[rq subgraph output mapper]"
+	return func(_ graph.State, r graph.SubgraphResult) graph.State {
+		// 从 RawStateDelta 的原始 JSON 字节解码出完整 messages。
+		raw, exist := r.RawStateDelta[graph.StateKeyMessages]
+		if !exist {
+			logs.Warnf("%s RawStateDelta has no %s key, give up merge", logPrefix, graph.StateKeyMessages)
+			return nil
+		}
+		var decoded []trpcmodel.Message
+		if err := json.Unmarshal(raw, &decoded); err != nil {
+			logs.Errorf("%s decode RawStateDelta[messages] failed, err: %v, raw: %s",
+				logPrefix, err, string(raw))
+			return nil
+		}
+		if len(decoded) == 0 {
+			logs.Warnf("%s decoded messages from RawStateDelta is empty, give up merge", logPrefix)
+			return nil
+		}
+		logs.Infof("%s decoded %d messages from RawStateDelta, last role=%s, last content len=%d",
+			logPrefix, len(decoded), decoded[len(decoded)-1].Role, len(decoded[len(decoded)-1].Content))
+		return graph.State{graph.StateKeyMessages: decoded}
+	}
+}
+
+// parseSessionTag 从 graph state 中容错解析会话场景标签。
+//
+// session_tag 在 state 中的具体类型并不稳定：fresh 注入（service 层）时是 enumor.IntentType，
+// 而节点写回或经 checkpoint JSON 序列化/反序列化恢复后会变成 plain string。这里统一兼容两种类型，
+// 避免直接 .(enumor.IntentType) 断言因类型不符而拿到零值。
+func parseSessionTag(state graph.State) enumor.IntentType {
+	switch v := state[constant.StateKeySessionTag].(type) {
+	case enumor.IntentType:
+		return v
+	case string:
+		return enumor.IntentType(v)
+	default:
+		return ""
+	}
 }
 
 // makeSceneDispatchNode returns the scene_dispatch node function.
@@ -185,9 +328,11 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 func makeSceneDispatchNode() graph.NodeFunc {
 	return func(ctx context.Context, state graph.State) (any, error) {
 		rid := rest.RidFromContext(ctx)
-		tag, _ := state[constant.StateKeySessionTag].(enumor.IntentType)
+		tag := parseSessionTag(state)
 		if tag.IsSupportedScene() {
-			return graph.State{}, nil
+			return graph.State{
+				constant.StateKeySessionTag: tag,
+			}, nil
 		}
 
 		// 检查是否意图识别出来了支持的场景，是则提交到 StateKeySessionTag
@@ -202,15 +347,27 @@ func makeSceneDispatchNode() graph.NodeFunc {
 	}
 }
 
+// sceneNodeTarget 将受支持的场景标签映射到主图中对应的入口节点。
+func sceneNodeTarget(scene enumor.IntentType) string {
+	switch scene {
+	case enumor.IntentTypeResourceQuery:
+		return "resource_query"
+	default:
+		// host_apply 及其它默认进入主 ReAct account_select 节点的场景
+		return "account_select"
+	}
+}
+
 // makeSceneDispatchRoutingFunc 根据会话标签与本轮意图决定 scene_dispatch 的后续路由。
 func makeSceneDispatchRoutingFunc() func(ctx context.Context, state graph.State) (string, error) {
 	return func(ctx context.Context, state graph.State) (string, error) {
 		rid := rest.RidFromContext(ctx)
-		tag, _ := state[constant.StateKeySessionTag].(enumor.IntentType)
+		tag := parseSessionTag(state)
 		logs.Infof("scene dispatch routing: graph state session_tag=%s, type is %T, rid: %s", tag, tag, rid)
 		if tag.IsSupportedScene() {
-			logs.Infof("[scene dispatch routing] session_tag=%s, route to account_select, rid: %s", tag, rid)
-			return string(enumor.CvmApplyNodeAccountSelect), nil
+			target := sceneNodeTarget(tag)
+			logs.Infof("[scene dispatch routing] session_tag=%s, route to %s, rid: %s", tag, target, rid)
+			return target, nil
 		}
 
 		// 本轮意图非空且不受支持：直接路由到 fallback 给出拒识回复，
@@ -421,6 +578,29 @@ func buildFallbackInterruptKey(state graph.State, lastResp string) string {
 		len(messages), constant.InterruptKeySeparator, hash)
 }
 
+// buildModelCallbacks assembles the BeforeModel/AfterModel callbacks shared by the main graph
+// llm node and scene subgraphs. The scene parameter selects which scene's system prompt the
+// replace callback injects (empty scene = default/host_apply prompt). Each node needs its own
+// callbacks so the system prompt replace does not clobber a scene's static prompt.
+func buildModelCallbacks(promptStore *prompt.Store, skillRepo skillpkg.Repository,
+	agentName, scene string) *trpcmodel.Callbacks {
+
+	modelCb := trpcmodel.NewCallbacks()
+	modelCb.AfterModel = append(modelCb.AfterModel, logger.MakeModelLoggerCallback())
+	// 历史工具调用结果优化，减少 LLM 上下文长度
+	modelCb.BeforeModel = append(modelCb.BeforeModel, model.MakeHistoricalToolResultFilter())
+	// 远程 prompt 注入系统提示词（按场景，优先于其他要入System的提示词，如skill,time）
+	if promptStore != nil {
+		modelCb.BeforeModel = append(modelCb.BeforeModel,
+			prompt.MakeSceneSystemPromptReplaceCallback(promptStore, scene))
+	}
+	// 技能上下文注入
+	modelCb.BeforeModel = append(modelCb.BeforeModel, skill.MakeSkillInjectWithModelCallback(agentName, skillRepo))
+	// 当前时间注入
+	modelCb.BeforeModel = append(modelCb.BeforeModel, timer.MakeTimeInjectCallback())
+	return modelCb
+}
+
 // resolveStaticPrompt 返回传给 AddLLMNode 的系统提示词。
 // 优先使用 Store 中的内容（来自本地文件或 BKAIDev 同步），
 // 仅在 Store 暂无 system prompt 时回退到 cc 原始配置。
@@ -436,13 +616,112 @@ func resolveStaticPrompt(store *prompt.Store) string {
 	return prompt.BuildSystemPrompt(promptCfg.SystemPrompt, promptCfg.Instruction)
 }
 
+// buildResourceQuerySubgraph builds the resource_query ReAct subgraph.
+// The subgraph contains only llm/hitl/tool nodes (no fallback).
+// When the llm node produces no tool_calls it routes to graph.End, finishing the subgraph
+// and returning control to the main graph's fallback node.
+func buildResourceQuerySubgraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository,
+	toolset *agenttool.MCPToolSet, rqToolProxy *toolproxy.ToolProxy, agentName string,
+	modelCfg cc.AgentModelGeneralConfig, promptStore *prompt.Store, clientSet *client.ClientSet) (
+	*graph.Graph, error) {
+
+	rqStaticPrompt := prompt.ResolveSceneStaticPrompt(promptStore, string(enumor.IntentTypeResourceQuery))
+	rqLLMOpts := genLLMNodeOptions(toolset, rqToolProxy, modelCfg)
+	// 子图 LLM 回调：resource_query 场景的系统提示词（避免被默认场景提示词覆盖）
+	modelCb := buildModelCallbacks(promptStore, skillRepo, agentName, string(enumor.IntentTypeResourceQuery))
+	rqLLMOpts = append(rqLLMOpts, graph.WithModelCallbacks(modelCb))
+
+	// 构建 skill 工具集：skill 工具 + HITL 工具（声明性工具，路由到 hitl 节点）
+	skillTools := make(map[string]trpctool.Tool)
+	skillTools[constant.SkillLoadToolName] = toolskill.NewLoadTool(skillRepo)
+	skillTools[constant.SkillListDocsToolName] = toolskill.NewListDocsTool(skillRepo)
+	skillTools[constant.SkillSelectDocsToolName] = toolskill.NewSelectDocsTool(skillRepo)
+	skillTools[constant.HumanConfirmToolName] = hitl.GetToolWrapper()
+
+	rqToolsOpts := genToolNodeOptions(toolset, rqToolProxy, agentName)
+
+	schema := graph.MessagesStateSchema()
+	sg := graph.NewStateGraph(schema)
+
+	sg.AddLLMNode(string(enumor.ResourceQueryNodeLLM), mdl, rqStaticPrompt, skillTools, rqLLMOpts...)
+
+	// 4. HITL Node: the unified human-in-the-loop interrupt node. It handles every tool call that
+	// has a registered handler: LLM-initiated human_confirm questions and pre-execution confirm
+	// gates of real tools (e.g. create_biz_apply). Gates are filtered by the confirm-gate config.
+	hitlReg := hitl.NewRegistry()
+	hitlReg.Register(hitl.NewHumanConfirmHandler())
+	// 注册需要进行门禁中断的工具handler
+	for _, h := range toolgate.GetEnabledGateHandlers(cc.AgentServer().Tools.ConfirmGate, clientSet) {
+		hitlReg.Register(h)
+	}
+	sg.AddNode(string(enumor.ResourceQueryNodeHITL), hitl.GetNode(hitlReg))
+
+	sg.AddToolsNode(string(enumor.ResourceQueryNodeTool), skillTools, rqToolsOpts...)
+
+	sg.SetEntryPoint(string(enumor.ResourceQueryNodeLLM))
+	sg.SetFinishPoint(string(enumor.ResourceQueryNodeLLM))
+
+	// llm routing: human_confirm → hitl, other tools → tool, no tool_calls → graph.End (subgraph finish)
+	sg.AddConditionalEdges("llm", makeSubgraphRoutingFunc(), map[string]string{
+		string(enumor.ResourceQueryNodeHITL): string(enumor.ResourceQueryNodeHITL),
+		string(enumor.ResourceQueryNodeTool): string(enumor.ResourceQueryNodeTool),
+		graph.End:                            graph.End,
+	})
+
+	sg.AddEdge(string(enumor.ResourceQueryNodeHITL), string(enumor.ResourceQueryNodeLLM))
+	sg.AddEdge(string(enumor.ResourceQueryNodeTool), string(enumor.ResourceQueryNodeLLM))
+
+	return sg.Compile()
+}
+
+// makeSubgraphRoutingFunc is a variant of makeRoutingFunc for use inside the resource_query subgraph.
+// When there are no tool_calls, it returns graph.End to finish the subgraph and return control
+// to the main graph, instead of routing to a fallback node.
+func makeSubgraphRoutingFunc() func(ctx context.Context, state graph.State) (string, error) {
+	return func(ctx context.Context, state graph.State) (string, error) {
+		rid := rest.RidFromContext(ctx)
+		messages, _ := state[graph.StateKeyMessages].([]trpcmodel.Message)
+		if len(messages) == 0 {
+			return graph.End, nil
+		}
+
+		lastMsg := messages[len(messages)-1]
+
+		if len(lastMsg.ToolCalls) == 0 {
+			logs.Infof("[rq subgraph routing] no tool_calls, finish subgraph, rid: %s", rid)
+			return graph.End, nil
+		}
+
+		hasHumanConfirm := false
+		hasOtherTools := false
+		for _, tc := range lastMsg.ToolCalls {
+			if tc.Function.Name == constant.HumanConfirmToolName {
+				hasHumanConfirm = true
+			} else {
+				hasOtherTools = true
+			}
+		}
+
+		if hasHumanConfirm && hasOtherTools {
+			return "", fmt.Errorf("rq subgraph: invalid tool calls: human_confirm cannot be combined with other tools")
+		}
+
+		if hasHumanConfirm {
+			logs.Infof("[rq subgraph routing] only human_confirm, route to hitl, rid: %s", rid)
+			return string(enumor.ResourceQueryNodeHITL), nil
+		}
+
+		logs.Infof("[rq subgraph routing] other tool calls, route to tool, rid: %s", rid)
+		return string(enumor.ResourceQueryNodeTool), nil
+	}
+}
+
 // unsupportedIntentFallbackMessage 在未调用 llm 时返回面向用户的兜底回复。
 func unsupportedIntentFallbackMessage(state graph.State) string {
 	intentStr, _ := state[constant.StateKeyIntent].(string)
-	switch enumor.IntentType(intentStr) {
-	case enumor.IntentTypeResourceQuery, enumor.IntentTypeChat:
-		return "目前AI助手仅支持主机申领相关能力，其他云资源管理功能即将上线，如需要申领主机，请直接描述您的配置需求。"
-	default:
-		return "抱歉，我暂时无法处理您的请求。"
+	if !enumor.IntentType(intentStr).IsSupportedScene() {
+		return "目前AI助手支持主机申领和云资源查询相关能力，其他云资源管理功能即将上线。" +
+			"如需申领主机，请直接描述您的配置需求；如需查询云资源，请告诉我您想查询的内容。"
 	}
+	return "抱歉，我暂时无法处理您的请求。"
 }
