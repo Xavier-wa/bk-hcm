@@ -67,6 +67,9 @@ type Dispatcher struct {
 
 	// processingTickets 记录正在处理中的单据ID，防止同一单据被并发处理
 	processingTickets sync.Map
+
+	// processingSubTickets 记录正在处理中的子单ID，防止同一子单被并发重复处理
+	processingSubTickets sync.Map
 }
 
 // New creates a resource plan ticket Dispatcher instance.
