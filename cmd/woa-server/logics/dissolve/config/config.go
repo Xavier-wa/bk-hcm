@@ -55,6 +55,9 @@ type Config interface {
 	// 单业务偏移修改
 	UpdateBizDissolveQuotaOffset(kt *kit.Kit, bizID int64,
 		req *model.UpdateDissolveQuotaOffsetReq) (*model.UpdateDissolveQuotaOffsetResp, error)
+	// 裁撤项目配置相关
+	GetDissolveProjects(kt *kit.Kit) ([]model.DissolveProjectCycle, error)
+	UpsertDissolveProjects(kt *kit.Kit, cycles []model.DissolveProjectCycle) error
 }
 
 type logics struct {
@@ -150,6 +153,40 @@ func (l *logics) upsertDissolveConfig(kt *kit.Kit, key enumor.GlobalConfigResDis
 	}
 
 	return nil
+}
+
+// GetDissolveProjects get dissolve project cycles, returns empty slice if not configured.
+func (l *logics) GetDissolveProjects(kt *kit.Kit) ([]model.DissolveProjectCycle, error) {
+	cycles := make([]model.DissolveProjectCycle, 0)
+
+	config, exist, err := l.getDissolveConfigByKey(kt, enumor.GlobalConfigDissolveProject)
+	if err != nil {
+		logs.Errorf("failed to get dissolve project config, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+	if !exist {
+		return cycles, nil
+	}
+
+	if err = json.Unmarshal([]byte(config.ConfigValue), &cycles); err != nil {
+		logs.Errorf("failed to unmarshal dissolve projects, err: %v, value: %s, rid: %s", err,
+			config.ConfigValue, kt.Rid)
+		return nil, err
+	}
+
+	return cycles, nil
+}
+
+// UpsertDissolveProjects upsert dissolve project cycles.
+func (l *logics) UpsertDissolveProjects(kt *kit.Kit, cycles []model.DissolveProjectCycle) error {
+	for i := range cycles {
+		if err := cycles[i].Validate(); err != nil {
+			logs.Errorf("invalid dissolve project cycle, err: %v, rid: %s", err, kt.Rid)
+			return err
+		}
+	}
+
+	return l.upsertDissolveConfig(kt, enumor.GlobalConfigDissolveProject, cycles)
 }
 
 // GetApprovalLimit get approval limit.

@@ -20,7 +20,6 @@
 package caiche
 
 import (
-	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 )
 
@@ -38,29 +37,6 @@ type GrantParams struct {
 	AppKey    string    `json:"app_key" validate:"required"`
 	AppSecret string    `json:"app_secret" validate:"required"`
 	GrantType GrantType `json:"grant_type" validate:"required"`
-}
-
-// ListDeviceReq list device request
-type ListDeviceReq struct {
-	PlanProduct           []string              `json:"plan_product,omitempty" validate:"omitempty"`
-	AbolishPrincipal      []string              `json:"abolish_principal,omitempty" validate:"omitempty"`
-	SvrOwnerAssetID       []string              `json:"svr_owner_asset_id,omitempty" validate:"omitempty"`
-	ExpectAbolishDate     string                `json:"expect_abolish_date,omitempty" validate:"omitempty"`
-	SvrAssetID            []string              `json:"svr_asset_id,omitempty" validate:"omitempty"`
-	AbolishPhase          []enumor.AbolishPhase `json:"abolish_phase,omitempty" validate:"omitempty"`
-	ServerLanIP           []string              `json:"server_lan_ip,omitempty" validate:"omitempty"`
-	ProjectName           []string              `json:"project_name,omitempty" validate:"omitempty"`
-	DeptName              []string              `json:"dept_name,omitempty" validate:"omitempty"`
-	Module                []string              `json:"module,omitempty" validate:"omitempty"`
-	VirtualDepartmentName []string              `json:"virtual_department_name,omitempty" validate:"omitempty"`
-	ObsBG                 []string              `json:"obs_bg,omitempty" validate:"omitempty"`
-	PageIndex             uint                  `json:"page_index" validate:"required,min=1"`
-	PageSize              uint                  `json:"page_size" validate:"required,min=1,max=500"`
-}
-
-// Validate ...
-func (d *ListDeviceReq) Validate() error {
-	return validator.Validate.Struct(d)
 }
 
 // ListDeviceV2Req list device v2 request

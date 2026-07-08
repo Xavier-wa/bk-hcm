@@ -55,12 +55,6 @@ type service struct {
 }
 
 func (s *service) initDissolveService(h *rest.Handler) {
-	// recycle module
-	h.Add("CreateRecycledModule", http.MethodPost, "/dissolve/recycled_module/create", s.CreateRecycledModule)
-	h.Add("UpdateRecycledModule", http.MethodPut, "/dissolve/recycled_module/update", s.UpdateRecycledModule)
-	h.Add("ListRecycledModule", http.MethodPost, "/dissolve/recycled_module/list", s.ListRecycledModule)
-	h.Add("DeleteRecycledModule", http.MethodDelete, "/dissolve/recycled_module/delete", s.DeleteRecycledModule)
-
 	// recycle host
 	h.Add("CreateRecycledHost", http.MethodPost, "/dissolve/recycled_host/create", s.CreateRecycledHost)
 	h.Add("UpdateRecycledHost", http.MethodPut, "/dissolve/recycled_host/update", s.UpdateRecycledHost)
@@ -69,8 +63,8 @@ func (s *service) initDissolveService(h *rest.Handler) {
 	h.Add("SyncRecycledHost", http.MethodPost, "/dissolve/recycled_host/sync", s.SyncRecycledHost)
 
 	// resource dissolve
-	h.Add("ListOriginHost", http.MethodPost, "/dissolve/host/origin/list", s.ListOriginHost)
-	h.Add("ListCurrentHost", http.MethodPost, "/dissolve/host/current/list", s.ListCurHost)
+	h.Add("ListHostDetail", http.MethodPost, "/dissolve/host/detail/list", s.ListHostDetail)
+	h.Add("ListExportHostDetail", http.MethodPost, "/dissolve/host/detail/export/list", s.ListExportHostDetail)
 	h.Add("ListResDissolveTable", http.MethodPost, "/dissolve/table/list", s.ListResDissolveTable)
 
 	// summary
@@ -79,6 +73,7 @@ func (s *service) initDissolveService(h *rest.Handler) {
 	// config
 	h.Add("GetDissolveConfig", http.MethodGet, "/dissolve/config", s.GetDissolveConfig)
 	h.Add("UpsertDissolveConfig", http.MethodPut, "/dissolve/config/upsert", s.UpsertDissolveConfig)
+	h.Add("ListDissolveProjects", http.MethodGet, "/dissolve/projects", s.ListProjects)
 }
 
 // bizService 业务下的接口

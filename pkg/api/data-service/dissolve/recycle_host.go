@@ -49,11 +49,19 @@ func (c *BatchCreateRecycleHostReq) Validate() error {
 
 // RecycleHostCreateReq single create request.
 type RecycleHostCreateReq struct {
-	AssetID      string               `json:"asset_id" validate:"required"`
-	InnerIP      string               `json:"inner_ip" validate:"required"`
-	Module       string               `json:"module" validate:"required"`
-	AbolishPhase enumor.AbolishPhase  `json:"abolish_phase" validate:"required"`
-	ProjectName  string               `json:"project_name" validate:"required"`
+	AssetID      string              `json:"asset_id" validate:"required"`
+	InnerIP      string              `json:"inner_ip" validate:"omitempty"`
+	DeviceType   string              `json:"device_type" validate:"omitempty"`
+	Module       string              `json:"module" validate:"required"`
+	AbolishPhase enumor.AbolishPhase `json:"abolish_phase" validate:"required"`
+	ProjectName  string              `json:"project_name" validate:"required"`
+	ProjectID    int                 `json:"project_id" validate:"required"`
+	Region       string              `json:"region" validate:"omitempty"`
+	BkBizID      int64               `json:"bk_biz_id" validate:"omitempty"`
+	GroupID      int64               `json:"group_id" validate:"omitempty"`
+	Operators    []string            `json:"operators" validate:"omitempty"`
+	CPUCore      int                 `json:"cpu_core" validate:"omitempty"`
+	IsIgnore     bool                `json:"is_ignore" validate:"omitempty"`
 }
 
 // Validate RecycleHostCreateReq.
@@ -98,6 +106,14 @@ type RecycleHostUpdateData struct {
 	AbolishPhase *enumor.AbolishPhase `json:"abolish_phase"`
 	ProjectName  *string              `json:"project_name"`
 	Module       *string              `json:"module"`
+	InnerIP      *string              `json:"inner_ip"`
+	DeviceType   *string              `json:"device_type"`
+	Region       *string              `json:"region"`
+	BkBizID      *int64               `json:"bk_biz_id"`
+	GroupID      *int64               `json:"group_id"`
+	Operators    []string             `json:"operators"`
+	CPUCore      *int                 `json:"cpu_core"`
+	IsIgnore     *bool                `json:"is_ignore"`
 }
 
 // BatchDeleteRecycleHostReq batch delete recycle host request.

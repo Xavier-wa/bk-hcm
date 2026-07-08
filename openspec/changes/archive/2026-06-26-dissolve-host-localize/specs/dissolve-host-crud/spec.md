@@ -1,10 +1,4 @@
-# dissolve-host-crud
-
-## Purpose
-
-裁撤主机表 CRUD 能力：通过 data-service 暴露 `recycle_host_info` 表的批量创建/更新/删除与列表查询接口，并提供 client 封装供 woa-server 经微服务调用，禁止上层直连 DB。
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: 裁撤主机表 CRUD 接口
 

@@ -208,6 +208,7 @@ POST /api/v1/woa/dissolve/recycled_host/list
 | id                     | string       | 资源ID                                  |
 | asset_id         | string	  | 主机固资号    |
 | inner_ip | string | 主机ip    |
+| device_type | string | 机型    |
 | module | string | 	机器所在的裁撤模块  |
 | creator                | string       | 创建者                                   |
 | reviser                | string       | 修改者                                   |

@@ -36,82 +36,28 @@ type GetTokenResult struct {
 	ExpiresIn   int    `json:"expires_in"`
 }
 
-// ListDeviceResp list device response
-type ListDeviceResp struct {
-	Code int             `json:"code"`
-	Msg  string          `json:"msg"`
-	Data *DeviceListData `json:"data"`
-}
-
-// DeviceListData device list data
-type DeviceListData struct {
-	DataList   []Device `json:"dataList"`
-	Total      int      `json:"total"`
-	UpdateTime string   `json:"update_time"`
-}
-
-// Device device
-type Device struct {
-	SvrAssetId            string              `json:"svr_assetId"`
-	EqsName               string              `json:"eqs_name"`
-	ServerLanIP           string              `json:"server_lan_ip"`
-	ServerWanIP           string              `json:"server_wan_ip"`
-	DeptName              string              `json:"dept_name"`
-	SvrOperator           string              `json:"svr_operator"`
-	SvrBakOperator        string              `json:"svr_bak_operator"`
-	BsiPath               string              `json:"bsi_path"`
-	IdcName               string              `json:"Idc_name"`
-	Region                string              `json:"region"`
-	ZoneName              string              `json:"zone_name"`
-	Campus                string              `json:"campus"`
-	Module                string              `json:"module"`
-	ServerLogicDomain     string              `json:"server_logic_domain"`
-	SvrDeviceClassName    string              `json:"svr_device_class_name"`
-	ProjectName           string              `json:"project_name"`
-	AbolishStatus         string              `json:"abolish_status"`
-	AbolishPrincipal      string              `json:"abolish_principal"`
-	PlanProduct           string              `json:"plan_product"`
-	AbolishDate           string              `json:"abolish_date"`
-	ProjectID             string              `json:"project_id"`
-	AlterAbolishPrincipal string              `json:"alter_abolish_principal"`
-	ExpectAbolishDate     string              `json:"expect_abolish_date"`
-	AckStatus             string              `json:"ack_status"`
-	AbolishPhase          enumor.AbolishPhase `json:"abolish_phase"`
-	DefaultBsiGroup       string              `json:"default_bsi_group"`
-	DefaultBG             string              `json:"default_bg"`
-	AckEndDate            string              `json:"ack_end_date"`
-	HasIPRelatedInfo      bool                `json:"has_ip_related_info"`
-	SvrTypeName           string              `json:"svr_type_name"`
-	BsiGroupL2            string              `json:"bsi_group_l2"`
-	SvrOwnerAssetID       string              `json:"svr_owner_asset_id"`
-	Down                  string              `json:"down"`
-	SelfSvrTypeName       string              `json:"self_svr_type_name"`
-	HighDispersion        string              `json:"high_dispersion"`
-	UpdatedAt             string              `json:"updated_at"`
-	ID                    string              `json:"id"`
-	IdcParentName         string              `json:"idc_parent_name"`
-	ServerRack            string              `json:"server_rack"`
-	RckID                 string              `json:"rck_id"`
-	PosCode               string              `json:"pos_code"`
-	YunxiDst              string              `json:"yunxi_dst"`
-	PlanDestination       string              `json:"plan_destination"`
-	PlanFinishTime        string              `json:"plan_finish_time"`
-	InnerSwitchAssetID    string              `json:"inner_switch_asset_id"`
-	InnerSwitchIP         string              `json:"inner_switch_ip"`
-	NeedUser              string              `json:"need_user"`
-	YunxiPriority         string              `json:"yunxi_priority"`
-	YunxiType             string              `json:"yunxi_type"`
-	MoveDest              string              `json:"move_dest"`
-	ProjectCode           string              `json:"project_code"`
-	VirtualDepartmentName string              `json:"virtual_department_name"`
-	ObgBG                 string              `json:"obg_bg"`
-}
-
 // ListDeviceV2Resp list device v2 response
 type ListDeviceV2Resp struct {
 	JsonRPC  string              `json:"jsonrpc"`
 	Result   *DeviceListV2Result `json:"result"`
 	XTraceID string              `json:"x_trace_id"`
+}
+
+// ListProjectsResp list projects response
+type ListProjectsResp struct {
+	JsonRPC  string    `json:"jsonrpc"`
+	Result   []Project `json:"result"`
+	XTraceID string    `json:"x_trace_id"`
+}
+
+// Project 裁撤项目
+type Project struct {
+	// ID 项目ID
+	ID int `json:"id"`
+	// ProjectName 项目名称
+	ProjectName string `json:"projectName"`
+	// ProjectType 项目类型
+	ProjectType enumor.ProjectType `json:"projectType"`
 }
 
 // DeviceListV2Result device list v2 result

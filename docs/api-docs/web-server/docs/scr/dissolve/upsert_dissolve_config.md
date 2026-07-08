@@ -16,6 +16,7 @@ PUT /api/v1/woa/dissolve/config/upsert
 | approval_limit  | string            | 否  | 主机裁撤项目申请自动审批配置，超过比例后，则申请单需要管理员人工审批，范围0-100                   |
 | quota_coefficient | float64         | 否  | 配额系数（百分比），用于计算可申请额度，范围1-100，默认值65                           |
 | quota_offsets   | []QuotaOffsetItem | 否  | 业务偏移配置数组。注意：此字段为全量覆盖，传空数组`[]`将清空所有业务的偏移配置                    |
+| dissolve_projects | []DissolveProjectCycle | 否 | 裁撤周期配置数组。非 nil 时全量覆盖；传空数组`[]`将清空裁撤周期配置 |
 
 #### QuotaOffsetItem
 
@@ -25,6 +26,22 @@ PUT /api/v1/woa/dissolve/config/upsert
 | offset   | int64  | 是  | 偏移值，必须大于等于0                           |
 | type     | string | 是  | 调整类型：increase=调增，decrease=调减          |
 | memo     | string | 否  | 调整原因，最大512字符                          |
+
+#### DissolveProjectCycle
+
+| 参数名称     | 参数类型                | 必选 | 描述                                          |
+|----------|---------------------|----|---------------------------------------------|
+| start    | string              | 是  | 裁撤周期开始时间，格式 yyyy-MM-dd                     |
+| end      | string              | 是  | 裁撤周期结束时间，格式 yyyy-MM-dd，不得早于 start         |
+| default  | bool                | 否  | 是否为当前裁撤周期（可有多个或零个，不要求唯一）                |
+| projects | []DissolveProjectItem | 是  | 裁撤项目列表，不能为空                              |
+
+#### DissolveProjectItem
+
+| 参数名称 | 参数类型   | 必选 | 描述              |
+|------|--------|----|-----------------|
+| id   | int    | 是  | 裁撤项目ID，必须大于0    |
+| memo | string | 否  | 项目备注            |
 
 ### 调用示例
 
@@ -38,6 +55,16 @@ PUT /api/v1/woa/dissolve/config/upsert
    "quota_offsets": [
       {"bk_biz_id": 100001, "offset": 50, "type": "increase", "memo": "特殊业务需求"},
       {"bk_biz_id": 100002, "offset": 30, "type": "decrease", "memo": "额度回收"}
+   ],
+   "dissolve_projects": [
+      {
+         "start": "2026-01-01",
+         "end": "2026-03-31",
+         "default": true,
+         "projects": [
+            {"id": 100, "memo": "第一批"}
+         ]
+      }
    ]
 }
 

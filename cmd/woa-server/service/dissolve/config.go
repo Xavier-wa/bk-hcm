@@ -30,9 +30,9 @@ import (
 
 // GetDissolveConfig get dissolve config
 func (s *service) GetDissolveConfig(cts *rest.Contexts) (interface{}, error) {
-	// 自研云资源-机房裁撤管理-菜单粒度
+	// 服务请求-机房裁撤-菜单粒度
 	err := s.authorizer.AuthorizeWithPerm(cts.Kit, meta.ResourceAttribute{
-		Basic: &meta.Basic{Type: meta.ZiyanResDissolveManage, Action: meta.Find}})
+		Basic: &meta.Basic{Type: meta.ServiceResDissolve, Action: meta.Find}})
 	if err != nil {
 		return nil, err
 	}
@@ -62,14 +62,33 @@ func (s *service) GetDissolveConfig(cts *rest.Contexts) (interface{}, error) {
 		return nil, err
 	}
 
+	// 获取裁撤项目配置
+	dissolveProjects, err := s.logics.Config().GetDissolveProjects(cts.Kit)
+	if err != nil {
+		logs.Errorf("get dissolve projects config failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
 	config := &model.Config{
 		HostApplyTime:    time,
 		ApprovalLimit:    approvalLimit,
 		QuotaCoefficient: &quotaCoefficient,
 		QuotaOffsets:     quotaOffsets,
+		DissolveProjects: dissolveProjects,
 	}
 
 	return config, nil
+}
+
+// ListProjects list dissolve projects
+func (s *service) ListProjects(cts *rest.Contexts) (interface{}, error) {
+	projects, err := s.logics.RecycledHost().ListProjects(cts.Kit)
+	if err != nil {
+		logs.Errorf("list dissolve projects failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return projects, nil
 }
 
 // UpsertDissolveConfig upsert dissolve config
@@ -126,6 +145,16 @@ func (s *service) UpsertDissolveConfig(cts *rest.Contexts) (interface{}, error) 
 		// 记录操作日志
 		logs.Infof("upsert dissolve quota offsets config, operator: %s, offsets: %+v, rid: %s",
 			cts.Kit.User, req.QuotaOffsets, cts.Kit.Rid)
+	}
+
+	// 更新裁撤项目配置（全量覆盖）
+	if req.DissolveProjects != nil {
+		err = s.logics.Config().UpsertDissolveProjects(cts.Kit, req.DissolveProjects)
+		if err != nil {
+			logs.Errorf("upsert dissolve projects config failed, err: %v, rid: %s", err, cts.Kit.Rid)
+			return nil, err
+		}
+		logs.Infof("upsert dissolve projects config, operator: %s, rid: %s", cts.Kit.User, cts.Kit.Rid)
 	}
 
 	return nil, nil

@@ -102,6 +102,8 @@ const (
 	GlobalConfigDissolveQuotaCoefficient GlobalConfigResDissolveKey = "dissolve_quota_coefficient"
 	// GlobalConfigDissolveQuotaOffsets 业务裁撤偏移额度配置
 	GlobalConfigDissolveQuotaOffsets GlobalConfigResDissolveKey = "dissolve_quota_offsets"
+	// GlobalConfigDissolveProject 裁撤项目配置
+	GlobalConfigDissolveProject GlobalConfigResDissolveKey = "dissolve_project"
 )
 
 // DissolveQuotaOffsetType 裁撤配额偏移类型

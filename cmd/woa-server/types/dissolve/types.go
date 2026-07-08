@@ -22,50 +22,18 @@ package dissolve
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
-	"hcm/pkg"
 	"hcm/pkg/api/core"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
-	"hcm/pkg/criteria/errf"
 	"hcm/pkg/criteria/validator"
 	hostdefine "hcm/pkg/dal/table/dissolve/host"
-	moduledefine "hcm/pkg/dal/table/dissolve/module"
 	"hcm/pkg/runtime/filter"
-	"hcm/pkg/thirdparty/api-gateway/cmdb"
-	"hcm/pkg/thirdparty/es"
 	cvt "hcm/pkg/tools/converter"
-	"hcm/pkg/tools/querybuilder"
-	"hcm/pkg/tools/slice"
 )
 
 // -------------------------- Create --------------------------
-
-// RecycleModuleCreateReq define recycle module create request.
-type RecycleModuleCreateReq struct {
-	Modules []moduledefine.RecycleModuleTable `json:"modules" validate:"required"`
-}
-
-// Validate recycle module create request.
-func (req *RecycleModuleCreateReq) Validate() error {
-	if len(req.Modules) == 0 {
-		return errors.New("modules is required")
-	}
-
-	if len(req.Modules) > constant.BatchOperationMaxLimit {
-		return fmt.Errorf("recycle module count should <= %d, but got: %d", constant.BatchOperationMaxLimit,
-			len(req.Modules))
-	}
-
-	return nil
-}
-
-// RecycleModuleCreateResp define recycle module create response.
-type RecycleModuleCreateResp struct {
-	IDs []string `json:"ids"`
-}
 
 // RecycleHostCreateReq define recycle host create request.
 type RecycleHostCreateReq struct {
@@ -93,20 +61,6 @@ type RecycleHostCreateResp struct {
 
 // -------------------------- Update --------------------------
 
-// RecycleModuleUpdateReq define recycle module update request.
-type RecycleModuleUpdateReq struct {
-	moduledefine.RecycleModuleTable `json:",inline"`
-}
-
-// Validate recycle module update request.
-func (req *RecycleModuleUpdateReq) Validate() error {
-	if len(req.ID) == 0 {
-		return errors.New("id is required")
-	}
-
-	return nil
-}
-
 // RecycleHostUpdateReq define recycle host update request.
 type RecycleHostUpdateReq struct {
 	hostdefine.RecycleHostTable `json:",inline"`
@@ -122,31 +76,6 @@ func (req *RecycleHostUpdateReq) Validate() error {
 }
 
 // -------------------------- List --------------------------
-
-// RecycleModuleListReq recycle module list req.
-type RecycleModuleListReq struct {
-	Field  []string           `json:"field" validate:"omitempty"`
-	Filter *filter.Expression `json:"filter" validate:"omitempty"`
-	Page   *core.BasePage     `json:"page" validate:"required"`
-}
-
-// Validate recycle module list request.
-func (req *RecycleModuleListReq) Validate() error {
-	if err := validator.Validate.Struct(req); err != nil {
-		return err
-	}
-
-	pageOpt := &core.PageOption{
-		EnableUnlimitedLimit: false,
-		MaxLimit:             core.DefaultMaxPageLimit,
-		DisabledSort:         false,
-	}
-	if err := req.Page.Validate(pageOpt); err != nil {
-		return err
-	}
-
-	return nil
-}
 
 // RecycleHostListReq recycle host list req.
 type RecycleHostListReq struct {
@@ -199,193 +128,205 @@ func (req *HostListReq) Validate() error {
 
 // ResDissolveReq resource dissolve request.
 type ResDissolveReq struct {
-	GroupIDs    []int64  `json:"group_ids"`
-	BizNames    []string `json:"bk_biz_names"`
-	ModuleNames []string `json:"module_names"`
-	Operators   []string `json:"operators"`
+	// ProjectIDs 裁撤项目ID
+	ProjectIDs []int `json:"project_ids"`
+	// GroupIDs 组织ID
+	GroupIDs []int64 `json:"group_ids"`
+	// BizIDs 业务ID
+	BizIDs []int64 `json:"bk_biz_ids"`
+	// Operators 负责人
+	Operators []string `json:"operators"`
+	// Regions 地域ID
+	Regions []string `json:"regions"`
 }
 
 // Validate table list request.
 func (req *ResDissolveReq) Validate() error {
-	if len(req.ModuleNames) == 0 {
-		return errf.Newf(errf.InvalidParameter, "module_names is required")
+	return nil
+}
+
+// DissolveStatus 对外暴露的两态裁撤状态
+type DissolveStatus string
+
+const (
+	// DissolveStatusComplete 已裁撤，对应 DB abolish_phase=complete
+	DissolveStatusComplete DissolveStatus = "complete"
+	// DissolveStatusIncomplete 未裁撤，对应 DB abolish_phase in (incomplete, bsiComplete, retain)
+	DissolveStatusIncomplete DissolveStatus = "incomplete"
+)
+
+// Validate 校验裁撤状态
+func (s DissolveStatus) Validate() error {
+	if s != DissolveStatusComplete && s != DissolveStatusIncomplete {
+		return errors.New("status is invalid")
 	}
 
 	return nil
 }
 
-// GetESCond get elasticsearch condition
-func (req *ResDissolveReq) GetESCond(assetIDs []string, bizIDName, blackBizIDName map[int64]string) (
-	map[string][]interface{}, error) {
-
-	cond := make(map[string][]interface{})
-
-	for _, id := range req.GroupIDs {
-		cond[es.GroupID] = append(cond[es.GroupID], id)
+// ToAbolishPhases 将对外两态转换为 DB 四态
+func (s DissolveStatus) ToAbolishPhases() []enumor.AbolishPhase {
+	switch s {
+	case DissolveStatusComplete:
+		return []enumor.AbolishPhase{enumor.Complete}
+	case DissolveStatusIncomplete:
+		return []enumor.AbolishPhase{enumor.Incomplete, enumor.BsiComplete, enumor.Retain}
+	default:
+		return nil
 	}
-
-	for id := range bizIDName {
-		cond[es.BizID] = append(cond[es.BizID], id)
-	}
-
-	for id := range blackBizIDName {
-		cond[es.BlackList] = append(cond[es.BlackList], id)
-	}
-
-	for _, v := range req.Operators {
-		cond[es.Operator] = append(cond[es.Operator], v)
-	}
-
-	for _, assetID := range assetIDs {
-		cond[es.AssetID] = append(cond[es.AssetID], assetID)
-	}
-
-	return cond, nil
 }
 
-// GetCCHostCond get cc host condition
-func (req *ResDissolveReq) GetCCHostCond(assetIDs []string) []*cmdb.QueryFilter {
-	andRules := make([]querybuilder.Rule, 0)
-	cloudIDRule := querybuilder.AtomRule{
-		Field:    pkg.BKCloudIDField,
-		Operator: querybuilder.OperatorEqual,
-		Value:    0, // 只需要查询管控区域为0的公司的机器
-	}
-	andRules = append(andRules, cloudIDRule)
-
-	if len(req.Operators) != 0 {
-		operatorRule := querybuilder.CombinedRule{
-			Condition: querybuilder.ConditionOr,
-			Rules: []querybuilder.Rule{
-				querybuilder.AtomRule{
-					Field: pkg.BKOperatorField, Operator: querybuilder.OperatorIn, Value: req.Operators,
-				},
-				querybuilder.AtomRule{
-					Field: pkg.BKBakOperatorField, Operator: querybuilder.OperatorIn, Value: req.Operators,
-				},
-			},
-		}
-		andRules = append(andRules, operatorRule)
+// FromAbolishPhase 将 DB 四态归并为对外两态
+func FromAbolishPhase(phase enumor.AbolishPhase) DissolveStatus {
+	if phase == enumor.Complete {
+		return DissolveStatusComplete
 	}
 
-	result := make([]*cmdb.QueryFilter, 0)
-	batchSize := pkg.BKMaxPageSize
-	if len(assetIDs) != 0 {
-		for _, batch := range slice.Split(assetIDs, batchSize) {
-			assetIDRule := querybuilder.AtomRule{
-				Field: pkg.BKAssetIDField, Operator: querybuilder.OperatorIn, Value: batch,
-			}
-			rules := make([]querybuilder.Rule, len(andRules))
-			copy(rules, andRules)
-			rules = append(rules, assetIDRule)
-			cond := &cmdb.QueryFilter{Rule: querybuilder.CombinedRule{Condition: querybuilder.ConditionAnd,
-				Rules: rules}}
-			result = append(result, cond)
+	return DissolveStatusIncomplete
+}
+
+// HostDetailListReq 裁撤主机明细列表请求
+type HostDetailListReq struct {
+	BizIDs     []int64        `json:"bk_biz_ids"`
+	ProjectIDs []int          `json:"project_ids"`
+	GroupIDs   []int64        `json:"group_ids"`
+	Operators  []string       `json:"operators"`
+	Modules    []string       `json:"modules"`
+	InnerIPs   []string       `json:"inner_ips"`
+	AssetIDs   []string       `json:"asset_ids"`
+	Status     DissolveStatus `json:"status"`
+	Page       *core.BasePage `json:"page" validate:"required"`
+}
+
+// Validate 校验明细列表请求
+func (req *HostDetailListReq) Validate() error {
+	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+
+	if req.Status != "" {
+		if err := req.Status.Validate(); err != nil {
+			return err
 		}
 	}
 
-	return result
+	pageOpt := &core.PageOption{
+		EnableUnlimitedLimit: false,
+		MaxLimit:             core.DefaultMaxPageLimit,
+		DisabledSort:         false,
+	}
+
+	return req.Page.Validate(pageOpt)
 }
 
-// ListCurHostCond list current host condition
-type ListCurHostCond struct {
-	Organizations []string `json:"organizations"`
-	BizIDs        []int    `json:"bk_biz_ids"`
-	ModuleNames   []string `json:"module_names"`
-	Operators     []string `json:"operators"`
+// HostDetailExportListReq 查询导出的裁撤主机明细请求
+type HostDetailExportListReq struct {
+	BizIDs     []int64        `json:"bk_biz_ids"`
+	ProjectIDs []int          `json:"project_ids"`
+	GroupIDs   []int64        `json:"group_ids"`
+	Operators  []string       `json:"operators"`
+	Modules    []string       `json:"modules"`
+	InnerIPs   []string       `json:"inner_ips"`
+	AssetIDs   []string       `json:"asset_ids"`
+	Status     DissolveStatus `json:"status"`
+	// SnapshotDate ES 快照日期(yyyyMMdd)，传入时按该日期快照补充扩展字段
+	SnapshotDate string         `json:"snapshot_date"`
+	Page         *core.BasePage `json:"page" validate:"required"`
 }
 
-// ListHostDetails list elasticsearch host details.
-type ListHostDetails struct {
-	Count   int64  `json:"count,omitempty"`
-	Details []Host `json:"details,omitempty"`
+// Validate 校验查询导出的裁撤主机明细请求
+func (req *HostDetailExportListReq) Validate() error {
+	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+
+	if req.Status != "" {
+		if err := req.Status.Validate(); err != nil {
+			return err
+		}
+	}
+
+	pageOpt := &core.PageOption{
+		EnableUnlimitedLimit: false,
+		MaxLimit:             constant.HostDetailExportListMaxLimit,
+		DisabledSort:         false,
+	}
+
+	return req.Page.Validate(pageOpt)
 }
 
-// Host host data
-type Host struct {
-	ServerAssetID        string  `json:"server_asset_id"`
-	InnerIP              string  `json:"ip"`
-	OuterIP              string  `json:"outer_ip"`
-	AppName              string  `json:"app_name"`
-	BizID                int64   `json:"bk_biz_id"`
-	Module               string  `json:"module"`
-	DeviceType           string  `json:"device_type"`
-	SvrTypeName          string  `json:"svr_type_name"`
-	ModuleName           string  `json:"module_name"`
-	IdcUnitName          string  `json:"idc_unit_name"`
-	SfwNameVersion       string  `json:"sfw_name_version"`
-	GoUpDate             string  `json:"go_up_date"`
-	RaidName             string  `json:"raid_name"`
-	LogicArea            string  `json:"logic_area"`
-	ServerBakOperator    string  `json:"server_bak_operator"`
-	ServerOperator       string  `json:"server_operator"`
-	DeviceLayer          string  `json:"device_layer"`
-	CPUScore             float64 `json:"cpu_score"`
-	MemScore             float64 `json:"mem_score"`
+// HostDetail 裁撤主机明细
+type HostDetail struct {
+	ID          string         `json:"id"`
+	AssetID     string         `json:"asset_id"`
+	InnerIP     string         `json:"inner_ip"`
+	DeviceType  string         `json:"device_type"`
+	Module      string         `json:"module"`
+	Status      DissolveStatus `json:"status"`
+	ProjectID   int            `json:"project_id"`
+	ProjectName string         `json:"project_name"`
+	Region      string         `json:"region"`
+	BkBizID     int64          `json:"bk_biz_id"`
+	GroupID     int64          `json:"group_id"`
+	Operators   []string       `json:"operators"`
+	CPUCore     int            `json:"cpu_core"`
+	Extension   *HostExtension `json:"extension,omitempty"`
+}
+
+// HostExtension ES 快照补充的主机性能/属性扩展字段（仅传入 snapshot_date 且快照命中时返回）
+type HostExtension struct {
+	// OuterIP 公网IP
+	OuterIP string `json:"outer_ip"`
+	// DeviceType SCM设备类型
+	DeviceType string `json:"device_type"`
+	// ModuleName 裁撤模块名称
+	ModuleName string `json:"module_name"`
+	// IdcUnitName 存放机房管理单元
+	IdcUnitName string `json:"idc_unit_name"`
+	// SfwNameVersion 操作系统
+	SfwNameVersion string `json:"sfw_name_version"`
+	// GoUpDate 上架时间
+	GoUpDate string `json:"go_up_date"`
+	// RaidName RAID结构
+	RaidName string `json:"raid_name"`
+	// LogicArea 逻辑区域
+	LogicArea string `json:"logic_area"`
+	// DeviceLayer 设备技术分类
+	DeviceLayer string `json:"device_layer"`
+	// CPUScore CPU得分
+	CPUScore float64 `json:"cpu_score"`
+	// MemScore 内存得分
+	MemScore float64 `json:"mem_score"`
+	// InnerNetTrafficScore 内网流量得分
 	InnerNetTrafficScore float64 `json:"inner_net_traffic_score"`
-	DiskIoScore          float64 `json:"disk_io_score"`
-	DiskUtilScore        float64 `json:"disk_util_score"`
-	IsPass               bool    `json:"is_pass"`
-	Mem4linux            float64 `json:"mem4linux"`
-	InnerNetTraffic      float64 `json:"inner_net_traffic"`
-	OuterNetTraffic      float64 `json:"outer_net_traffic"`
-	DiskIo               float64 `json:"disk_io"`
-	DiskUtil             float64 `json:"disk_util"`
-	DiskTotal            float64 `json:"disk_total"`
-	MaxCPUCoreAmount     int64   `json:"max_cpu_core_amount"`
-	GroupName            string  `json:"group_name"`
-	Center               string  `json:"center"`
-	ProjectName          string  `json:"project_name"`
+	// DiskIoScore 磁盘IO得分
+	DiskIoScore float64 `json:"disk_io_score"`
+	// DiskUtilScore 磁盘IO使用率得分
+	DiskUtilScore float64 `json:"disk_util_score"`
+	// IsPass 是否达标
+	IsPass bool `json:"is_pass"`
+	// Mem4linux 内存使用量(G)
+	Mem4linux float64 `json:"mem4linux"`
+	// InnerNetTraffic 内网流量(Mb/s)
+	InnerNetTraffic float64 `json:"inner_net_traffic"`
+	// OuterNetTraffic 外网流量(Mb/s)
+	OuterNetTraffic float64 `json:"outer_net_traffic"`
+	// DiskIo 磁盘IO(Blocks/s)
+	DiskIo float64 `json:"disk_io"`
+	// DiskUtil 磁盘IO使用率
+	DiskUtil float64 `json:"disk_util"`
+	// DiskTotal 磁盘总量(G)
+	DiskTotal float64 `json:"disk_total"`
+	// GroupName 运维小组
+	GroupName string `json:"group_name"`
+	// Center 业务中心
+	Center string `json:"center"`
 }
 
-// ConvertHost convert host
-func ConvertHost(origin *es.Host) (*Host, error) {
-	if origin == nil {
-		return nil, nil
-	}
-
-	var isPass bool
-	var err error
-	if origin.IsPass != "" {
-		isPass, err = strconv.ParseBool(origin.IsPass)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &Host{
-		ServerAssetID:        origin.ServerAssetID,
-		InnerIP:              origin.InnerIP,
-		OuterIP:              origin.OuterIP,
-		AppName:              origin.AppName,
-		BizID:                origin.BizID,
-		Module:               origin.Module,
-		DeviceType:           origin.DeviceType,
-		ModuleName:           origin.ModuleName,
-		IdcUnitName:          origin.IdcUnitName,
-		SfwNameVersion:       origin.SfwNameVersion,
-		GoUpDate:             origin.GoUpDate,
-		RaidName:             origin.RaidName,
-		LogicArea:            origin.LogicArea,
-		ServerBakOperator:    origin.ServerBakOperator,
-		ServerOperator:       origin.ServerOperator,
-		DeviceLayer:          origin.DeviceLayer,
-		CPUScore:             origin.CPUScore,
-		MemScore:             origin.MemScore,
-		InnerNetTrafficScore: origin.InnerNetTrafficScore,
-		DiskIoScore:          origin.DiskIoScore,
-		DiskUtilScore:        origin.DiskUtilScore,
-		IsPass:               isPass,
-		Mem4linux:            origin.Mem4linux,
-		InnerNetTraffic:      origin.InnerNetTraffic,
-		OuterNetTraffic:      origin.OuterNetTraffic,
-		DiskIo:               origin.DiskIo,
-		DiskUtil:             origin.DiskUtil,
-		DiskTotal:            origin.DiskTotal,
-		MaxCPUCoreAmount:     origin.MaxCPUCoreAmount,
-		GroupName:            origin.GroupName,
-		Center:               origin.Center,
-	}, nil
+// HostDetailListResult 裁撤主机明细列表响应
+type HostDetailListResult struct {
+	Count   int64        `json:"count"`
+	Details []HostDetail `json:"details"`
 }
 
 // ResDissolveTable resource dissolve table
@@ -393,43 +334,25 @@ type ResDissolveTable struct {
 	Items []BizDetail `json:"items"`
 }
 
-// BizDetail business detail
+// BizDetail 业务裁撤进度统计行，合计行的 bk_biz_id 为 0
 type BizDetail struct {
-	BizID           interface{}    `json:"bk_biz_id"`
-	BizName         string         `json:"bk_biz_name"`
-	ModuleHostCount map[string]int `json:"module_host_count"`
-	Total           Total          `json:"total"`
-	Progress        string         `json:"progress"`
-}
-
-// Total statistical data of hosts under business
-type Total struct {
-	Origin        TotalData `json:"origin"`
-	Current       TotalData `json:"current"`
-	DeliveredCore int64     `json:"delivered_core"`
-}
-
-// TotalData statistical data of host under business
-type TotalData struct {
-	HostCount interface{} `json:"host_count"`
-	CpuCount  int64       `json:"cpu_count"`
+	// BkBizID 业务ID，合计行为 0
+	BkBizID int64 `json:"bk_biz_id"`
+	// OriginHostCount 原始裁撤设备数
+	OriginHostCount int64 `json:"origin_host_count"`
+	// OriginCpuCore 原始裁撤CPU总核数
+	OriginCpuCore int64 `json:"origin_cpu_core"`
+	// CurrentHostCount 当前裁撤设备数
+	CurrentHostCount int64 `json:"current_host_count"`
+	// CurrentCpuCore 当前裁撤CPU总核数
+	CurrentCpuCore int64 `json:"current_cpu_core"`
+	// DeliveredCpuCore 已申领CPU核数
+	DeliveredCpuCore int64 `json:"delivered_cpu_core"`
+	// Progress 裁撤进度
+	Progress string `json:"progress"`
 }
 
 // -------------------------- Delete --------------------------
-
-// RecycleModuleDeleteReq recycle module delete request.
-type RecycleModuleDeleteReq struct {
-	IDs []string `json:"ids" validate:"required,min=1"`
-}
-
-// Validate recycle module delete request.
-func (req *RecycleModuleDeleteReq) Validate() error {
-	if len(req.IDs) > constant.BatchOperationMaxLimit {
-		return fmt.Errorf("batch delete limit is %d", constant.BatchOperationMaxLimit)
-	}
-
-	return validator.Validate.Struct(req)
-}
 
 // RecycleHostDeleteReq recycle host delete request.
 type RecycleHostDeleteReq struct {
@@ -525,18 +448,69 @@ func (q *QuotaOffsetItem) SignedOffset() int64 {
 
 // Config dissolve config
 type Config struct {
-	HostApplyTime    *time.Time        `json:"host_apply_time"`
-	ApprovalLimit    *float64          `json:"approval_limit"`
-	QuotaCoefficient *float64          `json:"quota_coefficient,omitempty"`
-	QuotaOffsets     []QuotaOffsetItem `json:"quota_offsets,omitempty"`
+	HostApplyTime    *time.Time             `json:"host_apply_time"`
+	ApprovalLimit    *float64               `json:"approval_limit"`
+	QuotaCoefficient *float64               `json:"quota_coefficient,omitempty"`
+	QuotaOffsets     []QuotaOffsetItem      `json:"quota_offsets,omitempty"`
+	DissolveProjects []DissolveProjectCycle `json:"dissolve_projects,omitempty"`
+}
+
+// DissolveProjectCycle 裁撤周期
+type DissolveProjectCycle struct {
+	// Start 裁撤周期开始时间，格式 yyyy-MM-dd
+	Start string `json:"start"`
+	// End 裁撤周期结束时间，格式 yyyy-MM-dd
+	End string `json:"end"`
+	// Default 是否为当前裁撤周期，可有多个或零个，不要求唯一
+	Default bool `json:"default"`
+	// Projects 裁撤项目列表
+	Projects []DissolveProjectItem `json:"projects"`
+}
+
+// DissolveProjectItem 裁撤项目项
+type DissolveProjectItem struct {
+	// ID 裁撤项目ID
+	ID int `json:"id"`
+	// Memo 项目备注
+	Memo string `json:"memo"`
+}
+
+// Validate 校验裁撤周期
+func (c *DissolveProjectCycle) Validate() error {
+	start, err := time.Parse(constant.DateLayout, c.Start)
+	if err != nil {
+		return fmt.Errorf("invalid start date: %s", c.Start)
+	}
+
+	end, err := time.Parse(constant.DateLayout, c.End)
+	if err != nil {
+		return fmt.Errorf("invalid end date: %s", c.End)
+	}
+
+	if start.After(end) {
+		return fmt.Errorf("start date %s must not be after end date %s", c.Start, c.End)
+	}
+
+	if len(c.Projects) == 0 {
+		return errors.New("projects can not be empty")
+	}
+
+	for _, p := range c.Projects {
+		if p.ID <= 0 {
+			return fmt.Errorf("invalid project id: %d", p.ID)
+		}
+	}
+
+	return nil
 }
 
 // UpsertConfigReq upsert config request
 type UpsertConfigReq struct {
-	HostApplyTime    *time.Time        `json:"host_apply_time" validate:"omitempty"`
-	ApprovalLimit    *float64          `json:"approval_limit" validate:"omitempty"`
-	QuotaCoefficient *float64          `json:"quota_coefficient" validate:"omitempty"`
-	QuotaOffsets     []QuotaOffsetItem `json:"quota_offsets" validate:"omitempty"`
+	HostApplyTime    *time.Time             `json:"host_apply_time" validate:"omitempty"`
+	ApprovalLimit    *float64               `json:"approval_limit" validate:"omitempty"`
+	QuotaCoefficient *float64               `json:"quota_coefficient" validate:"omitempty"`
+	QuotaOffsets     []QuotaOffsetItem      `json:"quota_offsets" validate:"omitempty"`
+	DissolveProjects []DissolveProjectCycle `json:"dissolve_projects" validate:"omitempty"`
 }
 
 // Validate ...
@@ -568,6 +542,13 @@ func (u *UpsertConfigReq) Validate() error {
 			return fmt.Errorf("duplicate bk_biz_id: %d", item.BkBizID)
 		}
 		seenBizIDs[item.BkBizID] = true
+	}
+
+	// 校验裁撤项目配置
+	for i := range u.DissolveProjects {
+		if err := u.DissolveProjects[i].Validate(); err != nil {
+			return err
+		}
 	}
 
 	return nil

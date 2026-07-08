@@ -558,20 +558,16 @@ func (i ItsmFlow) validate() error {
 
 // ResourceDissolve resource dissolve config
 type ResourceDissolve struct {
-	OriginDate               string   `yaml:"originDate"`
-	ProjectIDs               []int    `yaml:"projectIDs"`
-	ListExcludedProjectNames []string `yaml:"listExcludedProjectNames"`
-	SvrTypeNames             []string `yaml:"svrTypeNames"`
-	SyncDissolveHost         bool     `yaml:"syncDissolveHost"`
+	OriginDate             string   `yaml:"originDate"`
+	ListExcludedProjectIDs []int    `yaml:"listExcludedProjectIDs"`
+	IgnoreBiz              []int64  `yaml:"ignoreBiz"`
+	SvrTypeNames           []string `yaml:"svrTypeNames"`
+	SyncDissolveHost       bool     `yaml:"syncDissolveHost"`
 }
 
 func (r ResourceDissolve) validate() error {
 	if len(r.OriginDate) == 0 {
 		return errors.New("resourceDissolve.originDate is not set")
-	}
-
-	if len(r.ProjectIDs) == 0 {
-		return errors.New("resourceDissolve.projectIDs is not set")
 	}
 
 	if len(r.SvrTypeNames) == 0 {

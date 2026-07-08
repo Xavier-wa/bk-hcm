@@ -1,25 +1,21 @@
 ### 描述
 
-- 该接口提供版本：v1.6.1+。
+- 该接口提供版本：v9.9.9+。
 - 该接口所需权限：平台-机房裁撤管理。
-- 该接口功能描述：删除裁撤模块信息。
+- 该接口功能描述：同步裁撤主机信息。
 
 ### URL
 
-DELETE /api/v1/woa/dissolve/recycled_module/update
+POST /api/v1/woa/dissolve/recycled_host/sync
 
 ### 输入参数
 
-| 参数名称  | 参数类型         | 必选 | 描述                |
-|-------|--------------|----|-------------------|
-| ids   | string array | 是	 | 模块唯一标识数组，最大支持100个 |
+无
 
 ### 调用示例
 
 ```json
-{
-  "ids": ["1", "2"]
-}
+{}
 ```
 
 ### 响应示例
@@ -40,4 +36,4 @@ DELETE /api/v1/woa/dissolve/recycled_module/update
 | result     | bool        | 请求成功与否。true:请求成功；false请求失败 |
 | code       | int         | 错误编码。 0表示success，>0表示失败错误  |
 | message    | string      | 请求失败返回的错误信息 |
-| data	     | object | 响应数据             |
+| data	     | object      | 响应数据             |

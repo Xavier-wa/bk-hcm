@@ -37,12 +37,11 @@ import (
 
 // EsCli elasticsearch client
 type EsCli struct {
-	client    *elastic.Client
-	blacklist []interface{}
+	client *elastic.Client
 }
 
 // NewEsClient create es client
-func NewEsClient(esConf cc.Es, blacklist string) (*EsCli, error) {
+func NewEsClient(esConf cc.Es) (*EsCli, error) {
 	httpClient := &http.Client{}
 	if esConf.TLS.Enable() {
 		tlsC, err := ssl.ClientTLSConfVerify(esConf.TLS.InsecureSkipVerify, esConf.TLS.CAFile, esConf.TLS.CertFile,
@@ -64,14 +63,7 @@ func NewEsClient(esConf cc.Es, blacklist string) (*EsCli, error) {
 		return nil, err
 	}
 
-	list := make([]interface{}, 0)
-	if len(blacklist) != 0 {
-		for _, v := range strings.Split(blacklist, ",") {
-			list = append(list, v)
-		}
-	}
-
-	return &EsCli{client: client, blacklist: list}, nil
+	return &EsCli{client: client}, nil
 }
 
 // SearchWithCond search with condition
@@ -125,13 +117,8 @@ func (es *EsCli) buildQuery(cond map[string][]interface{}) (elastic.Query, error
 		// 当查询条件为操作人时，可以对主维护人或者备份维护人进行匹配
 		if k == Operator {
 			subQuery := elastic.NewBoolQuery()
-			subQuery.Should(elastic.NewTermsQuery(serverOperator, v...), elastic.NewTermsQuery(serverBakOperator, v...))
+			subQuery.Should(elastic.NewTermsQuery(ServerOperator, v...), elastic.NewTermsQuery(ServerBakOperator, v...))
 			query.Must(subQuery)
-			continue
-		}
-
-		if k == BlackList {
-			query.MustNot(elastic.NewTermsQuery(BizID, v...))
 			continue
 		}
 

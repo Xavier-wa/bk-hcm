@@ -45,6 +45,14 @@ func (svc *service) BatchUpdateRecycleHost(cts *rest.Contexts) (interface{}, err
 			AbolishPhase: req.Data.AbolishPhase,
 			ProjectName:  req.Data.ProjectName,
 			Module:       req.Data.Module,
+			InnerIP:      req.Data.InnerIP,
+			DeviceType:   req.Data.DeviceType,
+			Region:       req.Data.Region,
+			BkBizID:      req.Data.BkBizID,
+			GroupID:      req.Data.GroupID,
+			Operators:    req.Data.Operators,
+			CPUCore:      req.Data.CPUCore,
+			IsIgnore:     req.Data.IsIgnore,
 		}
 		if err := svc.dao.RecycleHost().UpdateWithTx(cts.Kit, txn, req.Filter, updateHost); err != nil {
 			return nil, err

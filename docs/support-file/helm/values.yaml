@@ -1102,10 +1102,11 @@ egress:
 
 resourceDissolve:
   originDate: "20240105"
-  projectIDs:
-    - 26 # 2025轻量云徙Q4
-    - 27 # 2025机房裁撤（国内）
+  # 裁撤列表展示需要排除对应项目id的主机
+  listExcludedProjectIDs:
     - 28 # 2025机房裁撤（海外）
+  # 忽略业务id列表
+  ignoreBiz:
   svrTypeNames:
     - "Server"
     - "QC_CVM"
@@ -1119,8 +1120,6 @@ elasticsearch:
 
 # 是否启用Mongo
 useMongo: true
-
-blacklist:
 
 # defines cmsi related settings.
 cmsi:
