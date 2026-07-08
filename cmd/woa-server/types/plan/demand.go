@@ -847,7 +847,7 @@ func (c *CrpOrderChangeInfo) GetKey(bkBizID int64, demandClass enumor.DemandClas
 		DeviceType:    c.DeviceType,
 		DiskIO:        c.DiskIO,
 	}
-	key.DiskType = key.DiskType.GetWithDefault()
+	key.DiskType = c.DiskType.GetWithDefault()
 
 	return key
 }
