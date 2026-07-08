@@ -98,6 +98,9 @@ type Interface interface {
 
 	// CreateApplyOrder creates resource apply order
 	CreateApplyOrder(kit *kit.Kit, param *types.ApplyReq) (*types.CreateApplyOrderResult, error)
+	// CheckApplyQuota checks whether the apply exceeds quota for require types that need quota management
+	CheckApplyQuota(kt *kit.Kit, bizID int64, requireType enumor.RequireType,
+		suborders []*types.Suborder) error
 	// GetApplyOrder gets resource apply order info
 	GetApplyOrder(kit *kit.Kit, param *types.GetApplyParam) (*types.GetApplyOrderRst, error)
 	// GetApplyDetail gets resource apply order detail info
@@ -928,7 +931,29 @@ func (s *scheduler) createSubOrders(kt *kit.Kit, orderId uint64) error {
 		return err
 	}
 
-	// 将资源池采购的子单放到最后创建，防止业务看到的子单号不连续
+	// 额度校验前置：在创建子单之前完成校验，校验不通过直接失败，避免产生 rolling_applied_record 缺失的孤儿子单。
+	if err = s.CheckApplyQuota(kt, ticket.BkBizId, ticket.RequireType, ticket.Suborders); err != nil {
+		logs.Errorf("check apply quota before create suborders failed, err: %v, orderID: %d, rid: %s", err, orderId,
+			kt.Rid)
+		return err
+	}
+
+	suborders, err := s.buildAndSaveSubOrders(kt, ticket, orderId)
+	if err != nil {
+		return err
+	}
+
+	if err = s.doCreateOrderPostOp(kt, ticket, suborders); err != nil {
+		logs.Errorf("do create order post op failed, err: %v, ticket: %+v, suborders: %v, rid: %s", err,
+			cvt.PtrToVal(ticket), suborders, kt.Rid)
+		return err
+	}
+
+	return nil
+}
+
+// sortSubordersForCreate 将资源池采购的子单排到最后创建，防止业务看到的子单号不连续
+func sortSubordersForCreate(ticket *types.ApplyTicket) []*types.Suborder {
 	subOrders := make([]*types.Suborder, 0)
 	purchaseToResPoolSuborders := make([]*types.Suborder, 0)
 	for _, suborder := range ticket.Suborders {
@@ -941,70 +966,80 @@ func (s *scheduler) createSubOrders(kt *kit.Kit, orderId uint64) error {
 		}
 		subOrders = append(subOrders, suborder)
 	}
-	subOrders = append(subOrders, purchaseToResPoolSuborders...)
 
+	return append(subOrders, purchaseToResPoolSuborders...)
+}
+
+// buildApplyOrder 根据 ticket 与子单规格构造一条待创建的 ApplyOrder
+func buildApplyOrder(ticket *types.ApplyTicket, suborder *types.Suborder, orderId uint64, index int, now time.Time,
+	purchaseToResPoolUser string) *types.ApplyOrder {
+
+	subOrder := &types.ApplyOrder{
+		OrderId:           orderId,
+		SubOrderId:        fmt.Sprintf("%d-%d", orderId, index+1),
+		BkBizId:           ticket.BkBizId,
+		User:              ticket.User,
+		Follower:          ticket.Follower,
+		Auditor:           "",
+		RequireType:       ticket.RequireType,
+		ExpectTime:        ticket.ExpectTime,
+		ResourceType:      suborder.ResourceType,
+		Source:            suborder.Source,
+		ProductType:       ticket.ProductType,
+		Spec:              suborder.Spec,
+		AntiAffinityLevel: suborder.AntiAffinityLevel,
+		EnableDiskCheck:   suborder.EnableDiskCheck,
+		Description:       ticket.Remark,
+		Remark:            suborder.Remark,
+		Stage:             types.TicketStageRunning,
+		Status:            types.ApplyStatusWaitForMatch,
+		OriginNum:         suborder.Replicas,
+		TotalNum:          suborder.Replicas,
+		PendingNum:        suborder.Replicas,
+		SuccessNum:        0,
+		AppliedCore:       suborder.AppliedCore,
+		ObsProject:        ticket.RequireType.ToObsProject(),
+		RetryTime:         0,
+		ModifyTime:        0,
+		CreateAt:          now,
+		UpdateAt:          now,
+	}
+	if suborder.Source == enumor.ApplyTicketSrcPurchaseToResPool {
+		subOrder.Stage = types.TicketStageUncommit
+		subOrder.User = purchaseToResPoolUser
+	}
+
+	return subOrder
+}
+
+// buildAndSaveSubOrders 构造并落库子单及其步骤记录，返回创建好的子单列表
+func (s *scheduler) buildAndSaveSubOrders(kt *kit.Kit, ticket *types.ApplyTicket, orderId uint64) (
+	[]*types.ApplyOrder, error) {
+
+	subOrders := sortSubordersForCreate(ticket)
 	now := time.Now()
 	suborders := make([]*types.ApplyOrder, len(subOrders))
 	purchaseToResPoolUser := cc.WoaServer().ApplyTicketConfig.PurchaseToResourcePool.User
 	for index, suborder := range subOrders {
-		subOrder := &types.ApplyOrder{
-			OrderId:           orderId,
-			SubOrderId:        fmt.Sprintf("%d-%d", orderId, index+1),
-			BkBizId:           ticket.BkBizId,
-			User:              ticket.User,
-			Follower:          ticket.Follower,
-			Auditor:           "",
-			RequireType:       ticket.RequireType,
-			ExpectTime:        ticket.ExpectTime,
-			ResourceType:      suborder.ResourceType,
-			Source:            suborder.Source,
-			ProductType:       ticket.ProductType,
-			Spec:              suborder.Spec,
-			AntiAffinityLevel: suborder.AntiAffinityLevel,
-			EnableDiskCheck:   suborder.EnableDiskCheck,
-			Description:       ticket.Remark,
-			Remark:            suborder.Remark,
-			Stage:             types.TicketStageRunning,
-			Status:            types.ApplyStatusWaitForMatch,
-			OriginNum:         suborder.Replicas,
-			TotalNum:          suborder.Replicas,
-			PendingNum:        suborder.Replicas,
-			SuccessNum:        0,
-			AppliedCore:       suborder.AppliedCore,
-			ObsProject:        ticket.RequireType.ToObsProject(),
-			RetryTime:         0,
-			ModifyTime:        0,
-			CreateAt:          now,
-			UpdateAt:          now,
-		}
-		if suborder.Source == enumor.ApplyTicketSrcPurchaseToResPool {
-			subOrder.Stage = types.TicketStageUncommit
-			subOrder.User = purchaseToResPoolUser
-		}
+		subOrder := buildApplyOrder(ticket, suborder, orderId, index, now, purchaseToResPoolUser)
 		logs.V(4).Infof("create apply suborder data, bkBizID: %d, subOrder: %+v, rid: %s",
 			ticket.BkBizId, subOrder, kt.Rid)
 
-		if err = model.Operation().ApplyOrder().CreateApplyOrder(kt, subOrder); err != nil {
+		if err := model.Operation().ApplyOrder().CreateApplyOrder(kt, subOrder); err != nil {
 			logs.Errorf("failed to create apply order, err: %v, subOrder: %+v, rid: %s", err, subOrder, kt.Rid)
-			return err
+			return nil, err
 		}
 
 		// init all step record
-		if err = s.initAllSteps(kt, subOrder.SubOrderId, subOrder.TotalNum, subOrder.EnableDiskCheck); err != nil {
+		if err := s.initAllSteps(kt, subOrder.SubOrderId, subOrder.TotalNum, subOrder.EnableDiskCheck); err != nil {
 			logs.Errorf("failed to init apply step record, err: %v, rid: %s", err, kt.Rid)
-			return err
+			return nil, err
 		}
 
 		suborders[index] = subOrder
 	}
 
-	if err = s.doCreateOrderPostOp(kt, ticket, suborders); err != nil {
-		logs.Errorf("do create order post op failed, err: %v, ticket: %+v, suborders: %v, rid: %s", err,
-			cvt.PtrToVal(ticket), suborders, kt.Rid)
-		return err
-	}
-
-	return nil
+	return suborders, nil
 }
 
 func (s *scheduler) doCreateOrderPostOp(kt *kit.Kit, ticket *types.ApplyTicket, suborders []*types.ApplyOrder) error {
@@ -1014,12 +1049,72 @@ func (s *scheduler) doCreateOrderPostOp(kt *kit.Kit, ticket *types.ApplyTicket, 
 			logs.Errorf("create rolling applied record failed, err: %v, ticket: %+v, rid: %s", err, *ticket, kt.Rid)
 			return err
 		}
+	}
 
+	return nil
+}
+
+// CheckApplyQuota 按申请类型对需要额度管理的申请统一做额度校验，作为唯一对外入口供审批建单前置校验与提单预检共用，
+// 避免两处分发逻辑漂移。校验所用核数口径与 applied_core 落库保持一致。
+func (s *scheduler) CheckApplyQuota(kt *kit.Kit, bizID int64, requireType enumor.RequireType,
+	suborders []*types.Suborder) error {
+
+	switch requireType {
+	case enumor.RequireTypeRollServer, enumor.RequireTypeSpringResPool:
+		return s.checkRollingApplyQuota(kt, bizID, requireType, suborders)
 	case enumor.RequireTypeGreenChannel:
-		if err := s.canApplyGreenChannelHost(kt, ticket); err != nil {
-			logs.Errorf("apply green channel host failed, err: %v, ticket: %+v, rid: %s", err, *ticket, kt.Rid)
-			return err
+		return s.checkGreenChannelApplyQuota(kt, bizID, requireType, suborders)
+	}
+
+	return nil
+}
+
+// checkRollingApplyQuota 校验滚服/资源池申请是否超出业务及全局额度。
+// 校验所用核数口径与 CreateAppliedRecord 落库的 applied_core 保持一致（按 Replicas 累加）。
+func (s *scheduler) checkRollingApplyQuota(kt *kit.Kit, bizID int64, requireType enumor.RequireType,
+	suborders []*types.Suborder) error {
+
+	if !requireType.IsNeedQuotaManage() {
+		return nil
+	}
+
+	isResPoolBiz, err := s.rsLogics.IsResPoolBiz(kt, bizID)
+	if err != nil {
+		logs.Errorf("unable to confirm whether biz is resource pool, err: %v, bizID: %d, rid: %s", err, bizID, kt.Rid)
+		return err
+	}
+
+	appliedType := enumor.NormalAppliedType
+	if isResPoolBiz {
+		appliedType = enumor.ResourcePoolAppliedType
+	}
+
+	deviceTypeCountMap := make(map[string]int)
+	for _, suborder := range suborders {
+		if suborder.Spec == nil {
+			continue
 		}
+		// 按 Replicas 累加，与落库 applied_core = CPUAmount * Replicas 口径一致
+		deviceTypeCountMap[suborder.Spec.DeviceType] += int(suborder.Replicas)
+	}
+
+	count, err := s.rsLogics.GetCpuCoreSum(kt, deviceTypeCountMap)
+	if err != nil {
+		logs.Errorf("get cpu core sum failed, err: %v, deviceTypeCountMap: %v, rid: %s", err, deviceTypeCountMap,
+			kt.Rid)
+		return err
+	}
+
+	canApply, reason, err := s.rsLogics.CanApplyHost(kt, bizID, uint(count), appliedType)
+	if err != nil {
+		logs.Errorf("determine can apply host failed, err: %v, bizID: %d, appliedType: %s, rid: %s", err, bizID,
+			appliedType, kt.Rid)
+		return err
+	}
+	if !canApply {
+		logs.Errorf("can not apply host, bizID: %d, appliedType: %s, reason: %s, rid: %s", bizID, appliedType,
+			reason, kt.Rid)
+		return fmt.Errorf("%s", reason)
 	}
 
 	return nil
@@ -1051,30 +1146,6 @@ func (s *scheduler) createRollingAppliedRecord(kt *kit.Kit, ticket *types.ApplyT
 		appliedType = enumor.ResourcePoolAppliedType
 	}
 
-	deviceTypeCountMap := make(map[string]int)
-	for _, suborder := range ticket.Suborders {
-		if _, ok := deviceTypeCountMap[suborder.Spec.DeviceType]; !ok {
-			deviceTypeCountMap[suborder.Spec.DeviceType] = 0
-		}
-		deviceTypeCountMap[suborder.Spec.DeviceType]++
-	}
-	count, err := s.rsLogics.GetCpuCoreSum(kt, deviceTypeCountMap)
-	if err != nil {
-		logs.Errorf("get cpu core sum failed, err: %v, deviceTypeCountMap: %v, rid: %s", err, deviceTypeCountMap,
-			kt.Rid)
-		return err
-	}
-	canApply, reason, err := s.rsLogics.CanApplyHost(kt, ticket.BkBizId, uint(count), appliedType)
-	if err != nil {
-		logs.Errorf("determine can apply host failed, err: %v, ticket: %+v, rid: %s", err, *ticket, kt.Rid)
-		return err
-	}
-
-	if !canApply {
-		logs.Errorf("can not apply host, ticket: %+v, reason: %s, rid: %s", *ticket, reason, kt.Rid)
-		return fmt.Errorf("%s", reason)
-	}
-
 	records := make([]rstypes.CreateAppliedRecordData, len(suborders))
 	for i, suborder := range suborders {
 		appliedRecord := rstypes.CreateAppliedRecordData{
@@ -1097,24 +1168,40 @@ func (s *scheduler) createRollingAppliedRecord(kt *kit.Kit, ticket *types.ApplyT
 	return nil
 }
 
-func (s *scheduler) canApplyGreenChannelHost(kt *kit.Kit, ticket *types.ApplyTicket) error {
-	if ticket.RequireType != enumor.RequireTypeGreenChannel {
+// checkGreenChannelApplyQuota 校验小额绿通申请是否超出业务本周额度。
+// 核数按机型 CPU 核心数 * Replicas 累加，与 FillCVMAppliedCore 落库的 applied_core 口径一致，
+// 因而无需依赖尚未填充的 AppliedCore，可在提单预检阶段（FillCVMAppliedCore 之前）直接使用。
+func (s *scheduler) checkGreenChannelApplyQuota(kt *kit.Kit, bizID int64, requireType enumor.RequireType,
+	suborders []*types.Suborder) error {
+
+	if requireType != enumor.RequireTypeGreenChannel {
 		return nil
 	}
 
-	var appliedCount uint = 0
-	for _, suborder := range ticket.Suborders {
-		appliedCount += suborder.AppliedCore
+	deviceTypeCountMap := make(map[string]int)
+	for _, suborder := range suborders {
+		if suborder.Spec == nil {
+			continue
+		}
+		// 按 Replicas 累加，与落库 applied_core = CPUAmount * Replicas 口径一致
+		deviceTypeCountMap[suborder.Spec.DeviceType] += int(suborder.Replicas)
 	}
 
-	canApply, reason, err := s.gcLogics.CanApplyHost(kt, ticket.BkBizId, appliedCount)
+	count, err := s.rsLogics.GetCpuCoreSum(kt, deviceTypeCountMap)
+	if err != nil {
+		logs.Errorf("get cpu core sum failed, err: %v, deviceTypeCountMap: %v, rid: %s", err, deviceTypeCountMap,
+			kt.Rid)
+		return err
+	}
+
+	canApply, reason, err := s.gcLogics.CanApplyHost(kt, bizID, uint(count))
 	if err != nil {
 		logs.Errorf("determine can apply green channel host failed, err: %v, bizID: %d, total: %d, rid: %s", err,
-			ticket.BkBizId, appliedCount, kt.Rid)
+			bizID, count, kt.Rid)
 		return err
 	}
 	if !canApply {
-		logs.Errorf("can not apply green channel host, bizID: %d, reason: %s, rid: %s", ticket.BkBizId, reason, kt.Rid)
+		logs.Errorf("can not apply green channel host, bizID: %d, reason: %s, rid: %s", bizID, reason, kt.Rid)
 		return fmt.Errorf("%s", reason)
 	}
 
