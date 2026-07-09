@@ -27,6 +27,7 @@ export default defineComponent({
     };
     return () => (
       <bk-button v-bind={attrs} disabled={!props.data.length} onClick={exportToExcel}>
+        <i class='hcm-icon bkhcm-icon-download mr8'></i>
         {props.text}
       </bk-button>
     );

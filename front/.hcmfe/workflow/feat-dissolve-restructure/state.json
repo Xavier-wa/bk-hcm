@@ -1,0 +1,125 @@
+{
+  "id": "feat-dissolve-restructure",
+  "title": "机房裁撤-功能优化重构-前端",
+  "currentStage": "coding",
+  "createdAt": "2026-06-18T09:13:59.279Z",
+  "updatedAt": "2026-07-02T02:16:14.485Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": "../docs/reqs/机房裁撤重构.md",
+        "kind": "file",
+        "addedAt": "2026-06-18T09:14:21.916Z"
+      },
+      {
+        "ref": "../docs/reqs/机房裁撤公共搜索组件.md",
+        "kind": "file",
+        "addedAt": "2026-06-18T09:14:22.862Z"
+      },
+      {
+        "ref": "../docs/reqs/机房裁撤总览页开发.md",
+        "kind": "file",
+        "addedAt": "2026-06-18T09:14:23.548Z"
+      },
+      {
+        "ref": "../docs/reqs/机房裁撤明细页开发.md",
+        "kind": "file",
+        "addedAt": "2026-06-18T09:14:24.230Z"
+      },
+      {
+        "ref": "../docs/reqs/机房裁撤同步与配置.md",
+        "kind": "file",
+        "addedAt": "2026-06-18T09:14:24.746Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-dissolve-restructure/design.md",
+        "kind": "file",
+        "addedAt": "2026-06-18T09:35:00.540Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-dissolve-restructure/api.md",
+        "kind": "file",
+        "addedAt": "2026-06-18T09:42:01.990Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-dissolve-restructure/coding.md",
+        "kind": "file",
+        "addedAt": "2026-06-18T10:15:05.993Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-06-18T09:25:01.614Z"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-06-18T10:16:58.124Z"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-06-18T09:13:59.279Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-06-18T09:25:12.376Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-06-18T09:39:07.531Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-06-18T10:09:11.544Z"
+    },
+    {
+      "from": "coding",
+      "to": "api",
+      "at": "2026-06-18T10:17:48.938Z",
+      "note": "回退到 api 阶段：api.md 和 coding.md 未真实写入磁盘，state.json 中有 artifact 登记但文件缺失（空降痕迹）。需重新生成 api 产物。"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-06-22T01:36:14.289Z"
+    },
+    {
+      "from": "coding",
+      "to": "api",
+      "at": "2026-06-24T07:49:14.869Z",
+      "note": "根据实际后端 API 文档（api-doc 目录）更新 api.md，替换之前的假设结构"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-06-24T08:02:26.625Z"
+    },
+    {
+      "from": "coding",
+      "to": "api",
+      "at": "2026-07-02T02:04:51.941Z",
+      "note": "回退到 api 阶段：基于实际后端 API 文档（api-doc 目录）完整重写 api.md，替换之前的假设结构"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-07-02T02:13:40.080Z",
+      "note": "回到 coding 阶段：审视机房裁撤模块重构代码，基于实际实现修正补全 coding.md"
+    }
+  ],
+  "requirementId": "req-dissolve-restructure",
+  "branch": "feat-dissolve-restructure"
+}

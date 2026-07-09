@@ -81,7 +81,7 @@ export default defineComponent({
       switch (urlKey.value) {
         case 'biz_ziyan_resource_inventory':
           return <p class='mt5 sub-describe'>{t('当前无"业务-主机库存"的权限。')}</p>;
-        case 'biz_ziyan_resource_dissolve':
+        case 'service_resource_dissolve':
           return <p class='mt5 sub-describe'>{t('当前无"服务请求-机房裁撤"的权限。')}</p>;
       }
     };
@@ -91,7 +91,7 @@ export default defineComponent({
       switch (urlKey.value) {
         case 'biz_ziyan_resource_inventory':
           return <p class='mt5 sub-describe'>{t('查询主机的库存信息。')}</p>;
-        case 'biz_ziyan_resource_dissolve':
+        case 'service_resource_dissolve':
           return (
             <p class='mt5 sub-describe'>{t('机房裁撤，一般是由业务运维、SRE等角色管理，一般用户无需申请该功能。')}</p>
           );

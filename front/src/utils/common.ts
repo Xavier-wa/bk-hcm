@@ -66,7 +66,7 @@ const cleanPayload = (payload: any) => {
 };
 
 /** 导出列配置 */
-interface ExportColumn {
+export interface ExportColumn {
   /** 列标题 */
   label?: string;
   /** 字段名，支持嵌套路径如 'a.b.c' */

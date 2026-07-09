@@ -58,6 +58,7 @@ const localModel = computed({
       v-else-if="appearance === 'tag-input'"
       v-model="localModel"
       :collapse-tags="true"
+      :separator="separator"
       v-bind="attrs"
       clearable
       allow-create

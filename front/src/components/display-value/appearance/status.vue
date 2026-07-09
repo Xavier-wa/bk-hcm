@@ -7,6 +7,8 @@ import StatusUnknown from '@/assets/image/Status-unknown.png';
 import StatusSuccess from '@/assets/image/success-account.png';
 import StatusLoading from '@/assets/image/status_loading.png';
 import StatusFailure from '@/assets/image/failed-account.png';
+import StatusWaiting from '@/assets/image/result-waiting.svg';
+
 import { DisplayType } from '../typings';
 
 const props = defineProps<{
@@ -19,6 +21,8 @@ const props = defineProps<{
 const icon = computed(() => {
   switch (props.value) {
     case 'success':
+    case 'done':
+    case 'complete':
       return StatusSuccess;
     case 'failure':
     case 'failed':
@@ -27,11 +31,15 @@ const icon = computed(() => {
       return StatusFailure;
     case 'running':
       return StatusLoading;
+    case 'pending':
+      return StatusUnknown;
     case 'abnormal':
       return StatusAbnormal;
     case 'normal':
     case 'enabled':
       return StatusNormal;
+    case 'incomplete':
+      return StatusWaiting;
     default:
       return StatusUnknown;
   }

@@ -11,6 +11,7 @@ import { useVerify } from '@/hooks/useVerify';
 import ticketRoutes from '@/views/ticket/route-config';
 import { permissionPolicyRoutes } from '@/views/cloud-account-manage/permission-policy/route-config';
 import { gpuDemandSrv as gpuDemandSrvRouteConfig } from '@/views/resource-plan/route-config';
+import dissolveRoutes from '@/views/dissolve/route-config';
 
 const { t } = i18n.global;
 
@@ -20,25 +21,13 @@ const serviceMenus: RouteRecordRaw[] = [
     children: [
       ...ticketRoutes,
       ...permissionPolicyRoutes,
+      ...dissolveRoutes,
       // 单据管理 tab 资源预测详情
       {
         path: '/service/my-apply/resource-plan/detail',
         redirect: '/service/ticket/resource-plan/detail',
         meta: {
           notMenu: true,
-        },
-      },
-
-      {
-        path: '/service/dissolve',
-        component: () => import('@/views/ziyanScr/recycle-server-room'),
-        children: [],
-        meta: {
-          title: t('机房裁撤'),
-          activeKey: 'dissolve',
-          breadcrumb: ['资源', '主机'],
-          isShowBreadcrumb: true,
-          icon: 'hcm-icon bkhcm-icon-dissolve',
         },
       },
     ],

@@ -32,5 +32,5 @@ watchEffect(async () => {
 </script>
 
 <template>
-  {{ displayValue }}
+  {{ displayValue || '--' }}
 </template>

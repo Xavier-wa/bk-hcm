@@ -47,7 +47,7 @@ export type ModelPropertyMeta = {
 // 模型的基础字段，与业务场景无关
 export type ModelProperty = {
   id: string;
-  name: string | Function | VNode;
+  name: string | (() => string | VNode);
   type: ModelPropertyType;
   resource?: ResourceTypeEnum;
   option?: Record<string | number, any> | (() => Promise<Record<string | number, any>>);
@@ -58,6 +58,8 @@ export type ModelProperty = {
   group?: string;
   apiOnly?: boolean;
   hidden?: boolean;
+  /** 导出专用格式化函数，接收整行数据，返回纯文本 */
+  exportFormatter?: (row: Record<string, any>) => string | number;
 };
 
 export type PropertyColumnConfig = {
@@ -81,6 +83,8 @@ export type PropertyColumnConfig = {
   fixed?: 'left' | 'right';
   filter?: IFilterPropShape;
   ellipsis?: PrimaryTableCol['ellipsis'];
+  /** 透传给 display-value / 列渲染组件的额外 props */
+  props?: Record<string, any>;
 };
 
 export type PropertyFormConfig = {
