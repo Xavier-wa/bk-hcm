@@ -16,6 +16,9 @@ export default function useTimeoutPoll(
 
   let times = 0;
 
+  // 组件作用域销毁后置为 true，阻止在途请求 resolve 后再次唤起轮询
+  let isDisposed = false;
+
   function clear() {
     if (timer) {
       clearTimeout(timer);
@@ -47,6 +50,10 @@ export default function useTimeoutPoll(
   }
 
   function resume() {
+    // 作用域已销毁（组件已卸载）则不再启动轮询
+    if (isDisposed) {
+      return;
+    }
     if (!isActive.value) {
       isActive.value = true;
       immediate ? loop() : start();
@@ -68,7 +75,12 @@ export default function useTimeoutPoll(
   }
 
   if (getCurrentScope()) {
-    onScopeDispose(pause);
+    // 组件卸载时彻底停止轮询：清定时器 + 停用，并标记已销毁，
+    // 防止卸载瞬间在途的请求 resolve 后再调用 resume 复活轮询
+    onScopeDispose(() => {
+      isDisposed = true;
+      reset();
+    });
   }
 
   return {
