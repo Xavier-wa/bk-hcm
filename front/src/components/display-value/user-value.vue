@@ -15,6 +15,7 @@ const localValue = computed(() => {
 });
 
 const appearance = computed(() => props.display?.appearance);
+const appearanceProps = computed(() => props.display?.appearanceProps);
 const appearanceComps: Partial<Record<AppearanceType, any>> = {
   ['wxwork-link']: WxworkLink,
 };
@@ -55,7 +56,15 @@ watchEffect(() => {
 
 <template>
   <template v-if="!appearance">
-    {{ displayValue }}
+    <bk-overflow-title class="full-width" resizeable type="tips">
+      {{ displayValue }}
+    </bk-overflow-title>
   </template>
-  <component v-else :is="appearanceComps[appearance]" :display-value="displayValue" :value="value" />
+  <component
+    v-else
+    :is="appearanceComps[appearance]"
+    :display-value="displayValue"
+    :value="value"
+    v-bind="appearanceProps"
+  />
 </template>
