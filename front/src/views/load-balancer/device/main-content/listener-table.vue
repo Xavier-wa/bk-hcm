@@ -45,7 +45,7 @@ const headCheckOptions = [
     name: t('当页全选'),
   },
 ];
-const max = 1000;
+const max = 5000;
 const LISTENER_ROW_KEY = 'id';
 
 // t组件分页属性
@@ -511,11 +511,13 @@ const initAllCheckStatus = () => {
   :deep(.t-table) {
     height: calc(100% - 80px);
 
+    /* stylelint-disable-next-line selector-class-pattern */
     .t-table__content {
       height: 100%;
       overflow-y: auto;
     }
 
+    /* stylelint-disable-next-line selector-class-pattern */
     .t-table__pagination {
       padding: 0;
     }
