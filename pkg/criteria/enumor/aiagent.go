@@ -239,14 +239,44 @@ const (
 	CvmApplyNodeFallback CvmApplyNode = "fallback"
 	// CvmApplyNodeTool is the tool node.
 	CvmApplyNodeTool CvmApplyNode = "tool"
+	// CvmApplyNodeAfterToolHITL is the after-tool human-in-the-loop node, which interrupts
+	// after recommend tools to let the user pick a plan.
+	CvmApplyNodeAfterToolHITL CvmApplyNode = "after_tool_hitl"
 )
 
 // Validate validates the CVM apply node.
 func (n CvmApplyNode) Validate() error {
 	switch n {
-	case CvmApplyNodeLLM, CvmApplyNodeAccountSelect, CvmApplyNodeFallback, CvmApplyNodeTool:
+	case CvmApplyNodeLLM, CvmApplyNodeAccountSelect, CvmApplyNodeFallback, CvmApplyNodeTool, CvmApplyNodeAfterToolHITL:
 	default:
 		return fmt.Errorf("unsupported CVM apply node: %s", n)
 	}
 	return nil
+}
+
+// ToolName is the name of an MCP tool.
+type ToolName string
+
+const (
+	// ToolNameRecommendByStatic 离线偏好 + 库存在线推荐。
+	ToolNameRecommendByStatic ToolName = "get_biz_apply_recommend_by_static"
+	// ToolNameRecommendByPlan 预测余量 + 库存在线推荐。
+	ToolNameRecommendByPlan ToolName = "get_biz_apply_recommend_by_plan"
+	// ToolNameRecommendSplitSuborder 主机申请单据拆分试算。
+	ToolNameRecommendSplitSuborder ToolName = "get_biz_apply_recommend_split_suborder"
+)
+
+// Validate validates the tool name.
+func (n ToolName) Validate() error {
+	switch n {
+	case ToolNameRecommendByStatic, ToolNameRecommendByPlan, ToolNameRecommendSplitSuborder:
+		return nil
+	default:
+		return fmt.Errorf("unsupported tool name: %s", n)
+	}
+}
+
+// IsRecommend 判断是否为推荐类工具
+func (n ToolName) IsRecommend() bool {
+	return n == ToolNameRecommendByStatic || n == ToolNameRecommendByPlan || n == ToolNameRecommendSplitSuborder
 }

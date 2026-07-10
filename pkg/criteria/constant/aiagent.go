@@ -273,6 +273,14 @@ const (
 	// AccountSelectInterruptKey is the key used for graph.Interrupt when multiple accounts are
 	// detected and the user must choose one to proceed with the CVM apply workflow.
 	AccountSelectInterruptKey = "account_select.interrupt"
+
+	// AfterToolHITLRecommendSelectInterruptKey 推荐方案选择场景的中断 key
+	AfterToolHITLRecommendSelectInterruptKey = "after_tool_hitl.recommend_select.interrupt"
+	// AfterToolHITLRecommendSuborderConfirmInterruptKey 推荐方案拆单试算确认场景的中断key
+	AfterToolHITLRecommendSuborderConfirmInterruptKey = "after_tool_hitl.recommend_suborder_confirm.interrupt"
+
+	// AfterToolHITLResumeForwardedEventName 中断恢复时携带前端 forwardedProps 结构化回复的自定义事件名。
+	AfterToolHITLResumeForwardedEventName = "after_tool_hitl.resume_forwarded"
 )
 
 // CVM apply graph state keys
@@ -280,6 +288,15 @@ const (
 	// AccountSelectNextNodeKey is an internal routing key written by the account_select node so the
 	// conditional edge function can decide the next node.
 	AccountSelectNextNodeKey = "account_select.next"
+
+	// StateKeyRecommendCandidates 累积推荐候选的 graph state key。
+	StateKeyRecommendCandidates = "recommend:candidates"
+)
+
+// Apply recommend defaults consumed by the host_apply agent.
+const (
+	// DefaultRecommendLimit 推荐返回方案数缺省值。
+	DefaultRecommendLimit = 5
 )
 
 // tool confirm gate constants
@@ -341,3 +358,6 @@ const PermissionDeniedMsg = "当前用户无权限执行该工具，请联系管
 // NoPermissionFallbackMessage is the fallback reply shown when no available cloud account exists
 // under the current biz, blocking the CVM apply workflow.
 const NoPermissionFallbackMessage = "当前没有可用的云账号，请联系该业务管理员开通权限：[联系管理员](wxwork://message?username=HCM)"
+
+// ExtractDataMaxDepth bounds the recursion when unwrapping nested result/data envelopes.
+const ExtractDataMaxDepth = 5

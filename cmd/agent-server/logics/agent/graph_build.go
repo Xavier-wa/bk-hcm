@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"strings"
 
+	"hcm/cmd/agent-server/logics/agent/aftertool"
 	cvmapply "hcm/cmd/agent-server/logics/agent/cvm_apply"
 	"hcm/cmd/agent-server/logics/agent/hitl"
 	"hcm/cmd/agent-server/logics/agent/intent"
@@ -62,10 +63,11 @@ import (
 //	  ├─ supported session_tag (host_apply)        → host_apply
 //	  ├─ this-turn intent recognised but unsupported → fallback
 //	  └─ no tag / no intent this turn               → intent_recognition → scene_dispatch
-//	  ├─ host_apply → llm → ConditionalEdge(by tool_calls)
-//	  │     ├─ human_confirm → hitl → llm (loop back)
-//	  │     ├─ other_tool_calls → tool → llm (loop back)
-//	  │     └─ no tool_calls → fallback (interrupt) → llm (session stays on host_apply)
+//	llm → ConditionalEdge(by tool_calls)
+//	  ├─ human_confirm → hitl → llm (loop back)
+//	  ├─ other_tool_calls → tool → ConditionalEdge(by recommend tool)
+//	  │     ├─ recommend → after_tool_hitl → llm (interrupt or pass-through)
+//	  │     └─ other tools          → llm (loop back)
 //	  ├─ resource_query → resource_query(subgraph) → fallback (interrupt) → resource_query
 //	fallback (interrupt) → scene_dispatch (re-dispatch; this-turn intent always cleared)
 //
@@ -163,6 +165,10 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 	// 8. Account Select Node: queries biz accounts and auto-selects or triggers HITL.
 	stateGraph.AddNode(string(enumor.CvmApplyNodeAccountSelect), cvmapply.NewAccountSelectNode(clientSet.CloudServer()))
 
+	// 8. After Tool HITL Node: after recommend tools (by_static / by_plan / split_suborder),
+	// decides whether to interrupt for user plan selection based on the tool result.
+	stateGraph.AddNode(string(enumor.CvmApplyNodeAfterToolHITL), aftertool.GetNode())
+
 	// Entry point: every new run starts with intent recognition.
 	stateGraph.SetEntryPoint("scene_dispatch")
 
@@ -198,8 +204,14 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 		string(enumor.CvmApplyNodeLLM):  string(enumor.CvmApplyNodeLLM),
 	})
 
-	// tool loops back to llm to continue the current task.
-	stateGraph.AddEdge(string(enumor.CvmApplyNodeTool), string(enumor.CvmApplyNodeLLM))
+	// tool → after_tool_hitl (recommend tools by_static / by_plan / split_suborder) / llm (other tools).
+	stateGraph.AddConditionalEdges("tool", aftertool.MakeRoutingFunc(), map[string]string{
+		string(enumor.CvmApplyNodeAfterToolHITL): string(enumor.CvmApplyNodeAfterToolHITL),
+		string(enumor.CvmApplyNodeLLM):           string(enumor.CvmApplyNodeLLM),
+	})
+
+	// after_tool_hitl loops back to llm (both interrupt-resume and pass-through paths).
+	stateGraph.AddEdge(string(enumor.CvmApplyNodeAfterToolHITL), string(enumor.CvmApplyNodeLLM))
 
 	// After resource_query subgraph finishes (no tool_calls), enter main fallback
 	// to deliver the reply and interrupt waiting for the next user message.
