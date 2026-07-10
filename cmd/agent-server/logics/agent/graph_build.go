@@ -343,13 +343,13 @@ func makeSceneDispatchNode() graph.NodeFunc {
 		tag := parseSessionTag(state)
 		if tag.IsSupportedScene() {
 			return graph.State{
-				constant.StateKeySessionTag: tag,
+				constant.StateKeySessionTag: string(tag),
 			}, nil
 		}
 
 		// 检查是否意图识别出来了支持的场景，是则提交到 StateKeySessionTag
-		intentStr, _ := state[constant.StateKeyIntent].(string)
-		intentType := enumor.IntentType(intentStr)
+		// parseIntent 从 graph state 中解析本轮意图识别结果。
+		intentType := parseIntent(state)
 		if intentType.IsSupportedScene() {
 			logs.Infof("[scene dispatch] commit session_tag=%s from intent, rid: %s", intentType, rid)
 			return graph.State{constant.StateKeySessionTag: intentType}, nil
@@ -367,6 +367,19 @@ func sceneNodeTarget(scene enumor.IntentType) string {
 	default:
 		// host_apply 及其它默认进入主 ReAct account_select 节点的场景
 		return "account_select"
+	}
+}
+
+// parseIntent 从 graph state 中解析本轮意图识别结果。
+func parseIntent(state graph.State) enumor.IntentType {
+	// 兼容两种type避免state在checkpoint恢复过程中经过序列化和反序列，导致IntentType类型不匹配
+	switch v := state[constant.StateKeyIntent].(type) {
+	case enumor.IntentType:
+		return v
+	case string:
+		return enumor.IntentType(v)
+	default:
+		return ""
 	}
 }
 
@@ -432,7 +445,7 @@ func makeRoutingFunc(hitlReg *hitl.Registry) func(ctx context.Context, state gra
 
 		lastMsg := messages[len(messages)-1]
 		if len(lastMsg.ToolCalls) == 0 {
-			logs.Infof("routing: no tool_calls, route to fallback, rid: %s", rid)
+			logs.Infof("routing: no tool_calls(lastMsg=%+v), route to fallback, rid: %s", lastMsg, rid)
 			return "fallback", nil
 		}
 

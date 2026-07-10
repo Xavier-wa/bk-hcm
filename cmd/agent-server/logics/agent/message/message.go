@@ -115,12 +115,13 @@ func BuildFallbackResumeDelta(ctx context.Context, state graph.State, messages [
 		graph.StateKeyUserInput: "",
 	}
 
+	// StateKeyIntent 在 intent 节点中以 string 形式写入（见 intent.intentState），
+	// 这里需要先断言成string再转换，避免state在checkpoint回复过程中经过序列化和反序列，导致IntentType类型不匹配.
 	intentStr, _ := state[constant.StateKeyIntent].(string)
 	intentType := enumor.IntentType(intentStr)
-	clearingUnsupported := intentStr != "" && !intentType.IsSupportedScene()
-
-	if clearingUnsupported {
-		logs.Infof("[fallback] clear unsupported intent=%s for re-recognition, rid: %s", intentStr, rid)
+	logs.Infof("[fallback] intentType=%s, rid: %s", intentType, rid)
+	if !intentType.IsSupportedScene() {
+		logs.Infof("[fallback] clear unsupported intent=%s for re-recognition, rid: %s", intentType, rid)
 		delta[constant.StateKeyIntent] = ""
 		delta[graph.StateKeyMessages] = []graph.MessageOp{
 			graph.AppendMessages{
