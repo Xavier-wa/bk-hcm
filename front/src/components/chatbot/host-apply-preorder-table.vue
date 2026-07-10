@@ -3,6 +3,7 @@ import { EditLine } from 'bkui-vue/lib/icon';
 
 import { type HostApplySuborder } from '@/hooks/chatbot/types';
 import { getSpecFieldText } from '@/hooks/chatbot/host-apply-display';
+import ReqTypeValue from '@/components/display-value/req-type-value.vue';
 
 interface Props {
   suborders: HostApplySuborder[];
@@ -22,22 +23,25 @@ const emit = defineEmits<{ edit: [index: number] }>();
       <template #default="{ row }">{{ row.device_type || '--' }}</template>
     </bk-table-column>
     <bk-table-column label="操作系统" min-width="140">
-      <template #default="{ row }">{{ row.image_id || '--' }}</template>
+      <template #default="{ row }">{{ getSpecFieldText(row, 'image_id') || '--' }}</template>
     </bk-table-column>
     <bk-table-column label="申请数量" prop="replicas" sort min-width="100">
       <template #default="{ row }">{{ getSpecFieldText(row, 'replicas') || '--' }}</template>
     </bk-table-column>
     <bk-table-column label="地域" min-width="120">
-      <template #default="{ row }">{{ row.region || '--' }}</template>
+      <template #default="{ row }">{{ getSpecFieldText(row, 'region') || '--' }}</template>
     </bk-table-column>
     <bk-table-column label="可用区" min-width="120">
-      <template #default="{ row }">{{ row.zone || '--' }}</template>
+      <template #default="{ row }">{{ getSpecFieldText(row, 'zone') || '--' }}</template>
     </bk-table-column>
     <bk-table-column label="计费模式" min-width="140">
       <template #default="{ row }">{{ getSpecFieldText(row, 'charge_type') || '--' }}</template>
     </bk-table-column>
     <bk-table-column label="需求类型" min-width="120">
-      <template #default="{ row }">{{ row.require_type ?? '--' }}</template>
+      <template #default="{ row }">
+        <ReqTypeValue v-if="row.require_type != null && row.require_type !== ''" :value="Number(row.require_type)" />
+        <template v-else>--</template>
+      </template>
     </bk-table-column>
     <bk-table-column v-if="showDisk" label="系统盘" min-width="160">
       <template #default="{ row }">{{ getSpecFieldText(row, 'system_disk') || '--' }}</template>

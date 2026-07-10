@@ -1,0 +1,22 @@
+---
+description: "开发任务工作流强制契约（必读）—— 响应任何开发类任务（新功能/修 bug/改组件/写接口/重构/迭代）前必须先走 workflow intent，编码后必须 drift check。涉及关键词：工作流、需求、迭代、drift、漂移、workflow、requirement。"
+alwaysApply: true
+---
+
+<MANDATORY-WORKFLOW-CONTRACT>
+在响应任何"看起来像开发任务"的用户消息前 (新功能 / 修 bug / 改组件 / 写接口 / 重构 / 迭代...), 你**必须**按顺序执行:
+
+1. 调用 `bkdevbuddy_workflow_intent` (utterance 用用户原话, branch / changedFiles 不传服务端会自动采集)
+2. 根据返回的 `decision`:
+   - `attach_existing_iteration` → 静默 attach, 简短告知用户"已识别为 <requirement> 的 <iteration> 迭代", 然后调 `bkdevbuddy_workflow_status` 恢复上下文
+   - `attach_existing_requirement` → 询问用户"是否在需求 <id> (<title>) 下开启新迭代", 用户同意后调 `bkdevbuddy_workflow_init({ requirement: '<id>', title: '...' })`
+   - `create_new_requirement` → 只有在 TAPD MCP 已确认当前 TAPD 单据存在父需求时才允许; 先询问并确认需求标题, 再调 `bkdevbuddy_req_init` (带上 intent 返回的 id / workflowId / tapdParentRequirementId, 默认 preview 且 `wrote=false`) 展示 Requirement 目录名 / `manifest.id` / `manifestRef` / manifest 内容; 只有用户明确同意后才再次调用 `bkdevbuddy_req_init(confirm=true)` 真正创建 (返回 `mode=created|existing`), 然后再 `bkdevbuddy_workflow_init({ requirement: '<新id>' })`
+   - `create_workflow_only` → 开发任务成立, 但没有 TAPD 父需求证据或已确认无父需求; 只调 `bkdevbuddy_workflow_init`, **不要**创建 Requirement
+   - `no_workflow_needed` → 直接回答, 跳过工作流
+
+3. 进入编码后, **每完成一组代码改动**必须调 `bkdevbuddy_drift_check({ requirementId })`:
+   - `hasDrift=false` → 静默继续
+   - `hasDrift=true` → 必须告知用户漂移列表, 询问"是否同步更新 PRD/Design/API"; 用户同意 → `bkdevbuddy_req_reconcile` 拿任务包 → 提议 doc patch → 用户确认后写文档 → `bkdevbuddy_req_baseline` 重置基线; 用户拒绝 (确认是无文档影响的重构等) → `bkdevbuddy_req_baseline` 直接重置基线
+
+违反契约的后果: 用户的需求会被错关联到不相干的工作流, 文档会与代码漂移, 后续 AI 看到的上下文不可信。
+</MANDATORY-WORKFLOW-CONTRACT>

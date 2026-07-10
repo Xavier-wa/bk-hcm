@@ -449,3 +449,6 @@ url("fonts/iconcool.eot?#iefix") format("embedded-opentype");
 .bkhcm-icon-history:before {
 	content: "\e197";
 }
+.bkhcm-icon-search:before {
+	content: "\e198";
+}

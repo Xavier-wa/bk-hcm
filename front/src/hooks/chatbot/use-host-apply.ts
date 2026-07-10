@@ -44,6 +44,9 @@ export const useHostApply = (messages: Ref<Message[]>) => {
   // 已选方案下标；未选（含历史回放无该字段）返回 -1，由卡片退化为首条
   const getSelectedIndex = (message: Message): number => (message as HostApplyRecommendMessage).__selectedIndex ?? -1;
 
+  // 初始定位下标（「选择方案 + 添加到配置清单」跳转回放）：仅定位展示、不进只读，无该字段时为首条
+  const getInitialIndex = (message: Message): number => (message as HostApplyRecommendMessage).__initialIndex ?? 0;
+
   // ---- 模板 B：预提单数据 ----
   const isPreorderMessage = (message: Message): boolean =>
     (message as HostApplyPreorderMessage).__type === 'host_apply.preorder';
@@ -105,6 +108,7 @@ export const useHostApply = (messages: Ref<Message[]>) => {
     getRecommendContent,
     getRecommendReadonlyState,
     getSelectedIndex,
+    getInitialIndex,
     isPreorderMessage,
     getPreorderContent,
     getPreorderReadonlyState,

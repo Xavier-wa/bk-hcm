@@ -192,7 +192,7 @@ const handleSubmit = async () => {
 ### Step 9 — Lint 修复
 
 ```bash
-hcmfe lint --fix
+bkdevbuddy lint --fix
 ```
 
 ## 注意事项

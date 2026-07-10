@@ -76,6 +76,18 @@ export const useAccountSelect = (messages: Ref<Message[]>) => {
     return options.find((opt) => opt.account_id === accountId) ?? null;
   };
 
+  // 当前已选定的云账号 id：取最后一条已选定的账号选择消息的 account_id。
+  // 供「添加到配置清单」把聊天中前置选择的账号透传到申领页，预选同一账号。
+  const selectedAccountId = computed<string>(() => {
+    for (let i = messages.value.length - 1; i >= 0; i--) {
+      const message = messages.value[i];
+      if (!isAccountSelectMessage(message)) continue;
+      const { readonly, accountId } = getAccountSelectReadonlyState(message);
+      if (readonly && accountId) return accountId;
+    }
+    return '';
+  });
+
   // 吸顶回显：取最后一条已选定账号的云账号选择消息，解析为厂商名 + 账号名
   const selectedAccountEcho = computed<SelectedAccountEcho | null>(() => {
     for (let i = messages.value.length - 1; i >= 0; i--) {
@@ -98,6 +110,7 @@ export const useAccountSelect = (messages: Ref<Message[]>) => {
     isAccountSelectMessage,
     getAccountSelectContent,
     getAccountSelectReadonlyState,
+    selectedAccountId,
     selectedAccountEcho,
   };
 };

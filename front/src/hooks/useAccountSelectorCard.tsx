@@ -19,6 +19,8 @@ export const useAccountSelectorCard = () => {
       onAccountChange: Function as PropType<(acount: any) => void>,
       disabled: Boolean,
       placeholder: String,
+      // 预选账号 id（如聊天「添加到配置清单」透传）。命中账号列表时优先选中，未命中退化为默认选首个自研云账号
+      presetAccountId: String,
     },
     emits: ['update:modelValue', 'vendorChange'],
     setup(props, { emit }) {
@@ -37,11 +39,27 @@ export const useAccountSelectorCard = () => {
       watch(
         () => accountSelectorStore.businessAccountList,
         async (accountList) => {
-          const selectedAccount = accountList.find((account) => account.vendor === VendorEnum.ZIYAN);
+          // 优先命中预选账号（聊天透传），未命中再退化为默认选首个自研云账号
+          const presetAccount = props.presetAccountId
+            ? accountList.find((account) => account.id === props.presetAccountId)
+            : undefined;
+          const selectedAccount = presetAccount ?? accountList.find((account) => account.vendor === VendorEnum.ZIYAN);
           selectedVal.value = selectedAccount?.id;
           isAccountShow.value = true;
         },
         { deep: true },
+      );
+
+      // 预选账号在账号列表加载完成后才透传过来（如浮窗同页「添加到配置清单」）：命中即切换选中账号
+      watch(
+        () => props.presetAccountId,
+        (id) => {
+          if (!id) return;
+          const account = accountSelectorStore.businessAccountList.find((item) => item.id === id);
+          if (!account) return;
+          selectedVal.value = id;
+          isAccountShow.value = account.vendor === VendorEnum.ZIYAN;
+        },
       );
       const handleChange = async (account: any) => {
         isAccountShow.value = account?.vendor === VendorEnum.ZIYAN;

@@ -1,17 +1,21 @@
 import { ref } from 'vue';
 import { MessageRole, MessageStatus, type Message } from '@blueking/chat-x';
+import isEqual from 'lodash/isEqual';
 
 import * as agentApi from '@/store/chatbot/agent';
 import {
   EventType,
   HOST_APPLY_CONFIRM_EVENT,
   HOST_APPLY_RECOMMEND_EVENT,
+  HOST_APPLY_RESUME_FORWARDED_EVENT,
   HOST_APPLY_SUBMIT_EVENT,
   type AccountSelectInterruptValue,
   type AccountSelectOption,
   type HitlInterruptValue,
+  type HostApplyPreorderMessage,
   type HostApplyRecommendation,
   type HostApplyPreorderValue,
+  type HostApplyRecommendMessage,
   type HostApplyRecommendValue,
   type HostApplySubmitValue,
   type HostApplySuborder,
@@ -332,6 +336,72 @@ export function useStream(msg: MessageModule, event: EventModule) {
     } as Message;
   };
 
+  // 可渲染为卡片的已知 CUSTOM activity name；其余 activity（ACTIVITY_DELTA、resume_forwarded 等）属图执行内部态，不渲染
+  const RENDERABLE_CUSTOM_NAMES = new Set<string>([
+    'hitl.interrupt',
+    'account_select.interrupt',
+    HOST_APPLY_RECOMMEND_EVENT,
+    HOST_APPLY_CONFIRM_EVENT,
+    HOST_APPLY_SUBMIT_EVENT,
+  ]);
+
+  const getActivityName = (raw: Record<string, unknown>): string | undefined =>
+    (raw.content as Record<string, unknown> | undefined)?.name as string | undefined;
+
+  // 是否为 resume 转发回执（仅用于回放恢复选择/确认，不渲染）
+  const isResumeForwarded = (raw: Record<string, unknown>): boolean =>
+    raw.role === 'activity' &&
+    raw.activityType === 'CUSTOM' &&
+    getActivityName(raw) === HOST_APPLY_RESUME_FORWARDED_EVENT;
+
+  // 是否为不渲染的内部 activity：非 CUSTOM（ACTIVITY_DELTA 等）或未在白名单的 CUSTOM
+  const isInternalActivity = (raw: Record<string, unknown>): boolean => {
+    if (raw.role !== 'activity') return false;
+    if (raw.activityType !== 'CUSTOM') return true;
+    return !RENDERABLE_CUSTOM_NAMES.has(getActivityName(raw) ?? '');
+  };
+
+  // 解析 resume_forwarded 的 payload.value。兼容历史调试前缀（如「帮我基于此方案进行拆单{...}」），从首个 { 或 [ 起截取 JSON。
+  const parseResumeForwardedPayload = (raw: Record<string, unknown>): unknown => {
+    const content = raw.content as Record<string, unknown> | undefined;
+    const value = (content?.value as Record<string, unknown> | undefined)?.payload as
+      | Record<string, unknown>
+      | undefined;
+    const text = value?.value;
+    if (typeof text !== 'string') return null;
+    const start = text.search(/[[{]/);
+    if (start < 0) return null;
+    try {
+      return JSON.parse(text.slice(start));
+    } catch {
+      return null;
+    }
+  };
+
+  // 用 resume_forwarded 回执回放恢复最近一张待确认卡片的选择/确认：
+  //   - 数组 → 模板 B（预提单，可修改）：用确认时的 suborders 覆盖展示内容
+  //   - 对象 → 模板 A（方案推荐，不可修改）：匹配候选得到选中下标，未命中兜底首条
+  const applyResumeForwarded = (
+    raw: Record<string, unknown>,
+    lastRecommend: HostApplyRecommendMessage | undefined,
+    lastPreorder: HostApplyPreorderMessage | undefined,
+  ): void => {
+    const payload = parseResumeForwardedPayload(raw);
+    if (!payload) return;
+
+    if (Array.isArray(payload)) {
+      const suborders = payload.filter((item) => item && typeof item === 'object') as HostApplySuborder[];
+      if (lastPreorder && suborders.length) lastPreorder.__confirmedSuborders = suborders;
+      return;
+    }
+
+    if (typeof payload === 'object' && lastRecommend) {
+      const recommendations = lastRecommend.content?.value?.recommendations ?? [];
+      const idx = recommendations.findIndex((item) => isEqual(item.suborder, payload));
+      lastRecommend.__selectedIndex = idx >= 0 ? idx : 0;
+    }
+  };
+
   const streamChat = async (
     userMessages: { role: string; content: string }[],
     resumeValue?: string,
@@ -419,8 +489,24 @@ export function useStream(msg: MessageModule, event: EventModule) {
       await readSSE(reader, (e) => {
         if (e.type === EventType.MessagesSnapshot) {
           const items = (e.messages as Record<string, unknown>[]) || [];
+          // 边遍历边记录最近一张方案推荐卡 / 预提单卡，遇到 resume_forwarded 回执即回填选择/确认内容；
+          // 内部 activity（ACTIVITY_DELTA、resume_forwarded 等）不渲染为气泡。
+          let lastRecommend: HostApplyRecommendMessage | undefined;
+          let lastPreorder: HostApplyPreorderMessage | undefined;
           for (const raw of items) {
-            msg.messages.value.push(toHistoryMessage(raw));
+            if (isResumeForwarded(raw)) {
+              applyResumeForwarded(raw, lastRecommend, lastPreorder);
+              continue;
+            }
+            if (isInternalActivity(raw)) continue;
+
+            const message = toHistoryMessage(raw);
+            msg.messages.value.push(message);
+            if ((message as HostApplyRecommendMessage).__type === 'host_apply.recommend') {
+              lastRecommend = message as HostApplyRecommendMessage;
+            } else if ((message as HostApplyPreorderMessage).__type === 'host_apply.preorder') {
+              lastPreorder = message as HostApplyPreorderMessage;
+            }
           }
           // SNAPSHOT 内连续 user 消息（上次被中断 / 连续停止）每条都补占位
           fillSnapshotUserGaps('未响应或被停止');

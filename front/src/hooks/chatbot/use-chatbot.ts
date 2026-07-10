@@ -1,4 +1,5 @@
 import { MessageRole, type Message } from '@blueking/chat-x';
+import isEqual from 'lodash/isEqual';
 
 import * as sessionApi from '@/store/chatbot/session';
 import { useWhereAmI } from '@/hooks/useWhereAmI';
@@ -7,6 +8,7 @@ import { useEventHandler } from './use-event';
 import { useStream } from './use-stream';
 import { useSession } from './use-session';
 import { useAccountSelect } from './use-account-select';
+import { type HostApplyRecommendMessage, type HostApplySuborder } from './types';
 
 export type { ChatSession } from './types';
 
@@ -104,6 +106,23 @@ export function useChatbot(options: UseChatbotOptions = {}) {
     sessionModule.saveCurrentSession();
   };
 
+  // 「添加到配置清单」从选择方案步骤跳转后，关联会话打开时定位到跳转前所选方案：
+  // 按 suborder 在最近一张方案推荐卡的候选中精确匹配（A 卡不可改，理应命中），写入 __initialIndex 定位展示。
+  // 注意：仅定位、不设 __selectedIndex，卡片保持可交互（用户仍可选择/切换方案继续添加到清单）。
+  const selectRecommendBySuborder = (suborder: HostApplySuborder): boolean => {
+    for (let i = messageModule.messages.value.length - 1; i >= 0; i--) {
+      const message = messageModule.messages.value[i] as HostApplyRecommendMessage;
+      if (message.__type !== 'host_apply.recommend') continue;
+      const recommendations = message.content?.value?.recommendations ?? [];
+      const idx = recommendations.findIndex((item) => isEqual(item.suborder, suborder));
+      if (idx >= 0) {
+        message.__initialIndex = idx;
+        return true;
+      }
+    }
+    return false;
+  };
+
   return {
     messages: messageModule.messages,
     isChatting: streamModule.isChatting,
@@ -125,5 +144,6 @@ export function useChatbot(options: UseChatbotOptions = {}) {
     reloadSessions: sessionModule.reloadSessions,
     clearMessages: messageModule.clearMessages,
     selectedAccountEcho: accountSelectModule.selectedAccountEcho,
+    selectRecommendBySuborder,
   };
 }

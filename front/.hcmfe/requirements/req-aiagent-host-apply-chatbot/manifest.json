@@ -1,0 +1,23 @@
+{
+  "id": "req-aiagent-host-apply-chatbot",
+  "title": "aiagent - 主机申领场景 chatbot",
+  "createdAt": "2026-06-21T10:16:37.530Z",
+  "updatedAt": "2026-06-25T11:32:56.467Z",
+  "external": {
+    "tapd": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598134649532"
+  },
+  "iterations": [
+    {
+      "wfId": "feat-chatbot-hostapply",
+      "status": "coding",
+      "branch": "feat-chatbot-hostapply",
+      "title": "aiagent - 主机申领场景 chatbot",
+      "createdAt": "2026-06-21T10:17:00.579Z"
+    }
+  ],
+  "aggregatedArtifacts": {},
+  "codeScope": {
+    "globs": [],
+    "autoLearned": true
+  }
+}

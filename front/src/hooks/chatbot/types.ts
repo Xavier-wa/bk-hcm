@@ -66,6 +66,9 @@ export type AccountSelectInterruptMessage = Message & {
 export const HOST_APPLY_RECOMMEND_EVENT = 'after_tool_hitl.recommend_select.interrupt';
 export const HOST_APPLY_CONFIRM_EVENT = 'after_tool_hitl.recommend_suborder_confirm.interrupt';
 
+// CUSTOM 事件 name：中断 resume 转发回执。历史回放时据此恢复 A 卡选中方案 / B 卡确认（含修改）的内容。
+export const HOST_APPLY_RESUME_FORWARDED_EVENT = 'after_tool_hitl.resume_forwarded';
+
 // 磁盘规格（系统盘 / 数据盘统一结构）
 export interface HostApplyDisk {
   disk_type: string; // 磁盘类型编码，如 CLOUD_PREMIUM
@@ -120,6 +123,8 @@ export type HostApplyRecommendMessage = Message & {
   __type: 'host_apply.recommend';
   // 实时流中选择方案后写入所选下标，供只读态复用（历史回放无此字段，退化为首条）
   __selectedIndex?: number;
+  // 仅定位展示用下标：从「选择方案 + 添加到配置清单」跳转回放时，定位到跳转前所选方案，但保持卡片可交互（不进入只读）
+  __initialIndex?: number;
 };
 
 // 前端内部扩展消息类型，用于 slot 中识别预提单卡

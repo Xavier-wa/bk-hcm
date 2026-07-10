@@ -1,24 +1,8 @@
 {
   "resources": [
     {
-      "type": "skills",
-      "name": "page-detail"
-    },
-    {
-      "type": "skills",
-      "name": "page-form"
-    },
-    {
-      "type": "skills",
-      "name": "page-list"
-    },
-    {
-      "type": "skills",
-      "name": "workflow-design-figma-intake"
-    },
-    {
-      "type": "skills",
-      "name": "workflow-test-checklist"
+      "type": "agents",
+      "name": "code-reviewer.md"
     },
     {
       "type": "rules",
@@ -53,16 +37,56 @@
       "name": "fe-router-action.mdc"
     },
     {
-      "type": "commands",
-      "name": "archive-export.md"
+      "type": "rules",
+      "name": "workflow-contract.mdc"
     },
     {
-      "type": "commands",
-      "name": "cherry-pick-pr.md"
+      "type": "skills",
+      "name": "archive-export"
     },
     {
-      "type": "commands",
-      "name": "update-env.md"
+      "type": "skills",
+      "name": "cherry-pick-pr"
+    },
+    {
+      "type": "skills",
+      "name": "design-figma-intake"
+    },
+    {
+      "type": "skills",
+      "name": "expert"
+    },
+    {
+      "type": "skills",
+      "name": "page-creator"
+    },
+    {
+      "type": "skills",
+      "name": "page-detail"
+    },
+    {
+      "type": "skills",
+      "name": "page-form"
+    },
+    {
+      "type": "skills",
+      "name": "page-list"
+    },
+    {
+      "type": "skills",
+      "name": "requirement-guardian"
+    },
+    {
+      "type": "skills",
+      "name": "test-checklist"
+    },
+    {
+      "type": "skills",
+      "name": "update-env"
+    },
+    {
+      "type": "skills",
+      "name": "workflow-dev"
     }
   ]
 }

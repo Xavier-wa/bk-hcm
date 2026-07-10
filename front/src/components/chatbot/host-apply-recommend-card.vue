@@ -9,6 +9,7 @@ import {
   type HostApplySuborder,
 } from '@/hooks/chatbot/types';
 import { toSpecDisplayItems } from '@/hooks/chatbot/host-apply-display';
+import ReqTypeValue from '@/components/display-value/req-type-value.vue';
 import CustomMessageCard from './custom-message-card.vue';
 import HostApplyAdjustDialog from './host-apply-adjust-dialog.vue';
 
@@ -16,6 +17,8 @@ interface Props {
   content: HostApplyRecommendValue;
   readonly?: boolean;
   selectedIndex?: number;
+  // 初始定位下标（从「选择方案 + 添加到配置清单」跳转回放）：仅定位展示，不影响只读态
+  initialIndex?: number;
   onSelect: (index: number) => void;
   onAddToList: (suborder: HostApplySuborder) => void;
 }
@@ -23,6 +26,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   readonly: false,
   selectedIndex: -1,
+  initialIndex: 0,
 });
 
 // A 的「调整配置」为本地预览编辑（无明确 agent 回传语义），仅更新当前方案展示，故持有本地副本
@@ -34,7 +38,14 @@ watch(
   },
 );
 
-const pageIndex = ref(0);
+// 非只读态翻页下标，初值取 initialIndex；跳转回放时该 prop 在加载后才写入，故 watch 同步定位
+const pageIndex = ref(props.initialIndex);
+watch(
+  () => props.initialIndex,
+  (index) => {
+    pageIndex.value = index;
+  },
+);
 const adjustVisible = ref(false);
 
 const total = computed(() => localRecommendations.value.length);
@@ -51,14 +62,6 @@ const currentRecommendation = computed<HostApplyRecommendation | null>(
 const specItems = computed(() =>
   currentRecommendation.value ? toSpecDisplayItems(currentRecommendation.value.suborder) : [],
 );
-
-// 来源标签：user=历史配置 / biz=业务推荐（未知来源不展示）
-const sourceLabel = computed(() => {
-  const source = currentRecommendation.value?.source;
-  if (source === 'user') return '历史配置';
-  if (source === 'biz') return '业务推荐';
-  return '';
-});
 
 const titleLabel = computed(() => (props.readonly ? '申领方案预览' : '申领方案推荐'));
 
@@ -94,7 +97,6 @@ const handleAdjustSave = (suborder: HostApplySuborder) => {
     <template #title>
       <span class="ha-title-label">{{ titleLabel }}</span>
       <span class="ha-page-badge">{{ activeIndex + 1 }} / {{ total }}</span>
-      <span v-if="sourceLabel" class="ha-source-tag">{{ sourceLabel }}</span>
     </template>
 
     <template v-if="total > 1 && !readonly" #header-extra>
@@ -106,7 +108,13 @@ const handleAdjustSave = (suborder: HostApplySuborder) => {
     <div class="ha-spec">
       <div v-for="item in specItems" :key="item.key" class="ha-spec-row">
         <span class="ha-spec-label">{{ item.label }}</span>
-        <span class="ha-spec-value">{{ item.value }}</span>
+        <span class="ha-spec-value">
+          <ReqTypeValue
+            v-if="item.key === 'require_type' && currentRecommendation"
+            :value="Number(currentRecommendation.suborder.require_type)"
+          />
+          <template v-else>{{ item.value }}</template>
+        </span>
       </div>
     </div>
 
@@ -147,22 +155,6 @@ const handleAdjustSave = (suborder: HostApplySuborder) => {
   vertical-align: middle;
   background: #e1ecff;
   border-radius: 9px;
-}
-
-// 来源标签（历史配置 / 业务推荐），浅灰底弱色
-.ha-source-tag {
-  display: inline-flex;
-  align-items: center;
-  height: 18px;
-  padding: 0 8px;
-  margin-left: 8px;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 18px;
-  color: #63656e;
-  vertical-align: middle;
-  background: #f0f1f5;
-  border-radius: 2px;
 }
 
 .ha-spec {

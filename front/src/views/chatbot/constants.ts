@@ -26,56 +26,49 @@ export interface PromptChip {
 // 场景标识常量：主机申领。用于按场景过滤会话列表、创建会话时打 session_tag。
 export const SESSION_TAG_HOST_APPLY = 'host_apply';
 
-// session_tag key → 文件夹/场景展示名映射（与侧栏标签文件夹共用）。目前仅支持主机申领。
+// 场景标识常量：资源查询。
+export const SESSION_TAG_RESOURCE_QUERY = 'resource_query';
+
+// session_tag key → 文件夹/场景展示名映射（与侧栏标签文件夹共用）。
 export const SESSION_TAG_NAME: Record<string, string> = {
   [SESSION_TAG_HOST_APPLY]: '主机申领',
+  [SESSION_TAG_RESOURCE_QUERY]: '资源查询',
 };
 
 // 主内容区底部联系人：name 为企业微信账号（点击拉起会话），alias 为展示文案。
-// TODO: 待产品/稿面确认「小助手」对应的真实企微账号后替换 name。
 export const ASSISTANT_CONTACT = {
-  name: '小助手',
+  name: 'ICR',
   alias: '@小助手',
 };
 
 export const BIG_CARDS: BigCard[] = [
   {
     icon: 'bkhcm-icon-host-application',
-    title: '申领 10 台主机',
+    title: '自研云主机申请',
     desc: '可通过智能推荐快捷申领主机',
-    prompt: '我要申领 10 台主机',
+    prompt: '给我推荐申请主机的方案',
     sessionTag: SESSION_TAG_HOST_APPLY,
   },
   {
-    icon: 'bkhcm-icon-host-inventory',
-    title: 'GPU 库存情况',
-    desc: '可查看 GPU 库存情况及使用率',
-    prompt: '我想查看 GPU 库存情况',
-  },
-  {
-    icon: 'bkhcm-icon-host-recycle',
-    title: '如何提交回收申请',
-    desc: '可通过智能引导快速回收资源',
-    prompt: '如何提交回收申请',
-  },
-  {
-    icon: 'bkhcm-icon-host-multi',
-    title: '申领 50 台服务器',
-    desc: '可通过智能推荐快捷申领服务器',
-    prompt: '我要申领 50 台服务器',
-    sessionTag: SESSION_TAG_HOST_APPLY,
+    icon: 'bkhcm-icon-search',
+    title: '资源查询',
+    desc: '可查询主机、负载均衡等资源信息',
+    prompt: '列举出有哪些资源可以查询',
+    sessionTag: SESSION_TAG_RESOURCE_QUERY,
   },
 ];
 
 export const PROMPT_CHIPS: PromptChip[] = [
-  { tag: '主机申领', icon: 'bkhcm-icon-host-application', prompt: '我要申请主机', sessionTag: SESSION_TAG_HOST_APPLY },
-  { tag: '主机回收', icon: 'bkhcm-icon-host-recycle', prompt: '我要回收主机' },
-  { tag: '预测提单', icon: 'bkhcm-icon-resource-plan', prompt: '我要提交预测单' },
-  { tag: '预测调整', icon: 'bkhcm-icon-resource-plan', prompt: '我要调整预测' },
-  { tag: 'CLB申领', icon: 'bkhcm-icon-loadbalancer', prompt: '我要申领 CLB' },
-  { tag: 'CLB删除', icon: 'bkhcm-icon-loadbalancer', prompt: '我要删除 CLB' },
-  { tag: 'CLB批量导入', icon: 'bkhcm-icon-loadbalancer', prompt: '我要批量导入 CLB' },
-  { tag: '安全组创建', icon: 'bkhcm-icon-security-group', prompt: '我要创建安全组' },
-  { tag: '安全组规则管理', icon: 'bkhcm-icon-security-group', prompt: '我要管理安全组规则' },
-  { tag: '安全组绑定/解绑', icon: 'bkhcm-icon-security-group', prompt: '我要绑定或解绑安全组' },
+  {
+    tag: '主机申领',
+    icon: 'bkhcm-icon-host-application',
+    prompt: '我要申请主机，地域：南京，数量：1 台',
+    sessionTag: SESSION_TAG_HOST_APPLY,
+  },
+  {
+    tag: '资源查询',
+    icon: 'bkhcm-icon-search',
+    prompt: '列举出有哪些资源可以查询',
+    sessionTag: SESSION_TAG_RESOURCE_QUERY,
+  },
 ];

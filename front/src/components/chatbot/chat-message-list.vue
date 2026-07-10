@@ -11,7 +11,7 @@ import {
 } from '@blueking/chat-x';
 import '@blueking/chat-x/dist/index.css';
 
-import { useChatbotContext } from '@/hooks/chatbot/provide';
+import { useChatbotContext, useChatbotMode } from '@/hooks/chatbot/provide';
 import { useHitl } from '@/hooks/chatbot/use-hitl';
 import { useAccountSelect } from '@/hooks/chatbot/use-account-select';
 import { useHostApply } from '@/hooks/chatbot/use-host-apply';
@@ -22,15 +22,24 @@ import {
   type HostApplySubmitMessage,
   type HostApplySuborder,
 } from '@/hooks/chatbot/types';
+import { Message as bkMessage } from 'bkui-vue';
+
 import routerAction from '@/router/utils/action';
-import { MENU_SERVICE_HOST_APPLICATION } from '@/constants/menu-symbol';
+import { useWhereAmI } from '@/hooks/useWhereAmI';
+import { useHostApplyBackfillStore } from '@/store/chatbot/host-apply-backfill';
+import { GLOBAL_BIZS_KEY } from '@/common/constant';
 import HitlInterruptCard from './hitl-interrupt-card.vue';
 import AccountSelectCard from './account-select-card.vue';
 import HostApplyRecommendCard from './host-apply-recommend-card.vue';
 import HostApplyPreorderCard from './host-apply-preorder-card.vue';
 import HostApplySubmitCard from './host-apply-submit-card.vue';
 
-const { messages, isChatting, sendMessage, regenerate, resendEdited, stopGeneration } = useChatbotContext();
+const { messages, isChatting, currentSessionCode, sendMessage, regenerate, resendEdited, stopGeneration } =
+  useChatbotContext();
+
+const { getBizsId } = useWhereAmI();
+const chatbotMode = useChatbotMode();
+const hostApplyBackfillStore = useHostApplyBackfillStore();
 
 const selectedUserMessages = ref<Message[]>();
 const { messageGroups } = useMessageGroup({
@@ -41,12 +50,14 @@ const { messageGroups } = useMessageGroup({
 const messageStatus = computed(() => (isChatting.value ? MessageStatus.Streaming : MessageStatus.Complete));
 
 const { isHitlInterruptMessage, getHitlContent, getHitlReadonlyState } = useHitl(messages);
-const { isAccountSelectMessage, getAccountSelectContent, getAccountSelectReadonlyState } = useAccountSelect(messages);
+const { isAccountSelectMessage, getAccountSelectContent, getAccountSelectReadonlyState, selectedAccountId } =
+  useAccountSelect(messages);
 const {
   isRecommendMessage,
   getRecommendContent,
   getRecommendReadonlyState,
   getSelectedIndex,
+  getInitialIndex,
   isPreorderMessage,
   getPreorderContent,
   getPreorderReadonlyState,
@@ -73,11 +84,11 @@ const handleAccountConfirm = (message: Message, accountId: string) => {
 };
 
 // 模板 A 选择方案：记录所选下标（供只读态复用），以 resumeValue 回写所选 suborder（JSON 串）；
-// agent 随后返回预提单（模板 B）。【假设】resume 承载形式待后端确认，见 api.md §6。
+// agent 随后返回预提单（模板 B）。
 const handleSelectPlan = (message: Message, index: number) => {
   (message as HostApplyRecommendMessage).__selectedIndex = index;
   const suborder = getRecommendContent(message)?.value.recommendations[index]?.suborder;
-  const resumeValue = suborder ? `帮我基于此方案进行拆单${JSON.stringify(suborder)}` : undefined;
+  const resumeValue = suborder ? JSON.stringify(suborder) : undefined;
   sendMessage('我选择该申领方案', undefined, resumeValue);
 };
 
@@ -88,10 +99,32 @@ const handleConfirmPreorder = (message: Message, suborders: HostApplySuborder[],
   sendMessage(edited ? '确认申领配置（已调整）' : '确认申领配置', undefined, JSON.stringify(suborders));
 };
 
-// 「添加到配置清单」：本迭代仅跳转主机申请页面 + 预留入口；回填配置清单留后续「回填」需求实现
-const handleAddToList = (_payload: HostApplySuborder | HostApplySuborder[]) => {
-  // TODO: 后续「回填」需求接入：携带 _payload 回填配置清单并联动打开 AI 助手
-  routerAction.redirect({ name: MENU_SERVICE_HOST_APPLICATION });
+// 「添加到配置清单」分两种形态：
+// - 浮窗（floating）：chatbot 与申领页 ApplicationForm 同页，经 store 直接追加到当前页配置清单并提示，不开新标签页。
+// - 全页（fullpage）：新标签页打开 applyCvm 申领页，方案规格经 URL query 透传（新标签页是独立实例无法用 store），
+//   并携带 sessionCode 让申领页唤起对应会话的 AI 助手浮窗（见 service-apply/cvm/index.tsx）。
+const handleAddToList = (payload: HostApplySuborder | HostApplySuborder[]) => {
+  const suborders = Array.isArray(payload) ? payload : [payload];
+  // 申领页账号选择是前置步骤，带上聊天中已选账号让申领页预选同一账号
+  const accountId = selectedAccountId.value;
+  if (chatbotMode === 'floating') {
+    hostApplyBackfillStore.pushBackfill(suborders, accountId);
+    bkMessage({ theme: 'success', message: '配置已添加到清单' });
+    return;
+  }
+  // 仅 A 卡（选择方案步骤）传单方案：标记 selectPlan，让申领页打开关联会话后选中该方案（与 backfill 同一规格）
+  const fromRecommend = !Array.isArray(payload);
+  routerAction.open({
+    name: 'applyCvm',
+    query: {
+      from: 'chatbot',
+      [GLOBAL_BIZS_KEY]: getBizsId(),
+      backfill: JSON.stringify(suborders),
+      sessionCode: currentSessionCode.value ?? '',
+      ...(accountId ? { accountId } : {}),
+      ...(fromRecommend ? { selectPlan: '1' } : {}),
+    },
+  });
 };
 
 // 模板 D 确认提交申请单：记录已提交（供只读态复用），以 resumeValue 回传整个 data（含 body_param/path_param）。
@@ -141,6 +174,7 @@ const handleStopSending = () => {
         :content="getRecommendContent(message)"
         :readonly="getRecommendReadonlyState(message).readonly"
         :selected-index="getSelectedIndex(message)"
+        :initial-index="getInitialIndex(message)"
         :on-select="(index) => handleSelectPlan(message, index)"
         :on-add-to-list="handleAddToList"
       />

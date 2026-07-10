@@ -1,3 +1,5 @@
+import type { HostApplySuborder } from '@/hooks/chatbot/types';
+
 // ai-assistant 浮窗组件的公共类型定义（壳层）
 
 /** 位置与尺寸 */
@@ -81,8 +83,8 @@ export interface AiAssistantExpose {
   hide: () => void;
   /** 切换面板显隐 */
   toggle: () => void;
-  /** 初始化会话列表（可指定默认选中的 sessionCode） */
-  initSessions: (sessionCode?: string) => void;
+  /** 初始化会话列表（可指定默认选中的 sessionCode；携带 preselectSuborder 时加载后选中对应方案） */
+  initSessions: (sessionCode?: string, preselectSuborder?: HostApplySuborder) => void | Promise<void>;
   /** 切换到指定会话 */
   switchSession: (sessionCode: string) => void;
 }

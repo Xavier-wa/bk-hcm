@@ -12,6 +12,7 @@ import AiAssistantNimbus from './nimbus.vue';
 import AiAssistantHistoryDropdown from './history-dropdown.vue';
 import { isTogglePanelShortcut } from './utils';
 
+import type { HostApplySuborder } from '@/hooks/chatbot/types';
 import type { AiAssistantExpose } from './types';
 
 defineOptions({
@@ -50,6 +51,7 @@ const {
   switchSession,
   initSessions,
   selectedAccountEcho,
+  selectRecommendBySuborder,
 } = chatbot;
 
 const draggableContainerRef = useTemplateRef<InstanceType<typeof DraggableContainer>>('draggableContainerRef');
@@ -71,10 +73,12 @@ const ensureSessions = () => {
   initSessions();
 };
 
-// 深链初始化：加载并切换到指定会话，同时标记已初始化，避免 show() 再次重复拉取
-const initSessionsWithScene = (sessionCode?: string) => {
+// 深链初始化：加载并切换到指定会话，同时标记已初始化，避免 show() 再次重复拉取。
+// 携带 preselectSuborder 时（从「选择方案 + 添加到配置清单」跳转而来），会话加载完成后选中对应方案。
+const initSessionsWithScene = async (sessionCode?: string, preselectSuborder?: HostApplySuborder) => {
   sessionsInited.value = true;
-  initSessions(sessionCode);
+  await initSessions(sessionCode);
+  if (preselectSuborder) selectRecommendBySuborder(preselectSuborder);
 };
 
 const show = () => {

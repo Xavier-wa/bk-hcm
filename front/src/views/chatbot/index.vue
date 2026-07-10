@@ -598,25 +598,28 @@ onMounted(() => {
           </div>
           <div v-else-if="isHomeEmpty" class="home-default">
             <div class="welcome">
-              <img class="welcome-icon" :src="cloudAssistantSvg" alt="海垒 AI 助手" />
+              <div class="welcome-icon-wrapper">
+                <img class="welcome-icon" :src="cloudAssistantSvg" alt="海垒 AI 助手" />
+              </div>
               <h3 class="welcome-title">海垒 AI 助手</h3>
-              <p class="welcome-tips">可使用对话进行快捷主机申领，主机回收，预测提单等</p>
+              <p class="welcome-tips">可使用对话进行快捷主机申领，资源查询等</p>
             </div>
             <div class="big-cards">
-              <button
+              <div
                 v-for="card in BIG_CARDS"
                 :key="card.title"
-                type="button"
                 class="big-card"
                 :disabled="isChatting"
                 @click="handleBigCardClick(card)"
               >
-                <i class="hcm-icon big-card-icon" :class="card.icon" />
+                <div class="big-card-icon-wrapper">
+                  <i class="hcm-icon big-card-icon" :class="card.icon" />
+                </div>
                 <div class="big-card-body">
                   <span class="big-card-title">{{ card.title }}</span>
                   <span class="big-card-desc">{{ card.desc }}</span>
                 </div>
-              </button>
+              </div>
             </div>
           </div>
           <!-- 已选中会话但无消息：保持空白，不回退默认内容 -->
@@ -641,16 +644,15 @@ onMounted(() => {
           <div class="prompt-chips-inner">
             <div ref="chipsViewportRef" class="chips-viewport">
               <div class="chips-track" :style="chipTrackStyle">
-                <button
+                <div
                   v-for="chip in PROMPT_CHIPS"
                   :key="chip.tag"
-                  type="button"
                   class="prompt-chip"
                   @click="handlePromptChipClick(chip)"
                 >
                   <i class="hcm-icon prompt-chip-icon" :class="chip.icon" />
                   <span class="prompt-chip-label">{{ chip.tag }}</span>
-                </button>
+                </div>
               </div>
             </div>
             <button v-if="hasChipPaging" type="button" class="chip-pager" @click="toggleChipSegment">
@@ -1065,54 +1067,72 @@ onMounted(() => {
       flex-direction: column;
       align-items: center;
 
+      .welcome-icon-wrapper {
+        width: 64px;
+        height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #cddffe;
+        border-radius: 16px;
+      }
+
       .welcome-icon {
-        width: 48px;
-        height: 48px;
+        width: 40px;
+        height: 40px;
       }
 
       .welcome-title {
         margin-top: 12px;
-        font-size: 20px;
-        font-weight: 600;
+        font-size: 32px;
+        font-weight: 700;
         color: var(--chat-empty-title);
       }
 
       .welcome-tips {
         margin-top: 8px;
         font-size: 14px;
-        color: var(--chat-empty-desc);
+        color: #4d4f56;
       }
     }
 
     .big-cards {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-      gap: 12px;
+      gap: 16px;
       width: 100%;
       max-width: 960px;
-      margin-top: 20px;
+      margin-top: 52px;
     }
 
     .big-card {
       display: flex;
       gap: 12px;
       align-items: center;
-      padding: 16px;
+      padding: 24px;
       text-align: left;
       cursor: pointer;
       background: #fff;
-      border: 1px solid var(--sidebar-border);
-      border-radius: 8px;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
 
       &:hover {
-        border-color: var(--sidebar-item-active-color);
-        box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+        box-shadow: 0 4px 12px 0 rgb(0 0 0 / 20%);
       }
 
       &:disabled {
         cursor: not-allowed;
         opacity: 0.6;
+      }
+
+      .big-card-icon-wrapper {
+        width: 50px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgb(0 87 192 / 5%);
+        border-radius: 4px;
       }
 
       .big-card-icon {
@@ -1129,15 +1149,15 @@ onMounted(() => {
       }
 
       .big-card-title {
-        font-size: 14px;
-        font-weight: 600;
+        font-size: 16px;
+        font-weight: 700;
         color: var(--chat-empty-title);
       }
 
       .big-card-desc {
         overflow: hidden;
-        font-size: 12px;
-        color: var(--chat-empty-desc);
+        font-size: 14px;
+        color: #4d4f56;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -1274,18 +1294,17 @@ onMounted(() => {
       height: 28px;
       padding: 0 10px;
       font-size: 12px;
-      color: var(--sidebar-text);
+      color: #4d4f56;
       white-space: nowrap;
       cursor: pointer;
       background: #fff;
-      border: 1px solid var(--sidebar-border);
       border-radius: 14px;
-      transition: background 0.2s, border-color 0.2s;
+      box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
+      transition: background 0.2s;
 
       &:hover {
-        color: var(--sidebar-item-active-color);
-        background: var(--sidebar-item-active-bg);
-        border-color: var(--sidebar-item-active-color);
+        background: rgb(240 241 245 / 100%);
+        box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
       }
 
       .prompt-chip-icon {

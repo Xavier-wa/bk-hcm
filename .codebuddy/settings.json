@@ -1,0 +1,45 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bkdevbuddy hook run lint --ide codebuddy"
+          }
+        ],
+        "matcher": "Edit|Write"
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bkdevbuddy hook run redline --ide codebuddy"
+          }
+        ],
+        "matcher": "Edit|Write"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bkdevbuddy hook run drift --ide codebuddy"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bkdevbuddy hook run scan-secrets --ide codebuddy"
+          }
+        ],
+        "matcher": "Write|Edit"
+      }
+    ]
+  }
+}
