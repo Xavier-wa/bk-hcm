@@ -212,6 +212,8 @@ type ListResPlanDemandOverview struct {
 
 // ListResPlanDemandItem is list resource plan demand detail's item
 type ListResPlanDemandItem struct {
+	ListResPlanDemandItemBase
+
 	DemandID         string               `json:"demand_id"`
 	BkBizID          int64                `json:"bk_biz_id"`
 	BkBizName        string               `json:"bk_biz_name"`
@@ -219,23 +221,12 @@ type ListResPlanDemandItem struct {
 	OpProductName    string               `json:"op_product_name"`
 	PlanProductID    int64                `json:"plan_product_id"`
 	PlanProductName  string               `json:"plan_product_name"`
-	Status           enumor.DemandStatus  `json:"status"`
-	StatusName       string               `json:"status_name"`
-	DemandClass      enumor.DemandClass   `json:"demand_class"`
 	DemandResType    enumor.DemandResType `json:"demand_res_type"`
-	ExpectTime       string               `json:"expect_time"`
-	ReturnPlanTime   *string              `json:"return_plan_time"`
-	CanApplyTime     string               `json:"can_apply_time"`
-	ExpiredTime      string               `json:"expired_time"`
 	DeviceClass      string               `json:"device_class"`
 	DeviceType       string               `json:"device_type"`
 	TotalOS          decimal.Decimal      `json:"total_os"`
 	AppliedOS        decimal.Decimal      `json:"applied_os"`
 	RemainedOS       decimal.Decimal      `json:"remained_os"`
-	TotalCpuCore     int64                `json:"total_cpu_core"`
-	AppliedCpuCore   int64                `json:"applied_cpu_core"`
-	RemainedCpuCore  int64                `json:"remained_cpu_core"`
-	ExpiringCpuCore  int64                `json:"-"` // ExpiringCpuCore 即将过期核心数，目前仅用于计算overview
 	TotalMemory      int64                `json:"total_memory"`
 	AppliedMemory    int64                `json:"applied_memory"`
 	RemainedMemory   int64                `json:"remained_memory"`
@@ -259,6 +250,30 @@ type ListResPlanDemandItem struct {
 	DiskIO           int64                `json:"disk_io"`
 	Creator          string               `json:"creator"`
 	Reviser          string               `json:"reviser"`
+}
+
+// ListResPlanDemandItemBase is base of list resource plan demand item.
+type ListResPlanDemandItemBase struct {
+	DemandClass     enumor.DemandClass  `json:"demand_class"`
+	ExpectTime      string              `json:"expect_time"`
+	ReturnPlanTime  *string             `json:"return_plan_time"`
+	CanApplyTime    string              `json:"can_apply_time"`
+	ExpiredTime     string              `json:"expired_time"`
+	Status          enumor.DemandStatus `json:"status"`
+	StatusName      string              `json:"status_name"`
+	TotalCpuCore    int64               `json:"total_cpu_core"`
+	AppliedCpuCore  int64               `json:"applied_cpu_core"`
+	RemainedCpuCore int64               `json:"remained_cpu_core"`
+	ExpiringCpuCore int64               `json:"-"` // ExpiringCpuCore 即将过期核心数，目前仅用于计算overview
+}
+
+// SetStatus set demand status
+func (l *ListResPlanDemandItemBase) SetStatus(status enumor.DemandStatus) {
+	l.Status = status
+	// spent_all（已耗尽）优先级更高
+	if l.AppliedCpuCore == l.TotalCpuCore {
+		l.Status = enumor.DemandStatusSpentAll
+	}
 }
 
 // BudgetOperatorSyncReq defines the payload for budget operator sync.
@@ -308,15 +323,6 @@ type BudgetOperatorSyncResp struct {
 	FailedDemandIDs  []string `json:"failed_demand_ids"`
 	SkippedCount     int      `json:"skipped_count"`
 	SkippedDemandIDs []string `json:"skipped_demand_ids"`
-}
-
-// SetStatus set demand status
-func (l *ListResPlanDemandItem) SetStatus(status enumor.DemandStatus) {
-	l.Status = status
-	// spent_all（已耗尽）优先级更高
-	if l.AppliedCpuCore == l.TotalCpuCore {
-		l.Status = enumor.DemandStatusSpentAll
-	}
 }
 
 // SetRegionAndZoneID set region and zone id
@@ -841,7 +847,7 @@ func (c *CrpOrderChangeInfo) GetKey(bkBizID int64, demandClass enumor.DemandClas
 		DeviceType:    c.DeviceType,
 		DiskIO:        c.DiskIO,
 	}
-	key.DiskType = key.DiskType.GetWithDefault()
+	key.DiskType = c.DiskType.GetWithDefault()
 
 	return key
 }

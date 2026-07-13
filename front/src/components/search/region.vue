@@ -4,7 +4,7 @@ import { VendorEnum } from '@/common/constant';
 import RegionSelector from '@/views/service/service-apply/components/common/region-selector.vue';
 defineOptions({ name: 'hcm-search-region' });
 
-const model = defineModel<string>();
+const model = defineModel<string | string[]>();
 defineProps<{ vendor: VendorEnum }>();
 const attrs = useAttrs();
 </script>

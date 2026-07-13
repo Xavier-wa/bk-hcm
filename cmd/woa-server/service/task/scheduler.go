@@ -648,6 +648,13 @@ func (s *service) createApplyOrder(kt *kit.Kit, input *types.ApplyReq) (any, err
 		return nil, err
 	}
 
+	// 额度预检（fail-fast）：提前拦截超额提单，改善用户体验。复用审批建单前置校验的同一入口 CheckApplyQuota，避免两处口径漂移。
+	// NOTE：因提单到审批存在时间差且校验基于「已交付」不锁额度，预检通过不保证后续审批通过后依然有额度。
+	if err := s.logics.Scheduler().CheckApplyQuota(kt, input.BkBizId, input.RequireType, input.Suborders); err != nil {
+		logs.Errorf("precheck apply quota failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
 	rst, err := s.logics.Scheduler().CreateApplyOrder(kt, input)
 	if err != nil {
 		logs.Errorf("failed to create apply order, err: %v, rid: %s", err, kt.Rid)

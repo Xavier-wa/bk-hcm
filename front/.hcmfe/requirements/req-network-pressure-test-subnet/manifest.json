@@ -1,0 +1,23 @@
+{
+  "id": "req-network-pressure-test-subnet",
+  "title": "自研云-主机申领-网络信息增加压测子网配置类型",
+  "createdAt": "2026-06-04T09:25:29.769Z",
+  "updatedAt": "2026-06-09T01:33:32.491Z",
+  "external": {
+    "tapd": "https://<TAPD_HOST>/tapd_fe/my/work?dialog_preview_id=story_1069995598135009392"
+  },
+  "iterations": [
+    {
+      "wfId": "feat-load-test-subnets",
+      "status": "done",
+      "branch": "feat-load-test-subnets",
+      "title": "自研云-主机申领-网络信息增加压测子网配置类型",
+      "createdAt": "2026-06-04T09:25:33.965Z"
+    }
+  ],
+  "aggregatedArtifacts": {},
+  "codeScope": {
+    "globs": [],
+    "autoLearned": true
+  }
+}

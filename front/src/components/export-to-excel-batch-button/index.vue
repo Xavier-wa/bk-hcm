@@ -2,7 +2,7 @@
 import { exportTableToExcel } from '@/utils';
 import { MAX_ROWS_PER_FILE } from '@/vendor/Export2Excel';
 import { InfoBox, Message } from 'bkui-vue';
-import { h, useCssModule } from 'vue';
+import { h, ref, useCssModule } from 'vue';
 
 interface ExportToExcelButtonProps {
   data?: any[];
@@ -17,12 +17,18 @@ interface ExportToExcelButtonProps {
   cancelText?: string;
   showConfirmDialog?: boolean;
   disabled?: boolean;
-  request?: (signal: AbortSignal) => Promise<any[]>;
+  request?: (signal: AbortSignal, extraParams?: Record<string, any>) => Promise<any[]>;
   pickNum?: number;
   maxExportNum?: number;
+  showIcon?: boolean;
+  useCustomDialog?: boolean;
+  dialogTitle?: string;
+  dialogWidth?: string;
+  confirmDisabled?: boolean;
 }
 
 defineOptions({ name: 'ExportToExcelBatchButton' });
+const extraParams = defineModel<Record<string, any>>('extraParams', { default: () => ({}) });
 const props = withDefaults(defineProps<ExportToExcelButtonProps>(), {
   filename: '导出文件',
   text: '导出',
@@ -36,6 +42,11 @@ const props = withDefaults(defineProps<ExportToExcelButtonProps>(), {
   disabled: false,
   pickNum: 0,
   maxExportNum: 450000,
+  showIcon: false,
+  useCustomDialog: false,
+  dialogTitle: '导出',
+  dialogWidth: '520',
+  confirmDisabled: false,
 });
 
 const emit = defineEmits<{
@@ -45,6 +56,9 @@ const emit = defineEmits<{
 }>();
 
 const classes = useCssModule();
+
+const isShow = ref(false);
+const exporting = ref(false);
 
 // 用于取消导出操作的控制器
 let abortController: AbortController | null = null;
@@ -219,18 +233,118 @@ const invokeExport = () => {
 };
 // 点击处理
 const handleClick = () => {
+  if (props.useCustomDialog) {
+    isShow.value = true;
+    return;
+  }
   if (props.showConfirmDialog) {
     invokeExport();
   } else {
     exportToExcel();
   }
 };
+
+// 自定义 dialog 确认导出
+const handleCustomDialogConfirm = async () => {
+  if (exporting.value) return;
+
+  const dataLength = props.data.length || props.pickNum;
+
+  if (dataLength > props.maxExportNum) {
+    Message({
+      theme: 'error',
+      message: `导出数量已超过上限 ${props.maxExportNum} 条，请筛选条件后再提交导出`,
+    });
+    return;
+  }
+
+  exporting.value = true;
+  abortController = new AbortController();
+  const { signal } = abortController;
+
+  try {
+    if (props.request) {
+      const list = await props.request(signal, extraParams.value);
+      if (signal.aborted) {
+        throw new Error('终止导出');
+      }
+      await exportTableToExcel(list, props.columns, props.filename).then(() => {
+        Message({
+          theme: 'success',
+          message: '导出成功',
+        });
+      });
+    }
+    isShow.value = false;
+  } catch (error: any) {
+    if (signal.aborted || error?.message === '终止导出') {
+      isShow.value = false;
+      return;
+    }
+    Message({
+      theme: 'error',
+      message: error?.message || '导出失败',
+    });
+  } finally {
+    exporting.value = false;
+    abortController = null;
+  }
+};
+
+// 自定义 dialog 关闭时：若导出中则终止请求
+const handleCustomDialogClosed = () => {
+  if (abortController) {
+    abortController.abort();
+    emit('abort');
+  }
+};
 </script>
 
 <template>
   <bk-button :disabled="disabled" @click="handleClick">
+    <i v-if="showIcon" class="hcm-icon bkhcm-icon-download mr8"></i>
     {{ props.text }}
   </bk-button>
+
+  <bk-dialog
+    v-if="useCustomDialog"
+    v-model:is-show="isShow"
+    :title="dialogTitle"
+    :width="dialogWidth"
+    :close-icon="!exporting"
+    :esc-close="!exporting"
+    :quick-close="!exporting"
+    @closed="handleCustomDialogClosed"
+  >
+    <template v-if="exporting">
+      <slot name="loading-content">
+        <div class="custom-dialog-loading">
+          <bk-loading :loading="true" mode="spin" size="large" theme="primary" :opacity="0">
+            <div class="loading-text-container">
+              <div class="loading-title">导出中...</div>
+              <div class="loading-description">正在生成 Excel，请稍候</div>
+            </div>
+          </bk-loading>
+        </div>
+      </slot>
+    </template>
+    <template v-else>
+      <slot name="dialog-content" :exporting="false" />
+    </template>
+    <template #footer>
+      <template v-if="exporting">
+        <bk-button @click="handleCustomDialogClosed">终止导出</bk-button>
+      </template>
+      <template v-else>
+        <bk-button @click="isShow = false">
+          {{ cancelText }}
+        </bk-button>
+        <bk-button theme="primary" :disabled="confirmDisabled" @click="handleCustomDialogConfirm">
+          {{ confirmText }}
+        </bk-button>
+      </template>
+    </template>
+  </bk-dialog>
 </template>
 
 <style lang="scss" module>
@@ -270,6 +384,34 @@ const handleClick = () => {
     em {
       color: #ea3636;
     }
+  }
+}
+
+.custom-dialog-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  padding: 40px 0;
+
+  .loading-text-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .loading-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #313238;
+    line-height: 24px;
+  }
+
+  .loading-description {
+    font-size: 14px;
+    color: #63656e;
+    line-height: 22px;
   }
 }
 </style>

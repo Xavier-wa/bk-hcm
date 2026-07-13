@@ -201,7 +201,7 @@ func (cli *client) createRegion(kt *kit.Kit, opt *SyncRegionOption, addSlice []t
 		return errors.New("region addSlice is <= 0, not create")
 	}
 
-	createResources := make([]dataregion.TCloudRegionBatchCreate, 0, len(addSlice))
+	createResources := make([]dataregion.TCloudZiyanRegionBatchCreate, 0, len(addSlice))
 
 	for _, one := range addSlice {
 		areaName, cityName := extractAreaAndCityName(one.RegionName)
@@ -209,7 +209,7 @@ func (cli *client) createRegion(kt *kit.Kit, opt *SyncRegionOption, addSlice []t
 		if crpCityName, ok := regionCityMap[one.RegionID]; ok && crpCityName != "" {
 			cityName = crpCityName
 		}
-		tmpRes := dataregion.TCloudRegionBatchCreate{
+		tmpRes := dataregion.TCloudZiyanRegionBatchCreate{
 			Vendor:     enumor.TCloudZiyan,
 			RegionID:   one.RegionID,
 			RegionName: one.RegionName,
@@ -221,8 +221,9 @@ func (cli *client) createRegion(kt *kit.Kit, opt *SyncRegionOption, addSlice []t
 		createResources = append(createResources, tmpRes)
 	}
 
-	createReq := &dataregion.TCloudRegionCreateReq{
-		Regions: createResources,
+	createReq := &dataregion.TCloudZiyanRegionCreateReq{
+		AccountID: opt.AccountID,
+		Regions:   createResources,
 	}
 	if _, err := cli.dbCli.TCloudZiyan.Region.BatchCreate(kt, createReq); err != nil {
 		logs.Errorf("[%s] create region failed, err: %v, account: %s, opt: %v, rid: %s", enumor.TCloudZiyan,

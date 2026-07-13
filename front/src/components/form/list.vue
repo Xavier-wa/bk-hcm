@@ -18,10 +18,12 @@ const props = withDefaults(
     clearable?: boolean;
     multiple?: boolean;
     display?: DisplayType;
+    filterable?: boolean;
   }>(),
   {
     clearable: false,
     multiple: false,
+    filterable: true,
   },
 );
 const emit = defineEmits<{
@@ -153,7 +155,7 @@ defineExpose({
     :scroll-loading="isGeneratorMode ? scrollLoading : undefined"
     :remote-method="isGeneratorMode ? handleRemoteMethod : undefined"
     v-bind="attrs"
-    filterable
+    :filterable="filterable"
     @change="handleChange"
     @scroll-end="handleScrollEnd"
   >

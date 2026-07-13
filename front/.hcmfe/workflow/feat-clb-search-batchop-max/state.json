@@ -1,0 +1,54 @@
+{
+  "id": "feat-clb-search-batchop-max",
+  "title": "负载均衡-配置检索-批量操作优化-放开上限",
+  "currentStage": "done",
+  "createdAt": "2026-07-06T07:29:02.688Z",
+  "updatedAt": "2026-07-06T08:16:34.724Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-clb-search-batchop-max/coding.md",
+        "kind": "file",
+        "addedAt": "2026-07-06T07:30:03.261Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-07-06T08:15:54.470Z",
+      "note": "用户确认 coding 完成：监听器批量操作上限 1000→5000，仅改 listener-table.vue"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-07-06T07:29:02.688Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-07-06T08:15:54.470Z",
+      "note": "用户确认 coding 完成：监听器批量操作上限 1000→5000，仅改 listener-table.vue"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-07-06T08:16:34.724Z",
+      "note": "用户明确：往下继续推进工作流，但不需要生成 test.md"
+    }
+  ],
+  "branch": "feat-clb-search-batchop-max",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598135727363"
+  }
+}

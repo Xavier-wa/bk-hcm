@@ -27,6 +27,7 @@ import (
 	"hcm/cmd/hc-service/service/sync/handler"
 	"hcm/pkg/api/core"
 	coredevicetype "hcm/pkg/api/core/cloud/device-type"
+	corezone "hcm/pkg/api/core/cloud/zone"
 	"hcm/pkg/api/data-service/cloud/zone"
 	"hcm/pkg/api/hc-service/sync"
 	"hcm/pkg/cc"
@@ -114,12 +115,12 @@ func (hd *deviceTypeHandler) Next(kt *kit.Kit) ([]coredevicetype.DeviceType, err
 }
 
 // listZones 分页获取指定地域的可用区
-func (hd *deviceTypeHandler) listZones(kt *kit.Kit, region string) ([]string, error) {
+func (hd *deviceTypeHandler) listZones(kt *kit.Kit, region string) ([]corezone.BaseZone, error) {
 	req := &zone.ZoneListReq{
 		Filter: tools.ExpressionAnd(tools.RuleEqual("vendor", enumor.TCloudZiyan), tools.RuleEqual("region", region)),
 		Page:   core.NewDefaultBasePage(),
 	}
-	zones := make([]string, 0)
+	zones := make([]corezone.BaseZone, 0)
 
 	for {
 		result, err := hd.dataCli.Global.Zone.ListZone(kt.Ctx, kt.Header(), req)
@@ -127,9 +128,7 @@ func (hd *deviceTypeHandler) listZones(kt *kit.Kit, region string) ([]string, er
 			logs.Errorf("list zones failed, err: %v, region: %s, rid: %s", err, region, kt.Rid)
 			return nil, err
 		}
-		for _, zone := range result.Details {
-			zones = append(zones, zone.Name)
-		}
+		zones = append(zones, result.Details...)
 		if len(result.Details) < int(req.Page.Limit) {
 			break
 		}
@@ -140,28 +139,24 @@ func (hd *deviceTypeHandler) listZones(kt *kit.Kit, region string) ([]string, er
 }
 
 // listDeviceTypeFromCloud 从云上获取机型数据
-func (hd *deviceTypeHandler) listDeviceTypeFromCloud(kt *kit.Kit, region string, zones []string) (
+func (hd *deviceTypeHandler) listDeviceTypeFromCloud(kt *kit.Kit, region string, zones []corezone.BaseZone) (
 	[]coredevicetype.DeviceType, error) {
 
 	deviceTypes := make([]coredevicetype.DeviceType, 0)
-	for _, zoneName := range zones {
-		// 1. 调用 GetInstanceTypeInfo 获取可用区下的机型列表
-		getInfoParams := &cvmapi.GetInstanceTypeInfoParams{
-			DeptId: cvmapi.CvmDeptId,
-			Zone:   zoneName,
+	for _, zone := range zones {
+		// 1. 调用 QueryCvmTypeList 获取可用区下的机型列表
+		listParams := &cvmapi.QueryCvmTypeListParams{
+			DeptName:  cvmapi.CvmLaunchDeptName,
+			ZoneNames: []string{zone.NameCn},
 		}
-		infoResp, err := hd.crpCli.GetInstanceTypeInfo(kt, getInfoParams)
+		listResp, err := hd.crpCli.QueryCvmTypeList(kt, listParams)
 		if err != nil {
-			logs.Errorf("get instance type info failed, err: %v, zone: %s, rid: %s", err, zoneName, kt.Rid)
+			logs.Errorf("query cvm type list failed, err: %v, zone: %s, rid: %s", err, zone.NameCn, kt.Rid)
 			return nil, err
-		}
-		if infoResp == nil || infoResp.Result == nil {
-			logs.Errorf("get instance type info result is nil, zone: %s, rid: %s", zoneName, kt.Rid)
-			return nil, fmt.Errorf("get instance type info result is nil, zone: %s, rid: %s", zoneName, kt.Rid)
 		}
 		// 收集所有机型名称
 		instanceTypes := make([]string, 0)
-		for _, item := range infoResp.Result.InstanceTypes {
+		for _, item := range listResp.Result {
 			if item.CvmInstanceModel != "" {
 				instanceTypes = append(instanceTypes, item.CvmInstanceModel)
 			}
@@ -176,12 +171,12 @@ func (hd *deviceTypeHandler) listDeviceTypeFromCloud(kt *kit.Kit, region string,
 		}
 		queryResp, err := hd.crpCli.QueryCvmInstanceType(kt, queryParams)
 		if err != nil {
-			logs.Errorf("query cvm instance type failed, err: %v, zone: %s, rid: %s", err, zoneName, kt.Rid)
+			logs.Errorf("query cvm instance type failed, err: %v, zone: %s, rid: %s", err, zone.NameCn, kt.Rid)
 			return nil, err
 		}
 		if queryResp == nil || queryResp.Result == nil {
-			logs.Errorf("query cvm instance type result is nil, zone: %s, rid: %s", zoneName, kt.Rid)
-			return nil, fmt.Errorf("query cvm instance type result is nil, zone: %s, rid: %s", zoneName, kt.Rid)
+			logs.Errorf("query cvm instance type result is nil, zone: %s, rid: %s", zone.NameCn, kt.Rid)
+			return nil, fmt.Errorf("query cvm instance type result is nil, zone: %s, rid: %s", zone.NameCn, kt.Rid)
 		}
 
 		// 3. 构建机型数据，构造完整的 device_type 表字段
@@ -189,7 +184,7 @@ func (hd *deviceTypeHandler) listDeviceTypeFromCloud(kt *kit.Kit, region string,
 			deviceTypes = append(deviceTypes, coredevicetype.DeviceType{
 				Vendor:          enumor.TCloudZiyan,
 				Region:          region,
-				Zone:            zoneName,
+				Zone:            zone.Name,
 				DeviceType:      item.InstanceType,
 				DeviceTypeClass: item.InstanceTypeClass,
 				DeviceClass:     item.InstanceClassDesc,

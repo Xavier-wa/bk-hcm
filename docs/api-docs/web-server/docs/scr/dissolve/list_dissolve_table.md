@@ -1,6 +1,6 @@
 ### 描述
 
-- 该接口提供版本：v1.6.1+。
+- 该接口提供版本：v9.9.9+。
 - 该接口所需权限：服务-机房裁撤。
 - 该接口功能描述：查询整体裁撤表格信息。
 
@@ -10,23 +10,25 @@ POST /api/v1/woa/dissolve/table/list
 
 ### 输入参数
 
-| 参数名称         | 参数类型         | 必选 | 描述     |
-|--------------|--------------|----|--------|
-| group_ids      | string array | 否  | 运维小组id |
-| bk_biz_names | string array | 否  | 业务名称   |
-| module_names | string array | 是  | 裁撤模块名称 |
-| operators    | string array | 否  | 人员名称   |
+| 参数名称       | 参数类型        | 必选 | 描述      |
+|------------|-------------|----|---------|
+| project_ids | int array   | 否  | 裁撤项目 ID |
+| group_ids  | int64 array | 否  | 组织 ID   |
+| bk_biz_ids | int64 array | 否  | 业务 ID   |
+| operators  | string array | 否 | 负责人     |
+| regions    | string array | 否 | 地域 ID   |
 
 ### 调用示例
 
-查询组织架构路径为“A公司/B事业群/C部门/D中心/F组”, 业务名称为biz, 裁撤模块名称为module, operator为test的整体裁撤表格信息。
+查询组织 ID 为 1111、业务 ID 为 100、负责人为 test、地域为 ap-guangzhou 的裁撤总览信息。
 
 ```json
 {
-  "group_ids": ["1111"],
-  "bk_biz_names": ["biz"],
-  "module_names": ["module"],
-  "operators": ["test"]
+  "project_ids": [1, 2],
+  "group_ids": [1111],
+  "bk_biz_ids": [100],
+  "operators": ["test"],
+  "regions": ["ap-guangzhou"]
 }
 ```
 
@@ -39,54 +41,21 @@ POST /api/v1/woa/dissolve/table/list
   "data": {
     "items": [
       {
-        "bk_biz_name": "biz",
-        "module_host_count": {
-          "module": 8
-        },
-        "total": {
-          "origin": {
-            "host_count": 8,
-            "cpu_count": 640
-          },
-          "current": {
-            "host_count": 0,
-            "cpu_count": 0
-          },
-          "delivered_core":100
-        },
+        "bk_biz_id": 100,
+        "origin_host_count": 8,
+        "origin_cpu_core": 640,
+        "current_host_count": 0,
+        "current_cpu_core": 0,
+        "delivered_cpu_core": 100,
         "progress": "100.00%"
       },
       {
-        "bk_biz_name": "总数",
-        "module_host_count": {
-          "module": 8
-        },
-        "total": {
-          "origin": {
-            "host_count": 8,
-            "cpu_count": 640
-          },
-          "current": {
-            "host_count": 0,
-            "cpu_count": 0
-          },
-          "delivered_core":100
-        },
-        "progress": ""
-      },
-      {
-        "bk_biz_name": "裁撤进度",
-        "module_list": {},
-        "total": {
-          "origin": {
-            "host_count": "100.00%",
-            "cpu_count": 0
-          },
-          "current": {
-            "host_count": "100.00%",
-            "cpu_count": 0
-          }
-        },
+        "bk_biz_id": -1,
+        "origin_host_count": 8,
+        "origin_cpu_core": 640,
+        "current_host_count": 0,
+        "current_cpu_core": 0,
+        "delivered_cpu_core": 100,
         "progress": "100.00%"
       }
     ]
@@ -104,37 +73,18 @@ POST /api/v1/woa/dissolve/table/list
 
 #### data
 
-| 参数名称  | 参数类型   | 描述         |
-|-------|--------|------------|
-| items | array  | 业务裁撤进度相关数据 |
+| 参数名称  | 参数类型  | 描述                          |
+|-------|-------|-----------------------------|
+| items | array | 业务裁撤进度数据，最后一行为「合计」行         |
 
 #### data.items[n]
 
-| 参数名称              | 参数类型           | 描述                       |
-|-------------------|----------------|--------------------------|
-| bk_biz_name       | string         | 业务名称                     |
-| module_host_count | map[string]int | key为模块名称，value为该模块下的主机数量 |
-| total             | object         | 主机总数相关信息                 |
-| progress | string         | 裁撤进度 |
-
-#### data.items[n].total
-
-| 参数名称               | 参数类型   | 描述            |
-|--------------------|--------|---------------|
-| current            | object | 当前            |
-| origin             | object | 原始            |
-| delivered_core | int    | 裁撤cpu已交付的总核心数 |
-
-#### data.items[n].total.current
-
-| 参数名称  | 参数类型          | 描述                                                         |
-|---------|---------------|------------------------------------------------------------|
-| host_count | int or string | 当bk_biz_name为"裁撤进度"时，该字段为string类型，表示主机裁撤进度；否则为int类型，表示主机数量 |
-| cpu_count  | int           | cpu核心数                                                     |
-
-#### data.items[n].total.origin
-
-| 参数名称  | 参数类型          | 描述                                                         |
-|---------|---------------|------------------------------------------------------------|
-| host_count | int or string | 当bk_biz_name为"裁撤进度"时，该字段为string类型，表示主机裁撤进度；否则为int类型，表示主机数量 |
-| cpu_count  | int           | cpu核心数                                                     |
+| 参数名称               | 参数类型   | 描述                                   |
+|--------------------|--------|--------------------------------------|
+| bk_biz_id          | int64  | 业务 ID；合计行该字段为 -1, 主机对应的业务未知时，业务id为0  |
+| origin_host_count  | int64  | 原始裁撤设备数（命中条件的全部记录）                   |
+| origin_cpu_core    | int64  | 原始裁撤 CPU 总核数                         |
+| current_host_count | int64  | 当前裁撤设备数（`abolish_phase != complete`） |
+| current_cpu_core   | int64  | 当前裁撤 CPU 总核数                         |
+| delivered_cpu_core | int64  | 已申领 CPU 核数                           |
+| progress           | string | 裁撤进度 = (原始设备数 − 当前设备数) / 原始设备数       |

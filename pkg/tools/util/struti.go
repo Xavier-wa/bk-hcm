@@ -139,6 +139,37 @@ func ContainsAnyString(s string, subs ...string) bool {
 	return false
 }
 
+// ContainsWord reports whether word appears in s as a standalone word,
+// bounded by non-alphanumeric characters or the string boundaries.
+// The match is case-sensitive; callers should normalize case beforehand if needed.
+// Boundaries are checked byte-wise, which is suitable for ASCII text.
+func ContainsWord(s, word string) bool {
+	if len(word) == 0 {
+		return false
+	}
+
+	wordLen := len(word)
+	for from := 0; ; {
+		idx := strings.Index(s[from:], word)
+		if idx < 0 {
+			return false
+		}
+		start := from + idx
+		end := start + wordLen
+		leftOK := start == 0 || !isWordByte(s[start-1])
+		rightOK := end == len(s) || !isWordByte(s[end])
+		if leftOK && rightOK {
+			return true
+		}
+		from = start + 1
+	}
+}
+
+// isWordByte reports whether the byte is a word character (letter or digit).
+func isWordByte(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
+}
+
 // Normalize to trim space of the str and get it's upper format
 // for example, Normalize(" hello world") ==> "HELLO WORLD"
 func Normalize(str string) string {

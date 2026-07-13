@@ -65,8 +65,12 @@ const getResultData = async () => {
     ticketDetail.value = ticketRes?.data;
     ticketAuditDetail.value = ticketAuditRes?.data;
 
-    // 轮询逻辑：init 或 auditing 状态时自动刷新
-    if (ticketRes?.data?.status_info?.status === 'init' || ticketRes?.data?.status_info?.status === 'auditing') {
+    // 轮询逻辑：init 或 auditing 状态时自动刷新；sideslider 已关闭则不再唤起轮询
+    // （卸载场景由 useTimeoutPoll 的作用域销毁统一兜底，此处仅需处理「关闭但未卸载」）
+    if (
+      isShow.value &&
+      (ticketRes?.data?.status_info?.status === 'init' || ticketRes?.data?.status_info?.status === 'auditing')
+    ) {
       autoFlushTask.resume();
     } else {
       autoFlushTask.reset();
@@ -99,6 +103,8 @@ const close = () => {
   isShow.value = false;
 };
 const handleClose = () => {
+  // 关闭子单详情时停止轮询
+  autoFlushTask.reset();
   // 删除路由上的 subId 参数，如果有的话
   if (route.query.subId) {
     router.replace({
@@ -109,6 +115,7 @@ const handleClose = () => {
     });
   }
 };
+
 defineExpose({
   open,
   close,

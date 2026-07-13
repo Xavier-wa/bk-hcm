@@ -20,7 +20,6 @@
 package dissolve
 
 import (
-	"hcm/cmd/woa-server/logics/dissolve/table"
 	"hcm/cmd/woa-server/types/dissolve"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/iam/meta"
@@ -28,9 +27,9 @@ import (
 	"hcm/pkg/rest"
 )
 
-// ListOriginHost list resource dissolve origin host
-func (s *service) ListOriginHost(cts *rest.Contexts) (interface{}, error) {
-	req := new(dissolve.HostListReq)
+// ListHostDetail list resource dissolve host detail
+func (s *service) ListHostDetail(cts *rest.Contexts) (interface{}, error) {
+	req := new(dissolve.HostDetailListReq)
 	if err := cts.DecodeInto(req); err != nil {
 		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
 	}
@@ -46,18 +45,18 @@ func (s *service) ListOriginHost(cts *rest.Contexts) (interface{}, error) {
 		return nil, err
 	}
 
-	result, err := s.logics.Table().FindOriginHost(cts.Kit, req, table.ReqForGetHost)
+	result, err := s.logics.Table().ListHostDetail(cts.Kit, req)
 	if err != nil {
-		logs.Errorf("find origin host failed, err: %v, req: %+v, rid: %s", err, req, cts.Kit.Rid)
+		logs.Errorf("list host detail failed, err: %v, req: %+v, rid: %s", err, req, cts.Kit.Rid)
 		return nil, err
 	}
 
 	return result, nil
 }
 
-// ListCurHost list resource dissolve current host
-func (s *service) ListCurHost(cts *rest.Contexts) (interface{}, error) {
-	req := new(dissolve.HostListReq)
+// ListExportHostDetail list resource dissolve host detail for export
+func (s *service) ListExportHostDetail(cts *rest.Contexts) (interface{}, error) {
+	req := new(dissolve.HostDetailExportListReq)
 	if err := cts.DecodeInto(req); err != nil {
 		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
 	}
@@ -73,9 +72,9 @@ func (s *service) ListCurHost(cts *rest.Contexts) (interface{}, error) {
 		return nil, err
 	}
 
-	result, err := s.logics.Table().FindCurHost(cts.Kit, req, table.ReqForGetHost)
+	result, err := s.logics.Table().ListExportHostDetail(cts.Kit, req)
 	if err != nil {
-		logs.Errorf("find current host failed, err: %v, req: %+v, rid: %s", err, req, cts.Kit.Rid)
+		logs.Errorf("list export host detail failed, err: %v, req: %+v, rid: %s", err, req, cts.Kit.Rid)
 		return nil, err
 	}
 

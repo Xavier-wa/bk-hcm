@@ -58,6 +58,7 @@ func InitService(c *capability.Capability) {
 	s.initCapacity(h)
 	s.initSg(h)
 	s.initSpringResPool(h)
+	s.initLoadTestSubnet(h)
 
 	h.Load(c.WebService)
 }
@@ -144,6 +145,7 @@ func (s *service) initPmRestrict(h *rest.Handler) {
 func (s *service) initRegion(h *rest.Handler) {
 	h.Add("GetQcloudRegion", http.MethodGet, "/config/find/config/qcloud/region", s.GetQcloudRegion)
 	h.Add("GetIdcRegion", http.MethodGet, "/config/find/config/idc/region", s.GetIdcRegion)
+	h.Add("UpsertRegionRecommend", http.MethodPost, "/config/qcloud/region/recommend/upsert", s.UpsertRegionRecommend)
 }
 
 func (s *service) initRequirement(h *rest.Handler) {
@@ -192,4 +194,9 @@ func (s *service) initSpringResPool(h *rest.Handler) {
 		s.UpsertSpringResPoolChargeType)
 	h.Add("DeleteSpringResPoolChargeTypeGlobal", http.MethodDelete, "/config/spring_res_pool/charge_type",
 		s.DeleteSpringResPoolChargeType)
+}
+
+func (s *service) initLoadTestSubnet(h *rest.Handler) {
+	h.Add("ListLoadTestSubnets", http.MethodGet, "/config/load_test_subnets", s.ListLoadTestSubnets)
+	h.Add("UpsertLoadTestSubnets", http.MethodPost, "/config/load_test_subnets/upsert", s.UpsertLoadTestSubnets)
 }

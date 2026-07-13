@@ -86,6 +86,10 @@ const (
 	GlobalConfigTypeCvmImageRecommend GlobalConfigType = "cvm_image_recommend"
 	// GlobalConfigTypeAuth auth related global config
 	GlobalConfigTypeAuth GlobalConfigType = "auth"
+	// GlobalConfigTypeCvmApply 自研云主机申领相关配置
+	GlobalConfigTypeCvmApply GlobalConfigType = "cvm_apply"
+	// GlobalConfigTypeRegionRecommend 地域推荐相关配置
+	GlobalConfigTypeRegionRecommend GlobalConfigType = "region_recommend"
 )
 
 // GlobalConfigResDissolveKey resource dissolve global config key
@@ -100,6 +104,8 @@ const (
 	GlobalConfigDissolveQuotaCoefficient GlobalConfigResDissolveKey = "dissolve_quota_coefficient"
 	// GlobalConfigDissolveQuotaOffsets 业务裁撤偏移额度配置
 	GlobalConfigDissolveQuotaOffsets GlobalConfigResDissolveKey = "dissolve_quota_offsets"
+	// GlobalConfigDissolveProject 裁撤项目配置
+	GlobalConfigDissolveProject GlobalConfigResDissolveKey = "dissolve_project"
 )
 
 // DissolveQuotaOffsetType 裁撤配额偏移类型
@@ -179,14 +185,28 @@ func GetBizSpringResPoolChargeTypeKey(bizID int64) string {
 	return string(GlobalConfigKeySpringResPoolChargeTypeBizPrefix) + strconv.FormatInt(bizID, 10)
 }
 
+// GlobalConfigKeyCvmApply cvm apply global config key
+type GlobalConfigKeyCvmApply string
+
+const (
+	// GlobalConfigKeyCvmApplyLoadTestSubnet 压测子网配置key，config_value 为 region->vpc_id->[subnet_id] 三层映射
+	GlobalConfigKeyCvmApplyLoadTestSubnet GlobalConfigKeyCvmApply = "load_test_subnet"
+)
+
 // GlobalConfigKeyAccountBill account bill global config key
 type GlobalConfigKeyAccountBill string
 
 const (
-	// GlobalConfigKeyAwsGpuInstanceTypes AWS GPU 机型列表配置key（JSON 数组字符串）
+	// GlobalConfigKeyAwsGpuInstanceTypes AWS GPU 机型配置key
+	// config_value 为「实例类型 → 卡型」JSON 对象（如 {"g5.12xlarge":"A10G"}），
+	// 同时承载「判断是否 GPU」（键集合）与「获取卡型」（值）两种能力
 	GlobalConfigKeyAwsGpuInstanceTypes GlobalConfigKeyAccountBill = "aws_gpu_instance_types"
 	// GlobalConfigKeyHuaweiGpuInstancePrefixes 华为 GPU 实例规格前缀列表配置key（JSON 数组字符串）
 	GlobalConfigKeyHuaweiGpuInstancePrefixes GlobalConfigKeyAccountBill = "huawei_gpu_instance_prefixes"
+	// GlobalConfigKeyGcpGpuInstancePrefixes GCP GPU 实例族前缀映射配置key
+	// config_value 为「实例族前缀 → 短卡型名」JSON 对象（如 {"A3Ultra":"H200","G4":"RTX6000PRO"}），
+	// 作为 GCP 卡型识别 L2 实例族前缀映射，匹配采用忽略大小写 + 词边界 + 最长前缀优先
+	GlobalConfigKeyGcpGpuInstancePrefixes GlobalConfigKeyAccountBill = "gcp_gpu_instance_prefixes"
 )
 
 // GlobalConfigKeyCvmRecommend CVM镜像推荐配置key
@@ -203,4 +223,12 @@ type GlobalConfigKeyAuth string
 const (
 	// GlobalConfigKeyAccessToken virtual-user access_token map stored as JSON object, for bkapigw
 	GlobalConfigKeyAccessToken GlobalConfigKeyAuth = "access_token"
+)
+
+// GlobalConfigRegionRecommendKey 地域推荐配置key
+type GlobalConfigRegionRecommendKey string
+
+const (
+	// GlobalConfigKeyRegionRecommend 地域推荐配置key
+	GlobalConfigKeyRegionRecommend GlobalConfigRegionRecommendKey = "recommended_regions"
 )

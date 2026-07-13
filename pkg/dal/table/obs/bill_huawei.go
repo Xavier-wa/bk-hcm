@@ -86,6 +86,8 @@ var OBSBillItemHuaweiColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "real_cost", NamedC: "real_cost", Type: enumor.Numeric},
 	{Column: "CityId", NamedC: "CityId", Type: enumor.Numeric},
 	{Column: "ResClassId", NamedC: "ResClassId", Type: enumor.Numeric},
+	{Column: "GpuCardCategory", NamedC: "GpuCardCategory", Type: enumor.String},
+	{Column: "APIBrandName", NamedC: "APIBrandName", Type: enumor.String},
 }
 
 // OBSBillItemHuawei huawei bill item
@@ -143,6 +145,8 @@ type OBSBillItemHuawei struct {
 	RealCost                  *types.Decimal `db:"real_cost"  json:"real_cost"`
 	CityId                    int32          `db:"CityId" json:"CityId"`
 	ResClassId                int32          `db:"ResClassId" json:"ResClassId"`
+	GpuCardCategory           string         `db:"GpuCardCategory" json:"GpuCardCategory"`
+	APIBrandName              string         `db:"APIBrandName" json:"APIBrandName"`
 }
 
 // TableName 返回月度汇总账单表名

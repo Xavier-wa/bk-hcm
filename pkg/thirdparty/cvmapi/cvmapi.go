@@ -102,7 +102,7 @@ type CVMClientInterface interface {
 	// QueryZoneCityList 查询可用区与城市映射列表
 	QueryZoneCityList(ctx context.Context, header http.Header, req *QueryZoneCityListReq) (*QueryZoneCityListResp,
 		error)
-	// QueryCvmTypeList 查询CVM机型与物理机机型族映射列表
+	// QueryCvmTypeList 查询「可填报需求预测」的CVM机型列表（含物理机机型族等映射信息）
 	QueryCvmTypeList(kt *kit.Kit, params *QueryCvmTypeListParams) (*QueryCvmTypeListResp, error)
 }
 
@@ -824,7 +824,7 @@ func (c *cvmApi) QueryZoneCityList(ctx context.Context, header http.Header, req 
 	return resp, nil
 }
 
-// QueryCvmTypeList 查询CVM机型与物理机机型族映射列表
+// QueryCvmTypeList 查询「可填报需求预测」的CVM机型列表（含物理机机型族等映射信息）
 func (c *cvmApi) QueryCvmTypeList(kt *kit.Kit, params *QueryCvmTypeListParams) (*QueryCvmTypeListResp, error) {
 	req := &QueryCvmTypeListReq{
 		ReqMeta: ReqMeta{

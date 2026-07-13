@@ -36,8 +36,8 @@ import (
 
 // CaiCheClientInterface caiche api interface
 type CaiCheClientInterface interface {
-	ListDevice(kt *kit.Kit, req *ListDeviceReq) (*DeviceListData, error)
 	ListDeviceV2(kt *kit.Kit, req *ListDeviceV2Req) (*DeviceListV2Result, error)
+	ListProjects(kt *kit.Kit) ([]Project, error)
 }
 
 // NewCaiCheClientInterface creates a caiche api instance
@@ -111,45 +111,6 @@ func (c *caicheApi) getToken(kt *kit.Kit) (string, error) {
 	return resp.Result.AccessToken, nil
 }
 
-// ListDevice list device https://iwiki.woa.com/p/4008334375
-func (c *caicheApi) ListDevice(kt *kit.Kit, req *ListDeviceReq) (*DeviceListData, error) {
-	token, err := c.getToken(kt)
-	if err != nil {
-		logs.Errorf("get token failed, err: %v, rid: %s", err, kt.Rid)
-		return nil, err
-	}
-
-	subPath := "/openapi_gateway/trpc.teg_devops.web_api.WebApiService/DeviceList"
-	header := kt.Header()
-	header.Set(authorizationHeader, token)
-
-	resp := new(ListDeviceResp)
-	err = c.client.Post().
-		WithContext(kt.Ctx).
-		Body(req).
-		SubResourcef(subPath).
-		WithHeaders(header).
-		Do().
-		Into(resp)
-	if err != nil {
-		logs.Errorf("send request failed, err: %v, req: %+v, rid: %s", err, cvt.PtrToVal(req), kt.Rid)
-		return nil, err
-	}
-
-	if resp.Code != 0 {
-		logs.Errorf("list device resp is invalid, code: %d, msg: %s, req: %+v, rid: %s", resp.Code, resp.Msg,
-			cvt.PtrToVal(req), kt.Rid)
-		return nil, fmt.Errorf("list device resp is invalid, code: %d, msg: %s", resp.Code, resp.Msg)
-	}
-
-	if resp.Data == nil {
-		logs.Errorf("device data is nil, req: %+v, rid: %s", cvt.PtrToVal(req), kt.Rid)
-		return nil, errors.New("device data is nil")
-	}
-
-	return resp.Data, nil
-}
-
 // ListDeviceV2 list device v2 https://iwiki.woa.com/p/4015994172
 func (c *caicheApi) ListDeviceV2(kt *kit.Kit, req *ListDeviceV2Req) (*DeviceListV2Result, error) {
 	token, err := c.getToken(kt)
@@ -178,6 +139,34 @@ func (c *caicheApi) ListDeviceV2(kt *kit.Kit, req *ListDeviceV2Req) (*DeviceList
 	if resp.Result == nil {
 		logs.Errorf("device v2 data is nil, req: %+v, XTraceID: %s, rid: %s", cvt.PtrToVal(req), resp.XTraceID, kt.Rid)
 		return nil, errors.New("device v2 data is nil")
+	}
+
+	return resp.Result, nil
+}
+
+// ListProjects 查询裁撤项目列表
+func (c *caicheApi) ListProjects(kt *kit.Kit) ([]Project, error) {
+	token, err := c.getToken(kt)
+	if err != nil {
+		logs.Errorf("get token failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	subPath := "/openapi_gateway/abolish-backend/device/listProjects"
+	header := kt.Header()
+	header.Set(authorizationHeader, token)
+
+	resp := new(ListProjectsResp)
+	err = c.client.Post().
+		WithContext(kt.Ctx).
+		Body(map[string]interface{}{}).
+		SubResourcef(subPath).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+	if err != nil {
+		logs.Errorf("list projects failed, err: %v, XTraceID: %s, rid: %s", err, resp.XTraceID, kt.Rid)
+		return nil, err
 	}
 
 	return resp.Result, nil

@@ -8,6 +8,8 @@ export interface DropDownMenuProps {
   isShow?: boolean;
   disabled?: boolean;
   popoverOptions?: DropDownPopover;
+  textButton?: boolean;
+  theme?: string; // bk-button的theme属性
 }
 
 defineOptions({ name: 'hcm-dropdown' });
@@ -17,6 +19,7 @@ const props = withDefaults(defineProps<DropDownMenuProps>(), {
   popoverOptions: () => ({
     trigger: 'manual',
   }),
+  textButton: false,
 });
 
 const show = ref<boolean>(props.isShow);
@@ -64,9 +67,10 @@ defineExpose({ hidePopover });
 <template>
   <div @mouseenter="handleMouseEnter" @mouseleave="handleMouseLeave" class="hcm-dropdown">
     <bk-dropdown :disabled="disabled" :is-show="show" :popover-options="popoverOptions" @hide="hidePopover">
-      <bk-button :disabled="disabled" @click="showPopover">
+      <bk-button :disabled="disabled" :text="textButton" :theme="theme" @click="showPopover">
         <slot></slot>
       </bk-button>
+
       <template #content>
         <bk-dropdown-menu @mouseenter="handleContentEnter" @mouseleave="handleContentLeave">
           <slot name="menus"></slot>

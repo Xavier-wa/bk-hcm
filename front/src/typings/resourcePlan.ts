@@ -108,6 +108,7 @@ export interface TicketDemandItem {
 }
 
 export interface TicketDemands {
+  demand_id?: string;
   obs_project: string;
   expect_time: string;
   /** 短租项目退回日期，YYYY-MM-DD */
@@ -204,21 +205,31 @@ export type ResourcePlanTicketAuditResData = IQueryResData<IPlanTicketAudit>;
 
 export interface IPlanTicket {
   bk_biz_id: number;
+  ticket_type?: string;
   demand_class: string;
   demands: IPlanTicketDemand[];
   remark: string;
 }
 
+/** 覆盖修改主单 demand 项：original_info 为修改前快照，updated_info 为修改后新值 */
+export interface IPlanTicketOverwriteDemand {
+  demand_id?: string;
+  original_info?: TicketDemands | null;
+  updated_info?: TicketDemands;
+}
+
 // 覆盖修改主单请求体, 字段全部可选, bizId/ticketId 在 URL 路径
 export interface IPlanTicketOverwrite {
+  ticket_type?: string;
   demand_class?: string;
-  demands?: IPlanTicketDemand[];
+  demands?: IPlanTicketOverwriteDemand[];
   remark?: string;
 }
 
 export interface IPlanTicketDemand {
   obs_project: string;
   expect_time: string;
+  return_plan_time?: string;
   region_id: string;
   region_name: string;
   zone_id: string;
@@ -228,6 +239,8 @@ export interface IPlanTicketDemand {
   remark?: string;
   demand_res_types: string[];
   demand_res_type: string;
+  /** 修改前快照，新增单为 null */
+  original_info?: TicketDemands | null;
   cvm?: {
     res_mode: string;
     device_class: string;

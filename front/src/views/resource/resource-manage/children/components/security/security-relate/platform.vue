@@ -24,7 +24,9 @@ import {
 } from '@/constants/security-group';
 import { ISearchSelectValue } from '@/typings';
 
-import { Plus } from 'bkui-vue/lib/icon';
+import { Plus, AngleDown } from 'bkui-vue/lib/icon';
+import HcmDropdown from '@/components/hcm-dropdown/index.vue';
+import CopyToClipboard from '@/components/copy-to-clipboard/index.vue';
 import tab from './tab/index.vue';
 import bind from './bind/index.vue';
 import batchUnbind from './unbind/batch.vue';
@@ -147,6 +149,41 @@ const unbindDisabledTooltipsOption = computed(() => {
   return { disabled: true };
 });
 
+// 复制按钮状态：与批量解绑一致，依赖勾选
+const copyDisabled = computed(() => !selected.value.length);
+
+// CVM: 内网IPv4 / CLB: 负载均衡IPv4
+const copyIPv4Text = computed(() =>
+  tabActive.value === SecurityGroupRelatedResourceName.CVM ? t('内网IP(ipv4)') : t('负载均衡VIP(ipv4)'),
+);
+const copyIPv4Content = computed(() => {
+  const field =
+    tabActive.value === SecurityGroupRelatedResourceName.CVM ? 'private_ipv4_addresses' : 'public_ipv4_addresses';
+  return selected.value.flatMap((item) => item[field] || []).join('\n') || '--';
+});
+
+// CVM: 内网IPv6 / CLB: 负载均衡IPv6
+const copyIPv6Text = computed(() =>
+  tabActive.value === SecurityGroupRelatedResourceName.CVM ? t('内网IP(ipv6)') : t('负载均衡VIP(ipv6)'),
+);
+const copyIPv6Content = computed(() => {
+  const field =
+    tabActive.value === SecurityGroupRelatedResourceName.CVM ? 'private_ipv6_addresses' : 'public_ipv6_addresses';
+  return selected.value.flatMap((item) => item[field] || []).join('\n') || '--';
+});
+
+// 复制主机ID (CVM) / 负载均衡ID (CLB)
+const copyIDText = computed(() =>
+  tabActive.value === SecurityGroupRelatedResourceName.CVM ? t('主机ID') : t('负载均衡ID'),
+);
+const copyIDContent = computed(
+  () =>
+    selected.value
+      .map((item) => item.cloud_id)
+      .filter(Boolean)
+      .join('\n') || '--',
+);
+
 const bindVisible = ref(false);
 const batchUnbindVisible = ref(false);
 const singleUnbindVisible = ref(false);
@@ -246,6 +283,30 @@ watch(
         >
           {{ t('批量解绑') }}
         </bk-button>
+        <hcm-dropdown :disabled="copyDisabled">
+          {{ t('复制') }}
+          <angle-down class="dropdown-icon" />
+          <template #menus>
+            <CopyToClipboard
+              type="dropdown-item"
+              :content="copyIPv4Content"
+              :text="copyIPv4Text"
+              :disabled="copyDisabled"
+            />
+            <CopyToClipboard
+              type="dropdown-item"
+              :content="copyIPv6Content"
+              :text="copyIPv6Text"
+              :disabled="copyDisabled"
+            />
+            <CopyToClipboard
+              type="dropdown-item"
+              :content="copyIDContent"
+              :text="copyIDText"
+              :disabled="copyDisabled"
+            />
+          </template>
+        </hcm-dropdown>
       </div>
 
       <search
@@ -323,16 +384,19 @@ watch(
 .tools-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 0;
 
   .operate-btn-wrap {
     display: flex;
     align-items: center;
     gap: 12px;
+    margin-right: 12px;
   }
 
   .search {
     margin-left: auto;
-    width: 320px;
+    width: 305px;
   }
 }
 
@@ -348,5 +412,9 @@ watch(
 
 .rel-res-display-wrap {
   margin-top: 12px;
+}
+
+.dropdown-icon {
+  font-size: 26px;
 }
 </style>

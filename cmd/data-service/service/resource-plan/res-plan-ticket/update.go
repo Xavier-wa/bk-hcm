@@ -101,6 +101,7 @@ func (svc *service) overwriteResPlanTicketWithTx(kt *kit.Kit, txn *sqlx.Tx,
 
 func buildResPlanTicketTableFromUpdateReq(req rpproto.ResPlanTicketUpdateReq, reviser string) *rpt.ResPlanTicketTable {
 	record := &rpt.ResPlanTicketTable{
+		Type:             req.Type,
 		Remark:           req.Remark,
 		DemandClass:      req.DemandClass,
 		SubmittedAt:      req.SubmittedAt,

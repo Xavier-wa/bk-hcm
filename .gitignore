@@ -21,3 +21,5 @@ vetur.config.js
 bkcodeai.json
 
 .codebuddy/memory/
+.codebuddy/plans/
+docs/reqs

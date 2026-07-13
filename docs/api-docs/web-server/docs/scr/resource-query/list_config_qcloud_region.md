@@ -31,7 +31,8 @@ GET /api/v1/woa/config/find/config/qcloud/region
       {
         "id":1,
         "region":"ap-shanghai",
-        "region_cn":"华东区域(上海)"
+        "region_cn":"华东区域(上海)",
+        "is_recommended": true
       },
       {
         "id":2,
@@ -61,8 +62,9 @@ GET /api/v1/woa/config/find/config/qcloud/region
 
 #### data.info
 
-| 参数名称   | 参数类型  | 描述         |
-|-----------|---------|--------------|
-| id	    | int	  | 可用区配置信息实例ID，系统内部管理ID |
-| region    | string  | 可用区，英文   |
-| region_cn | string  | 可用区，中文   |
+| 参数名称        | 参数类型  | 描述         |
+|----------------|---------|--------------|
+| id	         | int	   | 可用区配置信息实例ID，系统内部管理ID |
+| region         | string  | 可用区，英文   |
+| region_cn      | string  | 可用区，中文   |
+| is_recommended | bool    | 是否推荐地域   |

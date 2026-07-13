@@ -41,7 +41,8 @@ func (req *RegionListReq) Validate() error {
 
 // RegionImportReq define region batch import request.
 type RegionImportReq struct {
-	Regions []RegionImportItem `json:"regions" validate:"required"`
+	Regions   []RegionImportItem `json:"regions" validate:"required"`
+	AccountID string             `json:"account_id" validate:"required"`
 }
 
 // RegionImportItem define single region import item.

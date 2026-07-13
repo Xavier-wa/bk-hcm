@@ -58,46 +58,116 @@ func BuildResPlanDemandsFromCreateReq(demandClass enumor.DemandClass, reqDemands
 	for idx, demand := range reqDemands {
 		demands[idx] = rpt.ResPlanDemand{
 			DemandClass: demandClass,
-			Updated: &rpt.UpdatedRPDemandItem{
-				ObsProject:     demand.ObsProject,
-				ExpectTime:     demand.ExpectTime,
-				ReturnPlanTime: demand.ReturnPlanTime,
-				ZoneID:         demand.ZoneID,
-				ZoneName:       zoneMap[demand.ZoneID],
-				RegionID:       demand.RegionID,
-				RegionName:     regionAreaMap[demand.RegionID].RegionName,
-				AreaName:       regionAreaMap[demand.RegionID].AreaName,
-				DemandSource:   demand.DemandSource,
-				Remark:         demand.Remark,
-			},
-		}
-
-		if slices.Contains(demand.DemandResTypes, enumor.DemandResTypeCVM) {
-			deviceType := demand.Cvm.DeviceType
-			demands[idx].Updated.Cvm = rpt.Cvm{
-				ResMode:        demand.Cvm.ResMode,
-				DeviceType:     deviceType,
-				DeviceClass:    deviceTypeMap[deviceType].DeviceClass,
-				DeviceFamily:   deviceTypeMap[deviceType].DeviceFamily,
-				TechnicalClass: deviceTypeMap[deviceType].TechnicalClass,
-				CoreType:       string(deviceTypeMap[deviceType].CoreType),
-				Os:             tabletypes.Decimal{Decimal: cvt.PtrToVal(demand.Cvm.Os)},
-				CpuCore:        cvt.PtrToVal(demand.Cvm.CpuCore),
-				Memory:         cvt.PtrToVal(demand.Cvm.Memory),
-			}
-		}
-
-		if slices.Contains(demand.DemandResTypes, enumor.DemandResTypeCBS) {
-			demands[idx].Updated.Cbs = rpt.Cbs{
-				DiskType:     demand.Cbs.DiskType,
-				DiskTypeName: demand.Cbs.DiskType.Name(),
-				DiskIo:       cvt.PtrToVal(demand.Cbs.DiskIo),
-				DiskSize:     cvt.PtrToVal(demand.Cbs.DiskSize),
-			}
+			Updated:     buildUpdatedRPDemandItem(demand, zoneMap, regionAreaMap, deviceTypeMap),
 		}
 	}
 
 	return demands
+}
+
+// BuildResPlanDemandsFromOverwriteReq converts overwrite demand requests to table demands.
+func BuildResPlanDemandsFromOverwriteReq(demandClass enumor.DemandClass, reqDemands []ptypes.OverwriteResPlanDemandReq,
+	zoneMap map[string]string, regionAreaMap map[string]dmtypes.RegionArea,
+	deviceTypeMap map[string]dt.DistinctDeviceType) rpt.ResPlanDemands {
+
+	demands := make(rpt.ResPlanDemands, len(reqDemands))
+	for idx, demand := range reqDemands {
+		demands[idx] = rpt.ResPlanDemand{
+			DemandClass: demandClass,
+		}
+		if demand.OriginalInfo != nil {
+			demands[idx].Original = buildOriginalRPDemandItem(
+				cvt.PtrToVal(demand.OriginalInfo), demand.DemandID, demand.CrpDemandID,
+				zoneMap, regionAreaMap, deviceTypeMap)
+		}
+		if demand.UpdatedInfo != nil {
+			demands[idx].Updated = buildUpdatedRPDemandItem(
+				cvt.PtrToVal(demand.UpdatedInfo), zoneMap, regionAreaMap, deviceTypeMap)
+		}
+	}
+
+	return demands
+}
+
+func buildOriginalRPDemandItem(demand ptypes.CreateResPlanDemandReq, demandID string, crpDemandID int64,
+	zoneMap map[string]string, regionAreaMap map[string]dmtypes.RegionArea,
+	deviceTypeMap map[string]dt.DistinctDeviceType) *rpt.OriginalRPDemandItem {
+
+	item := &rpt.OriginalRPDemandItem{
+		DemandID:       demandID,
+		CrpDemandID:    crpDemandID,
+		ObsProject:     demand.ObsProject,
+		ExpectTime:     demand.ExpectTime,
+		ReturnPlanTime: demand.ReturnPlanTime,
+		ZoneID:         demand.ZoneID,
+		ZoneName:       zoneMap[demand.ZoneID],
+		RegionID:       demand.RegionID,
+		RegionName:     regionAreaMap[demand.RegionID].RegionName,
+		AreaName:       regionAreaMap[demand.RegionID].AreaName,
+		Remark:         demand.Remark,
+	}
+
+	if slices.Contains(demand.DemandResTypes, enumor.DemandResTypeCVM) {
+		item.Cvm = buildRPDemandCvm(demand, deviceTypeMap)
+	}
+	if slices.Contains(demand.DemandResTypes, enumor.DemandResTypeCBS) {
+		item.Cbs = buildRPDemandCbs(demand)
+	}
+
+	return item
+}
+
+func buildUpdatedRPDemandItem(demand ptypes.CreateResPlanDemandReq, zoneMap map[string]string,
+	regionAreaMap map[string]dmtypes.RegionArea,
+	deviceTypeMap map[string]dt.DistinctDeviceType) *rpt.UpdatedRPDemandItem {
+
+	item := &rpt.UpdatedRPDemandItem{
+		ObsProject:     demand.ObsProject,
+		ExpectTime:     demand.ExpectTime,
+		ReturnPlanTime: demand.ReturnPlanTime,
+		ZoneID:         demand.ZoneID,
+		ZoneName:       zoneMap[demand.ZoneID],
+		RegionID:       demand.RegionID,
+		RegionName:     regionAreaMap[demand.RegionID].RegionName,
+		AreaName:       regionAreaMap[demand.RegionID].AreaName,
+		DemandSource:   demand.DemandSource,
+		Remark:         demand.Remark,
+	}
+
+	if slices.Contains(demand.DemandResTypes, enumor.DemandResTypeCVM) {
+		item.Cvm = buildRPDemandCvm(demand, deviceTypeMap)
+	}
+	if slices.Contains(demand.DemandResTypes, enumor.DemandResTypeCBS) {
+		item.Cbs = buildRPDemandCbs(demand)
+	}
+
+	return item
+}
+
+func buildRPDemandCvm(demand ptypes.CreateResPlanDemandReq,
+	deviceTypeMap map[string]dt.DistinctDeviceType) rpt.Cvm {
+
+	deviceType := demand.Cvm.DeviceType
+	return rpt.Cvm{
+		ResMode:        demand.Cvm.ResMode,
+		DeviceType:     deviceType,
+		DeviceClass:    deviceTypeMap[deviceType].DeviceClass,
+		DeviceFamily:   deviceTypeMap[deviceType].DeviceFamily,
+		TechnicalClass: deviceTypeMap[deviceType].TechnicalClass,
+		CoreType:       string(deviceTypeMap[deviceType].CoreType),
+		Os:             tabletypes.Decimal{Decimal: cvt.PtrToVal(demand.Cvm.Os)},
+		CpuCore:        cvt.PtrToVal(demand.Cvm.CpuCore),
+		Memory:         cvt.PtrToVal(demand.Cvm.Memory),
+	}
+}
+
+func buildRPDemandCbs(demand ptypes.CreateResPlanDemandReq) rpt.Cbs {
+	return rpt.Cbs{
+		DiskType:     demand.Cbs.DiskType,
+		DiskTypeName: demand.Cbs.DiskType.Name(),
+		DiskIo:       cvt.PtrToVal(demand.Cbs.DiskIo),
+		DiskSize:     cvt.PtrToVal(demand.Cbs.DiskSize),
+	}
 }
 
 // buildAndValidateDemandsFromCreateReq builds table demands from API create requests and validates them.
@@ -106,6 +176,23 @@ func (c *Controller) buildAndValidateDemandsFromCreateReq(kt *kit.Kit, demandCla
 	reqDemands []ptypes.CreateResPlanDemandReq) (rpt.ResPlanDemands, *ResPlanTicketResourceSummary, error) {
 
 	demands, err := c.buildDemandsFromCreateReq(kt, demandClass, reqDemands)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	summary, err := c.validateAndSummarizeDemands(kt, demands, false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return demands, summary, nil
+}
+
+// buildAndValidateDemandsFromOverwriteReq builds table demands from overwrite requests and validates them.
+func (c *Controller) buildAndValidateDemandsFromOverwriteReq(kt *kit.Kit, demandClass enumor.DemandClass,
+	reqDemands []ptypes.OverwriteResPlanDemandReq) (rpt.ResPlanDemands, *ResPlanTicketResourceSummary, error) {
+
+	demands, err := c.buildDemandsFromOverwriteReq(kt, demandClass, reqDemands)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -129,6 +216,19 @@ func (c *Controller) buildDemandsFromCreateReq(kt *kit.Kit, demandClass enumor.D
 	}
 
 	return BuildResPlanDemandsFromCreateReq(demandClass, reqDemands, zoneMap, regionAreaMap, deviceTypeMap), nil
+}
+
+// buildDemandsFromOverwriteReq builds table demands from overwrite requests.
+func (c *Controller) buildDemandsFromOverwriteReq(kt *kit.Kit, demandClass enumor.DemandClass,
+	reqDemands []ptypes.OverwriteResPlanDemandReq) (rpt.ResPlanDemands, error) {
+
+	zoneMap, regionAreaMap, deviceTypeMap, err := c.resFetcher.GetMetaMaps(kt)
+	if err != nil {
+		logs.Errorf("get meta maps failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	return BuildResPlanDemandsFromOverwriteReq(demandClass, reqDemands, zoneMap, regionAreaMap, deviceTypeMap), nil
 }
 
 // validateAndSummarizeDemands validates demands expect_time and returns aggregated resource summary.

@@ -1,0 +1,146 @@
+# @Column 装饰器 / Model / Meta 体系
+
+## 概述
+
+项目使用 **装饰器 @Column + Model.getProperties()** 体系来定义字段元数据，实现列表列、搜索条件、详情展示、表单等场景的声明式配置。一次 `@Column` 定义，多场景消费。
+
+## 核心流程
+
+```
+@Column (装饰器注册)  →  MetadataStorage (全局存储)  →  Model.getProperties() (查询输出)  →  组件消费
+```
+
+### 1. @Column 装饰器
+
+定义在 `decorator/columns/column.ts`，签名：
+
+```typescript
+Column(type: ModelPropertyType, def: Partial<ModelPropertyGeneric>): PropertyDecorator
+```
+
+装饰器执行时自动补全 `id`（属性名）和 `name`（未提供时取属性名字符串），然后将元数据写入全局 `MetadataStorage`。
+
+### 2. Model.getProperties()
+
+定义在 `model/model.ts`，从 `MetadataStorage` 中取出当前 Model 类（含父类）的所有 `@Column` 定义，过滤 `hidden: true`，按 `index` 排序返回。
+
+**返回值的 `id` → 表格的 `prop`/`field`，`name` → 表格的 `label`。**
+
+### 3. 消费端典型用法
+
+```typescript
+// ① 定义 Model（column.ts）
+@Model('xxx/table-column')
+export class TableColumn {
+  @Column('string', { name: '内网IP', minWidth: 120, index: 0 })
+  inner_ip: string;
+}
+
+// ② 在页面中获取属性列表（index.vue）
+const columnModel = getModel(TableColumn);
+const columnProperties = computed(() => columnModel.getProperties());
+
+// ③ 传给子组件消费
+<data-list :columns="columnProperties" />
+```
+
+## ModelProperty 字段一览（`model/typings.ts`）
+
+```typescript
+type ModelProperty = {
+  id: string;                          // 属性名 = 表格 field/prop
+  name: string | (() => string | VNode); // 显示名 = 表格 label
+  type: ModelPropertyType;             // string/enum/datetime/business/user/...
+  option?: Record<string|number, any>; // 枚举映射
+  meta?: ModelPropertyMeta;            // 多场景配置（核心，见下）
+  index?: number;                      // 排序（getProperties 按此排序）
+  group?: string;                      // 分组（getPropertiesByGroup 使用）
+  hidden?: boolean;                    // 隐藏（getProperties 自动过滤）
+  unit?: string;
+  apiOnly?: boolean;
+};
+```
+
+## meta 四域职责
+
+`meta` 是一个语义化嵌套对象，面向不同消费者，各自维护独立配置：
+
+| 域 | 类型 | 消费者 | 核心字段 |
+|---|---|---|---|
+| `meta.display` | `PropertyDisplayConfig` | `<display-value>` 组件 | `appearance`（status/tag/link…）、`render`(value) |
+| `meta.search` | `PropertySearchConfig` | `<hcm-search-*>` 搜索栏 | `op`（运算符）、`filterRules`、`enableEmpty` |
+| `meta.column` | `PropertyColumnConfig` | `<bk-table>` 列属性 | `render`（列级 VNode 渲染）、`sort`、`minWidth`、`width` |
+| `meta.form` | `PropertyFormConfig` | `<bk-form-item>` 表单 | `required`、`readonly`、`rules` |
+
+**关键区分**：
+
+- **`meta.display.render(value)`**：单元格级别的纯值渲染，用于 `<display-value>`
+- **`meta.column.render({ cell, row, index })`**：列级别的表格渲染，可访问整行数据
+
+## exportFormatter 位置决策
+
+**结论：放 `ModelProperty` 最外层，不入 `meta` 任何子域。**
+
+理由：
+
+1. **语义正交**：`exportFormatter` 是导出时的数据转换（row → 纯文本），与 `display.render`（value → VNode）、`column.render`（args → VNode）是不同层次的事
+2. **参数不同**：`exportFormatter(row)` 接收整行数据，meta 子域中的 render 要么只收 value，要么收列渲染参数
+3. **独立能力**：它是一个独立层次的导出数据映射能力，一次定义，只在导出时生效
+
+类型定义应添加在 `ModelProperty`：
+
+```typescript
+export type ModelProperty = {
+  // ... 现有字段 ...
+  exportFormatter?: (row: Record<string, any>) => string | number;
+};
+```
+
+## 实际示例：裁撤详情
+
+```typescript
+@Model('dissolve-detail/table-column')
+export class TableColumn {
+  // 基础列：什么都不需要，类型驱动 display-value 自动渲染
+  @Column('string', { name: '内网IP', minWidth: 120, index: 0 })
+  inner_ip: string;
+
+  // 枚举列：option + meta.display.appearance 联动，展示彩色标签
+  @Column('enum', {
+    name: '裁撤状态',
+    option: DISSOLVE_STATUS_MAP,
+    minWidth: 100,
+    index: 7,
+    meta: { display: { appearance: 'status' } },
+  })
+  status: string;
+}
+```
+
+## 业务类型列 + exportFormatter 的联动模式
+
+当列的 `type` 是 `'business'` 时，存储的是 `bk_biz_id`，但展示和导出都需要映射为业务名称。推荐模式：
+
+```typescript
+@Column('business', {
+  name: '业务名称',
+  minWidth: 100,
+  index: 3,
+  exportFormatter: (row) => {   // ← 外层，导出专用
+    return getNameFromBusinessMap(row.bk_biz_id) || row.bk_biz_id || '--';
+  },
+})
+bk_biz_id: number;
+```
+
+`data-list.vue` 中构建 `exportColumns` 时直接从 `col.exportFormatter` 取值，无需再在 computed 中按类型判断。
+
+## 类型联合（Typings）
+
+`@Column` 的 `def` 参数实际类型是 `Partial<ModelPropertyGeneric>`，这是一个联合类型：
+
+```typescript
+type ModelPropertyGeneric = ModelProperty | ModelPropertyColumn | ModelPropertyForm | ModelPropertyDisplay | ModelPropertySearch;
+```
+
+这意味着 `def` 中可以直接写各子域的字段（如 `minWidth` 来自 `PropertyColumnConfig`、`appearance` 来自 `PropertyDisplayConfig`），无需显式嵌套到对应子域下。但为了**语义清晰和位置统一**，推荐始终将跨场景配置放入 `meta`。

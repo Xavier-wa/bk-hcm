@@ -57,7 +57,7 @@ func GetZiyanRecordRoundTripper(next http.RoundTripper) promhttp.RoundTripperFun
 				"http_code": code,
 			}).Inc()
 		}
-		cost := time.Since(start).Seconds()
+		cost := time.Since(start)
 		cloudApiMetric.lagSec.With(
 			prometheus.Labels{
 				"vendor":    string(enumor.Ziyan),
@@ -65,7 +65,8 @@ func GetZiyanRecordRoundTripper(next http.RoundTripper) promhttp.RoundTripperFun
 				"region":    region,
 				"api_name":  action,
 				"http_code": code,
-			}).Observe(cost)
+			}).Observe(cost.Seconds())
+		ObserveCloudAPI(string(enumor.Ziyan), action, cost, classifyCloudErr(err, ret))
 		// 配合自研云多秘钥请求配置，记录秘钥请求，及其错误码
 		var ak = ""
 		authHeaders := req.Header["Authorization"]

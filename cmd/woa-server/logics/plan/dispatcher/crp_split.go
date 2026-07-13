@@ -119,7 +119,7 @@ func filterMatchCandidates(needDemand *rpt.UpdatedRPDemandItem, candidates []*cv
 		if c.IsInProcessing == 1 {
 			continue
 		}
-		if c.ReviewStatus == enumor.ResPlanReviewStatusPending {
+		if c.ReviewStatus.IsUnreviewed() {
 			continue
 		}
 		if c.ProjectName != needDemand.ObsProject || c.TechnicalClass != needDemand.Cvm.TechnicalClass {

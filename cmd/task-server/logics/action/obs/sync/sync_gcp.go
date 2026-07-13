@@ -106,6 +106,11 @@ func (act SyncAction) doSyncGcpBillItem(kt *kit.Kit,
 		logs.Errorf("load region city map failed, err: %v, vendor: %s, rid: %s", err, syncOpt.Vendor, kt.Rid)
 		return fmt.Errorf("load region city map failed, err: %v", err)
 	}
+	gcpGpuPrefixes, err := loadGcpGpuInstancePrefixes(kt)
+	if err != nil {
+		logs.Errorf("load gcp gpu instance prefixes failed, err: %v, vendor: %s, rid: %s", err, syncOpt.Vendor, kt.Rid)
+		return fmt.Errorf("load gcp gpu instance prefixes failed, err: %v", err)
+	}
 
 	// 清理特定的obs数据，此处防止之前有可能插入事务失败导致的脏数据
 	setIndex := fmt.Sprintf("%s-%s-%d-%d-%d-%d",
@@ -129,7 +134,7 @@ func (act SyncAction) doSyncGcpBillItem(kt *kit.Kit,
 	}
 
 	// 进行插入
-	finalItems, err := act.convertGcpBill(kt, syncOpt, result, setIndex, mainAccount, regionCityMap)
+	finalItems, err := act.convertGcpBill(kt, syncOpt, result, setIndex, mainAccount, regionCityMap, gcpGpuPrefixes)
 	if err != nil {
 		logs.Warnf("convert obs gcp bill failed, err %s, rid: %s", err.Error(), kt.Rid)
 		return err
@@ -151,7 +156,7 @@ func (act SyncAction) doSyncGcpBillItem(kt *kit.Kit,
 
 func (act SyncAction) convertGcpBill(kt *kit.Kit, syncOpt *SyncOption, result *databill.GcpBillItemListResult,
 	setIndex string, mainAccount *asproto.MainAccountGetResult[accountsetcore.GcpMainAccountExtension],
-	regionCityMap map[string]int32) ([]*tableobs.OBSBillItemGcp, error) {
+	regionCityMap map[string]int32, gcpGpuPrefixes map[string]string) ([]*tableobs.OBSBillItemGcp, error) {
 
 	yearM := syncOpt.BillYear*100 + syncOpt.BillMonth
 	item := result.Details[0]
@@ -187,7 +192,10 @@ func (act SyncAction) convertGcpBill(kt *kit.Kit, syncOpt *SyncOption, result *d
 		}
 
 		cityID := lookupCityID(kt, regionCityMap, region, isChina)
-		isGPU := isGcpGPU(skuDescription, item.HcProductName)
+		gpuCardCategory := lookupGcpGpuCardCategory(skuDescription, gcpGpuPrefixes)
+		isGPU := isGcpGPU(gpuCardCategory, skuDescription, item.HcProductName)
+		// 与 isGcpGPU 双路径对称：优先 HcProductName，命中为空兜底 SkuDescription
+		apiBrandName := resolveGcpAPIBrandName(item.HcProductName, skuDescription)
 
 		newItem := &tableobs.OBSBillItemGcp{
 			SetIndex:               setIndex,
@@ -206,7 +214,9 @@ func (act SyncAction) convertGcpBill(kt *kit.Kit, syncOpt *SyncOption, result *d
 			FetchTime:              fetchTime.Format("2006-01-02 15:04:05"),
 			RealCost:               item.Cost.Mul(decimal.NewFromFloat(floatRate)).InexactFloat64(),
 			CityId:                 cityID,
-			ResClassId:             enumor.GetOBSResClassID(syncOpt.Vendor, isGPU),
+			ResClassId:             enumor.GetOBSResClassIDByType(syncOpt.Vendor, isGPU, apiBrandName != ""),
+			GpuCardCategory:        gpuCardCategory,
+			APIBrandName:           apiBrandName,
 		}
 		if record != nil && record.GcpRawBillItem != nil {
 			newItem.BillingAccountId = record.BillingAccountID

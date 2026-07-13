@@ -22,4 +22,6 @@ package constant
 const (
 	// DissolveDefaultQuotaCoefficient 裁撤默认配额系数（百分比，范围1-100）
 	DissolveDefaultQuotaCoefficient float64 = 65
+	// HostDetailExportListMaxLimit 查询导出的裁撤主机明细单页上限
+	HostDetailExportListMaxLimit = 5000
 )

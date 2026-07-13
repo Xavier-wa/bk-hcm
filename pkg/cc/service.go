@@ -630,7 +630,6 @@ type WoaServerSetting struct {
 	CancelItsmFlows   []ItsmFlow        `yaml:"cancelItsmFlows"`
 	ResDissolve       ResourceDissolve  `yaml:"resourceDissolve"`
 	Es                Es                `yaml:"elasticsearch"`
-	Blacklist         string            `yaml:"blacklist"`
 	UseMongo          bool              `yaml:"useMongo"`
 	Recover           Recover           `yaml:"recover"`
 	LocalTimezone     string            `yaml:"localTimezone"`

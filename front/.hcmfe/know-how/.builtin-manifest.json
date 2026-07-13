@@ -26,7 +26,15 @@
     },
     {
       "type": "rules",
+      "name": "fe-list-search-architecture.mdc"
+    },
+    {
+      "type": "rules",
       "name": "fe-menu-route-architecture.mdc"
+    },
+    {
+      "type": "rules",
+      "name": "fe-model-column-meta.mdc"
     },
     {
       "type": "rules",

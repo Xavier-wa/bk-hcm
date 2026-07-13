@@ -49,8 +49,8 @@ import (
 	loadbalancer "hcm/pkg/dal/dao/cloud/load-balancer"
 	networkinterface "hcm/pkg/dal/dao/cloud/network-interface"
 	nicvmrel "hcm/pkg/dal/dao/cloud/network-interface-cvm-rel"
-	permissiontemplate "hcm/pkg/dal/dao/cloud/permission-template"
 	permissionpolicylibrary "hcm/pkg/dal/dao/cloud/permission-policy-library"
+	permissiontemplate "hcm/pkg/dal/dao/cloud/permission-template"
 	"hcm/pkg/dal/dao/cloud/region"
 	resflow "hcm/pkg/dal/dao/cloud/resource-flow"
 	resourcegroup "hcm/pkg/dal/dao/cloud/resource-group"
@@ -66,7 +66,6 @@ import (
 	daoapplystat "hcm/pkg/dal/dao/cvm-apply-order-statistics-config"
 	devicecapacity "hcm/pkg/dal/dao/device-capacity"
 	"hcm/pkg/dal/dao/dissolve/host"
-	"hcm/pkg/dal/dao/dissolve/module"
 	globalconfig "hcm/pkg/dal/dao/global-config"
 	idgenerator "hcm/pkg/dal/dao/id-generator"
 	"hcm/pkg/dal/dao/obs"
@@ -188,7 +187,6 @@ type Set interface {
 	ResPlanDemandGpuTemplate() resplan.DemandGpuTemplateInterface
 	ShortRentalReturnedRecord() shortrental.ShortRentalReturnedRecordInterface
 
-	RecycleModule() module.RecycleModule
 	RecycleHost() host.RecycleHost
 
 	RollingQuotaConfig() rollingserver.RollingQuotaConfigInterface
@@ -1164,11 +1162,6 @@ func (s *set) RollingFineDetail() rollingserver.RollingFineDetailInterface {
 		Orm:   s.orm,
 		IDGen: s.idGen,
 	}
-}
-
-// RecycleModule return recycle module dao.
-func (s *set) RecycleModule() module.RecycleModule {
-	return module.NewRecycleModuleDao(s.orm, s.idGen, s.audit)
 }
 
 // RecycleHost return recycle host dao.

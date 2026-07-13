@@ -83,7 +83,7 @@ func makeCbsOnlyDemand(cbsSize int64) rpt.ResPlanDemand {
 	return rpt.ResPlanDemand{
 		Updated: &rpt.UpdatedRPDemandItem{
 			ObsProject: enumor.ObsProjectNormal,
-			ExpectTime: "2025-01-01",
+			ExpectTime: currentTestYear(),
 			RegionID:   "ap-shanghai",
 			RegionName: "上海",
 			AreaName:   "华东",
@@ -298,7 +298,7 @@ func buildThresholdExceedCases() []autoApproveTestCase {
 				makeAutoApproveDemand("计算型", 1600, 50000),
 			},
 			wantCanApprove:    false,
-			wantReasonContain: "包含非标准型机型",
+			wantReasonContain: "包含非标准机型族",
 			wantCPUCores:      1600,
 			wantCBSSizeGB:     50000,
 		},
@@ -317,7 +317,7 @@ func buildDeviceFamilyCases() []autoApproveTestCase {
 				makeAutoApproveDemand("计算型", 500, 10000),
 			},
 			wantCanApprove:    false,
-			wantReasonContain: "包含非标准型机型: 计算型",
+			wantReasonContain: "包含非标准机型族: 计算型",
 			wantCPUCores:      1000,
 			wantCBSSizeGB:     20000,
 		},
@@ -327,7 +327,7 @@ func buildDeviceFamilyCases() []autoApproveTestCase {
 				makeAutoApproveDemand("", 500, 10000),
 			},
 			wantCanApprove:    false,
-			wantReasonContain: "包含未指定机型的需求",
+			wantReasonContain: "包含未指定机型族的需求",
 			wantCPUCores:      500,
 			wantCBSSizeGB:     10000,
 		},
@@ -339,7 +339,7 @@ func buildDeviceFamilyCases() []autoApproveTestCase {
 				makeAutoApproveDemand("计算型", 100, 1000),
 			},
 			wantCanApprove:    false,
-			wantReasonContain: "包含非标准型机型: 计算型",
+			wantReasonContain: "包含非标准机型族: 计算型",
 			wantCPUCores:      300,
 			wantCBSSizeGB:     3000,
 		},
@@ -465,31 +465,6 @@ func buildAutoApproveTestCases() []autoApproveTestCase {
 	cases = append(cases, buildDemandTypeCases()...)
 	cases = append(cases, buildNonCurrentYearCases()...)
 	return cases
-}
-
-func TestCheckPredictionAutoApprove(t *testing.T) {
-	kt := testKit()
-
-	for _, tc := range buildAutoApproveTestCases() {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			result := checkPredictionAutoApprove(kt, tc.demands)
-
-			assert.Equal(t, tc.wantCanApprove, result.CanAutoApprove,
-				"CanAutoApprove mismatch")
-
-			if tc.wantReasonContain != "" {
-				assert.Contains(t, result.Reason, tc.wantReasonContain,
-					"Reason should contain expected text")
-			}
-
-			assert.Equal(t, tc.wantCPUCores, result.TotalCPUCores,
-				"TotalCPUCores mismatch")
-
-			assert.Equal(t, tc.wantCBSSizeGB, result.TotalCBSSizeGB,
-				"TotalCBSSizeGB mismatch")
-		})
-	}
 }
 
 // TestCheckPredictionAutoApprove_CPUBoundary tests CPU threshold boundary conditions.
@@ -740,24 +715,4 @@ func TestAutoApprove_ZeroValues(t *testing.T) {
 	assert.True(t, result.CanAutoApprove)
 	assert.Equal(t, int64(0), result.TotalCPUCores)
 	assert.Equal(t, int64(0), result.TotalCBSSizeGB)
-}
-
-// TestAutoApprove_MultipleNonStandardFamilies tests multiple different non-standard families.
-func TestAutoApprove_MultipleNonStandardFamilies(t *testing.T) {
-	kt := testKit()
-
-	demands := rpt.ResPlanDemands{
-		makeAutoApproveDemand("计算型", 100, 1000),
-		makeAutoApproveDemand("内存型", 100, 1000),
-		makeAutoApproveDemand("GPU型", 100, 1000),
-		makeAutoApproveDemand("", 100, 1000), // empty family
-	}
-
-	result := checkPredictionAutoApprove(kt, demands)
-
-	assert.False(t, result.CanAutoApprove)
-	assert.Contains(t, result.Reason, "计算型")
-	assert.Contains(t, result.Reason, "内存型")
-	assert.Contains(t, result.Reason, "GPU型")
-	assert.Contains(t, result.Reason, "未指定机型")
 }

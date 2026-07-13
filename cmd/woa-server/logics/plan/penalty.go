@@ -60,10 +60,10 @@ func (c *Controller) generatePenaltyBase(ctx context.Context) {
 	nextRunTime := time.Date(nextMonday.Year(), nextMonday.Month(), nextMonday.Day(),
 		0, 0, 0, 0, nextMonday.Location())
 	var (
-		kt                  *kit.Kit
-		days12After         time.Time
+		kt                   *kit.Kit
+		days12After          time.Time
 		yearMonthWeek12After dtime.DemandYearMonthWeek
-		err                 error
+		err                  error
 	)
 
 	// 判断上周的罚金基数是否已经生成，没有需要先补上周的
@@ -1031,12 +1031,18 @@ func (c *Controller) sendEmail(kt *kit.Kit, receivers, extraReceivers []string, 
 		cc = make([]string, 0)
 	}
 
-	if len(c.resPlanCfg.ExpireNotification.DefaultReceivers) > 0 {
-		receivers = append(receivers, c.resPlanCfg.ExpireNotification.DefaultReceivers...)
-	}
-
 	if len(extraReceivers) > 0 {
 		receivers = append(receivers, extraReceivers...)
+	}
+
+	// DefaultReceivers are platform admins and should be CC'd, not primary recipients.
+	defaultReceivers := c.resPlanCfg.ExpireNotification.DefaultReceivers
+	if len(defaultReceivers) > 0 {
+		cc = append(cc, defaultReceivers...)
+	}
+	// 如果没有收件人，添加默认收件人到receiver列表，以免邮件无法发送
+	if len(receivers) == 0 {
+		receivers = append(receivers, defaultReceivers...)
 	}
 
 	logs.Infof("ready to send email, receivers: %v, cc: %s, title: %s, rid: %s", receivers, cc, emailTitle,

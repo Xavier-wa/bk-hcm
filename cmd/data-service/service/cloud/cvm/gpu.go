@@ -84,7 +84,7 @@ func isGPUMachine(vendor enumor.Vendor, machineType string, machineTypes map[str
 	switch vendor {
 	case enumor.Gcp:
 		return isGcpGPUMachine(machineType, machineTypes, extension)
-	case enumor.HuaWei, enumor.TCloud, enumor.Azure:
+	case enumor.HuaWei, enumor.TCloud, enumor.TCloudZiyan, enumor.Azure:
 		// 这些厂商的 GPU 机型均按机型前缀识别
 		return matchGPUMachineTypeByPrefix(machineType, machineTypes)
 	case enumor.Aws:
@@ -131,7 +131,7 @@ func getGPUMachineKey(vendor enumor.Vendor) (enumor.GlobalConfigKeyGPUMachineTyp
 	switch vendor {
 	case enumor.HuaWei:
 		return enumor.GlobalConfigKeyHuaweiGPUPrefix, nil
-	case enumor.TCloud:
+	case enumor.TCloud, enumor.TCloudZiyan:
 		return enumor.GlobalConfigKeyTcloudGPUPrefix, nil
 	case enumor.Gcp:
 		return enumor.GlobalConfigKeyGcpGPUPrefix, nil

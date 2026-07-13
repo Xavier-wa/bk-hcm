@@ -9,13 +9,17 @@ export interface ICvmVpc {
   vpc_id: string;
   vpc_name: string;
 }
-type ICvmVpcList = Array<ICvmVpc>;
+export type ICvmVpcList = Array<ICvmVpc>;
 
 defineOptions({ name: 'CvmVpcSelector' });
 
 const model = defineModel<string>();
 
-const props = defineProps<{ region: string; disabled: boolean }>();
+const props = defineProps<{
+  region: string;
+  disabled: boolean;
+  filter?: (list: ICvmVpcList) => ICvmVpcList;
+}>();
 
 const emit = defineEmits<(e: 'change', val: ICvmVpc) => void>();
 
@@ -36,6 +40,8 @@ const selectedId = computed({
     model.value = selectedItem?.vpc_id ?? '';
   },
 });
+
+const filteredOptionList = computed(() => (props.filter ? props.filter(optionList.value) : optionList.value));
 
 const displayOptionList = computed(() => {
   const priorityVpcName = [
@@ -70,7 +76,7 @@ const displayOptionList = computed(() => {
     'VPC-IEG-SBL',
   ];
   // 按 priorityVpcName 排序（完整匹配），让这些优先出现在前面，其他按原顺序排在后面
-  return [...optionList.value].sort((a, b) => {
+  return [...filteredOptionList.value].sort((a, b) => {
     const aIndex = priorityVpcName.findIndex((name) => a.vpc_name === name);
     const bIndex = priorityVpcName.findIndex((name) => b.vpc_name === name);
     if (aIndex === -1 && bIndex === -1) {
@@ -97,8 +103,8 @@ const getOptionList = async (region: string) => {
 
 watch(
   () => props.region,
-  (val) => {
-    val && getOptionList(val);
+  (region) => {
+    if (region) getOptionList(region);
   },
   { immediate: true },
 );

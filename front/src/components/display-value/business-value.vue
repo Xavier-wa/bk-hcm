@@ -29,6 +29,7 @@ const businessNames = computed(() => {
       }
     }
   }
+
   return names;
 });
 

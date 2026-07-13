@@ -142,7 +142,6 @@ func (s *SubTicketSplitter) prepareAddSubTickets(kt *kit.Kit, ticketID string, v
 	return canTransfer, cvmDemands, nil
 }
 
-
 // separateAndProcessDemands 分离并处理仅包含 CBS 的和包含 CVM 的需求
 func (s *SubTicketSplitter) separateAndProcessDemands(kt *kit.Kit, ticketID string, demands rpt.ResPlanDemands) (
 	cvmDemands rpt.ResPlanDemands, obsProjects []enumor.ObsProject, technicalClasses []string, err error) {
@@ -258,7 +257,7 @@ func (s *SubTicketSplitter) matchTransferCRPDemands(kt *kit.Kit, ticketID string
 		}
 
 		// 未评审需求跳过，不记录
-		if transAbleD.ReviewStatus == enumor.ResPlanReviewStatusPending {
+		if transAbleD.ReviewStatus.IsUnreviewed() {
 			continue
 		}
 

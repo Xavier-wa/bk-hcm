@@ -1,0 +1,54 @@
+{
+  "id": "feat-usercomp-display-tips-missing",
+  "title": "负责人展示-hover中文名未加载",
+  "currentStage": "done",
+  "createdAt": "2026-07-06T09:05:47.123Z",
+  "updatedAt": "2026-07-07T02:46:22.150Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-usercomp-display-tips-missing/coding.md",
+        "kind": "file",
+        "addedAt": "2026-07-06T09:14:47.307Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-07-07T02:45:55.356Z",
+      "note": "用户确认 coding 完成；user-value.vue 已用 bk-overflow-title 修复 hover 中文名，lint 通过"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-07-06T09:05:47.123Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-07-07T02:45:55.356Z",
+      "note": "用户确认 coding 完成；user-value.vue 已用 bk-overflow-title 修复 hover 中文名，lint 通过"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-07-07T02:46:22.150Z",
+      "note": "用户明确要求不写 test.md 产物，直接推进到 done"
+    }
+  ],
+  "branch": "feat-usercomp-display-tips-missing",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598135774216"
+  }
+}

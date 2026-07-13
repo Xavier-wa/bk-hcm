@@ -37,9 +37,17 @@ var RecycleHostColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "id", NamedC: "id", Type: enumor.String},
 	{Column: "asset_id", NamedC: "asset_id", Type: enumor.String},
 	{Column: "inner_ip", NamedC: "inner_ip", Type: enumor.String},
+	{Column: "device_type", NamedC: "device_type", Type: enumor.String},
 	{Column: "module", NamedC: "module", Type: enumor.String},
 	{Column: "abolish_phase", NamedC: "abolish_phase", Type: enumor.String},
 	{Column: "project_name", NamedC: "project_name", Type: enumor.String},
+	{Column: "project_id", NamedC: "project_id", Type: enumor.Numeric},
+	{Column: "region", NamedC: "region", Type: enumor.String},
+	{Column: "bk_biz_id", NamedC: "bk_biz_id", Type: enumor.Numeric},
+	{Column: "group_id", NamedC: "group_id", Type: enumor.Numeric},
+	{Column: "operators", NamedC: "operators", Type: enumor.Json},
+	{Column: "cpu_core", NamedC: "cpu_core", Type: enumor.Numeric},
+	{Column: "is_ignore", NamedC: "is_ignore", Type: enumor.Boolean},
 	{Column: "creator", NamedC: "creator", Type: enumor.String},
 	{Column: "reviser", NamedC: "reviser", Type: enumor.String},
 	{Column: "created_at", NamedC: "created_at", Type: enumor.Time},
@@ -54,12 +62,28 @@ type RecycleHostTable struct {
 	AssetID *string `db:"asset_id" json:"asset_id"`
 	// InnerIP 主机内网IP
 	InnerIP *string `db:"inner_ip" json:"inner_ip"`
+	// DeviceType 机型
+	DeviceType *string `db:"device_type" json:"device_type"`
 	// Module 主机所属的裁撤模块名称
 	Module *string `db:"module" json:"module"`
 	// AbolishPhase 裁撤阶段
 	AbolishPhase *enumor.AbolishPhase `db:"abolish_phase" json:"abolish_phase"`
 	// ProjectName 项目名称
 	ProjectName *string `db:"project_name" json:"project_name"`
+	// ProjectID 裁撤项目ID
+	ProjectID *int `db:"project_id" json:"project_id"`
+	// Region 地域ID
+	Region *string `db:"region" json:"region"`
+	// BkBizID 业务ID
+	BkBizID *int64 `db:"bk_biz_id" json:"bk_biz_id"`
+	// GroupID 组织ID
+	GroupID *int64 `db:"group_id" json:"group_id"`
+	// Operators 负责人列表
+	Operators types.StringArray `db:"operators" json:"operators"`
+	// CPUCore CPU核心数
+	CPUCore *int `db:"cpu_core" json:"cpu_core"`
+	// IsIgnore 是否忽略该主机
+	IsIgnore *bool `db:"is_ignore" json:"is_ignore"`
 	// Creator 创建者
 	Creator string `db:"creator" validate:"max=64" json:"creator"`
 	// Reviser 更新者
@@ -89,8 +113,8 @@ func (r RecycleHostTable) InsertValidate() error {
 		return errors.New("asset_id can not be empty")
 	}
 
-	if r.InnerIP == nil {
-		return errors.New("inner_ip can not be empty")
+	if r.ProjectID == nil {
+		return errors.New("project_id can not be empty")
 	}
 
 	if r.Module == nil {

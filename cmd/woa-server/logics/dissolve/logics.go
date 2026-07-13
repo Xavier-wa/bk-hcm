@@ -26,12 +26,10 @@ import (
 	"hcm/cmd/woa-server/logics/config"
 	dissolveconfig "hcm/cmd/woa-server/logics/dissolve/config"
 	"hcm/cmd/woa-server/logics/dissolve/host"
-	"hcm/cmd/woa-server/logics/dissolve/module"
 	dissolvetable "hcm/cmd/woa-server/logics/dissolve/table"
 	"hcm/pkg/api/core"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
-	"hcm/pkg/dal/dao"
 	"hcm/pkg/thirdparty"
 	"hcm/pkg/thirdparty/api-gateway/cmdb"
 	esCli "hcm/pkg/thirdparty/es"
@@ -40,28 +38,25 @@ import (
 
 // Logics provides resource dissolve logics
 type Logics interface {
-	RecycledModule() module.RecycledModule
 	RecycledHost() host.RecycledHost
 	Table() dissolvetable.Table
 	Config() dissolveconfig.Config
 }
 
 type logics struct {
-	recycledModule module.RecycledModule
-	recycledHost   host.RecycledHost
-	table          dissolvetable.Table
-	config         dissolveconfig.Config
+	recycledHost host.RecycledHost
+	table        dissolvetable.Table
+	config       dissolveconfig.Config
 }
 
 // New create a logics manager
-func New(dao dao.Set, cmdbCli cmdb.Client, esCli *esCli.EsCli, thirdCli *thirdparty.Client,
+func New(cmdbCli cmdb.Client, esCli *esCli.EsCli, thirdCli *thirdparty.Client,
 	conf cc.WoaServerSetting, configLogics config.Logics, cliSet *client.ClientSet) Logics {
 
-	recycledModule := module.New(dao)
-	recycledHost := host.New(dao, thirdCli, conf.ResDissolve.ProjectIDs, conf.ResDissolve.SvrTypeNames)
 	dissolveConfig := dissolveconfig.New(cliSet)
 	originDate := conf.ResDissolve.OriginDate
-	blacklist := conf.Blacklist
+	recycledHost := host.New(cliSet, cmdbCli, esCli, thirdCli, dissolveConfig, conf.ResDissolve.IgnoreBiz,
+		conf.ResDissolve.SvrTypeNames, originDate)
 
 	if conf.ResDissolve.SyncDissolveHost {
 		workFunc := func() error {
@@ -71,19 +66,13 @@ func New(dao dao.Set, cmdbCli cmdb.Client, esCli *esCli.EsCli, thirdCli *thirdpa
 		go wait.Until(workFunc, 30*time.Minute, context.Background())
 	}
 
-	table := dissolvetable.New(recycledModule, recycledHost, dissolveConfig, configLogics, cmdbCli, esCli, originDate,
-		blacklist, cliSet)
+	table := dissolvetable.New(recycledHost, dissolveConfig, configLogics, esCli, originDate,
+		conf.ResDissolve.ListExcludedProjectIDs, cliSet)
 	return &logics{
-		recycledModule: recycledModule,
-		recycledHost:   recycledHost,
-		table:          table,
-		config:         dissolveConfig,
+		recycledHost: recycledHost,
+		table:        table,
+		config:       dissolveConfig,
 	}
-}
-
-// RecycledModule recycled module interface
-func (l *logics) RecycledModule() module.RecycledModule {
-	return l.recycledModule
 }
 
 // RecycledHost recycled host interface

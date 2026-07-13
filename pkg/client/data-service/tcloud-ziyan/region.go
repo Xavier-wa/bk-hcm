@@ -44,9 +44,9 @@ func NewRegionClient(client rest.ClientInterface) *RegionClient {
 
 // BatchCreate batch create tcloud ziyan region.
 func (v *RegionClient) BatchCreate(kt *kit.Kit,
-	req *protoregion.TCloudRegionCreateReq) (*core.BatchCreateResult, error) {
+	req *protoregion.TCloudZiyanRegionCreateReq) (*core.BatchCreateResult, error) {
 
-	return common.Request[protoregion.TCloudRegionCreateReq, core.BatchCreateResult](
+	return common.Request[protoregion.TCloudZiyanRegionCreateReq, core.BatchCreateResult](
 		v.client, rest.POST, kt, req, "/regions/batch/create")
 }
 

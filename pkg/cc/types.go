@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/logs"
 	"hcm/pkg/tools/ssl"
@@ -865,6 +866,8 @@ type BillControllerOption struct {
 	RootAccountSummarySyncDuration *time.Duration `yaml:"rootAccountSummarySyncDuration,omitempty"`
 	MonthTaskSyncDuration          *time.Duration `yaml:"monthTaskSyncDuration,omitempty"`
 	DailySummarySyncDuration       *time.Duration `yaml:"dailySummarySyncDuration,omitempty"`
+	// ObsSyncConcurrency OBS 账单同步并发度，即同一 sync record 内同时处于 syncing 状态的 item 数量上限
+	ObsSyncConcurrency *int `yaml:"obsSyncConcurrency,omitempty"`
 }
 
 func (bco *BillControllerOption) trySetDefault() {
@@ -882,6 +885,10 @@ func (bco *BillControllerOption) trySetDefault() {
 	}
 	if bco.DailySummarySyncDuration == nil {
 		bco.DailySummarySyncDuration = &defaultDailySummarySyncDuration
+	}
+	if bco.ObsSyncConcurrency == nil {
+		v := constant.OBSSyncDefaultConcurrency
+		bco.ObsSyncConcurrency = &v
 	}
 }
 

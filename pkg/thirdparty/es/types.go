@@ -24,22 +24,16 @@ const (
 	GroupID = "bk_oper_grp_name_id"
 	// Operator 主机主备维护人
 	Operator = "operator"
-	// BlackList 不进行查询主机的业务列表
-	BlackList = "black_list"
 	// BizID field of the host
 	BizID = "bk_biz_id"
-	// AppName field of the host
-	AppName = "app_name"
 	// ModuleName field of the host
 	ModuleName = "module_name"
 	// AssetID field of the host
-	AssetID           = "server_asset_id"
-	serverOperator    = "server_operator"
-	serverBakOperator = "server_bak_operator"
-	department        = "department"
-	center            = "center"
-	groupName         = "group_name"
-	innerIP           = "ip"
+	AssetID = "server_asset_id"
+	// ServerOperator field of server operator
+	ServerOperator = "server_operator"
+	// ServerBakOperator field of sever bak operator
+	ServerBakOperator = "server_bak_operator"
 
 	indexPrefix = "app_device_pass_dtl_"
 )
@@ -76,5 +70,6 @@ type Host struct {
 	DiskTotal            float64 `json:"disk_total"`
 	MaxCPUCoreAmount     int64   `json:"max_cpu_core_amount"`
 	GroupName            string  `json:"group_name"`
+	GroupID              int64   `json:"bk_oper_grp_name_id"`
 	Center               string  `json:"center"`
 }

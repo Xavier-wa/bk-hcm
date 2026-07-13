@@ -264,7 +264,7 @@ func initClients(apiClientSet *client.ClientSet, dis serviced.ServiceDiscover) (
 	clients.cmsiCli = cmsiCli
 
 	// init elasticsearch client
-	esCli, err := es.NewEsClient(cc.WoaServer().Es, cc.WoaServer().Blacklist)
+	esCli, err := es.NewEsClient(cc.WoaServer().Es)
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +357,7 @@ func initLogics(sd serviced.State, apiClientSet *client.ClientSet, clients *clie
 	logics.planCtrl = planCtrl
 
 	// new dissolve logic
-	logics.dissolveLogics = disLogics.New(clients.daoSet, clients.cmdbCli, clients.esCli, clients.thirdCli,
+	logics.dissolveLogics = disLogics.New(clients.cmdbCli, clients.esCli, clients.thirdCli,
 		cc.WoaServer(), logics.configLogics, apiClientSet)
 
 	return logics, nil

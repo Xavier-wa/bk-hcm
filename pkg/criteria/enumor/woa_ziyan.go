@@ -507,6 +507,28 @@ const (
 	Retain AbolishPhase = "retain"
 )
 
+// ProjectType 裁撤项目类型
+type ProjectType string
+
+const (
+	// ProjectTypeMachine 母机项目
+	ProjectTypeMachine ProjectType = "machine"
+	// ProjectTypeYunxi 云稀项目
+	ProjectTypeYunxi ProjectType = "yunxi"
+	// ProjectTypeLingxing 灵星项目
+	ProjectTypeLingxing ProjectType = "lingxing"
+)
+
+// Validate 校验裁撤项目类型是否合法
+func (p ProjectType) Validate() error {
+	switch p {
+	case ProjectTypeMachine, ProjectTypeYunxi, ProjectTypeLingxing:
+		return nil
+	default:
+		return fmt.Errorf("unsupported project type: %s", p)
+	}
+}
+
 // XrayFaultTicketIsEnd xray故障单是否结单
 type XrayFaultTicketIsEnd int
 

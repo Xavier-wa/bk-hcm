@@ -948,6 +948,8 @@ const (
 	ResPlanReviewStatusPass ResPlanReviewStatus = "已评审"
 	// ResPlanReviewStatusPending 待评审
 	ResPlanReviewStatusPending ResPlanReviewStatus = "待评审"
+	// ResPlanReviewStatusMediumLongTerm 中长期预测，按待评审逻辑处理
+	ResPlanReviewStatusMediumLongTerm ResPlanReviewStatus = "中长期预测"
 )
 
 // Validate ResPlanReviewStatus.
@@ -955,10 +957,17 @@ func (r ResPlanReviewStatus) Validate() error {
 	switch r {
 	case ResPlanReviewStatusPass:
 	case ResPlanReviewStatusPending:
+	case ResPlanReviewStatusMediumLongTerm:
 	default:
 		return fmt.Errorf("unsupported res plan review status: %s", r)
 	}
 	return nil
+}
+
+// IsUnreviewed 返回该评审状态是否按待评审逻辑处理
+// 中长期预测与待评审等价
+func (r ResPlanReviewStatus) IsUnreviewed() bool {
+	return r == ResPlanReviewStatusPending || r == ResPlanReviewStatusMediumLongTerm
 }
 
 // RPDemandGPUSubOrderStatus is resource plan demand gpu sub order status.

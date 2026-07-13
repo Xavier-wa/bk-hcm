@@ -14,6 +14,9 @@
 package config
 
 import (
+	types "hcm/cmd/woa-server/types/config"
+	"hcm/pkg/criteria/errf"
+	"hcm/pkg/iam/meta"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 )
@@ -38,4 +41,31 @@ func (s *service) GetIdcRegion(cts *rest.Contexts) (interface{}, error) {
 	}
 
 	return rst, nil
+}
+
+// UpsertRegionRecommend 新增或编辑地域推荐配置
+func (s *service) UpsertRegionRecommend(cts *rest.Contexts) (interface{}, error) {
+	req := new(types.UpsertRegionRecommendReq)
+	if err := cts.DecodeInto(req); err != nil {
+		logs.Errorf("failed to decode upsert region recommend request, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		logs.Errorf("failed to validate upsert region recommend request, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	if err := s.authorizer.AuthorizeWithPerm(cts.Kit, meta.ResourceAttribute{Basic: &meta.Basic{
+		Type: meta.GlobalConfig, Action: meta.Create}}); err != nil {
+		logs.Errorf("upsert region recommend global config auth failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	if err := s.logics.Region().UpsertRecommendConfig(cts.Kit, req); err != nil {
+		logs.Errorf("failed to upsert region recommend config, req: %+v, err: %v, rid: %s", req, err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return nil, nil
 }

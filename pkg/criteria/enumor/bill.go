@@ -27,6 +27,27 @@ import (
 
 var aiBillItemRegexp *regexp.Regexp
 
+// gcpGpuCardL1Keywords GCP L1 显式卡型关键词列表。
+// card 为短卡型名，直接用作正则命名分组名（须为合法标识符）；pattern 为关键词正则片段（内部不得含捕获组）。
+var gcpGpuCardL1Keywords = []struct {
+	card    string
+	pattern string
+}{
+	{"H200", `h200`},
+	{"H100", `h100`},
+	{"A100", `a100`},
+	{"RTX6000PRO", `rtx\s*(?:pro\s*)?6000`},
+	{"L4", `l4`},
+	{"TPU", `tpu7x`},
+	{"V100", `v100`},
+	{"P100", `p100`},
+	{"P4", `p4`},
+	{"K80", `k80`},
+}
+
+// gcpGpuCardRegexp 合并全部 L1 关键词的单一正则，每个关键词为一个以卡型名命名的分组，命中的分组名即短卡型名，避免逐条正则匹配。
+var gcpGpuCardRegexp *regexp.Regexp
+
 func init() {
 	aiFlag := getAIBillItemAIFlag()
 	aiFlagOrStr := strings.Join(aiFlag, "|")
@@ -35,6 +56,15 @@ func init() {
 	// ($|[^a-z]) - 结尾或者非字母字符
 	pattern := fmt.Sprintf(`(^|[^a-z])(%s)($|[^a-z])`, aiFlagOrStr)
 	aiBillItemRegexp = regexp.MustCompile(pattern)
+
+	// 合并全部 L1 关键词为单个正则，每个关键词包一层以卡型名命名的分组，命中后由分组名直接得到卡型。
+	// 卡型名含数字，词边界用 [^a-z0-9] 防止子串误命中（如 A1000 命中 A100、P40 命中 P4）
+	fragments := make([]string, 0, len(gcpGpuCardL1Keywords))
+	for _, kw := range gcpGpuCardL1Keywords {
+		fragments = append(fragments, fmt.Sprintf(`(?P<%s>%s)`, kw.card, kw.pattern))
+	}
+	gcpGpuCardRegexp = regexp.MustCompile(
+		fmt.Sprintf(`(?:^|[^a-z0-9])(?:%s)(?:$|[^a-z0-9])`, strings.Join(fragments, "|")))
 }
 
 // BillSyncPeriodType 账单同步周期类型
@@ -341,8 +371,8 @@ const (
 	BillItemAIFlagJina BillItemAIFlag = "jina"
 	// BillItemAIFlagVeo veo
 	BillItemAIFlagVeo BillItemAIFlag = "veo"
-	// BillItemAIFlagImgen imagen
-	BillItemAIFlagImgen BillItemAIFlag = "imagen"
+	// BillItemAIFlagImagen imagen
+	BillItemAIFlagImagen BillItemAIFlag = "imagen"
 	// BillItemAIFlagLyria lyria
 	BillItemAIFlagLyria BillItemAIFlag = "lyria"
 )
@@ -350,7 +380,8 @@ const (
 func getAIBillItemAIFlag() []string {
 	return []string{
 		string(BillItemAIFlagGemini), string(BillItemAIFlagClaude), string(BillItemAIFlagKimi),
-		string(BillItemAIFlagJina), string(BillItemAIFlagVeo), string(BillItemAIFlagImgen), string(BillItemAIFlagLyria),
+		string(BillItemAIFlagJina), string(BillItemAIFlagVeo), string(BillItemAIFlagImagen),
+		string(BillItemAIFlagLyria),
 	}
 }
 
@@ -359,6 +390,47 @@ func IsAIBillItem(str string) bool {
 	// 将字符串转换为小写以便忽略大小写
 	lowerStr := strings.ToLower(str)
 	return aiBillItemRegexp.MatchString(lowerStr)
+}
+
+// MatchAPIBrandName 在账单明细文本中匹配 API 厂商品牌，返回命中的品牌（小写）。
+// 复用 IsAIBillItem 的忽略大小写、词边界匹配规则；
+// veo/imagen/lyria 归并为 gemini， 其余取命中关键词原值；
+// 未命中返回空字符串。一条文本命中多个关键词时取位置最靠前的命中词。
+func MatchAPIBrandName(str string) string {
+	// aiBillItemRegexp 的词边界只含 [a-z]，需先转小写再匹配，否则大写文本无法命中
+	lowerStr := strings.ToLower(str)
+	// 第 2 个捕获组为命中的品牌关键词
+	matches := aiBillItemRegexp.FindStringSubmatch(lowerStr)
+	if len(matches) < 3 {
+		return ""
+	}
+
+	keyword := matches[2]
+	switch BillItemAIFlag(keyword) {
+	case BillItemAIFlagVeo, BillItemAIFlagImagen, BillItemAIFlagLyria:
+		return string(BillItemAIFlagGemini)
+	default:
+		return keyword
+	}
+}
+
+// MatchGcpGpuCardByKeyword 按 L1 显式卡型关键词识别 GCP GPU 卡型，返回短卡型名，未命中返回空字符串。
+// 复用忽略大小写 + 词边界匹配规则；卡型名含数字，词边界用 [^a-z0-9] 防止子串误命中。
+// 使用单一合并正则匹配，命中的命名分组名即为短卡型名，避免逐条正则匹配。
+func MatchGcpGpuCardByKeyword(str string) string {
+	lowerStr := strings.ToLower(str)
+	matches := gcpGpuCardRegexp.FindStringSubmatch(lowerStr)
+	if matches == nil {
+		return ""
+	}
+
+	// 命中的命名分组名即为短卡型名（同一位置仅一个关键词分组非空）
+	for i, name := range gcpGpuCardRegexp.SubexpNames() {
+		if name != "" && matches[i] != "" {
+			return name
+		}
+	}
+	return ""
 }
 
 // OBSResClassID OBS 资源分类 ID
@@ -377,6 +449,10 @@ const (
 	OBSResClassIDHuaweiCPU OBSResClassID = 1244
 	// OBSResClassIDHuaweiGPU 华为 GPU 资源分类 ID
 	OBSResClassIDHuaweiGPU OBSResClassID = 6315
+	// OBSResClassIDAwsAPI AWS 模型API厂商资源分类 ID
+	OBSResClassIDAwsAPI OBSResClassID = 6799
+	// OBSResClassIDGcpAPI GCP 模型API厂商资源分类 ID
+	OBSResClassIDGcpAPI OBSResClassID = 6800
 )
 
 // GetOBSResClassID returns the OBS resource class ID for the given vendor and GPU flag.
@@ -400,4 +476,18 @@ func GetOBSResClassID(vendor Vendor, isGPU bool) int32 {
 	default:
 		return 0
 	}
+}
+
+// GetOBSResClassIDByType 按厂商与账单类型返回 OBS 资源分类 ID，优先级 API > GPU > CPU。
+// 仅 AWS/GCP 有 API 分类，其余厂商 isAPI 不生效，回退到 GPU/CPU 判定。
+func GetOBSResClassIDByType(vendor Vendor, isGPU, isAPI bool) int32 {
+	if isAPI {
+		switch vendor {
+		case Aws:
+			return int32(OBSResClassIDAwsAPI)
+		case Gcp:
+			return int32(OBSResClassIDGcpAPI)
+		}
+	}
+	return GetOBSResClassID(vendor, isGPU)
 }

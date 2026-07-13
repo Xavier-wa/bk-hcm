@@ -502,9 +502,14 @@ func (c *Controller) sendConfirmEmail(kt *kit.Kit, receivers, cc []string, email
 		cc = make([]string, 0)
 	}
 
-	// 添加默认收件人
-	if len(c.resPlanCfg.ConfirmNotice.DefaultReceivers) > 0 {
-		receivers = append(receivers, c.resPlanCfg.ConfirmNotice.DefaultReceivers...)
+	// 添加默认收件人为抄送
+	defaultReceivers := c.resPlanCfg.ConfirmNotice.DefaultReceivers
+	if len(defaultReceivers) > 0 {
+		cc = append(cc, defaultReceivers...)
+	}
+	// 如果没有收件人，添加默认收件人到receiver列表，以免邮件无法发送
+	if len(receivers) == 0 {
+		receivers = append(receivers, defaultReceivers...)
 	}
 
 	if len(receivers) == 0 {

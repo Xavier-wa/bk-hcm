@@ -175,6 +175,8 @@ func (s *service) initBizPlanService(h *rest.Handler) {
 		s.ListBizResPlanTicket)
 	h.Add("CreateBizResPlanTicket", http.MethodPost, "/plans/resources/tickets/create",
 		s.CreateBizResPlanTicket)
+	h.Add("CreateBizResPlanTicketSimple", http.MethodPost, "/plans/resources/tickets/create_simple",
+		s.CreateBizResPlanTicketSimple)
 	h.Add("GetBizResPlanTicket", http.MethodGet, "/plans/resources/tickets/{id}", s.GetBizResPlanTicket)
 	h.Add("GetBizResPlanTicketAudit", http.MethodGet, "/plans/resources/tickets/{ticket_id}/audit",
 		s.GetBizResPlanTicketAudit)
@@ -201,6 +203,8 @@ func (s *service) initBizPlanService(h *rest.Handler) {
 
 	// demand
 	h.Add("ListBizResPlanDemand", http.MethodPost, "/plans/resources/demands/list", s.ListBizResPlanDemand)
+	h.Add("ListBizResPlanDemandWithDeviceTypes", http.MethodPost,
+		"/plans/resources/demands/list_with_device_types", s.ListBizResPlanDemandWithDeviceTypes)
 	h.Add("GetBizPlanDemandDetail", http.MethodGet, "/plans/demands/{id}", s.GetBizPlanDemandDetail)
 	h.Add("ListBizPlanDemandChangeLog", http.MethodPost, "/plans/demands/change_logs/list",
 		s.ListBizPlanDemandChangeLog)

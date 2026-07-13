@@ -30,6 +30,7 @@ import (
 	"hcm/pkg/api/data-service/bill"
 	dsbillapi "hcm/pkg/api/data-service/bill"
 	taskserver "hcm/pkg/api/task-server"
+	"hcm/pkg/cc"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/dal/dao/tools"
@@ -38,6 +39,7 @@ import (
 	"hcm/pkg/runtime/filter"
 	"hcm/pkg/serviced"
 	"hcm/pkg/thirdparty/obs"
+	"hcm/pkg/tools/converter"
 
 	"github.com/shopspring/decimal"
 )
@@ -164,25 +166,12 @@ func (sc *SyncController) handleSyncRecord(kt *kit.Kit, syncRecord *billcore.Syn
 		return sc.initSyncItem(kt, syncRecord)
 	}
 
-	for index, item := range itemList {
-		if item.State == stateSynced {
-			continue
-		}
-		afterItem, err := sc.handleSyncRecordDetailItem(kt, item)
-		if err != nil {
-			return err
-		}
-		itemList[index] = afterItem
-		newDetailData, err := json.Marshal(itemList)
-		if err != nil {
-			return err
-		}
-		req := &bill.BillSyncRecordUpdateReq{ID: syncRecord.ID, Detail: newDetailData}
-		if err := sc.Client.DataService().Global.Bill.UpdateBillSyncRecord(kt, req); err != nil {
-			logs.Errorf("update bill sync record detail failed, err: %s, record: %s, rid: %s",
-				err, syncRecord.ID, kt.Rid)
-			return err
-		}
+	allSynced, err := sc.advanceSyncItems(kt, syncRecord, itemList)
+	if err != nil {
+		return err
+	}
+	// 仍有未同步完成的 item，等待下一个 tick 继续推进
+	if !allSynced {
 		return nil
 	}
 	// all bill item synced, handle adjustment
@@ -208,6 +197,69 @@ func (sc *SyncController) handleSyncRecord(kt *kit.Kit, syncRecord *billcore.Syn
 		return err
 	}
 
+	return nil
+}
+
+// advanceSyncItems 按并发度推进 sync record 内的 item，返回是否全部已同步完成。
+func (sc *SyncController) advanceSyncItems(kt *kit.Kit, syncRecord *billcore.SyncRecord,
+	itemList []*SyncRecordDetailItem) (bool, error) {
+
+	// 并发度：同一 sync record 内同时处于 syncing 状态的 item 数量上限。
+	// 名额释放不追求实时，已完成的 item 留待下个 tick 重新统计时再腾出名额
+	maxConcurrency := converter.PtrToVal(cc.AccountServer().Controller.ObsSyncConcurrency)
+	syncingCount := 0
+	for _, item := range itemList {
+		if item.State == stateSyncing {
+			syncingCount++
+		}
+	}
+
+	changed := false
+	allSynced := true
+	for index, item := range itemList {
+		if item.State == stateSynced {
+			continue
+		}
+		allSynced = false
+		// 启动 item 同步，受并发度限制，达到上限则跳过，留待后续 tick
+		if item.State == stateNew && syncingCount >= maxConcurrency {
+			continue
+		}
+		beforeState := item.State
+		afterItem, err := sc.handleSyncRecordDetailItem(kt, item)
+		if err != nil {
+			return false, err
+		}
+		itemList[index] = afterItem
+		changed = true
+		if beforeState == stateNew && afterItem.State == stateSyncing {
+			syncingCount++
+		}
+	}
+
+	if !changed {
+		return allSynced, nil
+	}
+	if err := sc.updateSyncRecordDetail(kt, syncRecord, itemList); err != nil {
+		return false, err
+	}
+	return allSynced, nil
+}
+
+// updateSyncRecordDetail 将 item 列表回写到 sync record 的 detail 字段。
+func (sc *SyncController) updateSyncRecordDetail(kt *kit.Kit, syncRecord *billcore.SyncRecord,
+	itemList []*SyncRecordDetailItem) error {
+
+	newDetailData, err := json.Marshal(itemList)
+	if err != nil {
+		return err
+	}
+	req := &bill.BillSyncRecordUpdateReq{ID: syncRecord.ID, Detail: newDetailData}
+	if err := sc.Client.DataService().Global.Bill.UpdateBillSyncRecord(kt, req); err != nil {
+		logs.Errorf("update bill sync record detail failed, err: %s, record: %s, rid: %s",
+			err, syncRecord.ID, kt.Rid)
+		return err
+	}
 	return nil
 }
 

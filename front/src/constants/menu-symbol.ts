@@ -50,6 +50,7 @@ export const MENU_SERVICE = 'menu_service';
 export const MENU_SERVICE_HOST_APPLICATION = 'menu_service_host_application';
 export const MENU_SERVICE_HOST_RECYCLE_ENTRY = 'menu_service_host_recycle_entry';
 export const MENU_SERVICE_HOST_RECYCLE = 'menu_service_host_recycle';
+export const MENU_SERVICE_DISSOLVE = 'menu_service_dissolve';
 
 /**
  * 平台管理

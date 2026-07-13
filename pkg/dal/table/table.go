@@ -262,8 +262,6 @@ const (
 	// AccountBillRegionCityRelTable 账单地域-城市映射表
 	AccountBillRegionCityRelTable = "account_bill_region_city_rel"
 
-	// RecycleModuleInfo 裁撤模块表
-	RecycleModuleInfo = "recycle_module_info"
 	// RecycleHostInfo  裁撤主机表
 	RecycleHostInfo = "recycle_host_info"
 
@@ -471,7 +469,6 @@ var TableMap = map[Name]TableConfig{
 	OBSBillZenlayerItemTable: {},
 	OBSBillGcpItemTable:      {},
 	OBSBillRollingItemTable:  {},
-	RecycleModuleInfo:        {},
 	RecycleHostInfo:          {},
 
 	RollingQuotaConfigTable:      {},

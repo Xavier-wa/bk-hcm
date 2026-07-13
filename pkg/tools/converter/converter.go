@@ -262,3 +262,13 @@ func Int64PtrToInt32Ptr(source *int64) *int32 {
 	target := int32(*source)
 	return &target
 }
+
+// StrSliceToInterfaceSlice convert []string to []interface{}.
+func StrSliceToInterfaceSlice(vals []string) []interface{} {
+	result := make([]interface{}, 0, len(vals))
+	for _, v := range vals {
+		result = append(result, v)
+	}
+
+	return result
+}

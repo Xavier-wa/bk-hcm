@@ -695,16 +695,19 @@ func (c *Controller) buildOverwriteResPlanTicketUpdateModel(kt *kit.Kit, ticket 
 		DemandClass: cvt.PtrToVal(req.DemandClass),
 		SubmittedAt: time.Now().Format(constant.DateTimeLayout),
 	}
-	if len(req.Demands) == 0 {
-		return updateModel, nil
+	if req.TicketType != nil {
+		updateModel.Type = cvt.PtrToVal(req.TicketType)
 	}
 
 	demandClass := ticket.DemandClass
 	if req.DemandClass != nil {
-		demandClass = *req.DemandClass
+		demandClass = cvt.PtrToVal(req.DemandClass)
+	}
+	if req.Demands == nil {
+		return updateModel, nil
 	}
 
-	demands, summary, err := c.buildAndValidateDemandsFromCreateReq(kt, demandClass, req.Demands)
+	demands, summary, err := c.buildAndValidateDemandsFromOverwriteReq(kt, demandClass, req.Demands)
 	if err != nil {
 		return nil, err
 	}
@@ -768,6 +771,7 @@ func parseResPlanDeadlineConfigValue(configValue tabletypes.JsonField, loc *time
 
 func toResPlanTicketUpdateReq(model *rpt.ResPlanTicketTable) rpproto.ResPlanTicketUpdateReq {
 	updateReq := rpproto.ResPlanTicketUpdateReq{
+		Type:             model.Type,
 		Remark:           model.Remark,
 		DemandClass:      model.DemandClass,
 		SubmittedAt:      model.SubmittedAt,

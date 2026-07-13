@@ -1601,6 +1601,7 @@ type ModifyApplyReq struct {
 	TotalNum   uint          `json:"-"`                        // 需要交付的总数量
 	ProductNum uint          `json:"-"`                        // 已生产成功的总数量
 	Spec       *ResourceSpec `json:"spec" bson:"spec"`
+	Remark     string        `json:"remark" bson:"remark" validate:"omitempty,max=255"`
 }
 
 // Validate whether ModifyApplyReq is valid

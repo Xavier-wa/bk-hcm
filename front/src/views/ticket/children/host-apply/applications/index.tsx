@@ -8,7 +8,6 @@ import { Copy, DataShape, HelpDocumentFill } from 'bkui-vue/lib/icon';
 import GridContainer from '@/components/layout/grid-container/grid-container.vue';
 import GridItemFormElement from '@/components/layout/grid-container/grid-item-form-element.vue';
 import GridItem from '@/components/layout/grid-container/grid-item.vue';
-import WName from '@/components/w-name';
 import StageDetailSideslider from './stage-detail';
 
 import moment from 'moment';
@@ -381,12 +380,13 @@ export default defineComponent({
           },
           {
             label: t('申请人'),
-            width: 150,
+            width: 170,
             render: ({ data }: any) => {
               return (
-                <WName name={data.bk_username}>
-                  <UserValue value={data.bk_username} />
-                </WName>
+                <UserValue
+                  value={data.bk_username}
+                  display={{ appearance: 'wxwork-link', appearanceProps: { showDisplayValue: true } }}
+                />
               );
             },
           },

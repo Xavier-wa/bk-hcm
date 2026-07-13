@@ -143,3 +143,34 @@ func TestIsTime(t *testing.T) {
 		})
 	}
 }
+
+func TestContainsWord(t *testing.T) {
+	type args struct {
+		s    string
+		word string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{name: "首部独立单词", args: args{"a2 instance core", "a2"}, want: true},
+		{name: "中部独立单词", args: args{"g2 instance ram", "g2"}, want: true},
+		{name: "尾部独立单词", args: args{"core running g4", "g4"}, want: true},
+		{name: "整串相等", args: args{"a3", "a3"}, want: true},
+		{name: "左边界为字母不命中", args: args{"a3ultra core", "a3"}, want: false},
+		{name: "右边界为数字不命中", args: args{"a1000 series", "a100"}, want: false},
+		{name: "前后均为字母不命中", args: args{"xg4y component", "g4"}, want: false},
+		{name: "子串非独立单词不命中", args: args{"p40 gpu", "p4"}, want: false},
+		{name: "不存在返回 false", args: args{"n1 instance", "g4"}, want: false},
+		{name: "空 word 返回 false", args: args{"a2 instance", ""}, want: false},
+		{name: "区分大小写", args: args{"A2 Instance", "a2"}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ContainsWord(tt.args.s, tt.args.word); got != tt.want {
+				t.Errorf("ContainsWord(%q, %q) = %v, want %v", tt.args.s, tt.args.word, got, tt.want)
+			}
+		})
+	}
+}

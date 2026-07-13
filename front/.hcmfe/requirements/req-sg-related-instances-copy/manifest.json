@@ -1,0 +1,30 @@
+{
+  "id": "req-sg-related-instances-copy",
+  "title": "安全组-关联实例-增加复制按钮",
+  "createdAt": "2026-06-11T09:15:29.698Z",
+  "updatedAt": "2026-06-11T09:54:05.159Z",
+  "external": {
+    "tapd_parent": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598129570370",
+    "tapd_child_1": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598135131288",
+    "tapd_child_2": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598135131282"
+  },
+  "iterations": [
+    {
+      "wfId": "feat-sg-related-instances-copy",
+      "status": "prd",
+      "branch": "feat-sg-related-instances-copy",
+      "title": "安全组-关联实例-增加复制按钮",
+      "createdAt": "2026-06-11T09:06:59.160Z"
+    }
+  ],
+  "aggregatedArtifacts": {},
+  "codeScope": {
+    "globs": [],
+    "autoLearned": true
+  },
+  "codeFingerprint": {
+    "computedAt": "2026-06-11T09:54:05.159Z",
+    "files": {},
+    "rootHash": "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+  }
+}

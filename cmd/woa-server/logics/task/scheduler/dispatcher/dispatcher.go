@@ -115,6 +115,15 @@ func (d *Dispatcher) dispatchHandler(kt *kit.Kit, key string) error {
 		return err
 	}
 
+	// 校验父单状态：父单已终止（TERMINATE）时不再处理子单
+	handled, err := d.terminateOrphanIfParentTerminated(kt, applyOrder)
+	if err != nil {
+		return err
+	}
+	if handled {
+		return nil
+	}
+
 	// check order stage
 	if applyOrder.Stage != types.TicketStageRunning {
 		logs.Infof("apply order %s need not dispatch, stage: %s, rid: %s", key, applyOrder.Stage, kt.Rid)
@@ -149,14 +158,25 @@ func (d *Dispatcher) dispatchHandler(kt *kit.Kit, key string) error {
 	// 锁定成功后，需要更新applyOrder的状态为：匹配中
 	applyOrder.Status = types.ApplyStatusMatching
 
+	if err = d.runGenerateStep(kt, applyOrder, key); err != nil {
+		return err
+	}
+
+	logs.Infof("finished dispatch order %s", key)
+
+	return nil
+}
+
+// runGenerateStep 执行子单的设备生产流程：开始生产步骤、生成设备并更新生产步骤记录
+func (d *Dispatcher) runGenerateStep(kt *kit.Kit, applyOrder *types.ApplyOrder, key string) error {
 	// start generate step
-	if err = record.StartStep(kt, applyOrder.SubOrderId, types.StepNameGenerate); err != nil {
+	if err := record.StartStep(kt, applyOrder.SubOrderId, types.StepNameGenerate); err != nil {
 		logs.Errorf("failed to start generate step, order id: %s, err: %v, rid: %s", key, err, kt.Rid)
 		return err
 	}
 
 	// generate devices according to apply order
-	if err = d.generateDevices(kt, applyOrder); err != nil {
+	if err := d.generateDevices(kt, applyOrder); err != nil {
 		logs.Errorf("failed to generate device, order id: %s, err: %v, rid: %s", key, err, kt.Rid)
 		// update generate step record
 		if errStep := record.UpdateGenerateStep(
@@ -175,13 +195,11 @@ func (d *Dispatcher) dispatchHandler(kt *kit.Kit, key string) error {
 	}
 
 	// update generate step record
-	if err = record.UpdateGenerateStep(
+	if err := record.UpdateGenerateStep(
 		kt, applyOrder.SubOrderId, applyOrder.TotalNum, nil); err != nil {
 		logs.Errorf("failed to generate device, order id: %s, err: %v, rid: %s", key, err, kt.Rid)
 		return err
 	}
-
-	logs.Infof("finished dispatch order %s", key)
 
 	return nil
 }
@@ -209,6 +227,46 @@ func (d *Dispatcher) getApplyOrder(kt *kit.Kit, key string) (*types.ApplyOrder, 
 	}
 
 	return order, nil
+}
+
+// isParentTicketTerminated 判断子单对应的父单是否已终止（stage == TERMINATE）。
+// 为避免误杀正常子单，查询父单失败时仅告警并返回 false（按正常流程继续调度），不向上抛错触发重试。
+func (d *Dispatcher) isParentTicketTerminated(kt *kit.Kit, orderID uint64) (bool, error) {
+	filter := tools.ExpressionAnd(tools.RuleEqual("order_id", orderID))
+	ticket, err := model.Operation().ApplyTicket().GetApplyTicket(kt, filter)
+	if err != nil {
+		logs.Warnf("get parent apply ticket failed, skip parent terminated check, orderID: %d, err: %v, rid: %s",
+			orderID, err, kt.Rid)
+		return false, nil
+	}
+	if ticket == nil {
+		return false, nil
+	}
+
+	return ticket.Stage == types.TicketStageTerminate, nil
+}
+
+// terminateOrphanIfParentTerminated 父单已终止时终止该子单并返回 true，调用方据此跳过后续调度
+func (d *Dispatcher) terminateOrphanIfParentTerminated(kt *kit.Kit, applyOrder *types.ApplyOrder) (bool, error) {
+	terminated, err := d.isParentTicketTerminated(kt, applyOrder.OrderId)
+	if err != nil {
+		logs.Errorf("check parent ticket terminated failed, suborder: %s, err: %v, rid: %s", applyOrder.SubOrderId,
+			err, kt.Rid)
+		return false, err
+	}
+	if !terminated {
+		return false, nil
+	}
+
+	logs.Infof("apply order %s parent ticket %d is terminated, terminate orphan suborder and skip dispatch, rid: %s",
+		applyOrder.SubOrderId, applyOrder.OrderId, kt.Rid)
+	if err = d.updateApplyOrderStatus(
+		kt, applyOrder, types.TicketStageTerminate, types.ApplyStatusTerminate); err != nil {
+		logs.Errorf("failed to terminate orphan apply order %s, err: %v, rid: %s", applyOrder.SubOrderId, err, kt.Rid)
+		return false, err
+	}
+
+	return true, nil
 }
 
 // lockApplyOrder locks apply order to avoid order repeat dispatch

@@ -1,7 +1,7 @@
 ### 描述
 
 - 该接口提供版本：v1.8.7+。
-- 该接口所需权限：平台管理-机房裁撤。
+- 该接口所需权限：服务-机房裁撤。
 - 该接口功能描述：查询裁撤配置。
 
 ### URL
@@ -31,6 +31,16 @@ GET /api/v1/woa/dissolve/config
     "quota_offsets": [
       {"bk_biz_id": 100001, "offset": 50, "type": "increase", "memo": "特殊业务需求"},
       {"bk_biz_id": 100002, "offset": 30, "type": "decrease", "memo": "额度回收"}
+    ],
+    "dissolve_projects": [
+      {
+        "start": "2026-01-01",
+        "end": "2026-03-31",
+        "default": true,
+        "projects": [
+          {"id": 100, "memo": "第一批"}
+        ]
+      }
     ]
   }
 }
@@ -52,6 +62,7 @@ GET /api/v1/woa/dissolve/config
 | approval_limit    | string            | 主机裁撤项目申请自动审批配置，超过比例后，则申请单需要管理员人工审批，范围0-100     |
 | quota_coefficient | float64           | 配额系数（百分比），用于计算可申请额度，范围1-100，默认值65                          |
 | quota_offsets     | []QuotaOffsetItem | 业务偏移配置数组                                                              |
+| dissolve_projects | []DissolveProjectCycle | 裁撤周期配置数组                                        |
 
 #### QuotaOffsetItem
 
@@ -61,3 +72,19 @@ GET /api/v1/woa/dissolve/config
 | offset   | int64  | 偏移值                                   |
 | type     | string | 调整类型：increase=调增，decrease=调减          |
 | memo     | string | 调整原因                                  |
+
+#### DissolveProjectCycle
+
+| 参数名称     | 参数类型                | 描述                                  |
+|----------|---------------------|-------------------------------------|
+| start    | string              | 裁撤周期开始时间，格式 yyyy-MM-dd            |
+| end      | string              | 裁撤周期结束时间，格式 yyyy-MM-dd            |
+| default  | bool                | 是否为当前裁撤周期（可有多个或零个，不要求唯一）       |
+| projects | []DissolveProjectItem | 裁撤项目列表                            |
+
+#### DissolveProjectItem
+
+| 参数名称 | 参数类型   | 描述     |
+|------|--------|--------|
+| id   | int    | 裁撤项目ID |
+| memo | string | 项目备注   |

@@ -1648,14 +1648,14 @@ export default (type: string, isSimpleShow = false) => {
     {
       label: '申请时间',
       field: 'create_at',
-      width: 160,
+      width: 150,
       render: ({ cell }: any) => timeFormatter(cell),
       formatter: ({ create_at }: any) => timeFormatter(create_at),
     },
     {
       label: '期望交付时间',
       field: 'expect_time',
-      width: 160,
+      width: 150,
       render: ({ cell }: any) => timeFormatter(cell),
       formatter: ({ expect_time }: any) => timeFormatter(expect_time),
     },

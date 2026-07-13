@@ -254,6 +254,9 @@ func (act SyncAction) convertHuaweiBill(kt *kit.Kit, syncOpt *SyncOption, result
 			RealCost:                  &types.Decimal{Decimal: item.Cost.Mul(decimal.NewFromFloat(floatRate))},
 			CityId:                    cityID,
 			ResClassId:                enumor.GetOBSResClassID(syncOpt.Vendor, isGPU),
+			// TODO 华为本期 GpuCardCategory、APIBrandName 统一留空（无 AI 账单识别链路、无卡型映射），
+			GpuCardCategory: "",
+			APIBrandName:    "",
 		}
 		retList = append(retList, newItem)
 	}

@@ -25,7 +25,183 @@ import (
 
 	"hcm/pkg/criteria/enumor"
 	cvt "hcm/pkg/tools/converter"
+
+	"github.com/stretchr/testify/assert"
 )
+
+// TestDissolveStatus_ToAbolishPhases 测试对外两态转换为 DB 四态
+func TestDissolveStatus_ToAbolishPhases(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   DissolveStatus
+		expected []enumor.AbolishPhase
+	}{
+		{
+			name:     "complete 映射到 complete 单态",
+			status:   DissolveStatusComplete,
+			expected: []enumor.AbolishPhase{enumor.Complete},
+		},
+		{
+			name:   "incomplete 映射到未完成三态（含 retain）",
+			status: DissolveStatusIncomplete,
+			expected: []enumor.AbolishPhase{
+				enumor.Incomplete, enumor.BsiComplete, enumor.Retain,
+			},
+		},
+		{
+			name:     "空状态返回 nil",
+			status:   "",
+			expected: nil,
+		},
+		{
+			name:     "非法状态返回 nil",
+			status:   "unknown",
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.status.ToAbolishPhases())
+		})
+	}
+}
+
+// TestFromAbolishPhase 测试 DB 四态归并为对外两态
+func TestFromAbolishPhase(t *testing.T) {
+	tests := []struct {
+		name     string
+		phase    enumor.AbolishPhase
+		expected DissolveStatus
+	}{
+		{
+			name:     "complete 归并为 complete",
+			phase:    enumor.Complete,
+			expected: DissolveStatusComplete,
+		},
+		{
+			name:     "incomplete 归并为 incomplete",
+			phase:    enumor.Incomplete,
+			expected: DissolveStatusIncomplete,
+		},
+		{
+			name:     "bsiComplete 归并为 incomplete",
+			phase:    enumor.BsiComplete,
+			expected: DissolveStatusIncomplete,
+		},
+		{
+			name:     "retain 归并为 incomplete",
+			phase:    enumor.Retain,
+			expected: DissolveStatusIncomplete,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, FromAbolishPhase(tt.phase))
+		})
+	}
+}
+
+// TestDissolveStatusRoundTrip 测试四态经两态再回四态集合的闭环一致性
+func TestDissolveStatusRoundTrip(t *testing.T) {
+	allPhases := []enumor.AbolishPhase{
+		enumor.Complete, enumor.Incomplete, enumor.BsiComplete, enumor.Retain,
+	}
+	for _, phase := range allPhases {
+		t.Run(string(phase), func(t *testing.T) {
+			status := FromAbolishPhase(phase)
+			phases := status.ToAbolishPhases()
+			assert.Contains(t, phases, phase,
+				"phase %s should be contained in its mapped status phases", phase)
+		})
+	}
+}
+
+// TestDissolveProjectCycle_Validate 测试裁撤周期校验
+func TestDissolveProjectCycle_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		cycle   DissolveProjectCycle
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "合法周期",
+			cycle: DissolveProjectCycle{
+				Start:    "2026-01-01",
+				End:      "2026-03-31",
+				Default:  true,
+				Projects: []DissolveProjectItem{{ID: 100, Memo: "第一批"}},
+			},
+			wantErr: false,
+		},
+		{
+			name: "start 日期非法",
+			cycle: DissolveProjectCycle{
+				Start:    "2026/01/01",
+				End:      "2026-03-31",
+				Projects: []DissolveProjectItem{{ID: 100}},
+			},
+			wantErr: true,
+			errMsg:  "invalid start date",
+		},
+		{
+			name: "end 日期非法",
+			cycle: DissolveProjectCycle{
+				Start:    "2026-01-01",
+				End:      "bad",
+				Projects: []DissolveProjectItem{{ID: 100}},
+			},
+			wantErr: true,
+			errMsg:  "invalid end date",
+		},
+		{
+			name: "start 晚于 end",
+			cycle: DissolveProjectCycle{
+				Start:    "2026-04-01",
+				End:      "2026-03-31",
+				Projects: []DissolveProjectItem{{ID: 100}},
+			},
+			wantErr: true,
+			errMsg:  "must not be after end date",
+		},
+		{
+			name: "projects 为空",
+			cycle: DissolveProjectCycle{
+				Start:    "2026-01-01",
+				End:      "2026-03-31",
+				Projects: []DissolveProjectItem{},
+			},
+			wantErr: true,
+			errMsg:  "projects can not be empty",
+		},
+		{
+			name: "project id 非法",
+			cycle: DissolveProjectCycle{
+				Start:    "2026-01-01",
+				End:      "2026-03-31",
+				Projects: []DissolveProjectItem{{ID: 0}},
+			},
+			wantErr: true,
+			errMsg:  "invalid project id",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cycle.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.errMsg != "" {
+					assert.Contains(t, err.Error(), tt.errMsg)
+				}
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
 
 // TestUpsertConfigReqValidate_QuotaCoefficient 测试 UpsertConfigReq.Validate() 中配额系数校验
 func TestUpsertConfigReqValidate_QuotaCoefficient(t *testing.T) {

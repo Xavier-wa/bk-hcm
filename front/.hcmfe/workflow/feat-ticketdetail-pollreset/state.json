@@ -1,0 +1,61 @@
+{
+  "id": "feat-ticketdetail-pollreset",
+  "title": "资源预测-详情页返回列表页后详情轮询未停止",
+  "currentStage": "done",
+  "createdAt": "2026-07-03T12:10:00.980Z",
+  "updatedAt": "2026-07-05T11:34:55.871Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-ticketdetail-pollreset/coding.md",
+        "kind": "file",
+        "addedAt": "2026-07-03T12:12:03.378Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-ticketdetail-pollreset/test.md",
+        "kind": "file",
+        "addedAt": "2026-07-05T11:28:00.174Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-07-05T11:26:32.269Z",
+      "note": "用户确认编码完成（治本方案：改公共 hook use-timeout-poll + 子单 sideslider 关闭守卫），lint 通过，进入 test"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-07-05T11:34:55.871Z",
+      "note": "用户确认接受测试结果（开发自测 PASS），推进至 done"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-07-03T12:10:00.980Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-07-05T11:26:32.269Z",
+      "note": "用户确认编码完成（治本方案：改公共 hook use-timeout-poll + 子单 sideslider 关闭守卫），lint 通过，进入 test"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-07-05T11:34:55.871Z",
+      "note": "用户确认接受测试结果（开发自测 PASS），推进至 done"
+    }
+  ],
+  "branch": "feat-ticketdetail-pollreset",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ]
+}

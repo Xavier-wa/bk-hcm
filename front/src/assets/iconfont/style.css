@@ -452,3 +452,12 @@ url("fonts/iconcool.eot?#iefix") format("embedded-opentype");
 .bkhcm-icon-search:before {
 	content: "\e198";
 }
+.bkhcm-icon-download:before {
+	content: "\e199";
+}
+.bkhcm-icon-bin:before {
+	content: "\e19a";
+}
+.bkhcm-icon-vector:before {
+	content: "\e19b";
+}

@@ -35,6 +35,7 @@ type Logics interface {
 	Sg() ziyan.SgIf
 	ApplyOrderStatistics() ApplyOrderStatisticsIf
 	SpringResPool() SpringResPoolIf
+	LoadTestSubnet() LoadTestSubnetIf
 }
 
 type logics struct {
@@ -51,6 +52,7 @@ type logics struct {
 	sg                   ziyan.SgIf
 	applyOrderStatistics ApplyOrderStatisticsIf
 	springResPool        SpringResPoolIf
+	loadTestSubnet       LoadTestSubnetIf
 }
 
 // New create a logics manager
@@ -71,6 +73,7 @@ func New(client *client.ClientSet, thirdCli *thirdparty.Client, cmdbCli cmdb.Cli
 		sg:                   ziyan.NewSgOp(client),
 		applyOrderStatistics: NewApplyOrderStatisticsOp(daoSet),
 		springResPool:        NewSpringResPoolOp(client),
+		loadTestSubnet:       NewLoadTestSubnetOp(client),
 	}
 }
 
@@ -137,4 +140,9 @@ func (l *logics) ApplyOrderStatistics() ApplyOrderStatisticsIf {
 // SpringResPool spring resource pool interface
 func (l *logics) SpringResPool() SpringResPoolIf {
 	return l.springResPool
+}
+
+// LoadTestSubnet load test subnet interface
+func (l *logics) LoadTestSubnet() LoadTestSubnetIf {
+	return l.loadTestSubnet
 }

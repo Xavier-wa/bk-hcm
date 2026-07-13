@@ -162,9 +162,12 @@ const (
 	OBSDefaultCityIDOverseas = int32(300002)
 )
 
+// OBSSyncDefaultConcurrency OBS 账单同步默认并发度，即同一 sync record 内同时处于 syncing 状态的 item 数量上限
+const OBSSyncDefaultConcurrency = 5
+
 const (
-	// AmazonSageMaker Amazon SageMaker
+	// AmazonSageMaker Amazon SageMaker 的 line_item_product_code
 	AmazonSageMaker = "AmazonSageMaker"
-	// GcpCalendarMode gcp calendar mode
-	GcpCalendarMode = "calendar mode"
+	// AmazonSageMakerProductName Amazon SageMaker 的 product_product_name
+	AmazonSageMakerProductName = "Amazon SageMaker"
 )
