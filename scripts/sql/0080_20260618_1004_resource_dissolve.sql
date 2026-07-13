@@ -19,7 +19,7 @@
 
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9
+    SQLVER=0080,HCMVER=v1.9.2.1
 
     Notes:
     1. 裁撤主机表新增项目、地域、业务、组织、负责人、CPU、忽略等字段
@@ -54,6 +54,6 @@ drop table if exists `recycle_module_info`;
 delete from id_generator where `resource` = 'recycle_module_info';
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.9.2.1' as `hcm_ver`, '0080' as `sql_ver`;
 
 COMMIT
