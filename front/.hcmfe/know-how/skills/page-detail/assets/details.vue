@@ -19,7 +19,6 @@ const props = defineProps<{
 // ---- 3. 字段模型（多类型用 Factory，单类型直接 getModel）----
 // import { FieldFactory } from './field-factory';
 // const model = FieldFactory.createModel(currentVendor.value);
-// const properties = model.getPropertiesByGroup<ModelPropertyDisplay>();
 const properties = ref<Record<string, ModelPropertyDisplay[]>>({}); // 占位
 
 // ---- 4. 工具 ----

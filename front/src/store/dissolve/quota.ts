@@ -66,9 +66,11 @@ export interface IDissolveDetail {
   operators: string[];
   cpu_core: number;
   device_type: string;
+  expect_abolish_time?: string;
 }
 
 export interface IDissolveOverviewListParams {
+  expect_abolish_times?: string[];
   project_ids?: number[];
   group_ids?: number[];
   bk_biz_ids?: number[];
@@ -78,6 +80,7 @@ export interface IDissolveOverviewListParams {
 
 export interface IDissolveDetailListParams {
   bk_biz_ids?: number[];
+  expect_abolish_times?: string[];
   project_ids?: number[];
   group_ids?: number[];
   operators?: string[];
@@ -208,6 +211,28 @@ export const useDissolveQuotaStore = defineStore('dissolve-quota', () => {
     }
   };
 
+  const getExpectAbolishTimeList = async () => {
+    try {
+      const res: IQueryResData<{ expect_abolish_times: string[] }> = await http.post(
+        '/api/v1/woa/dissolve/expect_abolish_time/list',
+        {},
+      );
+      return res?.data?.expect_abolish_times || [];
+    } catch (error) {
+      console.error(error);
+      return Promise.reject(error);
+    }
+  };
+
+  const getExpectAbolishTimeOptions = async (): Promise<Record<string, string>> => {
+    try {
+      const times = await getExpectAbolishTimeList();
+      return times.reduce((acc: Record<string, string>, time: string) => ({ ...acc, [time]: time }), {});
+    } catch {
+      return {};
+    }
+  };
+
   const getIdcNames = async (params: { regions?: string[]; zones?: string[] }) => {
     try {
       const res: IQueryResData<IOptionItem[]> = await http.post('/api/v1/woa/dissolve/idc_names/list', params);
@@ -232,6 +257,8 @@ export const useDissolveQuotaStore = defineStore('dissolve-quota', () => {
     getDetailList,
     syncDissolve,
     getProjectTypes,
+    getExpectAbolishTimeList,
+    getExpectAbolishTimeOptions,
     getIdcNames,
   };
 });

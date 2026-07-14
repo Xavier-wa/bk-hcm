@@ -113,13 +113,10 @@ defineExpose({ getValue });
 
 <template>
   <div class="time-period-card">
-    <!-- 卡片头部：时间段名称 + 当前裁撤时间 checkbox + 删除 -->
+    <!-- 卡片头部：时间段名称 + 删除 -->
     <div class="card-header">
       <div class="header-left">
         <span class="period-label">时间段{{ props.index + 1 }}</span>
-        <bk-checkbox v-model="model.default" size="small" label="当前裁撤时间">
-          <span class="current-label">当前裁撤时间</span>
-        </bk-checkbox>
       </div>
       <button type="button" class="delete-btn" @click="$emit('remove')">
         <i class="hcm-icon bkhcm-icon-bin" style="color: #ea3636"></i>
@@ -218,12 +215,6 @@ defineExpose({ getValue });
       color: #313238;
       background-color: #f5f7fa;
       line-height: 20px;
-    }
-
-    .current-label {
-      font-size: 12px;
-      line-height: 20px;
-      color: #4d4f56;
     }
 
     .delete-btn {

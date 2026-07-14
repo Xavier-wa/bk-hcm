@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, watch, useTemplateRef } from 'vue';
+import { computed, ref, watch, useTemplateRef, inject, type Ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { getModel } from '@/model/manager';
 import usePage from '@/hooks/use-page';
 import useSearchQs from '@/hooks/use-search-qs';
-import { useDissolveQuotaStore, type IDissolveDetail } from '@/store/dissolve/quota';
+import { useDissolveQuotaStore, type IDissolveDetail, type IDissolveProjectCycle } from '@/store/dissolve/quota';
 import { SearchCondition } from './search/condition';
 import { TableColumn } from './data-list/column';
 import Search from './search/search.vue';
@@ -12,6 +12,17 @@ import DataList from './data-list/data-list.vue';
 
 const route = useRoute();
 const store = useDissolveQuotaStore();
+
+// 注入裁撤配置，用于展开 'all' 时获取已配置的项目列表
+const dissolveProjects = inject<Ref<IDissolveProjectCycle[]>>('dissolveProjects', ref([]));
+
+const getAllConfiguredProjectIds = () => {
+  const ids = new Set<number>();
+  dissolveProjects.value.forEach((cycle) => {
+    (cycle.projects || []).forEach((proj) => ids.add(proj.id));
+  });
+  return [...ids];
+};
 
 const conditionModel = getModel(SearchCondition);
 const conditionProperties = computed(() => conditionModel.getProperties());
@@ -29,7 +40,7 @@ const loading = ref(false);
 const searchQs = useSearchQs({ key: 'filter', properties: conditionProperties });
 
 const fetchList = async (searchCondition?: Record<string, any>) => {
-  const { time_periods, ...cond } = searchCondition ?? condition.value;
+  const cond = searchCondition ?? condition.value;
   loading.value = true;
   try {
     const sort = (route.query.sort as string) || 'inner_ip,id';
@@ -38,6 +49,19 @@ const fetchList = async (searchCondition?: Record<string, any>) => {
 
     // 将搜索条件转换为接口所需的直接参数
     const apiParams: Record<string, any> = { page, ...cond };
+    // 将 'all' 标记展开为全部项目类型 ID
+    if (Array.isArray(apiParams.project_ids) && apiParams.project_ids.includes('all')) {
+      apiParams.project_ids = getAllConfiguredProjectIds();
+    }
+    // 将 'all' 标记展开为全部裁撤截止时间
+    if (Array.isArray(apiParams.expect_abolish_times) && apiParams.expect_abolish_times.includes('all')) {
+      try {
+        const times = await store.getExpectAbolishTimeList();
+        apiParams.expect_abolish_times = times;
+      } catch {
+        apiParams.expect_abolish_times = [];
+      }
+    }
     const { list: dataList, count } = await store.getDetailList(apiParams as any);
 
     list.value = dataList || [];
