@@ -19,7 +19,7 @@
 
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9
+    SQLVER=0081,HCMVER=v1.9.2.2
 
     Notes:
     1. 裁撤主机表新增裁撤截止时间字段
@@ -33,6 +33,6 @@ alter table recycle_host_info
     add column `expect_abolish_time` varchar(32) not null default '' comment '裁撤截止时间,格式yyyy-MM-dd';
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.9.2.2' as `hcm_ver`, '0081' as `sql_ver`;
 
 COMMIT
