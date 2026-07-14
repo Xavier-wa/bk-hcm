@@ -1,10 +1,4 @@
-# dissolve-host-crud
-
-## Purpose
-
-裁撤主机表 CRUD 能力：通过 data-service 暴露 `recycle_host_info` 表的批量创建/更新/删除与列表查询接口，并提供 client 封装供 woa-server 经微服务调用，禁止上层直连 DB。
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: 裁撤主机表 CRUD 接口
 
@@ -30,19 +24,7 @@
 - **WHEN** 调用 `DELETE /dissolve/recycle_hosts/batch`，传入 filter 表达式
 - **THEN** 系统 SHALL 在事务中按 filter 条件删除 `recycle_host_info` 表中匹配的记录
 
-### Requirement: 裁撤主机 client 封装
-
-系统 SHALL 在 `pkg/client/data-service/tcloud-ziyan/` 提供 `DissolveClient`，封装上述四个 data-service 接口的调用，并注册到 `Client` 结构体中，使 woa-server 可通过 `clientSet.DataService().TCloudZiyan.Dissolve` 链式调用。woa-server 的裁撤同步、CRUD、`IsDissolveHost` 判定、scheduler 固资校验 SHALL 全部经此 client 完成，MUST NOT 直连 `pkg/dal/dao`。
-
-#### Scenario: woa-server 通过 client 查询裁撤主机
-
-- **WHEN** woa-server 业务逻辑调用 `clientSet.DataService().TCloudZiyan.Dissolve.ListRecycleHost(kt, req)`
-- **THEN** client SHALL 发送 HTTP 请求到 data-service 的 `/dissolve/recycle_hosts/list` 端点，并将响应反序列化后返回
-
-#### Scenario: woa-server 同步与判定走 client
-
-- **WHEN** woa-server 执行裁撤同步写库、`IsDissolveHost` 判定或 scheduler 固资校验
-- **THEN** 相关读写 SHALL 经 `DataService().TCloudZiyan.Dissolve` client，而非直连 `pkg/dal/dao`
+## ADDED Requirements
 
 ### Requirement: 裁撤截止时间去重查询接口
 

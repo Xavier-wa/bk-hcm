@@ -17,6 +17,7 @@ POST /api/v1/woa/dissolve/table/list
 | bk_biz_ids | int64 array | 否  | 业务 ID   |
 | operators  | string array | 否 | 负责人     |
 | regions    | string array | 否 | 地域 ID   |
+| expect_abolish_times | string array | 否 | 裁撤截止时间列表，格式 yyyy-MM-dd |
 
 ### 调用示例
 

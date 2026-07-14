@@ -42,17 +42,18 @@ func (svc *service) BatchUpdateRecycleHost(cts *rest.Contexts) (interface{}, err
 
 	_, err := svc.dao.Txn().AutoTxn(cts.Kit, func(txn *sqlx.Tx, opt *orm.TxnOption) (interface{}, error) {
 		updateHost := &hostdefine.RecycleHostTable{
-			AbolishPhase: req.Data.AbolishPhase,
-			ProjectName:  req.Data.ProjectName,
-			Module:       req.Data.Module,
-			InnerIP:      req.Data.InnerIP,
-			DeviceType:   req.Data.DeviceType,
-			Region:       req.Data.Region,
-			BkBizID:      req.Data.BkBizID,
-			GroupID:      req.Data.GroupID,
-			Operators:    req.Data.Operators,
-			CPUCore:      req.Data.CPUCore,
-			IsIgnore:     req.Data.IsIgnore,
+			AbolishPhase:      req.Data.AbolishPhase,
+			ProjectName:       req.Data.ProjectName,
+			Module:            req.Data.Module,
+			InnerIP:           req.Data.InnerIP,
+			DeviceType:        req.Data.DeviceType,
+			Region:            req.Data.Region,
+			BkBizID:           req.Data.BkBizID,
+			GroupID:           req.Data.GroupID,
+			Operators:         req.Data.Operators,
+			CPUCore:           req.Data.CPUCore,
+			IsIgnore:          req.Data.IsIgnore,
+			ExpectAbolishTime: req.Data.ExpectAbolishTime,
 		}
 		if err := svc.dao.RecycleHost().UpdateWithTx(cts.Kit, txn, req.Filter, updateHost); err != nil {
 			return nil, err

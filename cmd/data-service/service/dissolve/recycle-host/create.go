@@ -48,19 +48,20 @@ func (svc *service) BatchCreateRecycleHost(cts *rest.Contexts) (interface{}, err
 		hosts := make([]hostdefine.RecycleHostTable, 0, len(req.Hosts))
 		for _, createReq := range req.Hosts {
 			hosts = append(hosts, hostdefine.RecycleHostTable{
-				AssetID:      cvt.ValToPtr(createReq.AssetID),
-				InnerIP:      cvt.ValToPtr(createReq.InnerIP),
-				DeviceType:   cvt.ValToPtr(createReq.DeviceType),
-				Module:       cvt.ValToPtr(createReq.Module),
-				AbolishPhase: cvt.ValToPtr(createReq.AbolishPhase),
-				ProjectName:  cvt.ValToPtr(createReq.ProjectName),
-				ProjectID:    cvt.ValToPtr(createReq.ProjectID),
-				Region:       cvt.ValToPtr(createReq.Region),
-				BkBizID:      cvt.ValToPtr(createReq.BkBizID),
-				GroupID:      cvt.ValToPtr(createReq.GroupID),
-				Operators:    createReq.Operators,
-				CPUCore:      cvt.ValToPtr(createReq.CPUCore),
-				IsIgnore:     cvt.ValToPtr(createReq.IsIgnore),
+				AssetID:           cvt.ValToPtr(createReq.AssetID),
+				InnerIP:           cvt.ValToPtr(createReq.InnerIP),
+				DeviceType:        cvt.ValToPtr(createReq.DeviceType),
+				Module:            cvt.ValToPtr(createReq.Module),
+				AbolishPhase:      cvt.ValToPtr(createReq.AbolishPhase),
+				ProjectName:       cvt.ValToPtr(createReq.ProjectName),
+				ProjectID:         cvt.ValToPtr(createReq.ProjectID),
+				Region:            cvt.ValToPtr(createReq.Region),
+				BkBizID:           cvt.ValToPtr(createReq.BkBizID),
+				GroupID:           cvt.ValToPtr(createReq.GroupID),
+				Operators:         createReq.Operators,
+				CPUCore:           cvt.ValToPtr(createReq.CPUCore),
+				IsIgnore:          cvt.ValToPtr(createReq.IsIgnore),
+				ExpectAbolishTime: cvt.ValToPtr(createReq.ExpectAbolishTime),
 			})
 		}
 		ids, err := svc.dao.RecycleHost().CreateWithTx(cts.Kit, txn, hosts)

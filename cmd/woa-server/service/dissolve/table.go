@@ -107,3 +107,30 @@ func (s *service) ListResDissolveTable(cts *rest.Contexts) (interface{}, error) 
 
 	return dissolve.ResDissolveTable{Items: table}, nil
 }
+
+// ListExpectAbolishTime list resource dissolve expect abolish time
+func (s *service) ListExpectAbolishTime(cts *rest.Contexts) (interface{}, error) {
+	req := new(dissolve.ExpectAbolishTimeListReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	// 服务请求-机房裁撤-菜单粒度
+	err := s.authorizer.AuthorizeWithPerm(cts.Kit, meta.ResourceAttribute{
+		Basic: &meta.Basic{Type: meta.ServiceResDissolve, Action: meta.Find}})
+	if err != nil {
+		return nil, err
+	}
+
+	times, err := s.logics.Table().ListExpectAbolishTime(cts.Kit, req)
+	if err != nil {
+		logs.Errorf("list expect abolish time failed, err: %v, req: %+v, rid: %s", err, req, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return dissolve.ExpectAbolishTimeListResult{ExpectAbolishTimes: times}, nil
+}

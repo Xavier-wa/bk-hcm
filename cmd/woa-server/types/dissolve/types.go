@@ -138,6 +138,8 @@ type ResDissolveReq struct {
 	Operators []string `json:"operators"`
 	// Regions 地域ID
 	Regions []string `json:"regions"`
+	// ExpectAbolishTimes 裁撤截止时间
+	ExpectAbolishTimes []string `json:"expect_abolish_times"`
 }
 
 // Validate table list request.
@@ -187,15 +189,16 @@ func FromAbolishPhase(phase enumor.AbolishPhase) DissolveStatus {
 
 // HostDetailListReq 裁撤主机明细列表请求
 type HostDetailListReq struct {
-	BizIDs     []int64        `json:"bk_biz_ids"`
-	ProjectIDs []int          `json:"project_ids"`
-	GroupIDs   []int64        `json:"group_ids"`
-	Operators  []string       `json:"operators"`
-	Modules    []string       `json:"modules"`
-	InnerIPs   []string       `json:"inner_ips"`
-	AssetIDs   []string       `json:"asset_ids"`
-	Status     DissolveStatus `json:"status"`
-	Page       *core.BasePage `json:"page" validate:"required"`
+	BizIDs             []int64        `json:"bk_biz_ids"`
+	ProjectIDs         []int          `json:"project_ids"`
+	GroupIDs           []int64        `json:"group_ids"`
+	Operators          []string       `json:"operators"`
+	Modules            []string       `json:"modules"`
+	InnerIPs           []string       `json:"inner_ips"`
+	AssetIDs           []string       `json:"asset_ids"`
+	Status             DissolveStatus `json:"status"`
+	ExpectAbolishTimes []string       `json:"expect_abolish_times"`
+	Page               *core.BasePage `json:"page" validate:"required"`
 }
 
 // Validate 校验明细列表请求
@@ -221,14 +224,15 @@ func (req *HostDetailListReq) Validate() error {
 
 // HostDetailExportListReq 查询导出的裁撤主机明细请求
 type HostDetailExportListReq struct {
-	BizIDs     []int64        `json:"bk_biz_ids"`
-	ProjectIDs []int          `json:"project_ids"`
-	GroupIDs   []int64        `json:"group_ids"`
-	Operators  []string       `json:"operators"`
-	Modules    []string       `json:"modules"`
-	InnerIPs   []string       `json:"inner_ips"`
-	AssetIDs   []string       `json:"asset_ids"`
-	Status     DissolveStatus `json:"status"`
+	BizIDs             []int64        `json:"bk_biz_ids"`
+	ProjectIDs         []int          `json:"project_ids"`
+	GroupIDs           []int64        `json:"group_ids"`
+	Operators          []string       `json:"operators"`
+	Modules            []string       `json:"modules"`
+	InnerIPs           []string       `json:"inner_ips"`
+	AssetIDs           []string       `json:"asset_ids"`
+	Status             DissolveStatus `json:"status"`
+	ExpectAbolishTimes []string       `json:"expect_abolish_times"`
 	// SnapshotDate ES 快照日期(yyyyMMdd)，传入时按该日期快照补充扩展字段
 	SnapshotDate string         `json:"snapshot_date"`
 	Page         *core.BasePage `json:"page" validate:"required"`
@@ -257,20 +261,21 @@ func (req *HostDetailExportListReq) Validate() error {
 
 // HostDetail 裁撤主机明细
 type HostDetail struct {
-	ID          string         `json:"id"`
-	AssetID     string         `json:"asset_id"`
-	InnerIP     string         `json:"inner_ip"`
-	DeviceType  string         `json:"device_type"`
-	Module      string         `json:"module"`
-	Status      DissolveStatus `json:"status"`
-	ProjectID   int            `json:"project_id"`
-	ProjectName string         `json:"project_name"`
-	Region      string         `json:"region"`
-	BkBizID     int64          `json:"bk_biz_id"`
-	GroupID     int64          `json:"group_id"`
-	Operators   []string       `json:"operators"`
-	CPUCore     int            `json:"cpu_core"`
-	Extension   *HostExtension `json:"extension,omitempty"`
+	ID                string         `json:"id"`
+	AssetID           string         `json:"asset_id"`
+	InnerIP           string         `json:"inner_ip"`
+	DeviceType        string         `json:"device_type"`
+	Module            string         `json:"module"`
+	Status            DissolveStatus `json:"status"`
+	ProjectID         int            `json:"project_id"`
+	ProjectName       string         `json:"project_name"`
+	Region            string         `json:"region"`
+	BkBizID           int64          `json:"bk_biz_id"`
+	GroupID           int64          `json:"group_id"`
+	Operators         []string       `json:"operators"`
+	CPUCore           int            `json:"cpu_core"`
+	ExpectAbolishTime string         `json:"expect_abolish_time"`
+	Extension         *HostExtension `json:"extension,omitempty"`
 }
 
 // HostExtension ES 快照补充的主机性能/属性扩展字段（仅传入 snapshot_date 且快照命中时返回）
@@ -327,6 +332,22 @@ type HostExtension struct {
 type HostDetailListResult struct {
 	Count   int64        `json:"count"`
 	Details []HostDetail `json:"details"`
+}
+
+// ExpectAbolishTimeListReq 查询裁撤截止时间列表请求
+type ExpectAbolishTimeListReq struct {
+	Filter *filter.Expression `json:"filter" validate:"omitempty"`
+}
+
+// Validate 校验查询裁撤截止时间列表请求
+func (req *ExpectAbolishTimeListReq) Validate() error {
+	return nil
+}
+
+// ExpectAbolishTimeListResult 查询裁撤截止时间列表响应
+type ExpectAbolishTimeListResult struct {
+	// ExpectAbolishTimes 去重升序的裁撤截止时间列表
+	ExpectAbolishTimes []string `json:"expect_abolish_times"`
 }
 
 // ResDissolveTable resource dissolve table

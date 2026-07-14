@@ -1,24 +1,4 @@
-# dissolve-host-sync
-
-## Purpose
-
-裁撤主机同步能力：按裁撤项目动态配置从裁撤系统拉取设备，补全主机全部字段并落库，计算忽略主机，并以复合键 diff 后经 data-service 写库。
-
-## Requirements
-
-### Requirement: 按裁撤项目同步设备
-
-同步任务 SHALL 从 `dissolve_project` 配置取所有裁撤周期 `projects[].id` 的并集作为待同步项目集合，并以此（结合服务配置 `svrTypeNames`）作为过滤条件，分页调用裁撤系统 `ListDeviceV2` 拉取设备；拉取的裁撤阶段过滤 MUST 覆盖四态 `incomplete`/`complete`/`bsiComplete`/`retain`。
-
-#### Scenario: 从动态配置读取待同步项目
-
-- **WHEN** 同步任务启动且 `dissolve_project` 配置含多个裁撤周期
-- **THEN** 系统 SHALL 取所有周期 `projects[].id` 的并集作为 `projectId` 过滤条件拉取设备，不再读取服务配置 `projectIDs`
-
-#### Scenario: 覆盖 retain 阶段
-
-- **WHEN** 调用裁撤系统拉取设备
-- **THEN** `abolishPhase` 过滤 SHALL 包含 `retain`，确保保留暂不裁撤的设备纳入同步
+## MODIFIED Requirements
 
 ### Requirement: 主机字段一次性补全落库
 
@@ -56,20 +36,6 @@
 - **WHEN** CC 未命中某主机，且 DB 旧记录这些字段无值
 - **THEN** 系统 SHALL 按 `originDate` 定位 ES 快照索引 `app_device_pass_dtl_{originDate}`，补齐 `bk_biz_id`/`group_id`/`operators` 后更新
 
-### Requirement: 计算忽略主机
-
-同步任务 SHALL 在取得 `bk_biz_id` 后，依据服务配置 `ignore_biz` 列表计算 `is_ignore`：命中则 `is_ignore=true`，否则 `false`；当主机业务变化导致命中状态变化时，`is_ignore` SHALL 随之更新。
-
-#### Scenario: 业务命中忽略列表
-
-- **WHEN** 主机 `bk_biz_id` 命中 `ignore_biz` 列表
-- **THEN** 系统 SHALL 将该主机 `is_ignore` 置为 `true`
-
-#### Scenario: 业务变更后重算 is_ignore
-
-- **WHEN** 同步发现主机业务由命中 `ignore_biz` 变为未命中
-- **THEN** 系统 SHALL 将 `is_ignore` 更新为 `false`
-
 ### Requirement: 按项目与固资号复合键 diff
 
 同步任务 SHALL 以 `(project_id, asset_id)` 复合键比对裁撤系统数据与 DB 现有数据，得出新增/更新/删除集合，允许同一 `asset_id` 在不同项目并存；MUST 移除按 `asset_id` 去重择优的逻辑。变更比对 SHALL 覆盖 `expect_abolish_time`，即裁撤系统截止时间变化时须触发更新。
@@ -83,12 +49,3 @@
 
 - **WHEN** 裁撤系统某设备的 `expectAbolishTime` 与 DB 中该记录的 `expect_abolish_time` 不一致
 - **THEN** 系统 SHALL 将该记录纳入更新集合，回写新的 `expect_abolish_time`
-
-### Requirement: 同步写库经 data-service
-
-同步任务的新增/更新/删除 SHALL 全部通过 data-service client 完成，woa-server MUST NOT 直连 DB 操作 `recycle_host_info`。
-
-#### Scenario: 同步结果落库走 client
-
-- **WHEN** diff 得出新增/更新/删除集合
-- **THEN** 系统 SHALL 调用 `DataService().TCloudZiyan.Dissolve` 对应接口批量写库，而非直接调用 `pkg/dal/dao`

@@ -20,6 +20,7 @@ POST /api/v1/woa/dissolve/host/detail/list
 | inner_ips  | string array | 否  | 内网IP列表                                    |
 | asset_ids  | string array | 否  | 主机固资号列表                                  |
 | status     | string       | 否  | 裁撤状态，枚举值：complete（已裁撤）/incomplete（未裁撤），不传查全部       |
+| expect_abolish_times | string array | 否  | 裁撤截止时间列表，格式 yyyy-MM-dd                      |
 | page       | object       | 是  | 分页设置                                                |
 
 #### page
@@ -67,7 +68,8 @@ POST /api/v1/woa/dissolve/host/detail/list
         "bk_biz_id": 100,
         "group_id": 200,
         "operators": ["zhangsan", "lisi"],
-        "cpu_core": 64
+        "cpu_core": 64,
+        "expect_abolish_time": "2026-12-31"
       }
     ]
   }
@@ -106,3 +108,4 @@ POST /api/v1/woa/dissolve/host/detail/list
 | group_id    | int64        | 运维小组ID                                   |
 | operators   | string array | 负责人列表                                    |
 | cpu_core    | int          | CPU核心数                                   |
+| expect_abolish_time | string | 裁撤截止时间，格式 yyyy-MM-dd                       |
