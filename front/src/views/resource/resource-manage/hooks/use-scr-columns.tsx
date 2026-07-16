@@ -1138,7 +1138,7 @@ export default (type: string, isSimpleShow = false) => {
       field: 'return_time',
       width: 160,
       render: ({ cell }: any) => timeFormatter(cell),
-      formatter: ({ create_at }: any) => timeFormatter(create_at),
+      formatter: ({ return_time }: any) => timeFormatter(return_time),
     },
     {
       label: '备注',
