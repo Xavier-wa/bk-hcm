@@ -205,6 +205,7 @@ func (cli *client) deleteRemovedListener(kt *kit.Kit, lbID, region string, cloud
 		}
 		page.Start += uint32(page.Limit)
 	}
+
 	if len(removedLblCloudIds) != 0 {
 		for _, cloudIds := range slice.Split(removedLblCloudIds, constant.BatchOperationMaxLimit) {
 			if err := cli.deleteListener(kt, lbID, cloudIds); err != nil {
@@ -221,15 +222,14 @@ func (cli *client) deleteRemovedListener(kt *kit.Kit, lbID, region string, cloud
 	if err != nil {
 		return err
 	}
-	delLayer4RuleCloudIDs := make([]string, 0)
-	for _, rule := range dblayer4Rule {
-		if _, exists := allCloudIDMap[rule.CloudLBLID]; !exists {
-			delLayer4RuleCloudIDs = append(delLayer4RuleCloudIDs, rule.CloudID)
-		}
+	// prevent concurrent deletion of l4 rules when syncing and creating listeners
+	delLayer4RuleCloudIDs, err := cli.filterDeletableL4RuleCloudIDs(kt, lbID, dblayer4Rule, allCloudIDMap)
+	if err != nil {
+		logs.Errorf("fail to filter deletable l4 rule cloud ids, err: %v, lbID: %s, rid: %s", err, lbID, kt.Rid)
+		return err
 	}
 	if len(delLayer4RuleCloudIDs) > 0 {
-		err := cli.deleteLayer4Rule(kt, lbID, delLayer4RuleCloudIDs)
-		if err != nil {
+		if err := cli.deleteLayer4Rule(kt, lbID, delLayer4RuleCloudIDs); err != nil {
 			logs.Errorf("fail to clean l4 rule, err: %v, cloud id: %v, rid: %s", err, delLayer4RuleCloudIDs, kt.Rid)
 			return err
 		}
@@ -255,6 +255,57 @@ func (cli *client) deleteRemovedListener(kt *kit.Kit, lbID, region string, cloud
 	}
 
 	return nil
+}
+
+// filterDeletableL4RuleCloudIDs filters layer-4 rule cloud IDs that are safe to delete.
+//
+// The cloud listener snapshot can lag behind a just-created listener. In that race, the first listener scan
+// may miss the new DB listener, while the following rule scan can already see its layer-4 rule because
+// BatchCreateListenerWithRule commits listener and rule atomically.
+//
+// Recheck only the candidate DB listeners after reading rules: if a rule is visible and its listener was
+// committed by the same transaction, this later read must also see the listener. Only delete rules whose
+// listener is missing from both the cloud snapshot and the current DB state.
+func (cli *client) filterDeletableL4RuleCloudIDs(kt *kit.Kit, lbID string, dbRules []corelb.TCloudLbUrlRule,
+	cloudLblIDMap map[string]struct{}) ([]string, error) {
+
+	// get candidate rules that are not in the cloud snapshot, along with their listener cloud ids
+	candidateRules := make([]corelb.TCloudLbUrlRule, 0)
+	candidateCloudLBLIDs := make([]string, 0)
+	for _, rule := range dbRules {
+		if _, ok := cloudLblIDMap[rule.CloudLBLID]; ok {
+			continue
+		}
+		candidateRules = append(candidateRules, rule)
+		candidateCloudLBLIDs = append(candidateCloudLBLIDs, rule.CloudLBLID)
+	}
+	if len(candidateRules) == 0 {
+		logs.Infof("no candidate rules to delete, lbID: %s, rid: %s", lbID, kt.Rid)
+		return nil, nil
+	}
+
+	// get candidate listener ids from db
+	dbListeners, err := cli.listAllListenerFromDB(kt, lbID, candidateCloudLBLIDs)
+	if err != nil {
+		logs.Errorf("fail to list listeners from db by cloud ids, err: %v, cloud_ids: %v, rid: %s",
+			err, candidateCloudLBLIDs, kt.Rid)
+		return nil, err
+	}
+	existDBListenerMap := cvt.StringSliceToMap(slice.Map(dbListeners, func(listener corelb.TCloudListener) string {
+		return listener.CloudID
+	}))
+
+	delRuleCloudIDs := make([]string, 0, len(candidateRules))
+	for _, rule := range candidateRules {
+		if _, exist := existDBListenerMap[rule.CloudLBLID]; exist {
+			logs.Warnf("skip deleting l4 rule because listener still exists in db, rule_cloud_id: %s, "+
+				"cloud_lbl_id: %s, lb_id: %s, rid: %s", rule.CloudID, rule.CloudLBLID, lbID, kt.Rid)
+			continue
+		}
+		delRuleCloudIDs = append(delRuleCloudIDs, rule.CloudID)
+	}
+
+	return delRuleCloudIDs, nil
 }
 
 func (cli *client) listL7RuleFromDBByLbID(kt *kit.Kit, lbID string) ([]corelb.TCloudLbUrlRule, error) {
