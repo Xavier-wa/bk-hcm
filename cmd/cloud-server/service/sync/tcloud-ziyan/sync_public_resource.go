@@ -20,10 +20,12 @@
 package tziyan
 
 import (
+	"hcm/cmd/cloud-server/service/sync/detail"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	"hcm/pkg/kit"
+	"hcm/pkg/logs"
 )
 
 // SyncPublicResourceOption ...
@@ -37,14 +39,16 @@ func (opt *SyncPublicResourceOption) Validate() error {
 }
 
 // SyncPublicResource ...
-func SyncPublicResource(kt *kit.Kit, cliSet *client.ClientSet, opt *SyncPublicResourceOption) (
-	failedRes enumor.CloudResourceType, err error) {
+func SyncPublicResource(kt *kit.Kit, cliSet *client.ClientSet, opt *SyncPublicResourceOption,
+	sd *detail.SyncDetail) (failedRes enumor.CloudResourceType, err error) {
 
 	if err := opt.Validate(); err != nil {
 		return "", err
 	}
 
-	if err := SyncRegion(kt, cliSet.HCService(), opt.AccountID); err != nil {
+	if err := syncPublicResWithStatus(kt, sd, enumor.RegionCloudResType, func() error {
+		return SyncRegion(kt, cliSet.HCService(), opt.AccountID)
+	}); err != nil {
 		return enumor.RegionCloudResType, err
 	}
 
@@ -53,13 +57,45 @@ func SyncPublicResource(kt *kit.Kit, cliSet *client.ClientSet, opt *SyncPublicRe
 		return "", err
 	}
 
-	if err = SyncZone(kt, cliSet.HCService(), opt.AccountID, regions); err != nil {
+	if err := syncPublicResWithStatus(kt, sd, enumor.ZoneCloudResType, func() error {
+		return SyncZone(kt, cliSet.HCService(), opt.AccountID, regions)
+	}); err != nil {
 		return enumor.ZoneCloudResType, err
 	}
 
-	if err = SyncImage(kt, cliSet.HCService(), opt.AccountID, regions); err != nil {
+	if err := syncPublicResWithStatus(kt, sd, enumor.ImageCloudResType, func() error {
+		return SyncImage(kt, cliSet.HCService(), opt.AccountID, regions)
+	}); err != nil {
 		return enumor.ImageCloudResType, err
 	}
 
 	return "", nil
+}
+
+// syncPublicResWithStatus 包装公共资源同步流程，统一记录同步中/成功/失败状态。
+// 同步失败时先写入失败状态，再返回原始错误，保持上层对失败资源类型和错误的识别语义不变。
+func syncPublicResWithStatus(kt *kit.Kit, sd *detail.SyncDetail, resType enumor.CloudResourceType,
+	syncFunc func() error) error {
+
+	if err := sd.ResSyncStatusSyncing(resType); err != nil {
+		logs.Errorf("set res sync status syncing failed, res: %s, err: %v, accountID: %s, rid: %s",
+			resType, err, sd.AccountID, kt.Rid)
+		return err
+	}
+
+	if syncErr := syncFunc(); syncErr != nil {
+		if err := sd.ResSyncStatusFailed(resType, syncErr); err != nil {
+			logs.Errorf("set res sync status failed failed, res: %s, err: %v, accountID: %s, rid: %s",
+				resType, err, sd.AccountID, kt.Rid)
+		}
+		return syncErr
+	}
+
+	if err := sd.ResSyncStatusSuccess(resType); err != nil {
+		logs.Errorf("set res sync status success failed, res: %s, err: %v, accountID: %s, rid: %s",
+			resType, err, sd.AccountID, kt.Rid)
+		return err
+	}
+
+	return nil
 }
