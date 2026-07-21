@@ -188,7 +188,8 @@ type Logics interface {
 	CreateDemandWeek(kt *kit.Kit, createReqs []rpproto.ResPlanWeekCreateReq) (*core.BatchCreateResult, error)
 
 	// CalcPenaltyBase calc penalty base.
-	CalcPenaltyBase(kt *kit.Kit, baseDay time.Time, bkBizIDs []int64) error
+	CalcPenaltyBase(kt *kit.Kit, baseDay time.Time, bkBizIDs []int64,
+		sourceMode enumor.CalcPenaltyBaseSourceMode) error
 	// CalcPenaltyRatioAndPush calc penalty ratio and push.
 	CalcPenaltyRatioAndPush(kt *kit.Kit, baseTime time.Time) error
 	// PushExpireNotifications push expire notifications.

@@ -1000,3 +1000,25 @@ func (s RPDemandGPUSubOrderStatus) Validate() error {
 
 	return nil
 }
+
+// CalcPenaltyBaseSourceMode is penalty base data source mode.
+type CalcPenaltyBaseSourceMode string
+
+const (
+	// CalcPenaltyBaseSourceModeTicket use ticket snapshot.
+	CalcPenaltyBaseSourceModeTicket CalcPenaltyBaseSourceMode = "ticket"
+	// CalcPenaltyBaseSourceModeResPlanDemand use res_plan_demand table.
+	CalcPenaltyBaseSourceModeResPlanDemand CalcPenaltyBaseSourceMode = "res_plan_demand"
+)
+
+// Validate CalcPenaltyBaseSourceMode.
+func (m CalcPenaltyBaseSourceMode) Validate() error {
+	switch m {
+	case CalcPenaltyBaseSourceModeTicket:
+	case CalcPenaltyBaseSourceModeResPlanDemand:
+	default:
+		return fmt.Errorf("unsupported penalty base source mode: %s", m)
+	}
+
+	return nil
+}
