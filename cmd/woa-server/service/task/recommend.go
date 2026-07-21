@@ -325,24 +325,21 @@ func (s *service) filterCandidatesByCapacity(kt *kit.Kit, candidates []*staticRe
 			result = append(result, c)
 			continue
 		}
-		if satisfied[buildCapacityKey(c.requireType, c.region, c.deviceType)] {
+		if satisfied[buildCapacityKey(c.region, c.deviceType)] {
 			result = append(result, c)
 		}
 	}
 	return result, nil
 }
 
-// queryCapacitySatisfied 批量查静态库存表，返回满足 capacity ≥ 申请数量的 (require_type|region|device_type) 集合。
+// queryCapacitySatisfied 批量查静态库存表，返回满足 capacity ≥ 申请数量的 (region|device_type) 集合。
+// 库存统一按常规项目（RequireTypeRegular）查询，与需求类型无关。
 func (s *service) queryCapacitySatisfied(kt *kit.Kit, triples []capacityTriple,
 	applyNum int, zone string) (map[string]bool, error) {
 
-	rtSet, regionSet, dtSet := map[enumor.RequireType]struct{}{}, map[string]struct{}{}, map[string]struct{}{}
-	requireTypes, regions, deviceTypes := make([]enumor.RequireType, 0), make([]string, 0), make([]string, 0)
+	regionSet, dtSet := map[string]struct{}{}, map[string]struct{}{}
+	regions, deviceTypes := make([]string, 0), make([]string, 0)
 	for _, c := range triples {
-		if _, ok := rtSet[c.requireType]; !ok {
-			rtSet[c.requireType] = struct{}{}
-			requireTypes = append(requireTypes, c.requireType)
-		}
 		if _, ok := regionSet[c.region]; !ok {
 			regionSet[c.region] = struct{}{}
 			regions = append(regions, c.region)
@@ -353,7 +350,9 @@ func (s *service) queryCapacitySatisfied(kt *kit.Kit, triples []capacityTriple,
 		}
 	}
 	expr := tools.AllExpression()
-	expr.Rules = append(expr.Rules, tools.RuleIn("require_type", requireTypes), tools.RuleIn("region", regions))
+	// 库存仅维护常规项目的数据，其余需求类型无独立库存，统一采用常规项目的库存进行校验。
+	expr.Rules = append(expr.Rules, tools.RuleEqual("require_type", enumor.RequireTypeRegular),
+		tools.RuleIn("region", regions))
 	deviceTypeExpr := tools.ExpressionOr()
 	for _, batch := range slice.Split(deviceTypes, int(filter.DefaultMaxInLimit)) {
 		deviceTypeExpr.Rules = append(deviceTypeExpr.Rules, tools.RuleIn("device_type", batch))
@@ -372,7 +371,7 @@ func (s *service) queryCapacitySatisfied(kt *kit.Kit, triples []capacityTriple,
 		}
 		for _, one := range resp.Details {
 			if one.Capacity != nil && cvt.PtrToVal(one.Capacity) >= int64(applyNum) {
-				satisfied[buildCapacityKey(one.RequireType, one.Region, one.DeviceType)] = true
+				satisfied[buildCapacityKey(one.Region, one.DeviceType)] = true
 			}
 		}
 		if len(resp.Details) < int(listReq.Page.Limit) {
@@ -430,7 +429,11 @@ func assembleStaticPlans(candidates []*staticRecommendCandidate, req *woaserver.
 }
 
 // buildCapacityKey 构建库存校验的去重 key（不含镜像维度）。
-func buildCapacityKey(requireType enumor.RequireType, region, deviceType string) string {
+func buildCapacityKey(region, deviceType string) string {
+	return fmt.Sprintf("%s|%s", region, deviceType)
+}
+
+func buildPlanDedupKey(requireType enumor.RequireType, region, deviceType string) string {
 	return fmt.Sprintf("%d|%s|%s", requireType, region, deviceType)
 }
 
@@ -601,7 +604,7 @@ func (s *service) filterPlanCandidatesByCapacity(cts *rest.Contexts, candidates 
 			result = append(result, c)
 			continue
 		}
-		if satisfied[buildCapacityKey(c.requireType, c.region, c.deviceType)] {
+		if satisfied[buildCapacityKey(c.region, c.deviceType)] {
 			result = append(result, c)
 		}
 	}
@@ -623,7 +626,7 @@ func (s *service) assemblePlanItems(cts *rest.Contexts, candidates []*planRecomm
 		if len(items) >= req.Limit {
 			break
 		}
-		dedupKey := buildCapacityKey(c.requireType, c.region, c.deviceType)
+		dedupKey := buildPlanDedupKey(c.requireType, c.region, c.deviceType)
 		if _, ok := seen[dedupKey]; ok {
 			continue
 		}
@@ -933,7 +936,8 @@ func (s *service) computeAvailableCapacity(kt *kit.Kit, req *woaserver.ApplyReco
 	if req.RequireType.NotNeedVerifyCapacity() {
 		return 0, true, nil
 	}
-	capMap, err := s.querySplitCapacityLimit(kt, req.RequireType, req.Region, req.DeviceType, req.Zone)
+	// 库存仅维护常规项目的数据，其余需求类型无独立库存，统一采用常规项目的库存进行校验
+	capMap, err := s.querySplitCapacityLimit(kt, enumor.RequireTypeRegular, req.Region, req.DeviceType, req.Zone)
 	if err != nil {
 		return 0, false, err
 	}
