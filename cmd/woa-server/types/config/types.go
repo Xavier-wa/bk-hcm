@@ -143,15 +143,16 @@ type GetVpcListRst struct {
 
 // Subnet cvm subnet config
 type Subnet struct {
-	BkInstId   string `json:"id" bson:"id"`
-	Region     string `json:"region" bson:"region"`
-	Zone       string `json:"zone" bson:"zone"`
-	VpcId      string `json:"vpc_id" bson:"vpc_id"`
-	VpcName    string `json:"vpc_name" bson:"vpc_name"`
-	SubnetId   string `json:"subnet_id" bson:"subnet_id"`
-	SubnetName string `json:"subnet_name" bson:"subnet_name"`
-	Enable     bool   `json:"enable" bson:"enable"`
-	Comment    string `json:"comment"`
+	BkInstId         string `json:"id" bson:"id"`
+	Region           string `json:"region" bson:"region"`
+	Zone             string `json:"zone" bson:"zone"`
+	VpcId            string `json:"vpc_id" bson:"vpc_id"`
+	VpcName          string `json:"vpc_name" bson:"vpc_name"`
+	SubnetId         string `json:"subnet_id" bson:"subnet_id"`
+	SubnetName       string `json:"subnet_name" bson:"subnet_name"`
+	Enable           bool   `json:"enable" bson:"enable"`
+	Comment          string `json:"comment"`
+	AvailableIpCount uint64 `json:"available_ip_count"`
 }
 
 // GetSubnetParam get subnet list request param
