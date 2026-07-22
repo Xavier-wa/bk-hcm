@@ -28,6 +28,8 @@ import (
 	dt "hcm/pkg/dal/table/cloud/device-type"
 	"hcm/pkg/thirdparty/cvmapi"
 	cvt "hcm/pkg/tools/converter"
+		
+	"github.com/shopspring/decimal"
 )
 
 // DeviceType 机型实例，用于实现 CloudResType 接口
@@ -45,6 +47,7 @@ type DeviceType struct {
 	Memory          int64                    `json:"memory"`
 	GpuAmount       float64                  `json:"gpu_amount"`
 	TechnicalClass  string                   `json:"technical_class"`
+	TechClassResAmt decimal.Decimal          `json:"tech_class_res_amt"`
 	Disable         bool                     `json:"disable"`
 	Source          enumor.DeviceTypeSource  `json:"source"`
 	GenerationType  string                   `json:"generation_type"`
@@ -98,6 +101,7 @@ func ConvTableToDeviceType(one dt.DeviceTypeTable) DeviceType {
 		Memory:          one.Memory,
 		GpuAmount:       one.GpuAmount,
 		TechnicalClass:  one.TechnicalClass,
+		TechClassResAmt: one.TechClassResAmt,
 		Disable:         cvt.PtrToVal(one.Disable),
 		Source:          one.Source,
 		GenerationType:  one.GenerationType,
@@ -118,6 +122,7 @@ type DistinctDeviceType struct {
 	Memory          int64                    `json:"memory"`
 	GpuAmount       float64                  `json:"gpu_amount"`
 	TechnicalClass  string                   `json:"technical_class"`
+	TechClassResAmt decimal.Decimal          `json:"tech_class_res_amt"`
 	DeviceTypeClass cvmapi.InstanceTypeClass `json:"device_type_class"`
 	Disable         bool                     `json:"disable"`
 	Source          enumor.DeviceTypeSource  `json:"source"`
@@ -139,6 +144,7 @@ func ConvTableToDistinctDeviceType(one dt.DeviceTypeTable) DistinctDeviceType {
 		Memory:          one.Memory,
 		GpuAmount:       one.GpuAmount,
 		TechnicalClass:  one.TechnicalClass,
+		TechClassResAmt: one.TechClassResAmt,
 		DeviceTypeClass: one.DeviceTypeClass,
 		Disable:         cvt.PtrToVal(one.Disable),
 		Source:          one.Source,

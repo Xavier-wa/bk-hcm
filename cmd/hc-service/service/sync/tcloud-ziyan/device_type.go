@@ -181,6 +181,13 @@ func (hd *deviceTypeHandler) listDeviceTypeFromCloud(kt *kit.Kit, region string,
 
 		// 3. 构建机型数据，构造完整的 device_type 表字段
 		for _, item := range queryResp.Result.Data {
+			techClassResAmt, err := item.CalcTechClassResAmt()
+			if err != nil {
+				logs.Errorf("calc tech class res amt failed, err: %v, instance_type: %s, zone: %s, rid: %s",
+					err, item.InstanceType, zone.NameCn, kt.Rid)
+				return nil, err
+			}
+
 			deviceTypes = append(deviceTypes, coredevicetype.DeviceType{
 				Vendor:          enumor.TCloudZiyan,
 				Region:          region,
@@ -194,6 +201,7 @@ func (hd *deviceTypeHandler) listDeviceTypeFromCloud(kt *kit.Kit, region string,
 				Memory:          int64(item.RamAmount),
 				GpuAmount:       item.GPUAmount,
 				TechnicalClass:  item.CvmInstanceTypeClass,
+				TechClassResAmt: techClassResAmt,
 				Source:          enumor.DeviceTypeSourceSync,
 				GenerationType:  item.GenerationType,
 			})

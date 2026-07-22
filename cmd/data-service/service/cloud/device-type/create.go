@@ -73,6 +73,7 @@ func batchCreateDeviceType(cts *rest.Contexts, svc *service, vendor enumor.Vendo
 			GpuAmount:       createReq.GpuAmount,
 			DeviceTypeClass: createReq.DeviceTypeClass,
 			TechnicalClass:  createReq.TechnicalClass,
+			TechClassResAmt: createReq.TechClassResAmt,
 			Region:          createReq.Region,
 			Zone:            createReq.Zone,
 			Disable:         cvt.ValToPtr(createReq.Disable),

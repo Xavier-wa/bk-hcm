@@ -28,6 +28,8 @@ import (
 	"hcm/pkg/dal/table/types"
 	"hcm/pkg/dal/table/utils"
 	"hcm/pkg/thirdparty/cvmapi"
+
+	"github.com/shopspring/decimal"
 )
 
 // DeviceTypeColumns defines all the device type table's columns.
@@ -46,6 +48,7 @@ var DeviceTypeColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "memory", NamedC: "memory", Type: enumor.Numeric},
 	{Column: "gpu_amount", NamedC: "gpu_amount", Type: enumor.Numeric},
 	{Column: "technical_class", NamedC: "technical_class", Type: enumor.String},
+	{Column: "tech_class_res_amt", NamedC: "tech_class_res_amt", Type: enumor.Numeric},
 	{Column: "region", NamedC: "region", Type: enumor.String},
 	{Column: "zone", NamedC: "zone", Type: enumor.String},
 	{Column: "disable", NamedC: "disable", Type: enumor.Boolean},
@@ -81,6 +84,8 @@ type DeviceTypeTable struct {
 	DeviceTypeClass cvmapi.InstanceTypeClass `db:"device_type_class" json:"device_type_class" validate:"lte=64"`
 	// TechnicalClass 技术分类
 	TechnicalClass string `db:"technical_class" json:"technical_class" validate:"lte=64"`
+	// TechClassResAmt 技术分类资源量
+	TechClassResAmt decimal.Decimal `db:"tech_class_res_amt" json:"tech_class_res_amt" validate:"gte=0"`
 	// Region 地域
 	Region string `db:"region" json:"region" validate:"lte=64"`
 	// Zone 可用区
@@ -152,6 +157,10 @@ func (t DeviceTypeTable) InsertValidate() error {
 		return errors.New("gpu amount should be >= 0")
 	}
 
+	if t.TechClassResAmt.IsNegative() {
+		return errors.New("tech class res amt should be >= 0")
+	}
+
 	if err := t.Source.Validate(); err != nil {
 		return err
 	}
@@ -183,6 +192,10 @@ func (t DeviceTypeTable) UpdateValidate() error {
 
 	if t.GpuAmount < 0 {
 		return errors.New("gpu amount should be >= 0")
+	}
+
+	if t.TechClassResAmt.IsNegative() {
+		return errors.New("tech class res amt should be >= 0")
 	}
 
 	return nil

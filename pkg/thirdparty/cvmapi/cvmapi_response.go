@@ -13,6 +13,8 @@
 package cvmapi
 
 import (
+	"fmt"
+
 	"hcm/pkg/criteria/enumor"
 
 	"github.com/shopspring/decimal"
@@ -783,6 +785,50 @@ type QueryCvmInstanceTypeItem struct {
 	CoreType              int               `json:"coreType"`              // 1.2.3 分别标识，小核心，中核心，大核心
 	CvmInstanceTypeClass  string            `json:"cvmInstanceTypeClass"`  // 技术分类
 	GenerationType        string            `json:"generationType"`        // 机型代次
+	DiskBlockNum          int               `json:"diskBlockNum"`         // 数据盘数量
+	DiskBlockSize         int               `json:"diskBlockSize"`        // 单盘容量(GB)
+}
+
+// CalcTechClassResAmt 计算技术分类资源量
+// - 内存型：返回 RamAmount（单位 GB）
+// - 高IO型：返回 DiskBlockNum（单位：块），磁盘信息缺失或异常时返回 error
+// - 大数据型：返回 DiskBlockNum * DiskBlockSize / 1024（单位 TB），磁盘信息缺失或异常时返回 error
+// - 标准型、高主频、GPU类（推理GPU/训练GPU/GPU-其他，暂未接入等效卡数）：属于已知但未配置计算规则的技术分类，返回 CPUAmount
+// - 未知分类、空值：分类值本身无法识别，属于脏数据，返回 error
+func (q QueryCvmInstanceTypeItem) CalcTechClassResAmt() (decimal.Decimal, error) {
+	cls := enumor.CvmTechnicalClass(q.CvmInstanceTypeClass)
+	if err := cls.Validate(); err != nil {
+		return decimal.Decimal{}, fmt.Errorf("unsupported cvm instance type class: %s, instance type: %s",
+			q.CvmInstanceTypeClass, q.InstanceType)
+	}
+
+	switch cls {
+	case enumor.CvmTechnicalClassMemory:
+		// 内存型：取 RamAmount（单位 GB）
+		return decimal.NewFromFloat(q.RamAmount), nil
+
+	case enumor.CvmTechnicalClassHighIO:
+		// 高IO型：取 DiskBlockNum（单位：块）
+		if q.DiskBlockNum <= 0 {
+			return decimal.Decimal{}, fmt.Errorf("invalid disk block num for tech class: %s, instance type: %s, "+
+				"disk_block_num: %d", cls, q.InstanceType, q.DiskBlockNum)
+		}
+		return decimal.NewFromInt(int64(q.DiskBlockNum)), nil
+
+	case enumor.CvmTechnicalClassBigData:
+		// 大数据型：取 DiskBlockNum * DiskBlockSize / 1024（单位 TB）
+		if q.DiskBlockNum <= 0 || q.DiskBlockSize <= 0 {
+			return decimal.Decimal{}, fmt.Errorf("invalid disk info for tech class: %s, instance type: %s, "+
+				"disk_block_num: %d, disk_block_size: %d", cls, q.InstanceType, q.DiskBlockNum, q.DiskBlockSize)
+		}
+		result := decimal.NewFromInt(int64(q.DiskBlockNum)).Mul(decimal.NewFromInt(int64(q.DiskBlockSize))).
+			Div(decimal.NewFromInt(1024))
+		return result, nil
+
+	default:
+		// 标准型、高主频、以及暂未接入等效卡数的GPU类（推理GPU/训练GPU/GPU-其他），均以CPUAmount衡量
+		return decimal.NewFromFloat(q.CPUAmount), nil
+	}
 }
 
 // GetApproveLogResp get approve log response
