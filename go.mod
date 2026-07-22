@@ -25,7 +25,6 @@ require (
 	github.com/emicklei/go-restful/v3 v3.11.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-playground/validator/v10 v10.20.0
-	github.com/go-redis/redis/v7 v7.4.1
 	// go-sql-driver/mysql v1.8.1 may casuse error: connection.go:49: unexpected EOF
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/gogo/protobuf v1.3.2

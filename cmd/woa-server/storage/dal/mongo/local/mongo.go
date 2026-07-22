@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"hcm/cmd/woa-server/storage/dal"
-	"hcm/cmd/woa-server/storage/dal/redis"
 	"hcm/cmd/woa-server/storage/dal/types"
 	dtype "hcm/cmd/woa-server/storage/types"
 	"hcm/pkg"
@@ -145,11 +144,6 @@ func checkMongodbVersion(db string, client *mongo.Client) error {
 		return errors.New("mongodb version must be >= v4.2.0")
 	}
 	return nil
-}
-
-// InitTxnManager TxnID management of initial transaction
-func (c *Mongo) InitTxnManager(r redis.Client) error {
-	return c.tm.InitTxnManager(r)
 }
 
 // Close replica client

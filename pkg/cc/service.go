@@ -598,7 +598,6 @@ type WoaServerSetting struct {
 	BkApigwHCMURL     string     `yaml:"bkApigwHCMUrl"`
 	MongoDB           MongoDB    `yaml:"mongodb"`
 	Watch             MongoDB    `yaml:"watch"`
-	Redis             Redis      `yaml:"redis"`
 	ClientConfig      `yaml:",inline"`
 	ItsmFlows         []ItsmFlow        `yaml:"itsmFlows"`
 	CancelItsmFlows   []ItsmFlow        `yaml:"cancelItsmFlows"`
@@ -671,10 +670,6 @@ func (s WoaServerSetting) Validate() error {
 		if err := s.Watch.validate(); err != nil {
 			return err
 		}
-	}
-
-	if err := s.Redis.validate(); err != nil {
-		return err
 	}
 
 	if err := s.Database.validate(); err != nil {

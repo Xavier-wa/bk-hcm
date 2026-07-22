@@ -19,95 +19,18 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"hcm/cmd/woa-server/storage/dal/mongo/uuid"
-	"hcm/cmd/woa-server/storage/dal/redis"
 	"hcm/pkg"
-	"hcm/pkg/logs"
 	"hcm/pkg/tools/metadata"
 
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-const (
-	transactionNumberRedisKeyNamespace = pkg.BKCacheKeyV3Prefix + "transaction:number:"
-	transactionErrorRedisKeyNamespace  = pkg.BKCacheKeyV3Prefix + "transaction:error:"
-)
-
-type sessionKey string
-
-func (s sessionKey) genKey() string {
-	return transactionNumberRedisKeyNamespace + string(s)
-}
-
-func (s sessionKey) genErrKey() string {
-	return transactionErrorRedisKeyNamespace + string(s)
-}
-
-// TxnErrorType the error type of the transaction, some error type needs to do special operations like retry
-type TxnErrorType string
-
-const (
-	// UnknownType unknown error type, means the errors that has no specific type, do not have special logic
-	UnknownType TxnErrorType = "1"
-	// WriteConflictType mongodb write conflict error type, means the transaction conflicts with others, needs to retry
-	WriteConflictType TxnErrorType = "2"
-)
-
 // TxnManager TODO
 // a transaction manager
-type TxnManager struct {
-	cache redis.Client
-}
-
-// InitTxnManager is to init txn manager, set the redis storage
-func (t *TxnManager) InitTxnManager(r redis.Client) error {
-	t.cache = r
-	return nil
-}
-
-// GetTxnNumber TODO
-func (t *TxnManager) GetTxnNumber(sessionID string) (int64, error) {
-	key := sessionKey(sessionID).genKey()
-	v, err := t.cache.Get(context.Background(), key).Result()
-	if err != nil {
-		return 0, err
-	}
-	return strconv.ParseInt(v, 10, 64)
-}
-
-// GenTxnNumber generate the transaction number from redis.
-func (t *TxnManager) GenTxnNumber(sessionID string, ttl time.Duration) (int64, error) {
-	// return txnNumber with 1 directly, when our mongodb client option's RetryWrite
-	// is set to false.
-	key := sessionKey(sessionID).genKey()
-
-	pip := t.cache.Pipeline()
-	defer pip.Close()
-	if ttl == 0 {
-		ttl = pkg.TransactionDefaultTimeout
-	}
-	// we increase by step 1, so that we can calculate how many transaction has already
-	// be executed in a same session.
-	pip.SetNX(key, 0, ttl).Result()
-	incrBy := pip.IncrBy(key, 1)
-	_, err := pip.Exec()
-	if err != nil {
-		return 0, err
-	}
-	num := incrBy.Val()
-	// value of (num - num/2 +1) is the real transaction number
-	// in a distribute session.
-	return num, nil
-}
-
-// RemoveSessionKey remove transaction session key
-func (t *TxnManager) RemoveSessionKey(sessionID string) error {
-	key := sessionKey(sessionID).genKey()
-	return t.cache.Del(context.Background(), key).Err()
-}
+type TxnManager struct{}
 
 // ReloadSession is used to reset a created session's session id
 func (t *TxnManager) ReloadSession(sess mongo.Session, info *SessionInfo) (mongo.Session, error) {
@@ -142,14 +65,8 @@ func (t *TxnManager) PrepareTransaction(cap *metadata.TxnCapable, cli *mongo.Cli
 		return nil, fmt.Errorf("start transaction %s failed: %v", cap.SessionID, err)
 	}
 
-	txnNumber, err := t.GenTxnNumber(cap.SessionID, cap.Timeout)
-	if err != nil {
-		return nil, fmt.Errorf("generate txn number failed, err: %v", err)
-	}
-
 	// reset the session info with the session id.
 	info := &SessionInfo{
-		TxnNubmer: txnNumber,
 		SessionID: cap.SessionID,
 	}
 
@@ -251,45 +168,12 @@ func (t *TxnManager) AutoRunWithTxn(ctx context.Context, cli *mongo.Client, cmd 
 	// run the command and check error
 	err = cmd(sessCtx)
 	if err != nil {
-		// release the session connection.
-		// Attention: do not use session.EndSession() to do this, it will abort the transaction.
-		// mongo.CmdbReleaseSession(ctx, session)
-		t.setTxnError(sessionKey(cap.SessionID), err)
 		return err
 	}
 	// release the session connection.
 	// Attention: do not use session.EndSession() to do this, it will abort the transaction.
 	// mongo.CmdbReleaseSession(ctx, session)
 	return nil
-}
-
-// setTxnError set mongo raw error type to redis, it may be used in scene server to retry this transaction
-func (t *TxnManager) setTxnError(sessionID sessionKey, txnErr error) {
-	switch {
-	case strings.Contains(txnErr.Error(), "WriteConflict"):
-		key := sessionID.genErrKey()
-		err := t.cache.SetNX(context.Background(), key, string(WriteConflictType), time.Minute*5).Err()
-		if err != nil {
-			logs.Errorf("set txn error(%v) failed, err: %v, session id: %s", txnErr, err, sessionID)
-		}
-	default:
-	}
-}
-
-// GetTxnError get mongo raw error type in redis, the error may be used in scene server to retry this transaction
-func (t *TxnManager) GetTxnError(sessionID sessionKey) TxnErrorType {
-	key := sessionID.genErrKey()
-	errorType, err := t.cache.Get(context.Background(), key).Result()
-	if err != nil && redis.IsNilErr(err) {
-		logs.Errorf("get txn error failed, err: %v, session id: %s", err, sessionID)
-		return UnknownType
-	}
-
-	if len(errorType) == 0 {
-		return UnknownType
-	}
-
-	return TxnErrorType(errorType)
 }
 
 // GenSessionID TODO
