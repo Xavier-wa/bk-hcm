@@ -213,45 +213,55 @@ func (cli *client) deleteRemovedListener(kt *kit.Kit, lbID, region string, cloud
 					err, cloudIds, lbID, kt.Rid)
 				return err
 			}
-
 		}
 	}
 
-	// 清理未被删除的四层规则
-	dblayer4Rule, err := cli.listL4RuleFromDB(kt, lbID, nil)
+	// bottom-out cleanup for orphan rules whose listener is gone from cloud but was not removed by the
+	// cascade above. It only deletes rules, never listeners.
+	if err := cli.deleteOrphanRule(kt, lbID, allCloudIDMap); err != nil {
+		logs.Errorf("fail to delete orphan rule, err: %v, lbID: %s, cloud_lbl_ids: %v, rid: %s",
+			err, lbID, allCloudIDMap, kt.Rid)
+		return err
+	}
+
+	return nil
+}
+
+// deleteOrphanRule cleans up orphan rules whose listener no longer exists on cloud. Such orphans are not
+// expected in the normal flow (listener deletion already cascade-deletes its rules), so this is only a
+// bottom-out safeguard against leftovers, e.g. from historical partial failures. It never deletes listeners.
+func (cli *client) deleteOrphanRule(kt *kit.Kit, lbID string, cloudLblIDMap map[string]struct{}) error {
+	// clean up layer-4 rules that are not backed by any cloud listener
+	dbL4Rules, err := cli.listL4RuleFromDB(kt, lbID, nil)
 	if err != nil {
 		return err
 	}
-	// prevent concurrent deletion of l4 rules when syncing and creating listeners
-	delLayer4RuleCloudIDs, err := cli.filterDeletableL4RuleCloudIDs(kt, lbID, dblayer4Rule, allCloudIDMap)
+	delL4CloudIDs, err := cli.filterDeletableL4RuleCloudIDs(kt, lbID, dbL4Rules, cloudLblIDMap)
 	if err != nil {
 		logs.Errorf("fail to filter deletable l4 rule cloud ids, err: %v, lbID: %s, rid: %s", err, lbID, kt.Rid)
 		return err
 	}
-	if len(delLayer4RuleCloudIDs) > 0 {
-		if err := cli.deleteLayer4Rule(kt, lbID, delLayer4RuleCloudIDs); err != nil {
-			logs.Errorf("fail to clean l4 rule, err: %v, cloud id: %v, rid: %s", err, delLayer4RuleCloudIDs, kt.Rid)
-			return err
-		}
+	if err := cli.deleteLayer4Rule(kt, lbID, delL4CloudIDs); err != nil {
+		logs.Errorf("fail to clean l4 rule, err: %v, cloud_ids: %v, lbID: %s, rid: %s",
+			err, delL4CloudIDs, lbID, kt.Rid)
+		return err
 	}
 
-	// 清理未被删除的️七层规则
-	dblayer7Rule, err := cli.listL7RuleFromDBByLbID(kt, lbID)
+	// clean up layer-7 rules whose listener is gone from cloud
+	dbL7Rules, err := cli.listL7RuleFromDBByLbID(kt, lbID)
 	if err != nil {
 		return err
 	}
-	delLayer7RuleCloudIDs := make([]string, 0)
-	for _, rule := range dblayer7Rule {
-		if _, exists := allCloudIDMap[rule.CloudLBLID]; !exists {
-			delLayer7RuleCloudIDs = append(delLayer7RuleCloudIDs, rule.CloudID)
+	delL7CloudIDs := make([]string, 0)
+	for _, rule := range dbL7Rules {
+		if _, exists := cloudLblIDMap[rule.CloudLBLID]; !exists {
+			delL7CloudIDs = append(delL7CloudIDs, rule.CloudID)
 		}
 	}
-	if len(delLayer7RuleCloudIDs) > 0 {
-		err := cli.deleteLayer7RuleByLbIDAndCloudIDs(kt, lbID, delLayer7RuleCloudIDs)
-		if err != nil {
-			logs.Errorf("fail to clean l7 rule, err: %v, cloud id: %v, rid: %s", err, delLayer7RuleCloudIDs, kt.Rid)
-			return err
-		}
+	if err := cli.deleteLayer7RuleByLbIDAndCloudIDs(kt, lbID, delL7CloudIDs); err != nil {
+		logs.Errorf("fail to clean l7 rule, err: %v, cloud_ids: %v, lbID: %s, rid: %s",
+			err, delL7CloudIDs, lbID, kt.Rid)
+		return err
 	}
 
 	return nil
@@ -272,6 +282,7 @@ func (cli *client) filterDeletableL4RuleCloudIDs(kt *kit.Kit, lbID string, dbRul
 	// get candidate rules that are not in the cloud snapshot, along with their listener cloud ids
 	candidateRules := make([]corelb.TCloudLbUrlRule, 0)
 	candidateCloudLBLIDs := make([]string, 0)
+
 	for _, rule := range dbRules {
 		if _, ok := cloudLblIDMap[rule.CloudLBLID]; ok {
 			continue
