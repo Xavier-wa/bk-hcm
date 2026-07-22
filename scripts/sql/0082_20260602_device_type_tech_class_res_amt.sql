@@ -18,7 +18,7 @@
  */
 
 /*
-   SQLVER=9999,HCMVER=v9.9.9
+   SQLVER=0082,HCMVER=v1.9.2.4
 
    Notes:
    1. 机型表添加`技术分类资源量`字段
@@ -30,6 +30,6 @@ ALTER TABLE device_type
     ADD COLUMN `tech_class_res_amt` DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '技术分类资源量' AFTER `technical_class`;
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.9.2.4' as `hcm_ver`, '0082' as `sql_ver`;
 
 COMMIT;
