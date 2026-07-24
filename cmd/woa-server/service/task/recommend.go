@@ -279,6 +279,8 @@ func (s *service) listStaticCandidates(kt *kit.Kit, bkBizID int64,
 // buildStaticFilterRules 构建 A 类过滤条件（入参非空者）。
 func buildStaticFilterRules(req *woaserver.ApplyRecommendByStaticReq) []filter.RuleFactory {
 	rules := make([]filter.RuleFactory, 0)
+	// 滚服项目依赖固资号/继承实例能力，暂不支持。
+	rules = append(rules, tools.RuleNotEqual("require_type", enumor.RequireTypeRollServer))
 	if req.RequireType != nil {
 		rules = append(rules, tools.RuleEqual("require_type", *req.RequireType))
 	}
