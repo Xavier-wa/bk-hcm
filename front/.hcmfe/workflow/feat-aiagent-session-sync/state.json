@@ -1,0 +1,86 @@
+{
+  "id": "feat-aiagent-session-sync",
+  "title": "aiagent chatbot - 多个会话状态同步问题",
+  "currentStage": "done",
+  "createdAt": "2026-07-15T04:16:44.474Z",
+  "updatedAt": "2026-07-15T09:11:28.235Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-session-sync/coding.md",
+        "kind": "file",
+        "addedAt": "2026-07-15T04:55:26.508Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-session-sync/test.md",
+        "kind": "file",
+        "addedAt": "2026-07-15T06:53:48.968Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-07-15T09:10:12.472Z",
+      "note": "用户确认 F-001~F-004 全部实现完成（含 in-flight 锁定、跨标签仅同步已提交只读态、预提单本地草稿不跨标签）；front/src 已 commit b0b806c80，推进 test"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-07-15T09:11:28.235Z",
+      "note": "用户手测通过（F-001~F-004），推进 done"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-07-15T04:16:44.474Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-07-15T06:51:50.765Z",
+      "note": "用户确认 F-001/F-002/F-003 实现完成、lint 通过、无漂移，推进到 test"
+    },
+    {
+      "from": "test",
+      "to": "coding",
+      "at": "2026-07-15T07:25:45.195Z",
+      "note": "test 阶段实测发现：动作发起后到结果返回的 in-flight 窗口（5-10s）内其它标签页未同步，卡片仍可点存在并发重复操作风险。回退 coding 补：动作发起即广播 session-busy → 其它持有 pending 卡片的会话立即锁定卡片+提示，完成后 session-updated 解锁刷新，20s 兜底。"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-07-15T09:10:12.472Z",
+      "note": "用户确认 F-001~F-004 全部实现完成（含 in-flight 锁定、跨标签仅同步已提交只读态、预提单本地草稿不跨标签）；front/src 已 commit b0b806c80，推进 test"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-07-15T09:11:28.235Z",
+      "note": "用户手测通过（F-001~F-004），推进 done"
+    }
+  ],
+  "requirementId": "req-aiagent-host-apply-chatbot",
+  "branch": "feat-aiagent-hostapply-patch1",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598136113440"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "completed",
+      "at": "2026-07-15T04:49:41.732Z",
+      "note": "已完成需求澄清（产出 front/docs/reqs/多会话状态同步.md）+ 评估（无需拆分，~8-12人时，RICE~55-65）+ TAPD 全量解读（2张正文图直读、无评论）+ 用户已确认结论（读一致性为交付目标，409/后端 bk_biz_id 标为 out-of-scope）；已将定稿回写 TAPD description。"
+    }
+  }
+}

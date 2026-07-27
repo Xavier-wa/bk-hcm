@@ -12,11 +12,13 @@ interface Props {
   // 已拍平的表格行（合并 body_param.require_type + 外层 replicas + spec），由父组件提供
   rows: HostApplySuborder[];
   readonly?: boolean;
+  // F-004：他处正在操作该会话，锁定操作按钮（不进只读，仅禁用 + 顶部提示）
+  locked?: boolean;
   onConfirm: () => void;
   onAddToList: () => void;
 }
 
-const props = withDefaults(defineProps<Props>(), { readonly: false });
+const props = withDefaults(defineProps<Props>(), { readonly: false, locked: false });
 
 // 应用内「最大化」覆盖层：全页保留顶部导航栏可见，浮窗则整屏盖住不露顶部
 const isFloating = useChatbotMode() === 'floating';
@@ -56,14 +58,14 @@ onBeforeUnmount(() => {
 const banner = computed(() => `已确认 ${props.rows.length} 条申领配置方案，可点击按钮提交申请单`);
 
 const handleConfirm = () => {
-  if (props.readonly) return;
+  if (props.readonly || props.locked) return;
   // 退出最大化，让用户感知回到聊天流、看到 agent 后续响应
   isMaximized.value = false;
   props.onConfirm();
 };
 
 const handleAddToList = () => {
-  if (props.readonly) return;
+  if (props.readonly || props.locked) return;
   // 跳转前退出最大化，避免遮罩残留
   isMaximized.value = false;
   props.onAddToList();
@@ -71,7 +73,7 @@ const handleAddToList = () => {
 </script>
 
 <template>
-  <CustomMessageCard :readonly="readonly" summary-text="请确认全部方案信息，并提交申请单">
+  <CustomMessageCard :readonly="readonly" :locked="locked" summary-text="请确认全部方案信息，并提交申请单">
     <!-- 工具栏：提示横幅 + 全屏按钮（同行，横幅靠左、全屏靠右） -->
     <div class="ps-toolbar">
       <div class="ps-banner">
@@ -87,8 +89,8 @@ const handleAddToList = () => {
     <HostApplyPreorderTable :suborders="rows" readonly show-disk />
 
     <template #actions>
-      <Button theme="primary" :disabled="readonly" @click="handleConfirm">确认提交</Button>
-      <Button :disabled="readonly" @click="handleAddToList">添加到配置清单</Button>
+      <Button theme="primary" :disabled="readonly || locked" @click="handleConfirm">确认提交</Button>
+      <Button :disabled="readonly || locked" @click="handleAddToList">添加到配置清单</Button>
     </template>
   </CustomMessageCard>
 
@@ -110,8 +112,8 @@ const handleAddToList = () => {
         <div class="ps-fs-body">
           <HostApplyPreorderTable :suborders="rows" readonly show-disk :max-height="fsTableMaxHeight" />
           <div class="ps-fs-actions">
-            <Button theme="primary" :disabled="readonly" @click="handleConfirm">确认提交</Button>
-            <Button :disabled="readonly" @click="handleAddToList">添加到配置清单</Button>
+            <Button theme="primary" :disabled="readonly || locked" @click="handleConfirm">确认提交</Button>
+            <Button :disabled="readonly || locked" @click="handleAddToList">添加到配置清单</Button>
           </div>
         </div>
       </div>

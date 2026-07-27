@@ -1,3 +1,4 @@
+import { computed, ref, onScopeDispose } from 'vue';
 import { MessageRole, type Message } from '@blueking/chat-x';
 import isEqual from 'lodash/isEqual';
 
@@ -8,6 +9,13 @@ import { useEventHandler } from './use-event';
 import { useStream } from './use-stream';
 import { useSession } from './use-session';
 import { useAccountSelect } from './use-account-select';
+import {
+  applyPendingResumeMeta,
+  cardMetaRecordToMap,
+  type CardClientMeta,
+  restoreCardClientMeta,
+  snapshotCommittedCardMetaFromMessages,
+} from './card-client-meta';
 import { type HostApplyRecommendMessage, type HostApplySuborder } from './types';
 
 export type { ChatSession } from './types';
@@ -39,9 +47,89 @@ export function useChatbot(options: UseChatbotOptions = {}) {
     getBkBizId: getBizsId,
     abortStream: streamModule.abortStream,
     fetchHistory: streamModule.fetchHistory,
+    isChatting: streamModule.isChatting,
     sceneTag,
   });
   const accountSelectModule = useAccountSelect(messageModule.messages);
+
+  // F-004 in-flight 窗口锁定：记录「他处正在操作中」的会话码集合。
+  // 发起端在动作发起瞬间广播 session-busy，本端据此把同会话的 pending 可交互卡片立即锁定，
+  // 杜绝「结果返回前（5-10s）其它标签页对过期卡片重复点击」。完成后由 session-updated 解锁。
+  const remoteBusySessions = ref<Set<string>>(new Set());
+  // 兜底定时器：发起端异常关闭/崩溃未发 session-updated 时，最多 20s 自动解锁，防止长期卡死。
+  const busyTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const BUSY_TTL = 20_000;
+
+  const markSessionBusy = (code: string) => {
+    if (!remoteBusySessions.value.has(code)) {
+      const next = new Set(remoteBusySessions.value);
+      next.add(code);
+      remoteBusySessions.value = next;
+    }
+    clearTimeout(busyTimers.get(code));
+    busyTimers.set(
+      code,
+      setTimeout(() => clearSessionBusy(code), BUSY_TTL),
+    );
+  };
+  const clearSessionBusy = (code: string) => {
+    clearTimeout(busyTimers.get(code));
+    busyTimers.delete(code);
+    if (!remoteBusySessions.value.has(code)) return;
+    const next = new Set(remoteBusySessions.value);
+    next.delete(code);
+    remoteBusySessions.value = next;
+  };
+  // 当前选中会话是否正被他处操作（供 chat-message-list 下发 locked 给交互卡片）
+  const isCurrentSessionRemoteBusy = computed(() =>
+    remoteBusySessions.value.has(sessionModule.currentSessionCode.value),
+  );
+
+  // F-003/F-004 跨标签页/多入口同步：同机不同标签页或浮窗+全屏共享该频道。
+  // - session-busy（F-004）：仅广播锁定信号，不同步卡片数据（未提交编辑不跨标签传播）。
+  // - session-updated（F-003）：操作完成后广播「已提交只读态」cardMeta，其它实例刷新后合并最终数据。
+  type SyncChannelPayload = {
+    type?: string;
+    sessionCode?: string;
+    cardMeta?: Record<string, CardClientMeta>;
+  };
+
+  const syncChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('hcm-chatbot-sync') : null;
+  if (syncChannel) {
+    syncChannel.onmessage = (ev: MessageEvent) => {
+      const data = ev.data as SyncChannelPayload | null;
+      if (!data?.sessionCode) return;
+      if (data.type === 'session-busy') {
+        markSessionBusy(data.sessionCode);
+        return;
+      }
+      if (data.type === 'session-updated') {
+        clearSessionBusy(data.sessionCode);
+        if (data.sessionCode !== sessionModule.currentSessionCode.value) return;
+        const remoteMeta = cardMetaRecordToMap(data.cardMeta);
+        void (async () => {
+          await sessionModule.refreshCurrentSession();
+          restoreCardClientMeta(messageModule.messages.value, remoteMeta);
+          sessionModule.saveCurrentSession();
+        })();
+      }
+    };
+  }
+  const broadcastSessionBusy = (code: string) => {
+    syncChannel?.postMessage({ type: 'session-busy', sessionCode: code });
+  };
+  const broadcastSessionUpdated = (code: string) => {
+    syncChannel?.postMessage({
+      type: 'session-updated',
+      sessionCode: code,
+      cardMeta: snapshotCommittedCardMetaFromMessages(messageModule.messages.value),
+    });
+  };
+  onScopeDispose(() => {
+    syncChannel?.close();
+    busyTimers.forEach((timer) => clearTimeout(timer));
+    busyTimers.clear();
+  });
 
   const sendMessage = async (
     content: string,
@@ -49,6 +137,15 @@ export function useChatbot(options: UseChatbotOptions = {}) {
     resumeValue?: string,
     forwardedProps?: Record<string, unknown>,
   ) => {
+    // F-002：续跑/提交（存在 resumeValue）前先刷新当前会话，确保基于最新状态发起。
+    // 仅作读一致性的轻量校验：刷新后照常提交，若他处已推进导致 409 仍走现有错误渲染路径，不做专门冲突处理。
+    // 普通首轮发送不刷新，避免徒增一次 /history 往返。
+    if (resumeValue && sessionModule.currentSession.value) {
+      await sessionModule.refreshCurrentSession();
+      // F-002 刷新会替换 messages 对象，续跑前用 resumeValue 回填方案卡选中下标（与 card-client-meta 捕获互补）
+      applyPendingResumeMeta(messageModule.messages.value, resumeValue);
+    }
+
     // 首页空态（无选中会话）发送：先惰性创建/复用会话，避免清空消息时丢失刚加入的用户消息。
     // 创建失败（如无 bizId）时直接返回，不发送。
     // sessionTag 为场景标识（如 host_apply），通过 create_session 的 session_tag 入参传递。
@@ -63,12 +160,20 @@ export function useChatbot(options: UseChatbotOptions = {}) {
       session.sessionName = newName;
       sessionApi.updateSession(getBizsId(), session.sessionCode, newName).catch(() => {});
     }
-    await streamModule.streamChat([{ role: 'user', content }], resumeValue, forwardedProps);
-    sessionModule.saveCurrentSession();
-    if (session) {
-      session.sessionContentCount += 1;
-      session.updatedAt = new Date().toISOString();
-      sessionModule.moveSessionToTop(session.sessionCode);
+    // F-004：动作发起即广播 busy，其他持有同会话 pending 卡片的实例在结果返回前立即锁定，防重复点击。
+    const busyCode = session?.sessionCode;
+    if (busyCode) broadcastSessionBusy(busyCode);
+    try {
+      await streamModule.streamChat([{ role: 'user', content }], resumeValue, forwardedProps);
+      sessionModule.saveCurrentSession();
+      if (session) {
+        session.sessionContentCount += 1;
+        session.updatedAt = new Date().toISOString();
+        sessionModule.moveSessionToTop(session.sessionCode);
+      }
+    } finally {
+      // F-003/F-004：无论成功/失败/中断，都广播完成态解锁并触发其他实例刷新
+      if (busyCode) broadcastSessionUpdated(busyCode);
     }
   };
 
@@ -88,8 +193,14 @@ export function useChatbot(options: UseChatbotOptions = {}) {
     if (!userContent.trim()) return;
 
     messageModule.messages.value.splice(firstAiIndex);
-    await streamModule.streamChat([{ role: 'user', content: userContent }]);
-    sessionModule.saveCurrentSession();
+    const busyCode = sessionModule.currentSessionCode.value;
+    if (busyCode) broadcastSessionBusy(busyCode);
+    try {
+      await streamModule.streamChat([{ role: 'user', content: userContent }]);
+      sessionModule.saveCurrentSession();
+    } finally {
+      if (busyCode) broadcastSessionUpdated(busyCode);
+    }
   };
 
   const resendEdited = async (message: Message, newContent: unknown) => {
@@ -102,8 +213,14 @@ export function useChatbot(options: UseChatbotOptions = {}) {
 
     messageModule.messages.value.splice(index);
     messageModule.addUserMessage(content);
-    await streamModule.streamChat([{ role: 'user', content }]);
-    sessionModule.saveCurrentSession();
+    const busyCode = sessionModule.currentSessionCode.value;
+    if (busyCode) broadcastSessionBusy(busyCode);
+    try {
+      await streamModule.streamChat([{ role: 'user', content }]);
+      sessionModule.saveCurrentSession();
+    } finally {
+      if (busyCode) broadcastSessionUpdated(busyCode);
+    }
   };
 
   // 「添加到配置清单」从选择方案步骤跳转后，关联会话打开时定位到跳转前所选方案：
@@ -126,6 +243,7 @@ export function useChatbot(options: UseChatbotOptions = {}) {
   return {
     messages: messageModule.messages,
     isChatting: streamModule.isChatting,
+    isCurrentSessionRemoteBusy,
     sessions: sessionModule.sessions,
     currentSessionCode: sessionModule.currentSessionCode,
     currentSession: sessionModule.currentSession,
@@ -137,6 +255,7 @@ export function useChatbot(options: UseChatbotOptions = {}) {
     stopGeneration: streamModule.stopGeneration,
     createSession: sessionModule.createSession,
     switchSession: sessionModule.switchSession,
+    refreshCurrentSession: sessionModule.refreshCurrentSession,
     deleteSession: sessionModule.deleteSession,
     renameSession: sessionModule.renameSession,
     goHome: sessionModule.goHome,

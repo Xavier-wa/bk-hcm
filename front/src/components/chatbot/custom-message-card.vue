@@ -16,6 +16,8 @@ interface Props {
   readonly?: boolean;
   summaryText?: string;
   banner?: string;
+  // F-004：他处正在操作该会话（in-flight 窗口）。仅在非只读时生效：顶部展示锁定横幅（按钮禁用由各业务卡负责）
+  locked?: boolean;
   // 只读态是否可收起为摘要行（需有可展示的 summaryText 时才置 true）
   collapsible?: boolean;
   // 底部操作区对齐：主机申领左对齐，账号选择确认右对齐
@@ -26,6 +28,7 @@ const props = withDefaults(defineProps<Props>(), {
   readonly: false,
   summaryText: '',
   banner: '',
+  locked: false,
   collapsible: true,
   actionsAlign: 'left',
 });
@@ -38,6 +41,9 @@ const toggle = () => {
 // 只读 + 可收起 → 出现摘要行（收起/展开）；否则直接展示主体
 const showCollapsedSummary = computed(() => props.readonly && props.collapsible && !isExpanded.value);
 const showExpandedSummary = computed(() => props.readonly && props.collapsible && isExpanded.value);
+
+// F-004 锁定横幅：仅当卡片仍可交互（未只读）且被他处锁定时展示，避免与「已选择」只读摘要冲突
+const showLockedBanner = computed(() => props.locked && !props.readonly);
 </script>
 
 <template>
@@ -71,6 +77,12 @@ const showExpandedSummary = computed(() => props.readonly && props.collapsible &
       <div v-if="banner" class="cmc-banner">
         <Warn class="cmc-banner-icon" />
         <span class="cmc-banner-text">{{ banner }}</span>
+      </div>
+
+      <!-- F-004 锁定横幅：他处正在操作该会话，本处卡片按钮已禁用，等待最新状态同步 -->
+      <div v-if="showLockedBanner" class="cmc-banner">
+        <Warn class="cmc-banner-icon" />
+        <span class="cmc-banner-text">该会话正在其它页面操作中，最新状态稍后自动同步…</span>
       </div>
 
       <!-- 主体内容 -->

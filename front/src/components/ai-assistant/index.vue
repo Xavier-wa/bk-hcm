@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, provide, ref, useTemplateRef } from 'vue';
+import debounce from 'lodash/debounce';
 
 import { useChatbot } from '@/hooks/chatbot/use-chatbot';
 import { ChatbotKey, ChatbotModeKey } from '@/hooks/chatbot/provide';
@@ -54,6 +55,7 @@ const {
   sendMessage,
   goHome,
   switchSession,
+  refreshCurrentSession,
   initSessions,
   selectedAccountEcho,
   selectRecommendBySuborder,
@@ -91,6 +93,8 @@ const show = () => {
   if (!hasBizChatbotAccess.value) return;
   panelVisible.value = true;
   ensureSessions();
+  // 面板重新可见时刷新当前会话，保证与他处（另一标签页/全屏）已推进的内容一致
+  refreshCurrentSession();
 };
 
 const hide = () => {
@@ -141,12 +145,25 @@ const handleKeydown = (event: KeyboardEvent) => {
   }
 };
 
+// 标签页重新可见 / 窗口重新聚焦时刷新当前会话（仅面板展开时）。
+// ~300ms 去抖，避免高频 alt-tab 触发重复请求；刷新本身另有 isChatting/空会话守卫。
+const handleVisibilityRefresh = debounce(() => {
+  if (document.visibilityState !== 'visible') return;
+  if (!panelVisible.value) return;
+  refreshCurrentSession();
+}, 300);
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown);
+  document.addEventListener('visibilitychange', handleVisibilityRefresh);
+  window.addEventListener('focus', handleVisibilityRefresh);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown);
+  document.removeEventListener('visibilitychange', handleVisibilityRefresh);
+  window.removeEventListener('focus', handleVisibilityRefresh);
+  handleVisibilityRefresh.cancel();
 });
 
 defineExpose<AiAssistantExpose>({

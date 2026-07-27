@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { Button, Input } from 'bkui-vue';
+import { Warn } from 'bkui-vue/lib/icon';
 
 import { type HitlInterruptValue } from '@/hooks/chatbot/types';
 
@@ -9,11 +10,14 @@ interface Props {
   onConfirm: (value: string) => void;
   readonly?: boolean;
   readonlyValue?: string;
+  // F-004：他处正在操作该会话，锁定选项与确认（不进只读，仅禁用 + 顶部提示）
+  locked?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   readonly: false,
   readonlyValue: '',
+  locked: false,
 });
 
 const selectedOption = ref('');
@@ -46,26 +50,30 @@ watch(
 
 const showCustomInput = computed(() => !isReadonlyMode.value);
 const showReadonlyEmpty = computed(() => isReadonlyMode.value && !selectedOption.value && !customInput.value);
+// F-004 锁定横幅：仅在仍可交互（未只读）且被他处锁定时展示
+const showLockedBanner = computed(() => props.locked && !isReadonlyMode.value);
+// 交互是否被禁用：只读 / 已确认 / 他处锁定 任一成立
+const isInteractionDisabled = computed(() => isReadonlyMode.value || isConfirmed.value || props.locked);
 
 const isButtonDisabled = computed(() => {
-  if (isReadonlyMode.value || isConfirmed.value) return true;
+  if (isInteractionDisabled.value) return true;
   return !selectedOption.value && !customInput.value.trim();
 });
 
 const handleSelectOption = (option: string) => {
-  if (isReadonlyMode.value || isConfirmed.value) return;
+  if (isInteractionDisabled.value) return;
   selectedOption.value = option;
   customInput.value = '';
 };
 
 const handleInputChange = (value: string) => {
-  if (isReadonlyMode.value || isConfirmed.value) return;
+  if (isInteractionDisabled.value) return;
   customInput.value = value;
   selectedOption.value = '';
 };
 
 const handleConfirm = () => {
-  if (isReadonlyMode.value || isConfirmed.value) return;
+  if (isInteractionDisabled.value) return;
   const value = selectedOption.value || customInput.value.trim();
   if (!value) return;
   isConfirmed.value = true;
@@ -75,13 +83,17 @@ const handleConfirm = () => {
 
 <template>
   <div class="hitl-interrupt-card">
+    <div v-if="showLockedBanner" class="hitl-locked-banner">
+      <Warn class="hitl-locked-icon" />
+      <span class="hitl-locked-text">该会话正在其它页面操作中，最新状态稍后自动同步…</span>
+    </div>
     <div class="hitl-question">{{ content.value.question }}</div>
     <div class="hitl-options">
       <div
         v-for="option in content.value.options"
         :key="option"
         class="hitl-option"
-        :class="{ 'is-selected': selectedOption === option, 'is-disabled': isConfirmed || isReadonlyMode }"
+        :class="{ 'is-selected': selectedOption === option, 'is-disabled': isInteractionDisabled }"
         @click="handleSelectOption(option)"
       >
         <span class="hitl-option-radio">
@@ -94,7 +106,7 @@ const handleConfirm = () => {
       <div class="hitl-custom-label">其他选项：</div>
       <Input
         :model-value="customInput"
-        :disabled="isConfirmed || isReadonlyMode"
+        :disabled="isInteractionDisabled"
         :readonly="isReadonlyMode"
         :placeholder="isReadonlyMode ? '未填写内容' : '请输入自定义选项内容...'"
         @update:model-value="handleInputChange"
@@ -113,6 +125,29 @@ const handleConfirm = () => {
   background: #fff;
   border: 1px solid #dcdee5;
   border-radius: 8px;
+}
+
+.hitl-locked-banner {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: #fff4e2;
+  border-radius: 4px;
+
+  .hitl-locked-icon {
+    flex-shrink: 0;
+    margin-top: 2px;
+    margin-right: 8px;
+    font-size: 16px;
+    color: #ff9c01;
+  }
+
+  .hitl-locked-text {
+    font-size: 12px;
+    line-height: 20px;
+    color: #63656e;
+  }
 }
 
 .hitl-question {

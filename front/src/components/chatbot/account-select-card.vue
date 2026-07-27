@@ -12,11 +12,14 @@ interface Props {
   onConfirm: (accountId: string) => void;
   readonly?: boolean;
   readonlyValue?: string;
+  // F-004：他处正在操作该会话，锁定选择与确认（不进只读，仅禁用 + 顶部提示）
+  locked?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   readonly: false,
   readonlyValue: '',
+  locked: false,
 });
 
 const selectedId = ref('');
@@ -41,7 +44,7 @@ const selectedOption = computed<AccountSelectOption | null>(
 );
 // 已知选中账号 → 外壳可收起为摘要行；只读但未知选中（历史兜底失败）→ 外壳直接只读展示选项
 const hasKnownSelection = computed(() => isReadonly.value && !!selectedOption.value);
-const isConfirmDisabled = computed(() => !selectedId.value);
+const isConfirmDisabled = computed(() => !selectedId.value || props.locked);
 
 const summaryText = computed(() => {
   const opt = selectedOption.value;
@@ -50,12 +53,12 @@ const summaryText = computed(() => {
 });
 
 const handleSelect = (opt: AccountSelectOption) => {
-  if (isReadonly.value || !opt.enabled) return;
+  if (isReadonly.value || props.locked || !opt.enabled) return;
   selectedId.value = opt.account_id;
 };
 
 const handleConfirm = () => {
-  if (isReadonly.value || !selectedId.value) return;
+  if (isReadonly.value || props.locked || !selectedId.value) return;
   isConfirmed.value = true;
   props.onConfirm(selectedId.value);
 };
@@ -64,6 +67,7 @@ const handleConfirm = () => {
 <template>
   <CustomMessageCard
     :readonly="isReadonly"
+    :locked="locked"
     :collapsible="hasKnownSelection"
     :summary-text="summaryText"
     actions-align="right"
@@ -78,7 +82,7 @@ const handleConfirm = () => {
         :class="{
           'is-selected': selectedId === opt.account_id,
           'is-disabled': !opt.enabled,
-          'is-readonly': isReadonly,
+          'is-readonly': isReadonly || locked,
         }"
         @click="handleSelect(opt)"
       >

@@ -3,6 +3,7 @@ import type { Message } from '@blueking/chat-x';
 
 import * as sessionApi from '@/store/chatbot/session';
 import type { SessionApiItem } from '@/store/chatbot/session';
+import { captureCardClientMeta, restoreCardClientMeta } from './card-client-meta';
 import type { ChatSession } from './types';
 
 interface SessionDeps {
@@ -15,6 +16,8 @@ interface SessionDeps {
   abortStream: () => void;
   // 注意：fetchHistory 现在采用增量渲染，直接写入 deps.messages，不再返回消息数组
   fetchHistory: (sessionCode: string, onSnapshotLoaded?: () => void) => Promise<void>;
+  // 是否正在流式输出（来自 stream 模块）：刷新当前会话时用于守卫，避免打断进行中的对话/续跑
+  isChatting: Ref<boolean>;
 }
 
 const toSession = (item: SessionApiItem): ChatSession => ({
@@ -131,11 +134,13 @@ export function useSession(deps: SessionDeps) {
     }
 
     isLoadingHistory.value = true;
+    const clientMeta = captureCardClientMeta(target.messages);
     try {
       await deps.fetchHistory(code, () => {
         // SNAPSHOT 到达即关闭全屏 loading，露出历史消息；后续 resume 事件继续追加
         if (currentSessionCode.value === code) isLoadingHistory.value = false;
       });
+      restoreCardClientMeta(deps.messages.value, clientMeta);
       // 竞态守卫：快速连续切换时，旧 fetch 的 await 回收时当前会话已被切到新 code，
       // 不要覆盖当前会话的 messages 或写回旧 target
       if (currentSessionCode.value === code) {
@@ -150,6 +155,32 @@ export function useSession(deps: SessionDeps) {
       if (currentSessionCode.value === code) {
         isLoadingHistory.value = false;
       }
+    }
+  };
+
+  // 刷新「当前选中会话」的历史，使本地快照与服务端一致（读一致性核心）。
+  // 场景：多入口（浮窗/全屏）或多标签页同时打开同一会话时，非活跃处切回/聚焦后拉取最新内容。
+  // 守卫：无选中会话 / 正在流式输出 / 空会话 → 跳过，避免无谓请求与打断进行中的流。
+  // 不预清空 messages，也不切 isLoadingHistory：旧内容保持可见，由 fetchHistory 在快照到达时一次性替换，避免闪烁。
+  const refreshCurrentSession = async () => {
+    const code = currentSessionCode.value;
+    if (!code) return;
+    if (deps.isChatting.value) return;
+    const target = sessions.value.find((s) => s.sessionCode === code);
+    if (!target) return;
+    if (target.sessionContentCount === 0 && target.messages.length === 0) return;
+
+    try {
+      const clientMeta = captureCardClientMeta(deps.messages.value);
+      await deps.fetchHistory(code);
+      restoreCardClientMeta(deps.messages.value, clientMeta);
+      // 竞态守卫：await 期间用户可能已切换会话，仅当仍是同一会话时才写回本地快照
+      if (currentSessionCode.value === code) {
+        target.messages = [...deps.messages.value];
+      }
+    } catch (err) {
+      // 刷新失败：保留原有本地内容，静默降级（不弹错、不清空）
+      console.warn('[Session] refreshCurrentSession failed, keep local snapshot:', err);
     }
   };
 
@@ -243,6 +274,7 @@ export function useSession(deps: SessionDeps) {
     saveCurrentSession,
     createSession,
     switchSession,
+    refreshCurrentSession,
     deleteSession,
     renameSession,
     moveSessionToTop,

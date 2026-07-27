@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, useTemplateRef, watch } from 'vue';
+import debounce from 'lodash/debounce';
 import { useRoute } from 'vue-router';
 import { MENU_BUSINESS_CHATBOT } from '@/constants/menu-symbol';
 import routerAction from '@/router/utils/action';
@@ -43,6 +44,7 @@ const {
   goHome,
   initSessions,
   reloadSessions,
+  refreshCurrentSession,
   selectedAccountEcho,
 } = chatbot;
 
@@ -481,14 +483,25 @@ watch(
   },
 );
 
+// 标签页重新可见 / 窗口重新聚焦时刷新当前会话，保证与他处（浮窗/另一标签页）已推进的内容一致。
+// ~300ms 去抖，避免高频 alt-tab 触发重复请求；刷新本身另有 isChatting/空会话守卫。
+const handleVisibilityRefresh = debounce(() => {
+  if (document.visibilityState === 'visible') refreshCurrentSession();
+}, 300);
+
 onBeforeUnmount(() => {
   navObserver?.disconnect();
   chipsResizeObserver?.disconnect();
   chipsResizeObserver = null;
+  document.removeEventListener('visibilitychange', handleVisibilityRefresh);
+  window.removeEventListener('focus', handleVisibilityRefresh);
+  handleVisibilityRefresh.cancel();
 });
 
 onMounted(() => {
   initSessions(readRouteSessionCode() || undefined);
+  document.addEventListener('visibilitychange', handleVisibilityRefresh);
+  window.addEventListener('focus', handleVisibilityRefresh);
 });
 </script>
 

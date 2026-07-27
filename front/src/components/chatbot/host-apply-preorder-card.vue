@@ -14,6 +14,8 @@ interface Props {
   content: HostApplyPreorderValue;
   readonly?: boolean;
   readonlySuborders?: HostApplySuborder[];
+  // F-004：他处正在操作该会话，锁定操作按钮（不进只读，仅禁用 + 顶部提示）
+  locked?: boolean;
   onConfirm: (suborders: HostApplySuborder[], edited: boolean) => void;
   onAddToList: (suborders: HostApplySuborder[]) => void;
 }
@@ -21,17 +23,20 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   readonly: false,
   readonlySuborders: () => [],
+  locked: false,
 });
 
 const localSuborders = ref<HostApplySuborder[]>(cloneDeep(props.content.value.suborders ?? []));
+const edited = ref(false);
 watch(
   () => props.content.value.suborders,
   (suborders) => {
+    // 本地有未提交的 C 弹窗修改时，切标签触发的 refresh 不应覆盖编辑中的副本
+    if (edited.value) return;
     localSuborders.value = cloneDeep(suborders ?? []);
   },
 );
 
-const edited = ref(false);
 // 应用内「最大化」覆盖层：全页保留顶部导航栏可见，浮窗则整屏盖住不露顶部
 const isFloating = useChatbotMode() === 'floating';
 const isMaximized = ref(false);
@@ -90,14 +95,14 @@ const handleAdjustSave = (suborder: HostApplySuborder) => {
 };
 
 const handleConfirm = () => {
-  if (props.readonly) return;
+  if (props.readonly || props.locked) return;
   // 退出最大化，让用户感知回到聊天流、看到 agent 后续响应
   isMaximized.value = false;
   props.onConfirm(cloneDeep(localSuborders.value), edited.value);
 };
 
 const handleAddToList = () => {
-  if (props.readonly) return;
+  if (props.readonly || props.locked) return;
   // 跳转前退出最大化，避免遮罩残留
   isMaximized.value = false;
   props.onAddToList(cloneDeep(localSuborders.value));
@@ -105,7 +110,7 @@ const handleAddToList = () => {
 </script>
 
 <template>
-  <CustomMessageCard :readonly="readonly" :summary-text="summaryText">
+  <CustomMessageCard :readonly="readonly" :locked="locked" :summary-text="summaryText">
     <!-- 工具栏：全屏按钮靠右 -->
     <div class="po-toolbar">
       <Button class="po-fullscreen" :size="isFloating ? 'small' : ''" @click="isMaximized = true">
@@ -117,8 +122,8 @@ const handleAddToList = () => {
     <HostApplyPreorderTable :suborders="tableSuborders" :readonly="readonly" @edit="handleEditRow" />
 
     <template #actions>
-      <Button theme="primary" :disabled="readonly" @click="handleConfirm">确认方案</Button>
-      <Button :disabled="readonly" @click="handleAddToList">添加到配置清单</Button>
+      <Button theme="primary" :disabled="readonly || locked" @click="handleConfirm">确认方案</Button>
+      <Button :disabled="readonly || locked" @click="handleAddToList">添加到配置清单</Button>
     </template>
   </CustomMessageCard>
 
@@ -142,8 +147,8 @@ const handleAddToList = () => {
             @edit="handleEditRow"
           />
           <div class="po-fs-actions">
-            <Button theme="primary" :disabled="readonly" @click="handleConfirm">确认方案</Button>
-            <Button :disabled="readonly" @click="handleAddToList">添加到配置清单</Button>
+            <Button theme="primary" :disabled="readonly || locked" @click="handleConfirm">确认方案</Button>
+            <Button :disabled="readonly || locked" @click="handleAddToList">添加到配置清单</Button>
           </div>
         </div>
       </div>

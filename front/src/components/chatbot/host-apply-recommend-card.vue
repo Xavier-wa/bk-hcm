@@ -20,6 +20,8 @@ interface Props {
   selectedIndex?: number;
   // 初始定位下标（从「选择方案 + 添加到配置清单」跳转回放）：仅定位展示，不影响只读态
   initialIndex?: number;
+  // F-004：他处正在操作该会话，锁定操作按钮（不进只读，仅禁用 + 顶部提示）
+  locked?: boolean;
   onSelect: (index: number) => void;
   onAddToList: (suborder: HostApplySuborder) => void;
 }
@@ -28,6 +30,7 @@ const props = withDefaults(defineProps<Props>(), {
   readonly: false,
   selectedIndex: -1,
   initialIndex: 0,
+  locked: false,
 });
 
 // A 的「调整配置」为本地预览编辑（无明确 agent 回传语义），仅更新当前方案展示，故持有本地副本
@@ -94,12 +97,12 @@ const goNext = () => {
 };
 
 const handleSelectPlan = () => {
-  if (props.readonly || !currentRecommendation.value) return;
+  if (props.readonly || props.locked || !currentRecommendation.value) return;
   props.onSelect(activeIndex.value);
 };
 
 const handleAddToList = () => {
-  if (props.readonly || !currentRecommendation.value) return;
+  if (props.readonly || props.locked || !currentRecommendation.value) return;
   props.onAddToList(currentRecommendation.value.suborder);
 };
 
@@ -111,7 +114,7 @@ const handleAdjustSave = (suborder: HostApplySuborder) => {
 </script>
 
 <template>
-  <CustomMessageCard :readonly="readonly" summary-text="您已选择申领方案">
+  <CustomMessageCard :readonly="readonly" :locked="locked" summary-text="您已选择申领方案">
     <template #title>
       <span class="ha-title-label">{{ titleLabel }}</span>
       <span class="ha-page-badge">{{ activeIndex + 1 }} / {{ total }}</span>
@@ -137,8 +140,8 @@ const handleAdjustSave = (suborder: HostApplySuborder) => {
     </div>
 
     <template #actions>
-      <Button theme="primary" :disabled="readonly" @click="handleSelectPlan">选择方案</Button>
-      <Button :disabled="readonly" @click="handleAddToList">添加到配置清单</Button>
+      <Button theme="primary" :disabled="readonly || locked" @click="handleSelectPlan">选择方案</Button>
+      <Button :disabled="readonly || locked" @click="handleAddToList">添加到配置清单</Button>
       <!-- 暂不支持调整方案 -->
       <!-- <Button :disabled="readonly" @click="adjustVisible = true">调整配置</Button> -->
     </template>

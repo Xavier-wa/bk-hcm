@@ -34,8 +34,16 @@ import HostApplyRecommendCard from './host-apply-recommend-card.vue';
 import HostApplyPreorderCard from './host-apply-preorder-card.vue';
 import HostApplySubmitCard from './host-apply-submit-card.vue';
 
-const { messages, isChatting, currentSessionCode, sendMessage, regenerate, resendEdited, stopGeneration } =
-  useChatbotContext();
+const {
+  messages,
+  isChatting,
+  isCurrentSessionRemoteBusy,
+  currentSessionCode,
+  sendMessage,
+  regenerate,
+  resendEdited,
+  stopGeneration,
+} = useChatbotContext();
 
 const { getBizsId } = useWhereAmI();
 const chatbotMode = useChatbotMode();
@@ -160,6 +168,7 @@ const handleStopSending = () => {
         :content="getHitlContent(message)"
         :readonly="getHitlReadonlyState(message).readonly"
         :readonly-value="getHitlReadonlyState(message).value"
+        :locked="isCurrentSessionRemoteBusy"
         :on-confirm="sendMessage"
       />
       <AccountSelectCard
@@ -167,6 +176,7 @@ const handleStopSending = () => {
         :content="getAccountSelectContent(message)"
         :readonly="getAccountSelectReadonlyState(message).readonly"
         :readonly-value="getAccountSelectReadonlyState(message).accountId"
+        :locked="isCurrentSessionRemoteBusy"
         :on-confirm="(accountId) => handleAccountConfirm(message, accountId)"
       />
       <HostApplyRecommendCard
@@ -175,6 +185,7 @@ const handleStopSending = () => {
         :readonly="getRecommendReadonlyState(message).readonly"
         :selected-index="getSelectedIndex(message)"
         :initial-index="getInitialIndex(message)"
+        :locked="isCurrentSessionRemoteBusy"
         :on-select="(index) => handleSelectPlan(message, index)"
         :on-add-to-list="handleAddToList"
       />
@@ -183,6 +194,7 @@ const handleStopSending = () => {
         :content="getPreorderContent(message)"
         :readonly="getPreorderReadonlyState(message).readonly"
         :readonly-suborders="getPreorderReadonlySuborders(message)"
+        :locked="isCurrentSessionRemoteBusy"
         :on-confirm="(suborders, edited) => handleConfirmPreorder(message, suborders, edited)"
         :on-add-to-list="handleAddToList"
       />
@@ -190,6 +202,7 @@ const handleStopSending = () => {
         v-else-if="isSubmitMessage(message)"
         :rows="getSubmitRows(message)"
         :readonly="getSubmitReadonlyState(message).readonly"
+        :locked="isCurrentSessionRemoteBusy"
         :on-confirm="() => handleSubmitConfirm(message)"
         :on-add-to-list="() => handleAddToList(getSubmitRows(message))"
       />
