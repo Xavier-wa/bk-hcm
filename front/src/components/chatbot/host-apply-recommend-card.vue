@@ -9,6 +9,7 @@ import {
   type HostApplySuborder,
 } from '@/hooks/chatbot/types';
 import { toSpecDisplayItems } from '@/hooks/chatbot/host-apply-display';
+import { ensureDeviceMeta, type HostApplyDeviceMeta } from '@/hooks/chatbot/host-apply-device-meta';
 import ReqTypeValue from '@/components/display-value/req-type-value.vue';
 import CustomMessageCard from './custom-message-card.vue';
 import HostApplyAdjustDialog from './host-apply-adjust-dialog.vue';
@@ -59,9 +60,26 @@ const activeIndex = computed(() => (props.readonly ? selectedIdx.value : pageInd
 const currentRecommendation = computed<HostApplyRecommendation | null>(
   () => localRecommendations.value[activeIndex.value] ?? null,
 );
-const specItems = computed(() =>
-  currentRecommendation.value ? toSpecDisplayItems(currentRecommendation.value.suborder) : [],
+
+// device_type → meta；先展示编码，异步补全后刷新「机型」行
+const deviceMetaMap = ref<Record<string, HostApplyDeviceMeta | null>>({});
+watch(
+  () => currentRecommendation.value?.suborder?.device_type,
+  async (deviceType) => {
+    if (!deviceType || deviceMetaMap.value[deviceType] !== undefined) return;
+    const meta = await ensureDeviceMeta(deviceType);
+    deviceMetaMap.value = { ...deviceMetaMap.value, [deviceType]: meta };
+  },
+  { immediate: true },
 );
+
+const specItems = computed(() => {
+  const recommendation = currentRecommendation.value;
+  if (!recommendation) return [];
+  const deviceType = recommendation.suborder.device_type;
+  const meta = deviceType ? deviceMetaMap.value[deviceType] : undefined;
+  return toSpecDisplayItems(recommendation.suborder, meta);
+});
 
 const titleLabel = computed(() => (props.readonly ? '申领方案预览' : '申领方案推荐'));
 

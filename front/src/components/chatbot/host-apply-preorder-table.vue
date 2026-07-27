@@ -1,8 +1,14 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue';
 import { EditLine } from 'bkui-vue/lib/icon';
 
 import { type HostApplySuborder } from '@/hooks/chatbot/types';
 import { getSpecFieldText } from '@/hooks/chatbot/host-apply-display';
+import {
+  ensureDeviceMetaMap,
+  formatDeviceTypeDisplay,
+  type HostApplyDeviceMeta,
+} from '@/hooks/chatbot/host-apply-device-meta';
 import ReqTypeValue from '@/components/display-value/req-type-value.vue';
 
 interface Props {
@@ -13,14 +19,32 @@ interface Props {
   showDisk?: boolean;
 }
 
-withDefaults(defineProps<Props>(), { readonly: false, maxHeight: 480, showDisk: false });
+const props = withDefaults(defineProps<Props>(), { readonly: false, maxHeight: 480, showDisk: false });
 const emit = defineEmits<{ edit: [index: number] }>();
+
+const deviceMetaMap = ref<Record<string, HostApplyDeviceMeta | null>>({});
+
+watch(
+  () => props.suborders,
+  async (list) => {
+    const deviceTypes = [...new Set((list ?? []).map((item) => item.device_type).filter(Boolean) as string[])];
+    if (!deviceTypes.length) return;
+    const map = await ensureDeviceMetaMap(deviceTypes);
+    deviceMetaMap.value = { ...deviceMetaMap.value, ...map };
+  },
+  { immediate: true, deep: true },
+);
+
+const getDeviceTypeLabel = (row: HostApplySuborder) => {
+  if (!row.device_type) return '--';
+  return formatDeviceTypeDisplay(row.device_type, deviceMetaMap.value[row.device_type]) || '--';
+};
 </script>
 
 <template>
   <bk-table :data="suborders" :max-height="maxHeight" show-overflow-tooltip>
-    <bk-table-column label="机型" min-width="180" fixed="left">
-      <template #default="{ row }">{{ row.device_type || '--' }}</template>
+    <bk-table-column label="机型" min-width="220" fixed="left">
+      <template #default="{ row }">{{ getDeviceTypeLabel(row) }}</template>
     </bk-table-column>
     <bk-table-column label="操作系统" min-width="140">
       <template #default="{ row }">{{ getSpecFieldText(row, 'image_id') || '--' }}</template>

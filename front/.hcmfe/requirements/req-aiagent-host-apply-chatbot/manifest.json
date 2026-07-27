@@ -2,7 +2,7 @@
   "id": "req-aiagent-host-apply-chatbot",
   "title": "aiagent - 主机申领场景 chatbot",
   "createdAt": "2026-06-21T10:16:37.530Z",
-  "updatedAt": "2026-06-25T11:32:56.467Z",
+  "updatedAt": "2026-07-13T09:50:54.678Z",
   "external": {
     "tapd": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598134649532"
   },
@@ -13,11 +13,169 @@
       "branch": "feat-chatbot-hostapply",
       "title": "aiagent - 主机申领场景 chatbot",
       "createdAt": "2026-06-21T10:17:00.579Z"
+    },
+    {
+      "wfId": "feat-aiagent-hostapply-patch1",
+      "status": "done",
+      "branch": "feat-aiagent-hostapply-patch1",
+      "title": "agent产品化-推荐卡片展示机型族、CPU、内存",
+      "createdAt": "2026-07-10T12:25:15.385Z",
+      "mergedCommit": "ae1a53b46271e0ac29400b58e62b8f718f66a220"
     }
   ],
-  "aggregatedArtifacts": {},
+  "aggregatedArtifacts": {
+    "prd": {
+      "ref": ".hcmfe/requirements/req-aiagent-host-apply-chatbot/prd.md",
+      "lastMergedFrom": "feat-aiagent-hostapply-patch1",
+      "lastMergedAt": "2026-07-13T09:50:54.436Z",
+      "fingerprint": "65b42ed2625cf5f4f9e34989e7040e377b3b8422"
+    },
+    "design": {
+      "ref": ".hcmfe/requirements/req-aiagent-host-apply-chatbot/design.md",
+      "lastMergedFrom": "feat-aiagent-hostapply-patch1",
+      "lastMergedAt": "2026-07-13T09:50:54.436Z",
+      "fingerprint": "e545d0f49d512f7861dad3d706f2163f2a6fc608"
+    },
+    "api": {
+      "ref": ".hcmfe/requirements/req-aiagent-host-apply-chatbot/api.md",
+      "lastMergedFrom": "feat-aiagent-hostapply-patch1",
+      "lastMergedAt": "2026-07-13T09:50:54.436Z",
+      "fingerprint": "7ab73e1857db5002f2f5e004cc1994eab89c2496"
+    }
+  },
   "codeScope": {
-    "globs": [],
+    "globs": [
+      ".bkui-knowledge.json/**",
+      ".ci/**",
+      ".codebuddy/**",
+      ".cursor/**",
+      ".gitignore/**",
+      ".hcmfe/workflow/feat-cvm-private-image/**",
+      "Makefile/**",
+      "bkcodeai.json/**",
+      "cmd/**",
+      "docs/api-docs/api-server/api/**",
+      "docs/api-docs/api-server/bin/**",
+      "docs/api-docs/api-server/docs/zh/**",
+      "docs/api-docs/auth-server/bin/**",
+      "docs/api-docs/task-server/**",
+      "docs/api-docs/web-server/api/**",
+      "docs/api-docs/web-server/docs/biz/**",
+      "docs/api-docs/web-server/docs/resource/**",
+      "docs/api-docs/web-server/docs/scr/**",
+      "docs/api-docs/web-server/docs/service/**",
+      "docs/api-docs/web-server/docs/zh/**",
+      "docs/overview/**",
+      "docs/resource/img/**",
+      "docs/support-file/changelog/ch/**",
+      "docs/support-file/changelog/en/**",
+      "docs/support-file/docker/bk-hcm-accountserver/**",
+      "docs/support-file/docker/bk-hcm-apigwregister/**",
+      "docs/support-file/docker/bk-hcm-apiserver/**",
+      "docs/support-file/docker/bk-hcm-authregister/**",
+      "docs/support-file/docker/bk-hcm-authserver/**",
+      "docs/support-file/docker/bk-hcm-base/**",
+      "docs/support-file/docker/bk-hcm-cloudserver/**",
+      "docs/support-file/docker/bk-hcm-dataservice/**",
+      "docs/support-file/docker/bk-hcm-hcservice/**",
+      "docs/support-file/docker/bk-hcm-taskserver/**",
+      "docs/support-file/docker/bk-hcm-webserver/**",
+      "docs/support-file/docker/bk-hcm-woaserver/**",
+      "docs/support-file/helm/**",
+      "docs/support-file/template/**",
+      "front.zip/**",
+      "front/**",
+      "go.mod/**",
+      "go.sum/**",
+      "nt/.hcmfe/know-how/skills/archive-export/**",
+      "nt/.hcmfe/know-how/skills/cherry-pick-pr/**",
+      "nt/.hcmfe/know-how/skills/design-figma-intake/**",
+      "nt/.hcmfe/know-how/skills/expert/**",
+      "nt/.hcmfe/know-how/skills/test-checklist/**",
+      "nt/.hcmfe/know-how/skills/update-env/**",
+      "openspec/**",
+      "pkg/**",
+      "readme.md/**",
+      "readme_en.md/**",
+      "scripts/install/**",
+      "scripts/obssql/**",
+      "scripts/sql/**",
+      "test/suite/**"
+    ],
     "autoLearned": true
+  },
+  "codeFingerprint": {
+    "computedAt": "2026-07-13T09:50:54.651Z",
+    "files": {
+      ".codebuddy/rules/fe-auth-migration.mdc": {
+        "hash": "64c037b0bd5519b3082f6f0d57cc867de50aa942",
+        "size": 14862
+      },
+      ".codebuddy/rules/fe-bkui-usage.mdc": {
+        "hash": "9fa0f08baf1b019049e96ec6ef1b0b433508722f",
+        "size": 4873
+      },
+      ".codebuddy/rules/fe-code-quality-mindset.mdc": {
+        "hash": "bbad06da5dc9c4667bc7db1075a06f8ac51c837f",
+        "size": 2458
+      },
+      ".codebuddy/rules/fe-conventions.mdc": {
+        "hash": "689e3b2d3a6d66235b5555a149ca297f3910182e",
+        "size": 8992
+      },
+      ".codebuddy/rules/fe-deprecated.mdc": {
+        "hash": "027bfa6d37cea85e29d7bf64d5bb04c0dfcfc2b9",
+        "size": 9843
+      },
+      ".codebuddy/rules/fe-menu-route-architecture.mdc": {
+        "hash": "bb6e0aa51a08bf32380689c8e90b3d67795315ec",
+        "size": 9013
+      },
+      ".codebuddy/rules/fe-mongo-to-mysql-migration.mdc": {
+        "hash": "c47f34e20dc4cd0272787413613cb9ca66423dd9",
+        "size": 10458
+      },
+      ".codebuddy/rules/fe-router-action.mdc": {
+        "hash": "0473e8c3377066c7e18afb960b7209a31972bc5a",
+        "size": 3667
+      },
+      ".cursor/rules/fe-auth-migration.mdc": {
+        "hash": "64c037b0bd5519b3082f6f0d57cc867de50aa942",
+        "size": 14862
+      },
+      ".cursor/rules/fe-bkui-usage.mdc": {
+        "hash": "9fa0f08baf1b019049e96ec6ef1b0b433508722f",
+        "size": 4873
+      },
+      ".cursor/rules/fe-code-quality-mindset.mdc": {
+        "hash": "bbad06da5dc9c4667bc7db1075a06f8ac51c837f",
+        "size": 2458
+      },
+      ".cursor/rules/fe-conventions.mdc": {
+        "hash": "689e3b2d3a6d66235b5555a149ca297f3910182e",
+        "size": 8992
+      },
+      ".cursor/rules/fe-deprecated.mdc": {
+        "hash": "027bfa6d37cea85e29d7bf64d5bb04c0dfcfc2b9",
+        "size": 9843
+      },
+      ".cursor/rules/fe-menu-route-architecture.mdc": {
+        "hash": "bb6e0aa51a08bf32380689c8e90b3d67795315ec",
+        "size": 9013
+      },
+      ".cursor/rules/fe-mongo-to-mysql-migration.mdc": {
+        "hash": "c47f34e20dc4cd0272787413613cb9ca66423dd9",
+        "size": 10458
+      },
+      ".cursor/rules/fe-router-action.mdc": {
+        "hash": "0473e8c3377066c7e18afb960b7209a31972bc5a",
+        "size": 3667
+      },
+      ".hcmfe/workflow/feat-cvm-private-image/state.json": {
+        "hash": "04efea56066d5da98e4d170fc5171c1000057f7d",
+        "size": 2563
+      }
+    },
+    "rootHash": "2d302395e58ca50b18d21a1f54ea700690621fae"
   }
 }

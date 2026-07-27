@@ -5,6 +5,7 @@ import { getImages, getDiskTypes } from '@/api/host/cvm';
 import { useCvmDeviceStore } from '@/store/cvm/device';
 import { useConfigRequirementStore } from '@/store/config/requirement';
 import { RES_ASSIGN_TYPE } from '@/components/device-type-selector/constants';
+import { formatDeviceTypeDisplay, seedDeviceMetaCache } from './host-apply-device-meta';
 
 // 主机申领 C「调整配置」弹窗下拉选项：复用 ziyanScr 数据/接口层，统一归一化为 { id, name }，
 // 供 hcm-form-list 以 :id-key="'id'" :display-key="'name'" 消费（见 api.md / coding.md）。
@@ -37,13 +38,22 @@ export const getDeviceTypeOptions = async (
   if (region) filter.rules.push({ field: 'region', op: QueryRuleOPEnum.EQ, value: region });
   const { getDeviceTypeFullList } = useCvmDeviceStore();
   const { list } = await getDeviceTypeFullList({ filter });
-  // 按 device_type 去重
+  // 按 device_type 去重；name 附带机型族/CPU/内存
   const seen = new Set<string>();
   const options: HostApplyOption[] = [];
   (list ?? []).forEach((item) => {
     if (item.device_type && !seen.has(item.device_type)) {
       seen.add(item.device_type);
-      options.push({ id: item.device_type, name: item.device_type });
+      const meta = {
+        device_family: item.device_family,
+        cpu_core: item.cpu_core,
+        memory: item.memory,
+      };
+      seedDeviceMetaCache(item.device_type, meta);
+      options.push({
+        id: item.device_type,
+        name: formatDeviceTypeDisplay(item.device_type, meta),
+      });
     }
   });
   return options;

@@ -3,11 +3,12 @@ import { RES_ASSIGN_TYPE } from '@/components/device-type-selector/constants';
 import { getRegionCn, getZoneCn } from '@/views/ziyanScr/cvm-web/transform';
 import { getImageName, getDiskTypesName } from '@/views/ziyanScr/cvm-produce/component/property-display/transform';
 
+import { formatDeviceTypeDisplay, type HostApplyDeviceMeta } from './host-apply-device-meta';
 import type { HostApplyDisk, HostApplySuborder } from './types';
 
 // 主机申领 suborder 字段展示工具：键值表的 label 映射、字段顺序与 value 格式化。
 // 字段值为后端编码，展示时统一转为中文名称（vendor=ZIYAN，复用 ziyanScr transform/常量，见 api.md）。
-// 例外：device_type 机型本期原样展示；require_type 由模板内联 <req-type-value> 组件渲染。
+// device_type：有 meta 时展示「编码 (机型族, X核YG)」；require_type 由模板内联 <req-type-value> 组件渲染。
 
 export interface SpecDisplayItem {
   key: string;
@@ -60,7 +61,11 @@ const formatZone = (zone?: string): string => {
   return zone === 'all' ? '全部可用区' : getZoneCn(zone);
 };
 
-export const getSpecFieldText = (suborder: HostApplySuborder, key: keyof HostApplySuborder): string => {
+export const getSpecFieldText = (
+  suborder: HostApplySuborder,
+  key: keyof HostApplySuborder,
+  deviceMeta?: HostApplyDeviceMeta | null,
+): string => {
   switch (key) {
     case 'replicas':
       return isNil(suborder.replicas) ? '' : `${suborder.replicas} 台`;
@@ -87,8 +92,11 @@ export const getSpecFieldText = (suborder: HostApplySuborder, key: keyof HostApp
       if (isNil(val) || val === '') return '';
       return RES_ASSIGN_TYPE[val as keyof typeof RES_ASSIGN_TYPE]?.label ?? String(val);
     }
+    case 'device_type':
+      return isNil(suborder.device_type) || suborder.device_type === ''
+        ? ''
+        : formatDeviceTypeDisplay(String(suborder.device_type), deviceMeta);
     default: {
-      // device_type 等：原样展示
       const val = suborder[key];
       return isNil(val) ? '' : String(val);
     }
@@ -97,10 +105,13 @@ export const getSpecFieldText = (suborder: HostApplySuborder, key: keyof HostApp
 
 export const getSpecFieldLabel = (key: string): string => SPEC_FIELD_LABEL[key] ?? key;
 
-// 将 suborder 转为有序键值列表，缺失/空值字段不渲染
-export const toSpecDisplayItems = (suborder: HostApplySuborder): SpecDisplayItem[] =>
+// 将 suborder 转为有序键值列表，缺失/空值字段不渲染；deviceMeta 用于机型富文本
+export const toSpecDisplayItems = (
+  suborder: HostApplySuborder,
+  deviceMeta?: HostApplyDeviceMeta | null,
+): SpecDisplayItem[] =>
   SPEC_FIELD_ORDER.map((key) => ({
     key,
     label: getSpecFieldLabel(key),
-    value: getSpecFieldText(suborder, key),
+    value: getSpecFieldText(suborder, key, key === 'device_type' ? deviceMeta : undefined),
   })).filter((item) => item.value !== '');
