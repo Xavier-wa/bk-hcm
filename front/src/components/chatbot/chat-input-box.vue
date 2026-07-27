@@ -23,6 +23,9 @@ const emit = defineEmits<{
 
 const { isChatting, currentSessionCode, stopGeneration } = useChatbotContext();
 
+// 仅保留换行提示；去掉组件库默认的 Skill / Prompt / 工具与 MCP 引导（能力未开放）
+const INPUT_PLACEHOLDER = '通过 Shift + Enter 进行换行输入';
+
 const inputValue = shallowRef<string | TagSchema>([[]]);
 const chatInputRef = useTemplateRef<{ focus: () => void }>('chatInputRef');
 
@@ -65,6 +68,7 @@ defineExpose({ setInput, focus });
     <ChatInput
       ref="chatInputRef"
       v-model="inputValue"
+      :placeholder="INPUT_PLACEHOLDER"
       :message-status="messageStatus"
       :support-upload="supportUpload"
       :on-send-message="handleSendMessage"

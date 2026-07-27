@@ -37,7 +37,7 @@ export const SESSION_TAG_NAME: Record<string, string> = {
 
 // 主内容区底部联系人：name 为企业微信账号（点击拉起会话），alias 为展示文案。
 export const ASSISTANT_CONTACT = {
-  name: 'ICR',
+  name: 'HCM',
   alias: '@小助手',
 };
 

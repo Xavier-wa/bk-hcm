@@ -62,6 +62,8 @@ export function useStream(msg: MessageModule, event: EventModule) {
   const isChatting = ref(false);
   const sessionCode = ref('');
   let abortController: AbortController | null = null;
+  // 标记本次流是否被用户主动停止（点击「停止」），用于收尾时保证展示「已停止生成」提示
+  let stoppedByUser = false;
 
   // 防御：useMessageGroup 仅看消息列表最后一条的 role 决定是否注入 LoadingMessage（"请求中..."），
   // 与 messageStatus prop 无关。若 tail 仍是 user，必须补一条 assistant 占位消息阻断注入。
@@ -76,6 +78,25 @@ export function useStream(msg: MessageModule, event: EventModule) {
         status,
       } as Message);
     }
+  };
+
+  // 用户主动停止后保证「已停止」提示可见（用 Error 态展示与「未响应或被停止」一致的提示图标）：
+  //   - 末条为空内容助手气泡（如工具调用后正文未产出即被中断）→ 直接填充提示文案 + 置 Error 态，消除空白气泡；
+  //   - 否则（正文已渲染、卡片消息、或末条为 user）→ 追加一条独立提示气泡。
+  const ensureStopTip = (content: string) => {
+    const last = msg.messages.value.at(-1);
+    if (last?.role === MessageRole.Assistant && typeof last.content === 'string' && !last.content.trim()) {
+      (last as { content: string; status: MessageStatus }).content = content;
+      (last as { content: string; status: MessageStatus }).status = MessageStatus.Error;
+      return;
+    }
+    msg.messages.value.push({
+      role: MessageRole.Assistant,
+      content,
+      id: genId(),
+      messageId: genId(),
+      status: MessageStatus.Error,
+    } as Message);
   };
 
   // /history SNAPSHOT 里若出现连续 user 消息（上一次对话被中断、没有 assistant 回复就被持久化），
@@ -442,7 +463,9 @@ export function useStream(msg: MessageModule, event: EventModule) {
       if (abortController === controller) {
         const streaming = msg.getCurrentStreamingMessage();
         if (streaming) streaming.status = MessageStatus.Complete;
-        ensureAssistantTail('已停止生成');
+        // 用户主动停止才保证「已停止生成」可见（含空白气泡填充）；正常结束不额外插入提示
+        if (stoppedByUser) ensureStopTip('已停止生成');
+        stoppedByUser = false;
         isChatting.value = false;
         abortController = null;
       }
@@ -451,8 +474,8 @@ export function useStream(msg: MessageModule, event: EventModule) {
 
   // 纯本地中断当前 SSE（不通知后端）——用于会话切换 / 新建会话前的本地清理场景，
   // 避免上一会话的流继续写入共享 messages；让后端 run 自然跑完，结果进入 history 即可。
+  // 不依赖 isChatting：纯历史 SNAPSHOT 拉取阶段也可能持有 abortController，需能被打断。
   const abortStream = () => {
-    if (!isChatting.value) return;
     abortController?.abort();
   };
 
@@ -461,6 +484,8 @@ export function useStream(msg: MessageModule, event: EventModule) {
   // 文案按场景匹配（/agui → "已停止生成"，/history → "未响应或被停止"）
   const stopGeneration = () => {
     if (!isChatting.value) return;
+    // 标记为用户主动停止，收尾时保证展示「已停止生成」（覆盖空白气泡场景）
+    stoppedByUser = true;
     abortController?.abort();
     if (sessionCode.value) {
       agentApi.cancelRun(sessionCode.value);
@@ -474,10 +499,13 @@ export function useStream(msg: MessageModule, event: EventModule) {
   //   4) 最后 RUN_FINISHED（后端发完不会主动关闭 SSE，需要前端 reader.cancel()）
   // 因此这里需要和 streamChat 一样做增量渲染 —— SNAPSHOT 到达立即 push 到 messages，
   // 后续实时事件复用 event.handleEvent 接着填充，而不是攒完整个流再返回。
+  //
+  // isChatting 仅在 SNAPSHOT 之后出现续传实时事件时才置 true：
+  // 纯历史加载不是「生成中」，否则切回对话页 / 拉历史时会闪现「停止生成」按钮。
   const fetchHistory = async (code: string, onSnapshotLoaded?: () => void): Promise<void> => {
     const controller = new AbortController();
     abortController = controller;
-    isChatting.value = true;
+    let snapshotDone = false;
 
     try {
       const response = await agentApi.fetchHistoryStream(code, controller.signal);
@@ -510,8 +538,13 @@ export function useStream(msg: MessageModule, event: EventModule) {
           }
           // SNAPSHOT 内连续 user 消息（上次被中断 / 连续停止）每条都补占位
           fillSnapshotUserGaps('未响应或被停止');
+          snapshotDone = true;
           onSnapshotLoaded?.();
           return;
+        }
+        // SNAPSHOT 后的非 RunFinished 事件 = 断点续传，此时才进入「生成中」
+        if (snapshotDone && e.type !== EventType.RunFinished && !isChatting.value) {
+          isChatting.value = true;
         }
         // 其他事件交给标准分发器，保持与 /agui 流一致的处理路径（增量渲染）
         event.handleEvent(e);

@@ -243,11 +243,19 @@ const handleSend = async (text: string) => {
   await sendMessage(text, sessionTag);
 };
 
-// 大卡片：点击直接发送预设消息（带场景 tag 时随会话创建上报）
+// 大卡片：点击直接发送预设消息（带场景 tag 时随会话创建上报）。
+// 同步互斥：isChatting 要等 createSession/streamChat 才置位，连点会落在异步窗口内重复发送。
+const isBigCardSending = ref(false);
+
 const handleBigCardClick = async (card: BigCard) => {
-  if (isChatting.value) return;
-  pendingChip.value = null;
-  await sendMessage(card.prompt, card.sessionTag || '');
+  if (isChatting.value || isBigCardSending.value) return;
+  isBigCardSending.value = true;
+  try {
+    pendingChip.value = null;
+    await sendMessage(card.prompt, card.sessionTag || '');
+  } finally {
+    isBigCardSending.value = false;
+  }
 };
 
 // 小卡片：编辑器内注入默认提示词文本，场景 chip 由 #input-header 插槽自渲染（组件 v-model 不支持注入 tag 节点）
@@ -609,7 +617,7 @@ onMounted(() => {
                 v-for="card in BIG_CARDS"
                 :key="card.title"
                 class="big-card"
-                :disabled="isChatting"
+                :class="{ 'is-disabled': isChatting || isBigCardSending }"
                 @click="handleBigCardClick(card)"
               >
                 <div class="big-card-icon-wrapper">
@@ -1116,12 +1124,13 @@ onMounted(() => {
       border-radius: 4px;
       box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
 
-      &:hover {
+      &:hover:not(.is-disabled) {
         box-shadow: 0 4px 12px 0 rgb(0 0 0 / 20%);
       }
 
-      &:disabled {
+      &.is-disabled {
         cursor: not-allowed;
+        pointer-events: none;
         opacity: 0.6;
       }
 

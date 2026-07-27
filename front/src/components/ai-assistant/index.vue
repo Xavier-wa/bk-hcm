@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, provide, ref, useTemplateRef } fr
 
 import { useChatbot } from '@/hooks/chatbot/use-chatbot';
 import { ChatbotKey, ChatbotModeKey } from '@/hooks/chatbot/provide';
+import { useCommonStore } from '@/store';
 import ChatMessageList from '@/components/chatbot/chat-message-list.vue';
 import ChatInputBox from '@/components/chatbot/chat-input-box.vue';
 import AccountSelectEcho from '@/components/chatbot/account-select-echo.vue';
@@ -34,6 +35,10 @@ const props = withDefaults(
     sceneTag: '',
   },
 );
+
+// 与业务「首页」菜单 checkAuth（biz_agent_assistant）对齐：无权限不渲染浮窗入口
+const commonStore = useCommonStore();
+const hasBizChatbotAccess = computed(() => !!commonStore.authVerifyData?.permissionAction?.biz_agent_assistant);
 
 // 浮窗自持有 useChatbot 实例并 provide，与全页相互独立；通过 ChatbotKey 供原子组件 inject。
 // 传入 sceneTag 使会话列表按场景加载、新会话归入对应场景。
@@ -76,12 +81,14 @@ const ensureSessions = () => {
 // 深链初始化：加载并切换到指定会话，同时标记已初始化，避免 show() 再次重复拉取。
 // 携带 preselectSuborder 时（从「选择方案 + 添加到配置清单」跳转而来），会话加载完成后选中对应方案。
 const initSessionsWithScene = async (sessionCode?: string, preselectSuborder?: HostApplySuborder) => {
+  if (!hasBizChatbotAccess.value) return;
   sessionsInited.value = true;
   await initSessions(sessionCode);
   if (preselectSuborder) selectRecommendBySuborder(preselectSuborder);
 };
 
 const show = () => {
+  if (!hasBizChatbotAccess.value) return;
   panelVisible.value = true;
   ensureSessions();
 };
@@ -92,6 +99,7 @@ const hide = () => {
 };
 
 const toggle = () => {
+  if (!hasBizChatbotAccess.value) return;
   panelVisible.value ? hide() : show();
 };
 
@@ -151,7 +159,7 @@ defineExpose<AiAssistantExpose>({
 </script>
 
 <template>
-  <teleport to="body">
+  <teleport v-if="hasBizChatbotAccess" to="body">
     <div class="ai-assistant">
       <!-- 可拖拽 + 可缩放容器 -->
       <DraggableContainer
