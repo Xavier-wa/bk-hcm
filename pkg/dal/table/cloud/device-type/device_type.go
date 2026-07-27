@@ -28,8 +28,6 @@ import (
 	"hcm/pkg/dal/table/types"
 	"hcm/pkg/dal/table/utils"
 	"hcm/pkg/thirdparty/cvmapi"
-
-	"github.com/shopspring/decimal"
 )
 
 // DeviceTypeColumns defines all the device type table's columns.
@@ -85,7 +83,7 @@ type DeviceTypeTable struct {
 	// TechnicalClass 技术分类
 	TechnicalClass string `db:"technical_class" json:"technical_class" validate:"lte=64"`
 	// TechClassResAmt 技术分类资源量
-	TechClassResAmt decimal.Decimal `db:"tech_class_res_amt" json:"tech_class_res_amt" validate:"gte=0"`
+	TechClassResAmt *types.Decimal `db:"tech_class_res_amt" json:"tech_class_res_amt"`
 	// Region 地域
 	Region string `db:"region" json:"region" validate:"lte=64"`
 	// Zone 可用区
@@ -157,7 +155,7 @@ func (t DeviceTypeTable) InsertValidate() error {
 		return errors.New("gpu amount should be >= 0")
 	}
 
-	if t.TechClassResAmt.IsNegative() {
+	if t.TechClassResAmt != nil && t.TechClassResAmt.IsNegative() {
 		return errors.New("tech class res amt should be >= 0")
 	}
 
@@ -194,7 +192,7 @@ func (t DeviceTypeTable) UpdateValidate() error {
 		return errors.New("gpu amount should be >= 0")
 	}
 
-	if t.TechClassResAmt.IsNegative() {
+	if t.TechClassResAmt != nil && t.TechClassResAmt.IsNegative() {
 		return errors.New("tech class res amt should be >= 0")
 	}
 

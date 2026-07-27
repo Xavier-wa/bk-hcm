@@ -181,11 +181,11 @@ func (hd *deviceTypeHandler) listDeviceTypeFromCloud(kt *kit.Kit, region string,
 
 		// 3. 构建机型数据，构造完整的 device_type 表字段
 		for _, item := range queryResp.Result.Data {
-			techClassResAmt, err := item.CalcTechClassResAmt()
+			techClassResAmt, err := item.CalcTechClassResAmt(kt)
 			if err != nil {
 				logs.Errorf("calc tech class res amt failed, err: %v, instance_type: %s, zone: %s, rid: %s",
 					err, item.InstanceType, zone.NameCn, kt.Rid)
-				return nil, err
+				continue
 			}
 
 			deviceTypes = append(deviceTypes, coredevicetype.DeviceType{

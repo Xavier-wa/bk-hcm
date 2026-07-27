@@ -28,7 +28,7 @@ import (
 	dt "hcm/pkg/dal/table/cloud/device-type"
 	"hcm/pkg/thirdparty/cvmapi"
 	cvt "hcm/pkg/tools/converter"
-		
+
 	"github.com/shopspring/decimal"
 )
 
@@ -101,7 +101,7 @@ func ConvTableToDeviceType(one dt.DeviceTypeTable) DeviceType {
 		Memory:          one.Memory,
 		GpuAmount:       one.GpuAmount,
 		TechnicalClass:  one.TechnicalClass,
-		TechClassResAmt: one.TechClassResAmt,
+		TechClassResAmt: cvt.PtrToVal(one.TechClassResAmt).Decimal,
 		Disable:         cvt.PtrToVal(one.Disable),
 		Source:          one.Source,
 		GenerationType:  one.GenerationType,
@@ -144,7 +144,7 @@ func ConvTableToDistinctDeviceType(one dt.DeviceTypeTable) DistinctDeviceType {
 		Memory:          one.Memory,
 		GpuAmount:       one.GpuAmount,
 		TechnicalClass:  one.TechnicalClass,
-		TechClassResAmt: one.TechClassResAmt,
+		TechClassResAmt: cvt.PtrToVal(one.TechClassResAmt).Decimal,
 		DeviceTypeClass: one.DeviceTypeClass,
 		Disable:         cvt.PtrToVal(one.Disable),
 		Source:          one.Source,

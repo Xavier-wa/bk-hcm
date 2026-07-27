@@ -22,6 +22,7 @@ package ziyan
 import (
 	"testing"
 
+	"hcm/pkg/kit"
 	"hcm/pkg/thirdparty/cvmapi"
 
 	"github.com/shopspring/decimal"
@@ -60,7 +61,7 @@ func TestCalcTechClassResAmt_MemoryType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := tt.item.CalcTechClassResAmt()
+			result, err := tt.item.CalcTechClassResAmt(kit.New())
 			if err != nil {
 				t.Errorf("CalcTechClassResAmt() unexpected err: %v, item: %+v", err, tt.item)
 			}
@@ -116,7 +117,7 @@ func TestCalcTechClassResAmt_DiskType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := tt.item.CalcTechClassResAmt()
+			result, err := tt.item.CalcTechClassResAmt(kit.New())
 			if err != nil {
 				t.Errorf("CalcTechClassResAmt() unexpected err: %v, item: %+v", err, tt.item)
 			}
@@ -193,7 +194,7 @@ func TestCalcTechClassResAmt_OtherTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := tt.item.CalcTechClassResAmt()
+			result, err := tt.item.CalcTechClassResAmt(kit.New())
 			if err != nil {
 				t.Errorf("CalcTechClassResAmt() unexpected err: %v, item: %+v", err, tt.item)
 			}
@@ -206,12 +207,13 @@ func TestCalcTechClassResAmt_OtherTypes(t *testing.T) {
 
 func TestCalcTechClassResAmt_UnknownType(t *testing.T) {
 	tests := []struct {
-		name string
-		item cvmapi.QueryCvmInstanceTypeItem
+		name     string
+		item     cvmapi.QueryCvmInstanceTypeItem
+		expected decimal.Decimal
 	}{
-		// 8.1.5 测试未知分类机型资源量计算：验证返回 error，不再 fallback 到 CPUAmount
+		// 8.1.5 测试未知分类机型资源量计算：验证仅告警不报错，返回 0
 		{
-			name: "未知分类：直接报错",
+			name: "未知分类：告警并返回0",
 			item: cvmapi.QueryCvmInstanceTypeItem{
 				CvmInstanceTypeClass: "未知类型",
 				CPUAmount:            8,
@@ -219,9 +221,10 @@ func TestCalcTechClassResAmt_UnknownType(t *testing.T) {
 				DiskBlockNum:         1,
 				DiskBlockSize:        256,
 			},
+			expected: decimal.NewFromInt(0),
 		},
 		{
-			name: "空分类：直接报错",
+			name: "空分类：告警并返回0",
 			item: cvmapi.QueryCvmInstanceTypeItem{
 				CvmInstanceTypeClass: "",
 				CPUAmount:            4,
@@ -229,26 +232,32 @@ func TestCalcTechClassResAmt_UnknownType(t *testing.T) {
 				DiskBlockNum:         1,
 				DiskBlockSize:        128,
 			},
+			expected: decimal.NewFromInt(0),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := tt.item.CalcTechClassResAmt(); err == nil {
-				t.Errorf("CalcTechClassResAmt() want err, got nil, item: %+v", tt.item)
+			result, err := tt.item.CalcTechClassResAmt(kit.New())
+			if err != nil {
+				t.Errorf("CalcTechClassResAmt() unexpected err: %v, item: %+v", err, tt.item)
+			}
+			if result.Cmp(tt.expected) != 0 {
+				t.Errorf("CalcTechClassResAmt() = %v, want %v, item: %+v", result, tt.expected, tt.item)
 			}
 		})
 	}
 }
 
-func TestCalcTechClassResAmt_DiskFallback(t *testing.T) {
+func TestCalcTechClassResAmt_DiskZero(t *testing.T) {
 	tests := []struct {
-		name string
-		item cvmapi.QueryCvmInstanceTypeItem
+		name     string
+		item     cvmapi.QueryCvmInstanceTypeItem
+		expected decimal.Decimal
 	}{
-		// 8.1.6 测试磁盘信息异常时：验证返回 error，不再 fallback 到 CPUAmount
+		// 8.1.6 测试磁盘信息为 0 时：验证仅告警不报错，返回按 0 参与计算的结果
 		{
-			name: "高IO型但DiskBlockNum为0：直接报错",
+			name: "高IO型但DiskBlockNum为0：告警并返回0",
 			item: cvmapi.QueryCvmInstanceTypeItem{
 				CvmInstanceTypeClass: "高IO型",
 				CPUAmount:            16,
@@ -256,9 +265,10 @@ func TestCalcTechClassResAmt_DiskFallback(t *testing.T) {
 				DiskBlockNum:         0,
 				DiskBlockSize:        512,
 			},
+			expected: decimal.NewFromInt(0),
 		},
 		{
-			name: "大数据型但DiskBlockNum为0：直接报错",
+			name: "大数据型但DiskBlockNum为0：告警并返回0",
 			item: cvmapi.QueryCvmInstanceTypeItem{
 				CvmInstanceTypeClass: "大数据",
 				CPUAmount:            32,
@@ -266,15 +276,78 @@ func TestCalcTechClassResAmt_DiskFallback(t *testing.T) {
 				DiskBlockNum:         0,
 				DiskBlockSize:        512,
 			},
+			expected: decimal.NewFromInt(0),
 		},
 		{
-			name: "大数据型但DiskBlockSize为0：直接报错",
+			name: "大数据型但DiskBlockSize为0：告警并返回0",
 			item: cvmapi.QueryCvmInstanceTypeItem{
 				CvmInstanceTypeClass: "大数据",
 				CPUAmount:            32,
 				RamAmount:            128,
 				DiskBlockNum:         4,
 				DiskBlockSize:        0,
+			},
+			expected: decimal.NewFromInt(0),
+		},
+		{
+			name: "高IO型但磁盘信息为默认值：告警并返回0",
+			item: cvmapi.QueryCvmInstanceTypeItem{
+				CvmInstanceTypeClass: "高IO型",
+				CPUAmount:            16,
+				RamAmount:            64,
+				// DiskBlockNum和DiskBlockSize为默认零值
+			},
+			expected: decimal.NewFromInt(0),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tt.item.CalcTechClassResAmt(kit.New())
+			if err != nil {
+				t.Errorf("CalcTechClassResAmt() unexpected err: %v, item: %+v", err, tt.item)
+			}
+			if result.Cmp(tt.expected) != 0 {
+				t.Errorf("CalcTechClassResAmt() = %v, want %v, item: %+v", result, tt.expected, tt.item)
+			}
+		})
+	}
+}
+
+func TestCalcTechClassResAmt_DiskNegative(t *testing.T) {
+	tests := []struct {
+		name string
+		item cvmapi.QueryCvmInstanceTypeItem
+	}{
+		// 8.1.7 测试磁盘信息为负数时：验证返回 error，跳过该机型的创建或更新
+		{
+			name: "高IO型但DiskBlockNum为负数：直接报错",
+			item: cvmapi.QueryCvmInstanceTypeItem{
+				CvmInstanceTypeClass: "高IO型",
+				CPUAmount:            16,
+				RamAmount:            64,
+				DiskBlockNum:         -1,
+				DiskBlockSize:        512,
+			},
+		},
+		{
+			name: "大数据型但DiskBlockNum为负数：直接报错",
+			item: cvmapi.QueryCvmInstanceTypeItem{
+				CvmInstanceTypeClass: "大数据",
+				CPUAmount:            32,
+				RamAmount:            128,
+				DiskBlockNum:         -1,
+				DiskBlockSize:        512,
+			},
+		},
+		{
+			name: "大数据型但DiskBlockSize为负数：直接报错",
+			item: cvmapi.QueryCvmInstanceTypeItem{
+				CvmInstanceTypeClass: "大数据",
+				CPUAmount:            32,
+				RamAmount:            128,
+				DiskBlockNum:         4,
+				DiskBlockSize:        -512,
 			},
 		},
 		{
@@ -287,22 +360,11 @@ func TestCalcTechClassResAmt_DiskFallback(t *testing.T) {
 				DiskBlockSize:        -512,
 			},
 		},
-
-		// 8.1.7 测试磁盘信息缺失时：验证返回 error，不再 fallback 到 CPUAmount
-		{
-			name: "高IO型但磁盘信息为默认值：直接报错",
-			item: cvmapi.QueryCvmInstanceTypeItem{
-				CvmInstanceTypeClass: "高IO型",
-				CPUAmount:            16,
-				RamAmount:            64,
-				// DiskBlockNum和DiskBlockSize为默认零值
-			},
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := tt.item.CalcTechClassResAmt(); err == nil {
+			if _, err := tt.item.CalcTechClassResAmt(kit.New()); err == nil {
 				t.Errorf("CalcTechClassResAmt() want err, got nil, item: %+v", tt.item)
 			}
 		})

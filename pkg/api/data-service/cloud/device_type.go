@@ -20,6 +20,7 @@
 package cloud
 
 import (
+	"errors"
 	"strings"
 
 	"hcm/pkg/api/core"
@@ -29,7 +30,7 @@ import (
 	"hcm/pkg/dal/dao/types"
 	dt "hcm/pkg/dal/table/cloud/device-type"
 	"hcm/pkg/thirdparty/cvmapi"
-	
+
 	"github.com/shopspring/decimal"
 )
 
@@ -83,7 +84,7 @@ type DeviceTypeCreate struct {
 	// TechnicalClass 技术分类
 	TechnicalClass string `json:"technical_class" validate:"required,lte=64"`
 	// TechClassResAmt 技术分类资源量
-	TechClassResAmt decimal.Decimal `json:"tech_class_res_amt" validate:"gte=0"`
+	TechClassResAmt decimal.Decimal `json:"tech_class_res_amt"`
 	// Region 地域
 	Region string `json:"region" validate:"required,lte=64"`
 	// Zone 可用区
@@ -98,7 +99,13 @@ type DeviceTypeCreate struct {
 
 // Validate validate
 func (r *DeviceTypeCreate) Validate() error {
-	return validator.Validate.Struct(r)
+	if err := validator.Validate.Struct(r); err != nil {
+		return err
+	}
+	if r.TechClassResAmt.IsNegative() {
+		return errors.New("tech_class_res_amt should be >= 0")
+	}
+	return nil
 }
 
 // DeviceTypeUpdate update device type request
@@ -124,7 +131,7 @@ type DeviceTypeUpdate struct {
 	// TechnicalClass 技术分类
 	TechnicalClass *string `json:"technical_class,omitempty" validate:"omitempty,lte=64"`
 	// TechClassResAmt 技术分类资源量
-	TechClassResAmt *decimal.Decimal `json:"tech_class_res_amt,omitempty" validate:"omitempty,gte=0"`
+	TechClassResAmt *decimal.Decimal `json:"tech_class_res_amt,omitempty"`
 	// Region 地域
 	Region *string `json:"region,omitempty" validate:"omitempty,lte=64"`
 	// Zone 可用区
@@ -139,7 +146,13 @@ type DeviceTypeUpdate struct {
 
 // Validate validate
 func (r *DeviceTypeUpdate) Validate() error {
-	return validator.Validate.Struct(r)
+	if err := validator.Validate.Struct(r); err != nil {
+		return err
+	}
+	if r.TechClassResAmt != nil && r.TechClassResAmt.IsNegative() {
+		return errors.New("tech_class_res_amt should be >= 0")
+	}
+	return nil
 }
 
 // DeviceTypeBatchCreateReq create request

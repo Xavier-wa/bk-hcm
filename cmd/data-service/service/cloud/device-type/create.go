@@ -28,6 +28,7 @@ import (
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/orm"
 	devicetype "hcm/pkg/dal/table/cloud/device-type"
+	tabletypes "hcm/pkg/dal/table/types"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 	cvt "hcm/pkg/tools/converter"
@@ -73,7 +74,7 @@ func batchCreateDeviceType(cts *rest.Contexts, svc *service, vendor enumor.Vendo
 			GpuAmount:       createReq.GpuAmount,
 			DeviceTypeClass: createReq.DeviceTypeClass,
 			TechnicalClass:  createReq.TechnicalClass,
-			TechClassResAmt: createReq.TechClassResAmt,
+			TechClassResAmt: &tabletypes.Decimal{Decimal: createReq.TechClassResAmt},
 			Region:          createReq.Region,
 			Zone:            createReq.Zone,
 			Disable:         cvt.ValToPtr(createReq.Disable),
