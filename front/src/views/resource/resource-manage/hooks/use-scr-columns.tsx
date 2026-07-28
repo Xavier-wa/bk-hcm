@@ -1647,10 +1647,10 @@ export default (type: string, isSimpleShow = false) => {
   const ApplicationListColumns = [
     {
       label: '申请时间',
-      field: 'create_at',
-      width: 150,
+      field: 'created_at',
+      width: 160,
       render: ({ cell }: any) => timeFormatter(cell),
-      formatter: ({ create_at }: any) => timeFormatter(create_at),
+      formatter: ({ created_at }: any) => timeFormatter(created_at),
     },
     {
       label: '期望交付时间',
