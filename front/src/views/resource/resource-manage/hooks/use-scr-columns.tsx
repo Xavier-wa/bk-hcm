@@ -717,7 +717,7 @@ export default (type: string, isSimpleShow = false) => {
       exportFormatter: (row: any) => timeFormatter(row.updated_at),
     },
     {
-      label: '申请时间',
+      label: '生产时间',
       field: 'created_at',
       width: 160,
       render: ({ cell }: any) => timeFormatter(cell),
