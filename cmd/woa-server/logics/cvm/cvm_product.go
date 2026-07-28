@@ -91,8 +91,8 @@ func (l *logics) buildSubOrder(param *types.CvmCreateReq, order *taskTypes.Apply
 		SuccessNum:   0,
 		AppliedCore:  newParam.Suborders[0].AppliedCore,
 		ObsProject:   param.RequireType.ToObsProject(),
-		CreateAt:     now,
-		UpdateAt:     now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 }
 

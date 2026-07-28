@@ -49,6 +49,8 @@
         "total_num": 10,
         "success_num": 5,
         "pending_num": 5,
+        "created_at": "2022-01-02T15:04:05.004Z",
+        "updated_at": "2022-01-02T15:04:05.004Z",
         "create_at": "2022-01-02T15:04:05.004Z",
         "update_at": "2022-01-02T15:04:05.004Z"
       }
@@ -90,8 +92,10 @@
 | total_num           | int       | 资源需求总数                                                                                                    |
 | success_num         | int       | 已交付的资源数量                                                                                                  |
 | pending_num         | int       | 待匹配的资源数量                                                                                                  |
-| create_at           | timestamp | 单据创建时间                                                                                                    |
-| update_at           | timestamp | 单据最后更新时间                                                                                                  |
+| created_at          | timestamp | 单据创建时间                                                                                                    |
+| updated_at          | timestamp | 单据最后更新时间                                                                                                  |
+| create_at           | timestamp | 单据创建时间（已废弃，为兼容旧版本保留，建议使用 created_at）                                                                     |
+| update_at           | timestamp | 单据最后更新时间（已废弃，为兼容旧版本保留，建议使用 updated_at）                                                                   |
 
 #### spec 字段说明：
 

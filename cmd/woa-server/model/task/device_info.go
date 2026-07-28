@@ -329,7 +329,7 @@ func convertMySQLToDeviceInfo(mysqlRecord *cvmapplytable.ZiyanCvmDeviceInfo) (*t
 		InitTaskLink:     mysqlRecord.InitTaskLink,
 		IsManualMatched:  mysqlRecord.IsManualMatched,
 		OwnerIP:          mysqlRecord.OwnerIP,
-		CreateAt:         createdAt,
-		UpdateAt:         updatedAt,
+		CreatedAt:        createdAt,
+		UpdatedAt:        updatedAt,
 	}, nil
 }

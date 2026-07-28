@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.mongodb.org/mongo-driver/mongo"
 	"hcm/cmd/woa-server/logics/task/scheduler/record"
 	"hcm/cmd/woa-server/model/task"
 	types "hcm/cmd/woa-server/types/task"
@@ -36,6 +35,8 @@ import (
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/tools/maps"
+
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // CreateUpgradeTicketANDOrder creates upgrade cvm ticket and suborder
@@ -209,8 +210,8 @@ func (s *scheduler) createSubOrdersToMatching(kt *kit.Kit, orderID uint64, param
 			ObsProject:        param.RequireType.ToObsProject(),
 			RetryTime:         0,
 			ModifyTime:        0,
-			CreateAt:          now,
-			UpdateAt:          now,
+			CreatedAt:         now,
+			UpdatedAt:         now,
 		}
 		logs.V(4).Infof("create suborder to matching data, bkBizID: %d, subOrder: %+v, rid: %s",
 			param.BkBizId, subOrder, kt.Rid)

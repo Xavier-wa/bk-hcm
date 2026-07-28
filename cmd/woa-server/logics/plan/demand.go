@@ -1555,12 +1555,12 @@ func parseApplyOrderFields(kt *kit.Kit, sub *cvmapplytable.ZiyanCvmApplySuborder
 		return err
 	}
 	var err error
-	apply.CreateAt, err = parseTime(kt, sub.CreatedAt)
+	apply.CreatedAt, err = parseTime(kt, sub.CreatedAt)
 	if err != nil {
 		logs.Errorf("failed to parse created at, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID, kt.Rid)
 		return err
 	}
-	apply.UpdateAt, err = parseTime(kt, sub.UpdatedAt)
+	apply.UpdatedAt, err = parseTime(kt, sub.UpdatedAt)
 	if err != nil {
 		logs.Errorf("failed to parse updated at, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID, kt.Rid)
 		return err
@@ -1654,7 +1654,7 @@ func (c *Controller) getApplyOrderConsumePoolMapV2(kt *kit.Kit, subOrders []*tas
 			continue
 		}
 
-		demandYear, demandMonth, err := c.demandTime.GetDemandYearMonth(kt, subOrderInfo.CreateAt)
+		demandYear, demandMonth, err := c.demandTime.GetDemandYearMonth(kt, subOrderInfo.CreatedAt)
 		if err != nil {
 			logs.Errorf("failed to get demand year month, err: %v, subOrder: %+v, rid: %s", err, *subOrderInfo,
 				kt.Rid)

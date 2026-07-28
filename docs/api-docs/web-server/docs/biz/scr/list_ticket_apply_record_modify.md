@@ -103,7 +103,7 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/find/apply/record/modify
             "inherit_instance_id": "ins-xxxx"
           }
         },
-        "create_at":"2022-10-15 18:07:37",
+        "created_at":"2022-10-15 18:07:37",
         "status": 1
       }
     ]
@@ -134,7 +134,7 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/find/apply/record/modify
 | suborder_id | string	  | 资源申请子单号   |
 | bk_username | string	  | 改单操作人      |
 | details	  | object	  | 改单详情        |
-| create_at	  | timestamp | 记录创建时间     |
+| created_at	  | timestamp | 记录创建时间     |
 | status 	  | int       | 资源变更状态（0:待审批 1:审批通过 2:审批失败 3:审批拒绝 4:审批超时）|
 
 #### data.info.details
