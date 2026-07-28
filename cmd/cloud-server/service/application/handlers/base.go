@@ -143,6 +143,12 @@ func (a *BaseApplicationHandler) Complete() (status enumor.ApplicationStatus, de
 	return enumor.DeliverError, map[string]interface{}{}, fmt.Errorf("not implemented")
 }
 
+// NeedApproval 默认所有申请都需要走ITSM人工审批，具体业务如需支持免审直连交付，可覆写该方法
+// kit 保留，未来可能需要根据业务需求进行调整，后续按业务/责任人/配置判断、打带 rid 的日志都可能用到
+func (a *BaseApplicationHandler) NeedApproval(kt *kit.Kit) (bool, error) {
+	return true, nil
+}
+
 // GetAccountApprover get account approver.
 func (a *BaseApplicationHandler) GetAccountApprover(kt *kit.Kit, accountID string) ([]itsm2.VariableApprover, error) {
 	accountData, err := a.GetAccount(accountID)
