@@ -158,6 +158,16 @@ func interruptWithRecommendSuborders(ctx context.Context, state graph.State, mes
 }
 
 // doInterrupt performs the emit → interrupt → resume cycle shared by both interrupt branches.
+//
+// 恢复来源区分（command=自由输入 / forwarded=结构化协议）：
+//   - 优先读 inv.RunOptions.RuntimeState[StateKeyForwardedResumeValue]（前端结构化协议，由
+//     service.go: tryPrepareAutoResume 每轮重建进 RuntimeState，请求级、不脏），命中则视为前端
+//     结构化选择（选方案/选账号等），发出 after_tool_hitl.resume_forwarded 事件并以该值作为用户选择；
+//   - 未命中则回退 graph.Interrupt 返回的 resumeValue（用户在输入框输入的自由文本），校验为非空字符串。
+//
+// 不再依赖「JSON 嗅探」区分结构化 vs 自由文本：自由文本即使是合法 JSON 也走 resumeValue 通道，
+// 不再误发 resume_forwarded 事件。该 key 由 makeSubgraphInputMapper 在子图入口剥键，不进入子图持久化
+// state，故恢复时直接读 RuntimeState（每 Run 重建）即可，无需消费后清除。
 func doInterrupt(ctx context.Context, state graph.State, messages []trpcmodel.Message,
 	lastResp, baseKey string, payload map[string]any) (any, error) {
 
@@ -179,6 +189,7 @@ func doInterrupt(ctx context.Context, state graph.State, messages []trpcmodel.Me
 		return message.BuildFallbackResumeDelta(ctx, state, messages, lastResp, forwarded), nil
 	}
 
+	// 回退自由文本：graph.Interrupt 返回的 resumeValue，对应用户在输入框输入的本轮内容。
 	choice, ok := resumeValue.(string)
 	if !ok || choice == "" {
 		logs.Errorf("after_tool_hitl: invalid resume value, expected non-empty string, got %T, rid: %s",
@@ -189,9 +200,10 @@ func doInterrupt(ctx context.Context, state graph.State, messages []trpcmodel.Me
 	return message.BuildFallbackResumeDelta(ctx, state, messages, lastResp, choice), nil
 }
 
-// resolveForwardedResumeValue reads the structured resume value that the frontend passed via
-// forwardedProps (stored in RuntimeState under StateKeyForwardedResumeValue). It returns an empty
-// string when the invocation, RuntimeState, or value is absent or not a non-empty string.
+// resolveForwardedResumeValue reads the structured resume value passed by the frontend via
+// forwardedProps from RuntimeState. Returns an empty string when the value is absent or not a
+// non-empty string. The value is rebuilt into RuntimeState (via tryPrepareAutoResume) on every
+// resume Run, so reading it here is safe and not subject to stale checkpoint state.
 func resolveForwardedResumeValue(ctx context.Context) string {
 	rid := rest.RidFromContext(ctx)
 
@@ -207,6 +219,7 @@ func resolveForwardedResumeValue(ctx context.Context) string {
 	}
 
 	logs.Infof("after_tool_hitl: forwarded resume value=%s, rid: %s", forwarded, rid)
+
 	return forwarded
 }
 

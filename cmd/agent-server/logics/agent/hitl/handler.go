@@ -43,7 +43,7 @@ type Handler interface {
 	// ToolName 返回该 handler 响应的工具名。
 	ToolName() string
 	// EventKind 返回用于选择前端自定义事件的中断 key 前缀
-	// （constant.HITLInterruptKey 或 constant.ToolConfirmInterruptKey）。
+	// （constant.HITLInterruptKey 或 constant.ToolConfirmCreateCvmApplyInterruptKey）。
 	EventKind() string
 	// BuildPayload 构造自定义事件携带的中断 payload。
 	BuildPayload(ctx context.Context, tc *model.ToolCall) (any, error)

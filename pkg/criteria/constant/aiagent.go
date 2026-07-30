@@ -215,6 +215,13 @@ const (
 	// expanded before each LLM call.
 	SessionAccountIDTempKey = "account_id"
 
+	// SessionRidStateKey is the runtime-state key that carries the request id (rid)
+	// from the HTTP context into the Graph run. It is injected at the run entry point
+	// (makeRunOptionResolver) so that subgraph input/output mappers — which only
+	// receive graph.State — can attach the rid to [hcm graph trace] logs for
+	// cross-turn/cross-node correlation. Not persisted as business state.
+	SessionRidStateKey = "session_rid"
+
 	// SessionSelectedAccountIDStateKey 持久化 account_select 节点选定的账号，
 	// 使其跨多次 run 保留，避免重复触发账号选择。
 	SessionSelectedAccountIDStateKey = "cvm_apply:selected_account_id"
@@ -250,6 +257,14 @@ const ForwardedPropResumeValue = "resumeValue"
 // from forwardedProps. It is kept separate from the resume command (which always carries the
 // free-form user input text), so nodes can consume the structured selection independently.
 const StateKeyForwardedResumeValue = "forwarded_resume_value"
+
+// StateKeySubgraphTurnPrefix is the prefix of the per-subgraph turn counter state key.
+// 子图按「轮次」分配独立 checkpoint namespace 时，需要一个严格单调递增的轮次序号，
+// 用以替代「进入子图时的消息条数」这种脆弱标识（两轮消息数恰好相等会触发 namespace 碰撞、
+// 误命中旧完成态 checkpoint）。该序号按 nodePrefix 隔离（避免 host_apply / resource_query 互相干扰），
+// 完整 key 由 stateKeySubgraphTurn(nodePrefix) 生成，存储在父图 state 中并随子图 checkpoint 持久化，
+// 由 makeSubgraphInputMapper 自增、makeSubgraphOutputMapper 经子图完成态回填父图，跨轮次保持递增。
+const StateKeySubgraphTurnPrefix = "subgraph_turn_"
 
 // HITL (Human-in-the-Loop) constants
 const (
@@ -301,10 +316,11 @@ const (
 
 // tool confirm gate constants
 const (
-	// ToolConfirmInterruptKey is the key prefix used for graph.Interrupt in the tool confirm gate flow.
+	// ToolConfirmCreateCvmApplyInterruptKey is the interrupt key for create_cvm_apply confirm gate.
+	ToolConfirmCreateCvmApplyInterruptKey = "tool_confirm.interrupt.create_cvm_apply"
+	// ToolConfirmInterruptKeyPrefix is the key prefix used for graph.Interrupt in tool confirm gates.
 	// The translator emits the "tool.confirm" custom event when an interrupt key carries this prefix.
-	ToolConfirmInterruptKey = "tool_confirm"
-
+	ToolConfirmInterruptKeyPrefix = "tool_confirm.interrupt"
 	// ToolConfirmCustomEventName is the AG-UI custom event name carrying the tool confirm card payload.
 	ToolConfirmCustomEventName = "tool.confirm"
 

@@ -27,7 +27,6 @@ import (
 	"testing"
 
 	"hcm/cmd/agent-server/logics/agent/hitl"
-	agenttool "hcm/cmd/agent-server/logics/tool"
 	woatypes "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
@@ -109,9 +108,10 @@ func TestApplyGateBuildPayloadProxyWrapped(t *testing.T) {
 func TestApplyGateOnResumeProxyEditedArgsPreservesEnvelope(t *testing.T) {
 	// proxy 信封下编辑参数后，回写必须保留 tool_name / schema_token，仅替换 parameters，
 	// 否则 execute_tool 的 schema_token 校验会拒绝提单。
-	// forwardedProps.resumeValue carries the confirmed args JSON directly (no action wrapper).
+	// proceed 通过 AppendMessages 关闭原始 call 并注入带新 ID 的 tool_call。
 	g := newTestCreateCvmApplyGate(&woatypes.CheckApplyOrderResp{Pass: true}, nil)
-	res, err := g.OnResume(context.Background(), newApplyProxyToolCall(),
+	original := newApplyProxyToolCall()
+	res, err := g.OnResume(context.Background(), original,
 		`{"path_param":{"bk_biz_id":100},"body_param":{"remark":"edited"}}`)
 	if err != nil {
 		t.Fatalf("err = %v", err)
@@ -119,12 +119,18 @@ func TestApplyGateOnResumeProxyEditedArgsPreservesEnvelope(t *testing.T) {
 	if res.Next != enumor.CvmApplyNodeTool {
 		t.Errorf("next = %q, want tool", res.Next)
 	}
-	if len(res.MessageOps) != 1 {
-		t.Fatalf("message ops = %d, want 1", len(res.MessageOps))
+	if len(res.AppendMessages) != 2 {
+		t.Fatalf("append messages = %d, want 2 (close original + inject new call)", len(res.AppendMessages))
 	}
-	op, ok := res.MessageOps[0].(agenttool.ReplaceToolCallArgs)
-	if !ok {
-		t.Fatalf("op type = %T, want tool.ReplaceToolCallArgs", res.MessageOps[0])
+	if res.AppendMessages[0].Role != model.RoleTool || res.AppendMessages[0].ToolID != original.ID {
+		t.Fatalf("first message should close original tool call, got %+v", res.AppendMessages[0])
+	}
+	if res.AppendMessages[1].Role != model.RoleAssistant || len(res.AppendMessages[1].ToolCalls) != 1 {
+		t.Fatalf("second message should inject new tool call, got %+v", res.AppendMessages[1])
+	}
+	newCall := res.AppendMessages[1].ToolCalls[0]
+	if newCall.ID == "" || newCall.ID == original.ID {
+		t.Errorf("new tool call id = %q, want regenerated id", newCall.ID)
 	}
 
 	var envelope struct {
@@ -132,7 +138,7 @@ func TestApplyGateOnResumeProxyEditedArgsPreservesEnvelope(t *testing.T) {
 		SchemaToken string         `json:"schema_token"`
 		Parameters  map[string]any `json:"parameters"`
 	}
-	if err = json.Unmarshal(op.NewArgs, &envelope); err != nil {
+	if err = json.Unmarshal(newCall.Function.Arguments, &envelope); err != nil {
 		t.Fatalf("rewritten args not a valid envelope: %v", err)
 	}
 	if envelope.ToolName != "bkhcm-devhk/create_biz_apply" || envelope.SchemaToken != "tok-123" {
@@ -163,8 +169,8 @@ func TestApplyGateBuildPayload(t *testing.T) {
 }
 
 func TestApplyGateEventKind(t *testing.T) {
-	if g := newCreateCvmApplyGate(nil); g.EventKind() != constant.ToolConfirmInterruptKey {
-		t.Errorf("EventKind = %q, want %q", g.EventKind(), constant.ToolConfirmInterruptKey)
+	if g := newCreateCvmApplyGate(nil); g.EventKind() != constant.ToolConfirmCreateCvmApplyInterruptKey {
+		t.Errorf("EventKind = %q, want %q", g.EventKind(), constant.ToolConfirmCreateCvmApplyInterruptKey)
 	}
 }
 
@@ -174,18 +180,26 @@ func TestApplyGateOnResume(t *testing.T) {
 
 	t.Run("forwarded args with biz_id proceeds to tool", func(t *testing.T) {
 		// forwardedProps.resumeValue contains the full confirmed args JSON (no action wrapper).
-		res, err := g.OnResume(ctx, newApplyToolCall(), confirmArgsJSON)
+		original := newApplyToolCall()
+		res, err := g.OnResume(ctx, original, confirmArgsJSON)
 		if err != nil {
 			t.Fatalf("err = %v", err)
 		}
 		if res.Next != enumor.CvmApplyNodeTool {
 			t.Errorf("next = %q, want tool", res.Next)
 		}
-		if len(res.MessageOps) != 1 {
-			t.Fatalf("message ops = %d, want 1 (rewrite with confirmed args)", len(res.MessageOps))
+		if len(res.AppendMessages) != 2 {
+			t.Fatalf("append messages = %d, want 2 (close original + inject new call)",
+				len(res.AppendMessages))
 		}
-		if _, ok := res.MessageOps[0].(agenttool.ReplaceToolCallArgs); !ok {
-			t.Errorf("op type = %T, want tool.ReplaceToolCallArgs", res.MessageOps[0])
+		if res.AppendMessages[0].Role != model.RoleTool || res.AppendMessages[0].ToolID != original.ID {
+			t.Errorf("first message should close original tool call, got %+v", res.AppendMessages[0])
+		}
+		if len(res.AppendMessages[1].ToolCalls) != 1 {
+			t.Fatalf("second message should inject regenerated tool call")
+		}
+		if res.AppendMessages[1].ToolCalls[0].ID == original.ID {
+			t.Errorf("new tool call id should differ from original %q", original.ID)
 		}
 	})
 

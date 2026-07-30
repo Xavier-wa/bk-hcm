@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"hcm/cmd/agent-server/logics"
+	cvmapply "hcm/cmd/agent-server/logics/agent/cvm_apply"
 	authlogic "hcm/cmd/agent-server/logics/auth"
 	"hcm/cmd/agent-server/logics/prompt"
 	"hcm/cmd/agent-server/logics/skill"
@@ -75,6 +76,7 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/server/agui"
 	"trpc.group/trpc-go/trpc-agent-go/server/agui/adapter"
 	aguirunner "trpc.group/trpc-go/trpc-agent-go/server/agui/runner"
+	agentsession "trpc.group/trpc-go/trpc-agent-go/session"
 	"trpc.group/trpc-go/trpc-agent-go/tool"
 )
 
@@ -287,7 +289,7 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 		agui.WithAGUIRunnerOptions(
 			aguirunner.WithUserIDResolver(resolveAGUIUserID),
 			aguirunner.WithRunOptionResolver(
-				makeRunOptionResolver(s.runTime.CheckpointSaver(),
+				makeRunOptionResolver(s.runTime.CheckpointSaver(), s.runTime.SessionSvc(), svcCfg.AppName,
 					svcCfg.AllowedModelNames(), s.runTime.DynamicToolFilter())),
 			aguirunner.WithTranslatorFactory(aguievent.NewCustomTranslator),
 			// Auto-cancel the LLM call when the SSE connection drops (client disconnects).
@@ -728,8 +730,8 @@ func resolveAGUIUserID(ctx context.Context, _ *adapter.RunAgentInput) (string, e
 //
 // Tool filtering: when toolFilter is non-nil, injects agent.WithToolFilter so
 // that each Run performs index-based tool retrieval.
-func makeRunOptionResolver(saver graph.CheckpointSaver, allowedModels []string,
-	toolFilter tool.FilterFunc) aguirunner.RunOptionResolver {
+func makeRunOptionResolver(saver graph.CheckpointSaver, sessionSvc agentsession.Service, appName string,
+	allowedModels []string, toolFilter tool.FilterFunc) aguirunner.RunOptionResolver {
 
 	allowed := make(map[string]struct{}, len(allowedModels))
 	for _, m := range allowedModels {
@@ -743,10 +745,22 @@ func makeRunOptionResolver(saver graph.CheckpointSaver, allowedModels []string,
 			graph.CfgKeyLineageID: input.ThreadID,
 		}
 
+		// 注入 rid：子图 input/output mapper 只有 graph.State、无 ctx，
+		// 靠此 key 给 [hcm graph trace] 日志带上 rid；非业务持久化字段。
+		runtimeState[constant.SessionRidStateKey] = rest.RidFromContext(ctx)
+
 		// Inject bk_biz_id from session context when the session belongs to a business.
 		bkBizID := authlogic.BkBizIDFromContext(ctx)
 		if bkBizID > 0 {
 			runtimeState[constant.SessionBkBizIDStateKey] = bkBizID
+		}
+
+		// 每轮 run 起点从 session 后端回填已选账号，写入 RuntimeState[account_id]，
+		// 使 instruction prompt 从首次渲染起即带账号；与 account_select 写入侧 key 一致。
+		if sessionSvc != nil {
+			if accountID := loadSelectedAccountID(ctx, sessionSvc, input, appName); accountID != "" {
+				runtimeState[constant.SessionAccountIDTempKey] = accountID
+			}
 		}
 
 		// Auto-detect interrupted checkpoint and prepare resume (HITL / fallback interrupt).
@@ -788,13 +802,40 @@ func makeRunOptionResolver(saver graph.CheckpointSaver, allowedModels []string,
 	}
 }
 
+// loadSelectedAccountID 从 session 后端读取 account_select 持久化的 account_id。
+// 供 makeRunOptionResolver 在 run 起点回填 RuntimeState；读失败或不存在时返回空串，不阻断流程。
+// session key 须与 cvm_apply 写入侧一致（BuildAGUISessionKey）。
+func loadSelectedAccountID(ctx context.Context, sessionSvc agentsession.Service, input *adapter.RunAgentInput,
+	appName string) string {
+
+	rid := rest.RidFromContext(ctx)
+	key := cvmapply.BuildAGUISessionKey(ctx, appName, input.ThreadID)
+	sess, err := sessionSvc.GetSession(ctx, key)
+	if err != nil || sess == nil {
+		// 读后端失败（含会话不存在）不阻断：走正常账号选择分支。
+		if err != nil {
+			logs.Warnf("load selected account: GetSession failed, key=%+v err=%v, rid: %s", key, err, rid)
+		}
+		return ""
+	}
+	raw, ok := sess.GetState(constant.SessionSelectedAccountIDStateKey)
+	if !ok || len(raw) == 0 {
+		return ""
+	}
+	return string(raw)
+}
+
 // tryPrepareAutoResume checks if the thread has an interrupted checkpoint and, if
 // so, injects the checkpointID and resume value into runtimeState so the graph
 // continues from the interrupt point.
 //
-// resume command 始终承载最新的用户消息文本（非格式化、无法预期的自由输入）。
-// forwardedProps 中的结构化内容（如选中的 account_id）则写入独立的
-// StateKeyForwardedResumeValue，与用户输入区分开，供节点单独消费。
+// 恢复来源区分（command=自由输入 / forwarded=结构化协议）：
+//   - StateKeyForwardedResumeValue 经 inv.RunOptions.RuntimeState（请求级、每 Run 重建）服务
+//     account_select / hitl / after_tool_hitl 各中断节点读取前端结构化协议；该 key 不再经子图
+//     持久化 state（由 makeSubgraphInputMapper 在子图入口剥键），每次恢复读到的都是当轮值，
+//     不会因旧 checkpoint 残留而产生脏读；
+//   - resume command 经 graph.Interrupt 返回给中断节点，按请求注入，对应当前用户自由文本输入
+//     （如 human_confirm 回复、after_tool_hitl 的自由文本回退）。
 //
 // NOTE: mergeInitialStateNonInternal skips keys starting with "_", so
 // StateKeyCommand (processed by processResumeCommand) must be used instead of
@@ -819,18 +860,32 @@ func tryPrepareAutoResume(saver graph.CheckpointSaver, ctx context.Context, inpu
 
 	runtimeState[graph.CfgKeyCheckpointID] = tuple.Checkpoint.ID
 
-	// 前端通过 forwardedProps 传入的结构化数据（如选中的 account_id）写入独立的 runtime-state key。
-	// resume command 始终承载用户自由输入文本，是非格式化、无法预期的内容，二者必须区分开，
-	// 避免结构化内容覆盖用户输入。节点可按需从 StateKeyForwardedResumeValue 单独消费结构化值。
+	// forwardedProps.resumeValue 写入两处，服务不同消费场景：
+	//
+	// 1. StateKeyForwardedResumeValue — 经 inv.RunOptions.RuntimeState（请求级、每 Run 重建）
+	//    服务各中断节点读取前端结构化协议（account_select 解析 account_id、hitl 提单确认、
+	//    after_tool_hitl 方案选择等）。该 key 不进入子图持久化 state（子图入口剥键），
+	//    故每次恢复读到的都是当轮值，不会脏读；
+	// 2. resume command — 经 graph.Interrupt 返回给中断节点，按请求注入，代表本轮操作，
+	//    适用于子图内同轮多次中断恢复（after_tool_hitl、hitl 提单确认等）。
 	forwardedResumeVal, hasForwarded := forwardedProps[constant.ForwardedPropResumeValue]
 	if hasForwarded && forwardedResumeVal != nil {
 		runtimeState[constant.StateKeyForwardedResumeValue] = forwardedResumeVal
-		logs.Infof("auto-resume: stored forwardedProps resume value into runtime state %v, rid: %s",
+		if fwdStr, ok := forwardedResumeVal.(string); ok && fwdStr != "" {
+			// 结构化 forwarded 值同时作为 resume command，使 graph.Interrupt 能原样返回给中断节点。
+			// NOTE: mergeInitialStateNonInternal skips keys starting with "_",
+			// so we must use StateKeyCommand (processed by processResumeCommand)
+			// instead of writing ResumeChannel directly.
+			runtimeState[graph.StateKeyCommand] = graph.NewResumeCommand().WithResume(fwdStr)
+			logs.Infof("auto-resume: set resume command from forwarded value (len=%d), rid: %s",
+				len(fwdStr), rid)
+			return runtimeState
+		}
+		logs.Infof("auto-resume: stored non-string forwardedProps resume value type=%T, rid: %s",
 			forwardedResumeVal, rid)
 	}
 
-	// resume command 来自最新的用户消息文本；即便前端通过 forwardedProps 传结构化数据，
-	// 仍需设置 resume command 以驱动 graph 从中断点继续。
+	// 无 forwarded 结构化值时，用用户消息文本驱动 resume（如 human_confirm 自由文本回复）。
 	var userInput string
 	if len(input.Messages) > 0 {
 		lastMsg := input.Messages[len(input.Messages)-1]
@@ -839,9 +894,6 @@ func tryPrepareAutoResume(saver graph.CheckpointSaver, ctx context.Context, inpu
 		}
 	}
 	if userInput != "" {
-		// NOTE: mergeInitialStateNonInternal skips keys starting with "_",
-		// so we must use StateKeyCommand (processed by processResumeCommand)
-		// instead of writing ResumeChannel directly.
 		runtimeState[graph.StateKeyCommand] = graph.NewResumeCommand().WithResume(userInput)
 		logs.Infof("auto-resume: set resume command from user input: %q, rid: %s", userInput, rid)
 	}

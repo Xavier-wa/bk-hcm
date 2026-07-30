@@ -197,7 +197,7 @@ func New(clientSet *client.ClientSet) (*Runtime, error) {
 
 	runnerOpts := buildRunnerOpts(sessionSvc, memorySvc)
 	agUIRunner, err := newAGUIRunner(defaultMdl, modelsMap, mcpToolSets, skillMgr, promptMgr.Store, runnerOpts,
-		&toolSetup.toolProxies, checkpointSaver, clientSet)
+		&toolSetup.toolProxies, checkpointSaver, clientSet, sessionSvc)
 	if err != nil {
 		return nil, fmt.Errorf("build AGUI runner: %w", err)
 	}
@@ -335,13 +335,29 @@ func buildRunnerOpts(sessionSvc session.Service, memorySvc memory.Service) []run
 
 func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Model, mcpToolSets *tool.MCPToolSet,
 	skillMgr *skill.Manager, promptStore *prompt.Store, runnerOpts []runner.Option, toolProxies *toolproxy.ToolProxies,
-	checkpointSaver graph.CheckpointSaver, clientSet *client.ClientSet) (runner.Runner, error) {
+	checkpointSaver graph.CheckpointSaver, clientSet *client.ClientSet, sessionSvc session.Service) (
+	runner.Runner, error) {
 
 	aguiCfg := cc.AgentServer().AGUI
 
-	var skillRepo skillpkg.Repository
-	if skillMgr != nil {
-		skillRepo = skillMgr.Repository
+	// Build per-scene skill repositories. All scenes currently share the same underlying
+	// repository; the SkillRepos structure allows independent per-scene repos in the future.
+	if skillMgr == nil {
+		logs.Errorf("[new agui runner] skill manager is nil")
+		return nil, fmt.Errorf("[new agui runner] skill manager is nil")
+	}
+	var (
+		skillRepos *skill.SkillRepos
+		err        error
+	)
+	skillRepos, err = skill.NewSkillRepos(skillMgr.Repository,
+		enumor.IntentTypeHostApply,
+		enumor.IntentTypeResourceQuery,
+		enumor.IntentTypeChat,
+	)
+	if err != nil {
+		logs.Errorf("[new agui runner] build skill repos: %v", err)
+		return nil, fmt.Errorf("[new agui runner] build skill repos: %w", err)
 	}
 
 	// When any MCP toolset requires per-request authentication (e.g. type "bkaidev"),
@@ -353,8 +369,8 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 	var agt trpcagent.Agent
 	switch aguiCfg.Model.Mode {
 	case enumor.AgentModeGraph:
-		compiledGraph, subAgents, err := agent.BuildGraph(defaultMdl, skillRepo, mcpToolSets, toolProxies,
-			aguiCfg.AppName, aguiCfg.Model, promptStore, clientSet, checkpointSaver)
+		compiledGraph, subAgents, err := agent.BuildGraph(defaultMdl, skillRepos, mcpToolSets, toolProxies,
+			aguiCfg.AppName, aguiCfg.Model, promptStore, clientSet, sessionSvc, checkpointSaver)
 		if err != nil {
 			return nil, fmt.Errorf("build graph: %w", err)
 		}
@@ -364,8 +380,12 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 		}
 	default:
 		promptCfg := cc.AgentServer().Prompt
+		var llmSkillRepo skillpkg.Repository
+		if skillMgr != nil {
+			llmSkillRepo = skillMgr.Repository
+		}
 		agt = agent.NewLLMAgent(defaultMdl, modelsMap, aguiCfg.Model,
-			promptCfg.SystemPrompt, promptCfg.Instruction, skillRepo, mcpToolSets.TS,
+			promptCfg.SystemPrompt, promptCfg.Instruction, llmSkillRepo, mcpToolSets.TS,
 			refreshOnRun, promptStore)
 	}
 

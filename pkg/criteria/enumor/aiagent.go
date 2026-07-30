@@ -200,12 +200,60 @@ func (m MCPFilterMode) Validate() error {
 	return nil
 }
 
+// MainGraphAgentNode is the name of a built-in agent node in the main graph.
+type MainGraphAgentNode string
+
+const (
+	// MainGraphAgentNodeSceneDispatch is the scene dispatch routing hub node.
+	MainGraphAgentNodeSceneDispatch MainGraphAgentNode = "scene_dispatch"
+	// MainGraphAgentNodeIntentRecognition is the intent recognition node.
+	MainGraphAgentNodeIntentRecognition MainGraphAgentNode = "intent_recognition"
+	// MainGraphAgentNodeFallback is the fallback interrupt node.
+	MainGraphAgentNodeFallback MainGraphAgentNode = "fallback"
+)
+
+// Validate validates the main graph agent node.
+func (n MainGraphAgentNode) Validate() error {
+	switch n {
+	case MainGraphAgentNodeSceneDispatch, MainGraphAgentNodeIntentRecognition, MainGraphAgentNodeFallback:
+		return nil
+	default:
+		return fmt.Errorf("unsupported main graph agent node: %s", n)
+	}
+}
+
+// SubgraphAgentNode is the name of a subgraph agent node in the main graph
+// (AddSubgraphNode / AddAgentNode).
+type SubgraphAgentNode string
+
+const (
+	// SubgraphAgentNodeHostApply is the host apply subgraph agent node.
+	SubgraphAgentNodeHostApply SubgraphAgentNode = "host_apply"
+	// SubgraphAgentNodeResourceQuery is the resource query subgraph agent node.
+	SubgraphAgentNodeResourceQuery SubgraphAgentNode = "resource_query"
+)
+
+// Validate validates the subgraph agent node.
+func (n SubgraphAgentNode) Validate() error {
+	switch n {
+	case SubgraphAgentNodeHostApply, SubgraphAgentNodeResourceQuery:
+		return nil
+	default:
+		return fmt.Errorf("unsupported subgraph agent node: %s", n)
+	}
+}
+
+// IsSubgraphAgentNode reports whether nodeID is a main-graph subgraph agent node.
+// Interrupt metadata on these nodes is a propagated copy from an inner subgraph node
+// that has already reported the interrupt.
+func IsSubgraphAgentNode(nodeID string) bool {
+	return SubgraphAgentNode(nodeID).Validate() == nil
+}
+
 // ResourceQueryNode is the name of a graph node in the resource query workflow.
 type ResourceQueryNode string
 
 const (
-	// ResourceQueryGraphNode is the name of the graph node in the resource query workflow.
-	ResourceQueryGraphNode ResourceQueryNode = "resource_query"
 	// ResourceQueryNodeLLM is the LLM node.
 	ResourceQueryNodeLLM ResourceQueryNode = "llm"
 	// ResourceQueryNodeFallback is the fallback node.
@@ -219,12 +267,11 @@ const (
 // Validate validates the resource query node.
 func (n ResourceQueryNode) Validate() error {
 	switch n {
-	case ResourceQueryGraphNode, ResourceQueryNodeLLM, ResourceQueryNodeFallback,
-		ResourceQueryNodeTool, ResourceQueryNodeHITL:
+	case ResourceQueryNodeLLM, ResourceQueryNodeFallback, ResourceQueryNodeTool, ResourceQueryNodeHITL:
+		return nil
 	default:
 		return fmt.Errorf("unsupported resource query node: %s", n)
 	}
-	return nil
 }
 
 // CvmApplyNode is the name of a graph node in the CVM apply workflow.
@@ -242,16 +289,19 @@ const (
 	// CvmApplyNodeAfterToolHITL is the after-tool human-in-the-loop node, which interrupts
 	// after recommend tools to let the user pick a plan.
 	CvmApplyNodeAfterToolHITL CvmApplyNode = "after_tool_hitl"
+	// CvmApplyNodeHITL is the human-in-the-loop node in the cvm subgraph.
+	CvmApplyNodeHITL CvmApplyNode = "hitl"
 )
 
 // Validate validates the CVM apply node.
 func (n CvmApplyNode) Validate() error {
 	switch n {
-	case CvmApplyNodeLLM, CvmApplyNodeAccountSelect, CvmApplyNodeFallback, CvmApplyNodeTool, CvmApplyNodeAfterToolHITL:
+	case CvmApplyNodeLLM, CvmApplyNodeAccountSelect, CvmApplyNodeFallback, CvmApplyNodeTool, CvmApplyNodeAfterToolHITL,
+		CvmApplyNodeHITL:
+		return nil
 	default:
 		return fmt.Errorf("unsupported CVM apply node: %s", n)
 	}
-	return nil
 }
 
 // ToolName is the name of an MCP tool.

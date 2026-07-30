@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 	"hcm/pkg/tools/util"
@@ -178,6 +179,9 @@ type instructionTemplateData struct {
 	// AccountID is the cloud account ID identified by the account_select graph node.
 	// Empty when no account has been selected yet.
 	AccountID string
+	// SessionTag is the session-level scene tag (e.g. host_apply). Empty for an untagged
+	// session whose intent has not yet been committed to RuntimeState this run.
+	SessionTag string
 }
 
 // renderInstructionTemplate executes the instruction Go template with runtime values
@@ -197,11 +201,27 @@ func renderInstructionTemplate(ctx context.Context, tmpl string) string {
 	}
 
 	if inv, ok := trpcagent.InvocationFromContext(ctx); ok && inv != nil && inv.RunOptions.RuntimeState != nil {
-		if bkBizID, ok := inv.RunOptions.RuntimeState[constant.SessionBkBizIDStateKey].(int64); ok && bkBizID > 0 {
-			data.BkBizID = strconv.FormatInt(bkBizID, 10)
+		// bk_biz_id is stored as int64 but becomes float64 after checkpoint JSON deserialization.
+		switch bv := inv.RunOptions.RuntimeState[constant.SessionBkBizIDStateKey].(type) {
+		case int64:
+			if bv > 0 {
+				data.BkBizID = strconv.FormatInt(bv, 10)
+			}
+		case float64:
+			if int64(bv) > 0 {
+				data.BkBizID = strconv.FormatInt(int64(bv), 10)
+			}
 		}
 		if accountID, ok := inv.RunOptions.RuntimeState[constant.SessionAccountIDTempKey].(string); ok {
 			data.AccountID = accountID
+		}
+		// session_tag 在 RuntimeState 中可能为 enumor.IntentType 或 string（见 makeRunOptionResolver
+		// 的两条注入路径），两种类型都按字符串渲染。
+		switch tag := inv.RunOptions.RuntimeState[constant.StateKeySessionTag].(type) {
+		case enumor.IntentType:
+			data.SessionTag = string(tag)
+		case string:
+			data.SessionTag = tag
 		}
 	}
 

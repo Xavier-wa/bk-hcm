@@ -21,6 +21,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"hcm/cmd/agent-server/logics/agent/hitl"
@@ -57,8 +58,8 @@ func TestSceneNodeTarget(t *testing.T) {
 		scene enumor.IntentType
 		want  string
 	}{
-		{enumor.IntentTypeHostApply, "account_select"},
-		{enumor.IntentTypeResourceQuery, "resource_query"},
+		{enumor.IntentTypeHostApply, string(enumor.SubgraphAgentNodeHostApply)},
+		{enumor.IntentTypeResourceQuery, string(enumor.SubgraphAgentNodeResourceQuery)},
 	}
 	for _, tc := range tests {
 		if got := sceneNodeTarget(tc.scene); got != tc.want {
@@ -137,7 +138,7 @@ func newTestRegistry(enabled bool) *hitl.Registry {
 }
 
 func TestMakeRoutingFuncGate(t *testing.T) {
-	route := makeRoutingFunc(newTestRegistry(true))
+	route := makeSubgraphRoutingFunc(string(enumor.SubgraphAgentNodeHostApply), newTestRegistry(true))
 	ctx := context.Background()
 
 	gatedCall := trpcmodel.ToolCall{
@@ -235,7 +236,7 @@ func TestMakeRoutingFuncGate(t *testing.T) {
 }
 
 func TestMakeRoutingFuncGateDisabled(t *testing.T) {
-	route := makeRoutingFunc(newTestRegistry(false))
+	route := makeSubgraphRoutingFunc(string(enumor.SubgraphAgentNodeHostApply), newTestRegistry(false))
 
 	state := graph.State{graph.StateKeyMessages: []trpcmodel.Message{
 		{Role: trpcmodel.RoleAssistant, ToolCalls: []trpcmodel.ToolCall{
@@ -262,9 +263,9 @@ func TestMakeSceneDispatchRoutingFunc(t *testing.T) {
 		wantTarget string
 	}{
 		{
-			name:       "supported session_tag routes to account_select",
+			name:       "supported session_tag routes to host_apply subgraph",
 			state:      graph.State{constant.StateKeySessionTag: enumor.IntentTypeHostApply},
-			wantTarget: string(enumor.CvmApplyNodeAccountSelect),
+			wantTarget: string(enumor.SubgraphAgentNodeHostApply),
 		},
 		{
 			name:       "resource_query session_tag routes to resource_query subgraph",
@@ -274,17 +275,17 @@ func TestMakeSceneDispatchRoutingFunc(t *testing.T) {
 		{
 			name:       "this-turn unsupported intent routes to fallback",
 			state:      graph.State{constant.StateKeyIntent: string(enumor.IntentTypeChat)},
-			wantTarget: "fallback",
+			wantTarget: string(enumor.MainGraphAgentNodeFallback),
 		},
 		{
 			name:       "supported intent without committed tag routes to intent_recognition",
 			state:      graph.State{constant.StateKeyIntent: string(enumor.IntentTypeResourceQuery)},
-			wantTarget: "intent_recognition",
+			wantTarget: string(enumor.MainGraphAgentNodeIntentRecognition),
 		},
 		{
 			name:       "no tag no intent routes to intent_recognition",
 			state:      graph.State{},
-			wantTarget: "intent_recognition",
+			wantTarget: string(enumor.MainGraphAgentNodeIntentRecognition),
 		},
 	}
 
@@ -312,7 +313,8 @@ func TestSceneDispatchNodeThenRouting(t *testing.T) {
 		intent     enumor.IntentType
 		wantTarget string
 	}{
-		{name: "host_apply dispatch then route to llm", intent: enumor.IntentTypeHostApply, wantTarget: "llm"},
+		{name: "host_apply dispatch then route to host_apply subgraph", intent: enumor.IntentTypeHostApply,
+			wantTarget: string(enumor.SubgraphAgentNodeHostApply)},
 		{name: "resource_query dispatch then route to subgraph", intent: enumor.IntentTypeResourceQuery,
 			wantTarget: "resource_query"},
 	}
@@ -460,5 +462,230 @@ func TestBuildFallbackResumeDeltaClearsUserInput(t *testing.T) {
 				t.Fatalf("StateKeyUserInput = %q, want empty string", s)
 			}
 		})
+	}
+}
+
+// TestMakeSubgraphInputMapperStripsForwardedResumeValue verifies the entry-point key stripping:
+// StateKeyForwardedResumeValue must NOT enter the persisted subgraph state. The value is rebuilt
+// into inv.RunOptions.RuntimeState on every resume Run by tryPrepareAutoResume, so the subgraph
+// state dropping it forces mergeInitialStateNonInternal to backfill the current round's value and
+// avoids stale-checkpoint dirty reads on the after_tool_hitl loop edge.
+func TestMakeSubgraphInputMapperStripsForwardedResumeValue(t *testing.T) {
+	mapper := makeSubgraphInputMapper("host_apply")
+	parent := graph.State{
+		graph.StateKeyMessages:                []trpcmodel.Message{{Role: trpcmodel.RoleUser, Content: "hi"}},
+		graph.StateKeyUserInput:               "再申请一单试试",
+		constant.StateKeyForwardedResumeValue: `{"plan":"x"}`,
+		graph.CfgKeyCheckpointID:              "parent-cp",
+	}
+
+	child := mapper(parent)
+
+	if _, exists := child[constant.StateKeyForwardedResumeValue]; exists {
+		t.Errorf("subgraph child state must not contain %q (entry-point strip required)",
+			constant.StateKeyForwardedResumeValue)
+	}
+	// Sanity: regular (non-internal) keys still pass through, and the framework-internal
+	// checkpoint id is also stripped.
+	if _, exists := child[graph.CfgKeyCheckpointID]; exists {
+		t.Errorf("subgraph child state must not contain %q", graph.CfgKeyCheckpointID)
+	}
+	if _, exists := child[graph.StateKeyUserInput]; exists {
+		t.Errorf("subgraph child state must not contain %q (avoid createInitialState overwrite)",
+			graph.StateKeyUserInput)
+	}
+	if _, exists := child[graph.StateKeyMessages]; !exists {
+		t.Errorf("subgraph child state should preserve normal keys like %q", graph.StateKeyMessages)
+	}
+}
+
+func TestMakeSubgraphInputMapperDeepCopiesMessages(t *testing.T) {
+	mapper := makeSubgraphInputMapper("resource_query")
+	parentMsgs := []trpcmodel.Message{{Role: trpcmodel.RoleUser, Content: "hi"}}
+	parent := graph.State{graph.StateKeyMessages: parentMsgs}
+
+	child := mapper(parent)
+	childMsgs, ok := child[graph.StateKeyMessages].([]trpcmodel.Message)
+	if !ok {
+		t.Fatalf("child messages type = %T, want []model.Message", child[graph.StateKeyMessages])
+	}
+	if len(childMsgs) != 1 {
+		t.Fatalf("child messages len = %d, want 1", len(childMsgs))
+	}
+
+	childMsgs[0].Content = "mutated"
+	if parentMsgs[0].Content != "hi" {
+		t.Fatalf("parent message mutated after child edit, got %q", parentMsgs[0].Content)
+	}
+	if &childMsgs[0] == &parentMsgs[0] {
+		t.Fatal("child messages should not share element pointers with parent")
+	}
+}
+
+func TestMakeSubgraphOutputMapperReturnsDeltaOnly(t *testing.T) {
+	mapper := makeSubgraphOutputMapper("resource_query")
+	parent := graph.State{
+		graph.StateKeyMessages: []trpcmodel.Message{
+			{Role: trpcmodel.RoleUser, Content: "q1"},
+			{Role: trpcmodel.RoleUser, Content: "q2"},
+		},
+	}
+	decoded := []trpcmodel.Message{
+		{Role: trpcmodel.RoleUser, Content: "q1"},
+		{Role: trpcmodel.RoleUser, Content: "q2"},
+		{Role: trpcmodel.RoleAssistant, Content: "thinking"},
+		{Role: trpcmodel.RoleTool, ToolID: "tooluse_a", Content: "skill-a"},
+		{Role: trpcmodel.RoleTool, ToolID: "tooluse_b", Content: "skill-b"},
+	}
+	raw, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatalf("marshal decoded messages failed, err: %v", err)
+	}
+
+	out := mapper(parent, graph.SubgraphResult{
+		RawStateDelta: map[string][]byte{graph.StateKeyMessages: raw},
+	})
+	delta, ok := out[graph.StateKeyMessages].([]trpcmodel.Message)
+	if !ok {
+		t.Fatalf("output messages type = %T, want []model.Message", out[graph.StateKeyMessages])
+	}
+	if len(delta) != 3 {
+		t.Fatalf("delta len = %d, want 3", len(delta))
+	}
+	if delta[0].Role != trpcmodel.RoleAssistant || delta[1].ToolID != "tooluse_a" || delta[2].ToolID != "tooluse_b" {
+		t.Fatalf("unexpected delta messages: %+v", delta)
+	}
+}
+
+func TestMakeSubgraphOutputMapperSkipsWhenNoGrowth(t *testing.T) {
+	mapper := makeSubgraphOutputMapper("resource_query")
+	parentMsgs := []trpcmodel.Message{{Role: trpcmodel.RoleUser, Content: "q1"}}
+	parent := graph.State{graph.StateKeyMessages: parentMsgs}
+	raw, err := json.Marshal(parentMsgs)
+	if err != nil {
+		t.Fatalf("marshal parent messages failed, err: %v", err)
+	}
+
+	out := mapper(parent, graph.SubgraphResult{
+		RawStateDelta: map[string][]byte{graph.StateKeyMessages: raw},
+	})
+	if out != nil {
+		t.Fatalf("expected nil output when decoded len <= parent len, got %+v", out)
+	}
+}
+
+func TestMakeSubgraphInputMapperUsesTurnNamespace(t *testing.T) {
+	mapper := makeSubgraphInputMapper("host_apply")
+	parentMsgs := []trpcmodel.Message{{Role: trpcmodel.RoleUser, Content: "我要申请主机"}}
+
+	// 首轮：父图无 turn 记录，input mapper 自增到 1，ns = host_apply_1。
+	child1 := mapper(graph.State{graph.StateKeyMessages: parentMsgs})
+	ns1, _ := child1[graph.CfgKeyCheckpointNS].(string)
+	if ns1 != "host_apply_1" {
+		t.Fatalf("first round checkpoint ns = %q, want host_apply_1", ns1)
+	}
+	turn1, _ := child1[subgraphTurnKey("host_apply")].(int)
+	if turn1 != 1 {
+		t.Fatalf("first round child turn = %d, want 1", turn1)
+	}
+
+	// 第二轮：父图带有第一轮回填的 turn=1，input mapper 继续自增到 2，ns = host_apply_2。
+	// 关键：即便两轮父图消息数完全相同，ns 仍不同（不靠 len(msgs) 区分轮次）。
+	parent2 := graph.State{
+		graph.StateKeyMessages:        parentMsgs,
+		subgraphTurnKey("host_apply"): 1,
+	}
+	child2 := mapper(parent2)
+	ns2, _ := child2[graph.CfgKeyCheckpointNS].(string)
+	if ns2 != "host_apply_2" {
+		t.Fatalf("second round checkpoint ns = %q, want host_apply_2 (distinct from round 1 even with equal msg count)", ns2)
+	}
+	turn2, _ := child2[subgraphTurnKey("host_apply")].(int)
+	if turn2 != 2 {
+		t.Fatalf("second round child turn = %d, want 2", turn2)
+	}
+}
+
+func TestMakeSubgraphOutputMapperFeedsTurnBackToParent(t *testing.T) {
+	mapper := makeSubgraphOutputMapper("host_apply")
+	// 子图完成态 RawStateDelta 携带本轮自增后的 turn=2（与 messages 同口径由框架序列化）。
+	parentMsgs := []trpcmodel.Message{{Role: trpcmodel.RoleUser, Content: "q1"}}
+	decoded := []trpcmodel.Message{
+		{Role: trpcmodel.RoleUser, Content: "q1"},
+		{Role: trpcmodel.RoleAssistant, Content: "r1"},
+	}
+	rawMsgs, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatalf("marshal decoded messages failed, err: %v", err)
+	}
+	// RawStateDelta 是 map[string][]byte，需包含 turn key 以模拟子图状态回填。
+	turnRaw, err := json.Marshal(2)
+	if err != nil {
+		t.Fatalf("marshal turn failed, err: %v", err)
+	}
+	rawDelta := map[string][]byte{
+		graph.StateKeyMessages:        rawMsgs,
+		subgraphTurnKey("host_apply"): turnRaw,
+	}
+
+	out := mapper(graph.State{graph.StateKeyMessages: parentMsgs}, graph.SubgraphResult{RawStateDelta: rawDelta})
+	if out == nil {
+		t.Fatal("expected non-nil output when decoded grows, got nil")
+	}
+	// turn 必须随 messages 一起回填父图，供下一轮 input mapper 续递增。
+	gotTurn, ok := out[subgraphTurnKey("host_apply")].(int)
+	if !ok {
+		t.Fatalf("output missing turn key %q", subgraphTurnKey("host_apply"))
+	}
+	if gotTurn != 2 {
+		t.Fatalf("output turn = %d, want 2", gotTurn)
+	}
+}
+
+func TestMakeSubgraphOutputMapperFeedsTurnBackWhenNoGrowth(t *testing.T) {
+	mapper := makeSubgraphOutputMapper("host_apply")
+	// 零账号路径：子图未新增 assistant 消息（decoded == parent），但 turn 已自增到 1。
+	// 即便无消息可 merge，turn 也必须回填父图，否则下一轮复用同一 namespace 撞已结束 checkpoint。
+	parentMsgs := []trpcmodel.Message{{Role: trpcmodel.RoleUser, Content: "申请一台主机"}}
+	rawMsgs, err := json.Marshal(parentMsgs)
+	if err != nil {
+		t.Fatalf("marshal parent messages failed, err: %v", err)
+	}
+	turnRaw, err := json.Marshal(1)
+	if err != nil {
+		t.Fatalf("marshal turn failed, err: %v", err)
+	}
+	out := mapper(graph.State{graph.StateKeyMessages: parentMsgs}, graph.SubgraphResult{
+		RawStateDelta: map[string][]byte{
+			graph.StateKeyMessages:        rawMsgs,
+			subgraphTurnKey("host_apply"): turnRaw,
+		},
+	})
+	if out == nil {
+		t.Fatal("expected turn feedback when subgraph ends without message growth, got nil")
+	}
+	// 无增长场景不应带回 messages delta，只回填 turn。
+	if _, ok := out[graph.StateKeyMessages]; ok {
+		t.Fatalf("no-growth output must not carry messages delta, got %+v", out[graph.StateKeyMessages])
+	}
+	gotTurn, ok := out[subgraphTurnKey("host_apply")].(int)
+	if !ok || gotTurn != 1 {
+		t.Fatalf("output turn = %v ok=%v, want 1", out[subgraphTurnKey("host_apply")], ok)
+	}
+}
+
+func TestMakeSubgraphOutputMapperNoGrowthNoTurnReturnsNil(t *testing.T) {
+	mapper := makeSubgraphOutputMapper("host_apply")
+	// 无增长且 RawStateDelta 未携带 turn 时，保持原有「跳过」语义返回 nil。
+	parentMsgs := []trpcmodel.Message{{Role: trpcmodel.RoleUser, Content: "q1"}}
+	rawMsgs, err := json.Marshal(parentMsgs)
+	if err != nil {
+		t.Fatalf("marshal parent messages failed, err: %v", err)
+	}
+	out := mapper(graph.State{graph.StateKeyMessages: parentMsgs}, graph.SubgraphResult{
+		RawStateDelta: map[string][]byte{graph.StateKeyMessages: rawMsgs},
+	})
+	if out != nil {
+		t.Fatalf("expected nil when no growth and no turn in delta, got %+v", out)
 	}
 }

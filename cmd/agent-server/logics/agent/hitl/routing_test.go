@@ -34,9 +34,10 @@ func TestMakeRoutingFunc(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name  string
-		state graph.State
-		want  string
+		name    string
+		state   graph.State
+		want    string
+		wantErr bool
 	}{
 		{
 			name:  "proceed routes to tool",
@@ -48,14 +49,20 @@ func TestMakeRoutingFunc(t *testing.T) {
 			state: graph.State{constant.StateKeyHITLRoute: enumor.CvmApplyNodeLLM},
 			want:  string(enumor.CvmApplyNodeLLM),
 		},
-		{name: "missing defaults to llm", state: graph.State{}, want: string(enumor.CvmApplyNodeLLM)},
-		{name: "unknown defaults to llm", state: graph.State{constant.StateKeyHITLRoute: "x"},
-			want: string(enumor.CvmApplyNodeLLM)},
+		{name: "missing route returns error", state: graph.State{}, wantErr: true},
+		{name: "unknown route returns error", state: graph.State{constant.StateKeyHITLRoute: "x"},
+			wantErr: true},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := route(ctx, tc.state)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("route() err = nil, want error")
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("route() err = %v", err)
 			}

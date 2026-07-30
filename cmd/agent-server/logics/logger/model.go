@@ -37,6 +37,14 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/model"
 )
 
+// GraphTraceLogPrefix 是主机申领等场景「可串联可追溯」日志的统一标志词。
+// 父图进入子图、子图出父图、调用 LLM 发送的 messages 三类日志均使用本标志词，
+// 以便通过单一关键词 grep 串联一次请求的完整消息流转。
+const GraphTraceLogPrefix = "[hcm graph trace]"
+
+// traceMessageTruncateLen 单条 message 内容超过该长度则裁剪，避免超长工具结果刷屏。
+const traceMessageTruncateLen = 100
+
 // MakeModelLoggerCallback creates model callbacks that log LLM reasoning (thinking)
 // and response content for debugging.
 func MakeModelLoggerCallback() model.AfterModelCallbackStructured {
@@ -96,6 +104,8 @@ func LLMRequestLogger(r *http.Request, next openaiopt.MiddlewareNext) (*http.Res
 
 			logLLMToolsSummary(body, rid)
 			logLLMTokenConfig(body, rid)
+			logTraceLLMRequestMessages(body, rid)
+			logLLMMessageDuplicateCheck(body, rid)
 
 			// Estimate input tokens: roughly chars/4 for English, chars/2 for Chinese;
 			// use chars/4 as a conservative lower-bound heuristic for mixed content.
@@ -116,6 +126,57 @@ func LLMRequestLogger(r *http.Request, next openaiopt.MiddlewareNext) (*http.Res
 		logs.Infof("LLM request: %s %s (no body), rid: %s", r.Method, r.URL.String(), rid)
 	}
 	return next(r)
+}
+
+// LogTraceMessages 以统一标志词 [hcm graph trace] 在【一条日志】里结构化打印整组 messages。
+// 每条消息用 [] 包裹（形如 [idx=.. role=.. tool_id=.. content=.. tool_calls=..]），整组再用
+// messages=[...] 包裹，保证一次调用只产生一行可追溯日志，便于按 rid 串联且不被拆分。
+// 单条 content 超过 traceMessageTruncateLen 时裁剪为前缀+省略提示，避免超长工具结果刷屏；
+// tag 区分阶段（subgraph_input/subgraph_output/llm_request 等），rid 用于请求级串联。
+func LogTraceMessages(tag, rid string, msgs []model.Message) {
+	if len(msgs) == 0 {
+		logs.Infof("%s tag=%s message_count=0 rid: %s", GraphTraceLogPrefix, tag, rid)
+		return
+	}
+	var payload strings.Builder
+	payload.WriteString("messages=[")
+	for i, m := range msgs {
+		if i > 0 {
+			payload.WriteString(" ")
+		}
+		payload.WriteString(formatTraceMessage(i, m))
+	}
+	payload.WriteString("]")
+	logs.Infof("%s tag=%s message_count=%d %s rid: %s",
+		GraphTraceLogPrefix, tag, len(msgs), payload.String(), rid)
+}
+
+// formatTraceMessage 将单条 message 格式化为带 [] 包裹的结构化字符串。
+// tool_calls 内部每一项同样用 [] 包裹，并解包 tool_proxy_* 代理转发的真实 MCP 工具名（real=）。
+func formatTraceMessage(i int, m model.Message) string {
+	content := m.Content
+	if len(content) > traceMessageTruncateLen {
+		content = content[:traceMessageTruncateLen] + fmt.Sprintf("...(truncated, total %d)", len(m.Content))
+	}
+	toolID := m.ToolID
+	if toolID == "" && len(m.ToolCalls) > 0 {
+		toolID = m.ToolCalls[0].ID
+	}
+	var toolCallsSummary strings.Builder
+	for _, tc := range m.ToolCalls {
+		fargs := string(tc.Function.Arguments)
+		if len(fargs) > traceMessageTruncateLen {
+			fargs = fargs[:traceMessageTruncateLen] + fmt.Sprintf("...(truncated, total %d)", len(fargs))
+		}
+		realField := ""
+		if realName := gjson.Get(string(tc.Function.Arguments), "tool_name").String(); realName != "" {
+			realField = " real=" + realName
+		}
+		toolCallsSummary.WriteString(fmt.Sprintf("[id=%s fn=%s%s args=%s]",
+			tc.ID, tc.Function.Name, realField, fargs))
+	}
+	return fmt.Sprintf("[idx=%d role=%s tool_id=%s content=%s tool_calls=%s]",
+		i, m.Role, toolID, content, toolCallsSummary.String())
 }
 
 // logLLMToolsSummary extracts tool names from the OpenAI request JSON and logs
@@ -162,4 +223,90 @@ func logLLMTokenConfig(body, rid string) {
 		model, msgCount, inputChars, stream.String(),
 		maxTokens.String(), maxTokens.Exists(),
 		maxCompletionTokens.String(), maxCompletionTokens.Exists(), rid)
+}
+
+// logTraceLLMRequestMessages parses the outgoing LLM request body and logs the whole messages
+// array in a SINGLE line under the unified [hcm graph trace] prefix, so the LLM send step can be
+// correlated with subgraph input/output logs by the same keyword. Each message is wrapped in [] and
+// the whole group in messages=[...]; each message's content is truncated when longer than
+// traceMessageTruncateLen to avoid huge tool results flooding the log.
+func logTraceLLMRequestMessages(body, rid string) {
+	msgs := gjson.Get(body, "messages").Array()
+	if len(msgs) == 0 {
+		logs.Infof("%s tag=llm_request message_count=0 rid: %s", GraphTraceLogPrefix, rid)
+		return
+	}
+	var payload strings.Builder
+	payload.WriteString("messages=[")
+	for i, m := range msgs {
+		if i > 0 {
+			payload.WriteString(" ")
+		}
+		payload.WriteString(formatTraceMessageFromGJSON(i, m))
+	}
+	payload.WriteString("]")
+	logs.Infof("%s tag=llm_request message_count=%d %s rid: %s",
+		GraphTraceLogPrefix, len(msgs), payload.String(), rid)
+}
+
+// formatTraceMessageFromGJSON 将单条 gjson 原始消息格式化为带 [] 包裹的结构化字符串，
+// 与 formatTraceMessage 输出风格保持一致。content 支持结构化数组降级取 raw；
+// tool_calls 内部每一项同样用 [] 包裹，并解包 tool_proxy_* 代理转发的真实 MCP 工具名（real=）。
+func formatTraceMessageFromGJSON(i int, m gjson.Result) string {
+	role := m.Get("role").String()
+	toolID := m.Get("tool_call_id").String()
+	content := m.Get("content").String()
+	if content == "" {
+		// content 可能为结构化数组（如多模态/tool_call 渲染），降级取 raw
+		content = m.Get("content").Raw
+	}
+	if len(content) > traceMessageTruncateLen {
+		content = content[:traceMessageTruncateLen] + fmt.Sprintf("...(truncated, total %d)", len(content))
+	}
+	var toolCallsSummary strings.Builder
+	for _, tc := range m.Get("tool_calls").Array() {
+		tcid := tc.Get("id").String()
+		fname := tc.Get("function.name").String()
+		fargs := tc.Get("function.arguments").String()
+		if len(fargs) > traceMessageTruncateLen {
+			fargs = fargs[:traceMessageTruncateLen] + fmt.Sprintf("...(truncated, total %d)", len(fargs))
+		}
+		realField := ""
+		if realName := gjson.Get(fargs, "tool_name").String(); realName != "" {
+			realField = " real=" + realName
+		}
+		toolCallsSummary.WriteString(fmt.Sprintf("[id=%s fn=%s%s args=%s]", tcid, fname, realField, fargs))
+	}
+	return fmt.Sprintf("[idx=%d role=%s tool_id=%s content=%s tool_calls=%s]",
+		i, role, toolID, content, toolCallsSummary.String())
+}
+
+// logLLMMessageDuplicateCheck scans outgoing messages for duplicate tool_call_id values.
+func logLLMMessageDuplicateCheck(body, rid string) {
+	msgs := gjson.Get(body, "messages").Array()
+	if len(msgs) == 0 {
+		return
+	}
+	seen := make(map[string]int, len(msgs))
+	var dups []string
+	for i, msg := range msgs {
+		if msg.Get("role").String() != "tool" {
+			continue
+		}
+		toolID := msg.Get("tool_call_id").String()
+		if toolID == "" {
+			continue
+		}
+		if first, ok := seen[toolID]; ok {
+			dups = append(dups, fmt.Sprintf("idx=%d dup_of=%d id=%s", i, first, toolID))
+			continue
+		}
+		seen[toolID] = i
+	}
+	if len(dups) == 0 {
+		logs.Infof("[llm request] message check: messages=%d duplicate_tool_ids=0 rid: %s", len(msgs), rid)
+		return
+	}
+	logs.Warnf("[llm request] message check: messages=%d duplicate_tool_ids=%d details=%v rid: %s",
+		len(msgs), len(dups), dups, rid)
 }

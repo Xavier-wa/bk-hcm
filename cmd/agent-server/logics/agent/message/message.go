@@ -24,8 +24,8 @@ import (
 	"context"
 	"time"
 
+	agentstate "hcm/cmd/agent-server/logics/agent/state"
 	"hcm/pkg/criteria/constant"
-	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 	"hcm/pkg/tools/uuid"
@@ -117,11 +117,10 @@ func BuildFallbackResumeDelta(ctx context.Context, state graph.State, messages [
 
 	// StateKeyIntent 在 intent 节点中以 string 形式写入（见 intent.intentState），
 	// 这里需要先断言成string再转换，避免state在checkpoint回复过程中经过序列化和反序列，导致IntentType类型不匹配.
-	intentStr, _ := state[constant.StateKeyIntent].(string)
-	intentType := enumor.IntentType(intentStr)
-	logs.Infof("[fallback] intentType=%s, rid: %s", intentType, rid)
+	intentType := agentstate.ParseIntent(state)
+	logs.Infof("[ResumeDelta] intentType=%s, rid: %s", intentType, rid)
 	if !intentType.IsSupportedScene() {
-		logs.Infof("[fallback] clear unsupported intent=%s for re-recognition, rid: %s", intentType, rid)
+		logs.Infof("[ResumeDelta] clear unsupported intent=%s for re-recognition, rid: %s", intentType, rid)
 		delta[constant.StateKeyIntent] = ""
 		delta[graph.StateKeyMessages] = []graph.MessageOp{
 			graph.AppendMessages{

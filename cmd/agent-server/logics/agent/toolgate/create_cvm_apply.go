@@ -89,7 +89,7 @@ func (g *createCvmApplyGate) ToolName() string {
 
 // EventKind 将中断路由到 tool.confirm 前端事件。
 func (g *createCvmApplyGate) EventKind() string {
-	return constant.ToolConfirmInterruptKey
+	return constant.ToolConfirmCreateCvmApplyInterruptKey
 }
 
 // BuildPayload 从工具调用入参构造申领确认卡片的 payload。
@@ -309,11 +309,15 @@ func extractApplyPathParam(args map[string]any) (int64, bool) {
 	if !ok {
 		return 0, false
 	}
-	id, err := util.GetInt64ByInterface(pathParam["bk_biz_id"])
+	raw, ok := pathParam["bk_biz_id"]
+	if !ok || raw == nil {
+		return 0, false
+	}
+	id, err := util.GetInt64ByInterface(raw)
 	if err != nil {
 		return 0, false
 	}
-	return int64(id), true
+	return id, true
 }
 
 // unmarshalArgs 将有效的工具调用入参反序列化为通用 map。

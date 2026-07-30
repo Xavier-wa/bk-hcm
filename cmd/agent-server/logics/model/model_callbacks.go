@@ -21,6 +21,7 @@ package model
 
 import (
 	"context"
+	"fmt"
 
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
@@ -88,6 +89,36 @@ func MakeHistoricalToolResultFilter() model.BeforeModelCallbackStructured {
 
 		logs.Infof("[model] historical tool results filtered: count=%d total_msgs=%d, rid: %s", filteredCount,
 			len(msgs), rid)
+
+		// Log every message actually sent to the model so the filtered result is auditable.
+		// Mirrors the per-message trace logic in logger/model.go: each message gets its own
+		// line, Content is truncated at 100 chars when too long, and assistant tool_calls are
+		// printed out as well.
+		const msgTruncateLen = 100
+		for i, msg := range args.Request.Messages {
+			content := msg.Content
+			if len(content) > msgTruncateLen {
+				content = content[:msgTruncateLen] + fmt.Sprintf("...(truncated, total %d)", len(msg.Content))
+			}
+			toolID := msg.ToolID
+			if toolID == "" && len(msg.ToolCalls) > 0 {
+				toolID = msg.ToolCalls[0].ID
+			}
+			logs.Infof("[model] historical filter message: idx=%d role=%s tool_id=%s content=%s, rid: %s",
+				i, msg.Role, toolID, content, rid)
+
+			if msg.Role == model.RoleAssistant && len(msg.ToolCalls) > 0 {
+				for _, tc := range msg.ToolCalls {
+					argsStr := string(tc.Function.Arguments)
+					if len(argsStr) > msgTruncateLen {
+						argsStr = argsStr[:msgTruncateLen] + fmt.Sprintf("...(truncated, total %d)", len(argsStr))
+					}
+					logs.Infof("[model] historical filter assistant tool_call: idx=%d name=%s args=%s, rid: %s",
+						i, tc.Function.Name, argsStr, rid)
+				}
+			}
+		}
+
 		return nil, nil
 	}
 }
