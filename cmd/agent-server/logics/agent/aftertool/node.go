@@ -24,6 +24,7 @@ package aftertool
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"hcm/cmd/agent-server/logics/agent/message"
@@ -181,12 +182,20 @@ func doInterrupt(ctx context.Context, state graph.State, messages []trpcmodel.Me
 		return nil, err
 	}
 
+	// 用户看到的推荐方案并不在模型对话上下文中，这里将其拼到助手消息里注入，
+	// 让模型理解 resume 后用户输入（如「选第几个方案」）所针对的具体方案。
+	// 注意 emit 已用原始 lastResp，此处仅用于注入模型上下文，不改变前端展示。
+	respWithOptions := lastResp
+	if optionsMsg := buildRecommendOptionsMessage(ctx, payload); optionsMsg != "" {
+		respWithOptions = lastResp + "\n" + optionsMsg
+	}
+
 	// 优先使用前端通过 forwardedProps 传入的结构化回复（与自由文本 resumeValue 区分）：
 	// 命中时构造自定义事件携带该值，并以该值作为用户选择，忽略 resumeValue。
 	if forwarded := resolveForwardedResumeValue(ctx); forwarded != "" {
 		emitForwardedResumeEvent(ctx, state, forwarded)
 		logs.Infof("after_tool_hitl: resume with forwarded value=%s, rid: %s", forwarded, rid)
-		return message.BuildFallbackResumeDelta(ctx, state, messages, lastResp, forwarded), nil
+		return message.BuildFallbackResumeDelta(ctx, state, messages, respWithOptions, forwarded), nil
 	}
 
 	// 回退自由文本：graph.Interrupt 返回的 resumeValue，对应用户在输入框输入的本轮内容。
@@ -197,7 +206,21 @@ func doInterrupt(ctx context.Context, state graph.State, messages []trpcmodel.Me
 		return nil, fmt.Errorf("after_tool_hitl: invalid resume value: expected non-empty string")
 	}
 	logs.Infof("after_tool_hitl: resume with user choice=%s, rid: %s", choice, rid)
-	return message.BuildFallbackResumeDelta(ctx, state, messages, lastResp, choice), nil
+	return message.BuildFallbackResumeDelta(ctx, state, messages, respWithOptions, choice), nil
+}
+
+// buildRecommendOptionsMessage 将中断 payload（含 recommendations 或 suborders）序列化为文本，
+// 作为助手消息内容注入模型上下文，使 resume 后的对话历史反映用户实际看到的推荐方案。
+func buildRecommendOptionsMessage(ctx context.Context, payload map[string]any) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	result, err := json.Marshal(payload)
+	if err != nil {
+		logs.Warnf("after_tool_hitl: marshal recommend options failed, err: %v, rid: %s", err, rest.RidFromContext(ctx))
+		return ""
+	}
+	return string(result)
 }
 
 // resolveForwardedResumeValue reads the structured resume value passed by the frontend via
