@@ -600,7 +600,8 @@ func (c *Controller) GetBizResPlanAppliedCPUCore(kt *kit.Kit, bkBizIDs []int64, 
 }
 
 // convResConsumePoolToPenaltyMap 将 ResConsumePool 转为以 DemandPenaltyBaseKey 为 key 的 map
-// 因为 ResConsumePool 精确指定了deviceType，因此在list时无法进行模糊匹配，需要进行转化后使用
+// 因为 ResConsumePool 精确指定了deviceType，因此在list时无法进行模糊匹配，需要进行转化后使用。
+// 消耗池 key 的 DeviceType 应为原始申领机型；DeviceFamily 取自该机型，不得取自并查代表机型。
 func convResConsumePoolToPenaltyMap(kt *kit.Kit, pool ResPlanConsumePool, regionAreaMap map[string]dmtypes.RegionArea,
 	deviceTypes map[string]dt.DistinctDeviceType) (map[ptypes.DemandPenaltyBaseKey]int64, error) {
 
