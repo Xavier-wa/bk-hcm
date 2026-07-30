@@ -23,7 +23,6 @@
 //   - hcm_api_server_mcp_tools_call_total{tool, mcp_server_name, status}
 //   - hcm_api_server_mcp_tools_call_duration_seconds{tool, mcp_server_name}
 //   - hcm_api_server_mcp_bridge_active_tasks
-//   - hcm_api_server_mcp_internal_schema_stale
 //
 // 调用方应在 api-server 启动期调用 InitMCPMetrics()，之后通过包级访问函数获取
 // metric 对象进行 Observe / Inc / Set。
@@ -41,9 +40,6 @@ import (
 const (
 	// SubSysMCP 是对外部提供服务的 ingress + bridge 共用的指标子系统。
 	SubSysMCP = "api_server_mcp"
-
-	// SubSysMCPInternal 是对内部提供服务的 MCP server 专用的指标子系统。
-	SubSysMCPInternal = "api_server_mcp_internal"
 )
 
 // 调用状态标签取值，作为 Counter 的 status 维度。
@@ -59,7 +55,6 @@ type mcpMetrics struct {
 	toolsCallTotal           *prometheus.CounterVec
 	toolsCallDurationSeconds *prometheus.HistogramVec
 	bridgeActiveTasks        prometheus.Gauge
-	internalSchemaStale      prometheus.Gauge
 }
 
 var (
@@ -114,22 +109,11 @@ func initWithRegisterer(reg prometheus.Registerer) {
 					"that have not yet reached A2A terminal state",
 			},
 		),
-		internalSchemaStale: prometheus.NewGauge(
-			prometheus.GaugeOpts{
-				Namespace: metrics.Namespace,
-				Subsystem: SubSysMCPInternal,
-				Name:      "schema_stale",
-				Help: "1 when the southbound MCP tool schema has not been " +
-					"successfully synced from the BlueKing gateway MCP-proxy " +
-					"for longer than the configured threshold; 0 when fresh",
-			},
-		),
 	}
 
 	reg.MustRegister(holder.toolsCallTotal)
 	reg.MustRegister(holder.toolsCallDurationSeconds)
 	reg.MustRegister(holder.bridgeActiveTasks)
-	reg.MustRegister(holder.internalSchemaStale)
 }
 
 
@@ -164,16 +148,4 @@ func IncBridgeActiveTasks(delta float64) {
 		return
 	}
 	holder.bridgeActiveTasks.Add(delta)
-}
-
-// SetInternalSchemaStale 把对内部提供服务的 MCP schema 同步状态设置为 stale(1) 或 fresh(0)。
-func SetInternalSchemaStale(stale bool) {
-	if holder == nil {
-		return
-	}
-	v := 0.0
-	if stale {
-		v = 1.0
-	}
-	holder.internalSchemaStale.Set(v)
 }

@@ -112,20 +112,6 @@ func TestBridgeActiveTasksGauge(t *testing.T) {
 	}
 }
 
-func TestSetInternalSchemaStale(t *testing.T) {
-	resetAndInit(t)
-
-	SetInternalSchemaStale(false)
-	if got := testutil.ToFloat64(holder.internalSchemaStale); got != 0 {
-		t.Errorf("internalSchemaStale = %v, want 0 for fresh", got)
-	}
-
-	SetInternalSchemaStale(true)
-	if got := testutil.ToFloat64(holder.internalSchemaStale); got != 1 {
-		t.Errorf("internalSchemaStale = %v, want 1 for stale", got)
-	}
-}
-
 func TestAccessorsBeforeInit_NoPanic(t *testing.T) {
 	// 重置但**不**调用 InitMCPMetrics，模拟生产代码意外提前调用。
 	reset()
@@ -140,5 +126,4 @@ func TestAccessorsBeforeInit_NoPanic(t *testing.T) {
 	ObserveToolsCallDuration("send_message", "n", 1.0)
 	IncBridgeActiveTasks(1)
 	SetBridgeActiveTasks(0)
-	SetInternalSchemaStale(true)
 }

@@ -192,7 +192,7 @@ func TestToolsList_OnlySendMessage(t *testing.T) {
 	}
 	// 关键属性必须存在
 	props, _ := schema["properties"].(map[string]interface{})
-	for _, key := range []string{"text", "contextId", "bk_biz_id", "model_name"} {
+	for _, key := range []string{"text", "contextId", "bk_biz_id", "model_name", "confirm"} {
 		if _, ok := props[key]; !ok {
 			t.Errorf("inputSchema.properties missing %q", key)
 		}

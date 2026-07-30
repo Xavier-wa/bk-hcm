@@ -179,8 +179,9 @@ func isJSONObjectString(s string) bool {
 }
 
 // resolveHITLForwardedResumeValue reads the structured resume value passed by the frontend via
-// forwardedProps from RuntimeState. Returns an empty string when the value is absent or not a
-// non-empty string.
+// forwardedProps (AG-UI) or A2A/MCP message metadata (OpenClaw). The value may already be a JSON
+// string, or a map/object that still needs marshalling. Handlers always receive a JSON string.
+// Returns an empty string when the value is absent or marshalling fails.
 func resolveHITLForwardedResumeValue(ctx context.Context) string {
 	rid := rest.RidFromContext(ctx)
 
@@ -190,13 +191,25 @@ func resolveHITLForwardedResumeValue(ctx context.Context) string {
 	}
 
 	raw := inv.RunOptions.RuntimeState[constant.StateKeyForwardedResumeValue]
-	forwarded, ok := raw.(string)
-	if !ok || forwarded == "" {
+	if raw == nil {
 		return ""
 	}
-
-	logs.Infof("hitl node: forwarded resume value from runtime state, value=%s, rid: %s", forwarded, rid)
-	return forwarded
+	switch v := raw.(type) {
+	case string:
+		if v == "" {
+			return ""
+		}
+		logs.Infof("hitl node: forwarded resume value=%s, rid: %s", v, rid)
+		return v
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			logs.Warnf("hitl node: marshal forwarded resume value failed, err: %v, rid: %s", err, rid)
+			return ""
+		}
+		logs.Infof("hitl node: forwarded resume value=%s, rid: %s", string(b), rid)
+		return string(b)
+	}
 }
 
 // injectCancelUserMessage adjusts a cancel ResumeResult so that the user's free-form input

@@ -235,6 +235,16 @@ tools:
   #     args:
   #       - "--flag"
   #       - "value"
+  #   - name: "hcm-apply"
+  #     type: "internal"          # 仅注入 X-Bkapi-User-Name，不注入 bk_ticket / access_token
+  #     transport: "streamable_http"
+  #     serverUrl: "http://api-server:8080/api/v1/mcp/internal/hcm-apply/mcp/"
+  #     timeout: "60s"
+  #   - name: "hcm-resource"
+  #     type: "internal"
+  #     transport: "streamable_http"
+  #     serverUrl: "http://api-server:8080/api/v1/mcp/internal/hcm-resource/mcp/"
+  #     timeout: "60s"
 
   # 动态工具加载：基于索引，每条用户消息仅向 LLM 暴露最相关的 Top-N 个 MCP 工具。
   # 启用后，ToolFilter 会在每次 Run 中检索匹配工具，减少 token 消耗并提升推理质量。

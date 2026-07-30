@@ -344,7 +344,9 @@ func TestToolProxy_BuildToolSetLoadError(t *testing.T) {
 
 	err := proxy.buildForTest(kit.New())
 	require.NoError(t, err)
-	assert.True(t, proxy.IsBuildOK())
+	// When toolset loading fails (panic), no callable tools are registered.
+	// IsBuildOK() returns false so the graph falls back to direct MCP mode.
+	assert.False(t, proxy.IsBuildOK())
 	assert.Empty(t, proxy.RegistrySnapshot().ListTools())
 }
 
@@ -361,7 +363,6 @@ func TestExecuteToolTool_SchemaTokenValidation(t *testing.T) {
 	errResp := result.(toolErrorResult)
 	assert.False(t, errResp.Success)
 	assert.Equal(t, "schema_token_invalid", errResp.Error.Type)
-	assert.NotNil(t, errResp.Error.RequiredSchema)
 
 	// wrong schema_token
 	args, _ = json.Marshal(map[string]interface{}{

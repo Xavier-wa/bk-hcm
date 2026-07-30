@@ -17,6 +17,14 @@ data:
     service:
       etcd:
         {{- include "common.tplvalues.render" (dict "value" (include "bk-hcm.etcdConfig" .) "context" $) | nindent 8 }}
+    {{- with .Values.apiserver.mcp }}
+    mcp:
+      {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 6 }}
+    {{- end }}
+    {{- with .Values.apiserver.a2aPassthrough }}
+    a2aPassthrough:
+      {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 6 }}
+    {{- end }}
     log:
       {{- toYaml .Values.apiserver.log | nindent 6 }}
     tenant:
@@ -24,4 +32,8 @@ data:
   {{- if and (not .Values.apiserver.disableJwt) .Values.apiserver.apigwPublicKey }}
   apigw_public.key: |-
       {{- .Values.apiserver.apigwPublicKey | b64dec | nindent 6 }}
+  {{- end }}
+  {{- if .Values.apiserver.mcp.internal.enable }}
+  bk_apigw_resources_bk-hcm_internal_mcp.yaml: |-
+    {{- .Files.Get "files/bk_apigw_resources_bk-hcm_internal_mcp.yaml" | nindent 4 }}
   {{- end }}

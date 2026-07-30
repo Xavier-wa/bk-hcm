@@ -81,6 +81,12 @@ mcp:
     # maxIdleConnsPerHost: 100
   # 南向内部 HCM MCP server：仅供 agent-server LLM tool calling 调用。
   # 部署侧必须通过 K8s NetworkPolicy 或蓝鲸网关 Path Strip 限制外部访问。
+  # 上线前不得在公网蓝鲸网关发布 /api/v1/mcp/internal/ 路径；若经过网关，必须配置 Path Strip/未发布资源确保外部 404。
+  #
+  # 工具集数据源：启动时一次性从本地 OpenAPI 3.0 yaml 文件加载
+  # （由蓝鲸 API 网关「资源配置列表」页面手动导出到本仓库）。
+  # api-server 不再调用蓝鲸网关 MCP-proxy 同步工具 schema，不做周期同步、不写本地缓存、不依赖外部网络。
+  # 接口字段变更流程：开发者改 Go 代码 + 网关后台资源配置 → 网关后台「资源配置列表」重新导出 yaml → MR 覆盖 → 重启 api-server。
   internal:
     # [必填] 是否挂载南向 MCP server 路径。
     enable: false

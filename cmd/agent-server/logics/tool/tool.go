@@ -211,24 +211,29 @@ func appendBKAIDevAuthHook(opts []mcp.ToolSetOption, name string) []mcp.ToolSetO
 	))
 }
 
-// appendInternalAuthHook 注入 internal 类型 MCP toolset 的身份 header。
-// 仅写入 X-Bkapi-User-Name（来自 ctx 中的 bk_username），不读取 / 不注入
-// X-Bkapi-Authorization、bk_ticket、access_token；适用于 agent-server LLM →
+// appendInternalAuthHook 注入 internal 类型 MCP toolset 的内部调用 header。
+// 固定写入 X-Bkhcm-Caller-Source=agent-server，并写入 X-Bkapi-User-Name。
+// 请求上下文中没有 bk_username（如启动构建 / 后台刷新 ToolProxy）时，使用后端内部用户兜底，
+// 避免 internal MCP tools/list 因缺少身份 header 加载失败。
+// 不读取 / 不注入 X-Bkapi-Authorization、bk_ticket、access_token；适用于 agent-server LLM →
 // api-server 内置 HCM MCP 等内网直连场景。
 func appendInternalAuthHook(opts []mcp.ToolSetOption, name string) []mcp.ToolSetOption {
-	logs.Infof("A2A MCP toolset %q: internal auth hook registered (bk_username only)", name)
+	logs.Infof("A2A MCP toolset %q: internal auth hook registered (caller-source=%q)", name, cc.AgentServerName)
 	return append(opts, mcp.WithMCPOptions(
 		trpcmcp.WithHTTPBeforeRequest(func(ctx context.Context, req *http.Request) error {
 			rid := rest.RidFromContext(ctx)
+			req.Header.Set(constant.MCPCallerSourceHeader, string(cc.AgentServerName))
+
 			username := auth.BKUsernameFromContext(ctx)
 			if username == "" {
+				username = constant.BackendOperationUserKey
 				logs.Warnf("internal MCP hook: no bk_username in context for %s %s, "+
-					"calling without identity, rid: %s", req.Method, req.URL.Path, rid)
-				return nil
+					"fallback to backend user %s, rid: %s", req.Method, req.URL.Path, username, rid)
 			}
 			req.Header.Set(constant.UserKey, username)
-			logs.V(4).Infof("internal MCP hook: injected X-Bkapi-User-Name=%s for %s %s, rid: %s",
-				username, req.Method, req.URL.Path, rid)
+			logs.V(4).Infof("internal MCP hook: injected %s=%s, %s=%s for %s %s, rid: %s",
+				constant.MCPCallerSourceHeader, cc.AgentServerName, constant.UserKey, username,
+				req.Method, req.URL.Path, rid)
 			return nil
 		}),
 	))

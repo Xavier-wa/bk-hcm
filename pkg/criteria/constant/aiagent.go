@@ -130,6 +130,21 @@ const (
 	// A2AWellKnownAgentLegacyPath is the legacy AgentCard discovery path kept
 	// for client compatibility with A2A 0.1.x.
 	A2AWellKnownAgentLegacyPath = "/.well-known/agent.json"
+
+	// MCPBridgeDefaultConnectTimeout is the default timeout for establishing an A2A connection.
+	MCPBridgeDefaultConnectTimeout = 5 * time.Second
+	// MCPBridgeDefaultReadTimeout is the default timeout for an A2A streaming request.
+	MCPBridgeDefaultReadTimeout = 300 * time.Second
+	// MCPBridgeDefaultMaxIdleConnsPerHost is the default keep-alive connection pool size.
+	MCPBridgeDefaultMaxIdleConnsPerHost = 100
+	// MCPBridgeDefaultKeepAlive is the default keep-alive interval for an A2A connection.
+	MCPBridgeDefaultKeepAlive = 30 * time.Second
+	// MCPBridgeDefaultIdleConnTimeout is the default idle connection timeout.
+	MCPBridgeDefaultIdleConnTimeout = 90 * time.Second
+	// MCPBridgeDefaultTLSHandshakeTimeout is the default TLS handshake timeout.
+	MCPBridgeDefaultTLSHandshakeTimeout = 10 * time.Second
+	// MCPBridgeDefaultExpectContinueTimeout is the default timeout for an HTTP 100-continue response.
+	MCPBridgeDefaultExpectContinueTimeout = time.Second
 )
 
 // Skill
@@ -330,6 +345,30 @@ const (
 
 	// ToolNameCreateBizApply is the host apply submit tool guarded by the tool confirm gate.
 	ToolNameCreateBizApply = "create_biz_apply"
+)
+
+// MCP / OpenClaw HITL confirm constants (northbound send_message).
+const (
+	// MCPConfirmActionConfirm resumes a tool.confirm interrupt and proceeds to execute the tool.
+	MCPConfirmActionConfirm = "confirm"
+	// MCPConfirmActionCancel resumes a tool.confirm interrupt and cancels the pending tool call.
+	MCPConfirmActionCancel = "cancel"
+
+	// MCPResultMetaConfirmKey is the CallToolResult._meta key that carries the structured
+	// confirm payload when the agent graph is interrupted for HITL confirmation.
+	MCPResultMetaConfirmKey = "confirm"
+
+	// MCPConfirmPendingMessage is the human-readable content returned when a tool confirm
+	// interrupt is waiting for the next send_message with a confirm payload.
+	MCPConfirmPendingMessage = "需要您确认后才能继续执行。请使用同一 contextId 再次调用 send_message，" +
+		"并在 confirm 参数中传入 {\"action\":\"confirm\",\"args\":<上一次返回的 _meta.confirm.data>} 确认，" +
+		"或 {\"action\":\"cancel\"} 取消。"
+
+	// MCPSelectPendingMessage is the human-readable content returned when a non-tool.confirm HITL
+	// interrupt (account/recommendation/suborder selection) is waiting for the user's choice.
+	// 这类中断以纯文本恢复：把可选项展示给用户，用同一 contextId 将用户选择以 text 续聊即可。
+	MCPSelectPendingMessage = "需要先向用户展示以下可选项并由其确认后才能继续。请使用同一 contextId 再次调用 " +
+		"send_message，将用户的选择以纯文本传入 text 即可（无需 confirm 参数）。"
 )
 
 // bkaidev

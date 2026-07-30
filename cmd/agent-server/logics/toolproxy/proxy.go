@@ -278,11 +278,14 @@ func (p *ToolProxy) StopRefresh() {
 	}
 }
 
-// IsBuildOK reports whether the latest build succeeded.
+// IsBuildOK reports whether the latest build succeeded and at least one
+// callable tool was loaded. Returns false when the registry is empty, so
+// callers (e.g. graph_build) fall back to direct MCP mode and avoid
+// attempting tool lookups on an empty ToolProxy.
 func (p *ToolProxy) IsBuildOK() bool {
 	p.refreshMu.RLock()
 	defer p.refreshMu.RUnlock()
-	return p.buildOK
+	return p.buildOK && len(p.actualTools) > 0
 }
 
 // GetProxyToolSet returns the static ToolSet containing the 3 meta-tools.

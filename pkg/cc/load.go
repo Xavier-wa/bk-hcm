@@ -23,6 +23,9 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -45,6 +48,7 @@ func LoadSettings(sys *SysOption) error {
 
 	// s the default value if user not configured.
 	s.trySetDefault()
+	resolveConfigRelativePaths(s, sys.ConfigFile)
 
 	if err := s.Validate(); err != nil {
 		return err
@@ -97,4 +101,34 @@ func loadFromFile(filename string) (Setting, error) {
 	}
 
 	return s, nil
+}
+
+func resolveConfigRelativePaths(s Setting, configFile string) {
+	switch setting := s.(type) {
+	case *ApiServerSetting:
+		if setting.MCP.Internal.Enable {
+			for i := range setting.MCP.Internal.Servers {
+				setting.MCP.Internal.Servers[i].OpenAPISpecPath = resolvePathRelativeToConfigFile(configFile,
+					setting.MCP.Internal.Servers[i].OpenAPISpecPath)
+			}
+		}
+	}
+}
+
+func resolvePathRelativeToConfigFile(configFile string, configuredPath string) string {
+	path := strings.TrimSpace(configuredPath)
+	if path == "" || filepath.IsAbs(path) {
+		return configuredPath
+	}
+
+	if _, err := os.Stat(path); err == nil {
+		return configuredPath
+	}
+
+	configDir := filepath.Dir(configFile)
+	if configDir == "." || configDir == "" {
+		return configuredPath
+	}
+
+	return filepath.Join(configDir, path)
 }

@@ -23,24 +23,28 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"hcm/cmd/api-server/service/mcp/middleware"
 	"hcm/pkg/cc"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
 	"hcm/pkg/tools/util"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	mcpsdk "trpc.group/trpc-go/trpc-mcp-go"
 )
 
 // buildSendMessageTool 根据 ingress 配置构造对外暴露的唯一聚合工具描述。
 //
-// 工具入参 schema 严格对齐 design.md「send_message 工具 inputSchema」一节：
+// 工具入参 schema：
 //
 //	{
 //	  "text":       {"type": "string",  "description": "用户问题或操作意图"},
 //	  "contextId":  {"type": "string",  "description": "会话上下文 ID，连续对话固定复用"},
 //	  "bk_biz_id":  {"type": "integer", "description": "业务 ID，可选"},
-//	  "model_name": {"type": "string",  "description": "模型名称，可选"}
+//	  "model_name": {"type": "string",  "description": "模型名称，可选"},
+//	  "confirm":    {"type": "object",  "description": "HITL 结构化确认（对齐 AG-UI resumeValue）"}
 //	}
 //
 // `required: ["text"]`，其余字段可选。
@@ -52,7 +56,9 @@ func buildSendMessageTool(cfg cc.MCPIngressSetting) *mcpsdk.Tool {
 		mcpsdk.WithDescription(
 			"Send a natural-language message to the HCM agent. "+
 				"Use this tool for any HCM-related question or operation intent. "+
-				"Reuse the returned contextId in subsequent calls to keep a continuous conversation."),
+				"Reuse the returned contextId in subsequent calls to keep a continuous conversation. "+
+				"When a previous response includes _meta.confirm, call again with the same contextId "+
+				"and a confirm payload to approve or cancel the pending operation."),
 		mcpsdk.WithToolAnnotations(&mcpsdk.ToolAnnotations{
 			Title: "HCM Agent",
 			// HCM agent 工具会调用云资源接口，可能存在副作用，
@@ -72,6 +78,23 @@ func buildSendMessageTool(cfg cc.MCPIngressSetting) *mcpsdk.Tool {
 		),
 		mcpsdk.WithString("model_name",
 			mcpsdk.Description("模型名称，可选；为空时由 HCM agent 选择默认模型"),
+		),
+		mcpsdk.WithObject("confirm",
+			mcpsdk.Description(
+				"HITL 结构化确认（与 Web AG-UI resumeValue 对齐）。"+
+					"上一轮 _meta.confirm 存在时必填：action=confirm 并回传 args=_meta.confirm.data；"+
+					"或 action=cancel 取消。"),
+			mcpsdk.Properties(openapi3.Schemas{
+				"action": openapi3.NewSchemaRef("", &openapi3.Schema{
+					Type:        &openapi3.Types{openapi3.TypeString},
+					Description: "confirm 放行执行；cancel 取消待确认操作",
+					Enum:        []any{constant.MCPConfirmActionConfirm, constant.MCPConfirmActionCancel},
+				}),
+				"args": openapi3.NewSchemaRef("", &openapi3.Schema{
+					Type:        &openapi3.Types{openapi3.TypeObject},
+					Description: "确认后的工具入参，通常原样回传上一轮 _meta.confirm.data；可按需微调后回传",
+				}),
+			}),
 		),
 	)
 }
@@ -107,11 +130,17 @@ func newSendMessageHandler(cfg cc.MCPIngressSetting, bridge BridgeHandler,
 				len(text), cfg.TextMaxLength)
 		}
 
+		confirm, err := parseConfirmArg(req.Params.Arguments["confirm"])
+		if err != nil {
+			return nil, err
+		}
+
 		smReq := &SendMessageRequest{
 			Text:          text,
 			ContextID:     stringArg(req.Params.Arguments, "contextId"),
 			BkBizID:       int64Arg(req.Params.Arguments, "bk_biz_id"),
 			ModelName:     stringArg(req.Params.Arguments, "model_name"),
+			Confirm:       confirm,
 			MCPServerName: middleware.MCPServerNameFromCtx(ctx),
 		}
 
@@ -132,11 +161,42 @@ func newSendMessageHandler(cfg cc.MCPIngressSetting, bridge BridgeHandler,
 			rid = kt.Rid
 		}
 		logs.Infof("ingress: tools/call send_message: mcp_server_name: %s, text_len: %d, contextId: %q, "+
-			"has_progress_token: %t, rid: %s", smReq.MCPServerName, len(smReq.Text), smReq.ContextID,
-			smReq.ProgressToken != nil, rid)
+			"has_progress_token: %t, has_confirm: %t, rid: %s", smReq.MCPServerName, len(smReq.Text),
+			smReq.ContextID, smReq.ProgressToken != nil, smReq.Confirm != nil, rid)
 
 		return bridge.SendMessage(ctx, smReq, srv)
 	}
+}
+
+// parseConfirmArg 解析 send_message.confirm 对象。缺失时返回 (nil, nil)。
+func parseConfirmArg(raw interface{}) (*ConfirmRequest, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("parameter confirm must be an object")
+	}
+	action := strings.TrimSpace(stringArg(m, "action"))
+	if action == "" {
+		return nil, fmt.Errorf("parameter confirm.action is required")
+	}
+	switch action {
+	case constant.MCPConfirmActionConfirm, constant.MCPConfirmActionCancel:
+	default:
+		return nil, fmt.Errorf("parameter confirm.action must be %q or %q",
+			constant.MCPConfirmActionConfirm, constant.MCPConfirmActionCancel)
+	}
+
+	confirm := &ConfirmRequest{Action: action}
+	if argsRaw, exists := m["args"]; exists && argsRaw != nil {
+		args, ok := argsRaw.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("parameter confirm.args must be an object")
+		}
+		confirm.Args = args
+	}
+	return confirm, nil
 }
 
 // stringArg 从 arguments 中提取字符串字段，缺失或类型不匹配时返回空串。

@@ -52,8 +52,8 @@ func (m *MCPServerSetting) trySetDefault() {
 
 // Validate 校验 MCP 子配置。
 //
-// 当 Internal.Enable=true 时，Internal.SchemaSync.GatewayURL 必填（蓝鲸网关 MCP-proxy
-// 不在 etcd 服务发现范畴，必须手填）。
+// 当 Internal.Enable=true 时，Internal.OpenAPISpecPath 必填（指向本地 OpenAPI 3.0 yaml
+// 文件，由蓝鲸 API 网关「资源配置列表」页面导出）。
 // 其它情形（含 Ingress.Enable=true）依赖 etcd 服务发现 agent-server，不在配置层校验。
 func (m MCPServerSetting) Validate() error {
 	if err := m.Ingress.Validate(); err != nil {
@@ -153,13 +153,13 @@ type MCPBridgeSetting struct {
 // trySetDefault 为 bridge 补齐默认值。
 func (s *MCPBridgeSetting) trySetDefault() {
 	if s.ConnectTimeout <= 0 {
-		s.ConnectTimeout = 5 * time.Second
+		s.ConnectTimeout = constant.MCPBridgeDefaultConnectTimeout
 	}
 	if s.ReadTimeout <= 0 {
-		s.ReadTimeout = 300 * time.Second
+		s.ReadTimeout = constant.MCPBridgeDefaultReadTimeout
 	}
 	if s.MaxIdleConnsPerHost <= 0 {
-		s.MaxIdleConnsPerHost = 100
+		s.MaxIdleConnsPerHost = constant.MCPBridgeDefaultMaxIdleConnsPerHost
 	}
 }
 
@@ -172,43 +172,82 @@ func (s MCPBridgeSetting) Validate() error {
 //
 // 该 MCP server 仅供 agent-server LLM tool calling 调用，**不**对外暴露。
 // 部署侧 SHALL 通过 K8s NetworkPolicy 或蓝鲸网关 Path Strip 限制外部访问。
+//
+// 工具集数据源：启动时一次性从本地 OpenAPI 3.0 yaml 文件加载（由蓝鲸 API 网关「资源
+// 配置列表」页面手动导出到本仓库）；api-server 不再调用蓝鲸网关 MCP-proxy 同步工具
+// schema，不做周期同步、不写本地缓存、不依赖外部网络。
 type MCPInternalSetting struct {
 	// Enable 控制是否挂载对内部提供服务的 MCP server 路径。默认 false。
 	Enable bool `yaml:"enable"`
-	// BasePath 是对内部提供服务的 MCP server 路径前缀。
-	// 默认 constant.MCPInternalBasePathDefault（"/api/v1/mcp/internal/hcm/mcp"）。
-	BasePath string `yaml:"basePath"`
-	// ServerName 是 MCP server 标识名。默认 "hcm-internal-mcp"。
-	ServerName string `yaml:"serverName"`
-	// ServerVersion 是 MCP server 版本。默认 "1.0.0"。
-	ServerVersion string `yaml:"serverVersion"`
+	// Servers 描述多个内置 MCP server。启用 internal 时至少配置一项。
+	Servers []MCPInternalServerSetting `yaml:"servers"`
 	// EnforceCallerSource 是否强制要求请求携带 X-Bkhcm-Caller-Source: agent-server。
 	// 默认 true（对内部提供服务的 MCP 必须严格鉴权）。
 	EnforceCallerSource bool `yaml:"enforceCallerSource"`
-	// SchemaSync 控制从蓝鲸网关 MCP-proxy 同步工具 schema 的策略。
-	SchemaSync MCPSchemaSyncSetting `yaml:"schemaSync"`
-	// InternalOnlyTools 是仅在对内部提供服务的 MCP 暴露的内部专用工具名列表，
-	// 不会从蓝鲸网关同步，schema 由 api-server 本地代码维护。
-	InternalOnlyTools []string `yaml:"internalOnlyTools"`
-	// ToolFilter 是从网关同步结果中需要排除的工具名列表。
-	ToolFilter []string `yaml:"toolFilter"`
+}
+
+// MCPInternalServerSetting 描述一个独立的南向内置 MCP server。
+//
+// 多 server 场景下，每个条目拥有独立 basePath 和 tools/list 子集，agent-server 通过
+// 不同 serverUrl 接入后即可按 toolsetName/toolName 区分工具来源。
+type MCPInternalServerSetting struct {
+	// Name 是 MCP server 标识名，必填。
+	Name string `yaml:"name"`
+	// BasePath 是该 MCP server 的路径前缀，必填。
+	BasePath string `yaml:"basePath"`
+	// ServerVersion 是 MCP server 版本。为空时默认 1.0.0。
+	ServerVersion string `yaml:"serverVersion"`
+	// OpenAPISpecPath 是本地 OpenAPI 3.0 yaml 文件路径，必填。
+	OpenAPISpecPath string `yaml:"openapiSpecPath"`
+	// IncludeOperationIDs 是该 server 暴露的工具白名单，支持精确匹配与 glob（如 "list_*"）。
+	// 空数组（或省略）表示暴露 openapiSpecPath 中全部 operationId。
+	IncludeOperationIDs []string `yaml:"includeOperationIDs"`
+	// InternalOnlyTools 是该 server 私有工具。同名时覆盖 OpenAPI 同名工具。
+	InternalOnlyTools []InternalOnlyToolSetting `yaml:"internalOnlyTools"`
+}
+
+// InternalOnlyToolSetting 描述 OpenAPI yaml 之外的本地专用 MCP 工具结构化条目。
+//
+// 用于「LLM 决策需要但不进网关资源配置」的能力（如内部审计聚合查询）；
+// 每条都必须显式提供 InputSchema 与 Backend 路由。
+type InternalOnlyToolSetting struct {
+	// Name 是 MCP tool name，必填。
+	Name string `yaml:"name"`
+	// Description 是 MCP tool description，建议 ≤ 200 字。
+	Description string `yaml:"description"`
+	// InputSchema 是 JSON Schema 描述的 tool 入参；
+	// 直接以 map 形式存储，加载时透传给 trpc-mcp-go.NewTool。
+	InputSchema map[string]interface{} `yaml:"inputSchema"`
+	// Backend 描述 tool 调用的本地后端目标。
+	Backend InternalOnlyToolBackend `yaml:"backend"`
+}
+
+// InternalOnlyToolBackend 描述 internalOnlyTools 条目的后端调用目标。
+//
+// Method/Path 命中 api-server 自身现有 proxy 路由（如 "/api/v1/cloud/audit/list"）；
+// dispatcher 会注入 X-Bkapi-User-Name 等 header 后通过 self-call 调用本地 mux。
+type InternalOnlyToolBackend struct {
+	// Method 是 HTTP 方法（POST / GET / PUT / DELETE 等）。
+	Method string `yaml:"method"`
+	// Path 是 api-server 本地 mux 上的完整路径（含 /api/v1/ 前缀），
+	// 支持 path 模板占位（如 {bk_biz_id}），由 dispatcher 用入参替换。
+	Path string `yaml:"path"`
 }
 
 // trySetDefault 为对内部提供服务的 MCP server 补齐默认值。
 func (s *MCPInternalSetting) trySetDefault() {
-	if strings.TrimSpace(s.BasePath) == "" {
-		s.BasePath = constant.MCPInternalBasePathDefault
-	}
-	if strings.TrimSpace(s.ServerName) == "" {
-		s.ServerName = constant.MCPInternalDefaultServerName
-	}
-	if strings.TrimSpace(s.ServerVersion) == "" {
-		s.ServerVersion = constant.MCPInternalServerDefaultVersion
+	for i := range s.Servers {
+		s.Servers[i].trySetDefault()
 	}
 	// EnforceCallerSource 默认 true，但仅在解析为零值（false）时强制开启。
 	// 用户显式配置 false 时不覆盖。注：bool 字段无法区分"未配置"与"显式 false"，
 	// 因此对内部提供服务的 MCP 的安全默认值在 service.go ApiServerSetting.trySetDefault 阶段处理。
-	s.SchemaSync.trySetDefault()
+}
+
+func (s *MCPInternalServerSetting) trySetDefault() {
+	if strings.TrimSpace(s.ServerVersion) == "" {
+		s.ServerVersion = constant.MCPInternalServerDefaultVersion
+	}
 }
 
 // Validate 校验对内部提供服务的 MCP 配置。Enable=false 时跳过。
@@ -216,58 +255,58 @@ func (s MCPInternalSetting) Validate() error {
 	if !s.Enable {
 		return nil
 	}
-	if strings.TrimSpace(s.BasePath) == "" {
-		return errors.New("basePath is empty")
+	if len(s.Servers) == 0 {
+		return errors.New("servers is empty (required when mcp.internal.enable=true)")
 	}
-	if !strings.HasPrefix(s.BasePath, "/") {
-		return fmt.Errorf("basePath must start with '/': %q", s.BasePath)
-	}
-	if err := s.SchemaSync.Validate(); err != nil {
-		return fmt.Errorf("schemaSync: %w", err)
+	return s.validateServers()
+}
+
+func (s MCPInternalSetting) validateServers() error {
+	names := make(map[string]struct{}, len(s.Servers))
+	paths := make(map[string]struct{}, len(s.Servers))
+	for i, server := range s.Servers {
+		name := strings.TrimSpace(server.Name)
+		if name == "" {
+			return fmt.Errorf("servers[%d].name is empty", i)
+		}
+		if _, ok := names[name]; ok {
+			return fmt.Errorf("servers[%d].name is duplicated: %q", i, name)
+		}
+		names[name] = struct{}{}
+
+		basePath := strings.TrimSpace(server.BasePath)
+		if basePath == "" {
+			return fmt.Errorf("servers[%d].basePath is empty", i)
+		}
+		if !strings.HasPrefix(basePath, "/") {
+			return fmt.Errorf("servers[%d].basePath must start with '/': %q", i, basePath)
+		}
+		if _, ok := paths[basePath]; ok {
+			return fmt.Errorf("servers[%d].basePath is duplicated: %q", i, basePath)
+		}
+		paths[basePath] = struct{}{}
+
+		if strings.TrimSpace(server.OpenAPISpecPath) == "" {
+			return fmt.Errorf("servers[%d].openapiSpecPath is empty", i)
+		}
+		for j, tool := range server.InternalOnlyTools {
+			if err := validateInternalOnlyTool(tool); err != nil {
+				return fmt.Errorf("servers[%d].internalOnlyTools[%d]: %w", i, j, err)
+			}
+		}
 	}
 	return nil
 }
 
-// MCPSchemaSyncSetting 描述从蓝鲸网关 MCP-proxy 同步工具 schema 的策略。
-type MCPSchemaSyncSetting struct {
-	// GatewayURL 是蓝鲸网关 MCP-proxy 的 tools/list 端点 URL。
-	// 对内部提供服务的 MCP（internal.enable=true）时必填。
-	GatewayURL string `yaml:"gatewayURL"`
-	// Interval 是周期同步间隔。默认 5m。
-	Interval time.Duration `yaml:"interval"`
-	// Timeout 是单次同步调用的超时时间。默认 30s。
-	Timeout time.Duration `yaml:"timeout"`
-	// CachePath 是本地缓存文件路径，启动期从此处加载已知 schema 立即提供服务。
-	// 默认 "/tmp/hcm-api-server-mcp-schema-cache.json"。
-	CachePath string `yaml:"cachePath"`
-	// StaleAlertAfter 是连续同步失败多久后标记 schema 为 stale 并暴露告警 metric。
-	// 默认 30m。
-	StaleAlertAfter time.Duration `yaml:"staleAlertAfter"`
-}
-
-// trySetDefault 为 schema 同步补齐默认值。
-func (s *MCPSchemaSyncSetting) trySetDefault() {
-	if s.Interval <= 0 {
-		s.Interval = 5 * time.Minute
+func validateInternalOnlyTool(tool InternalOnlyToolSetting) error {
+	if strings.TrimSpace(tool.Name) == "" {
+		return errors.New("name is empty")
 	}
-	if s.Timeout <= 0 {
-		s.Timeout = 30 * time.Second
+	if strings.TrimSpace(tool.Backend.Method) == "" {
+		return errors.New("backend.method is empty")
 	}
-	if strings.TrimSpace(s.CachePath) == "" {
-		s.CachePath = "/tmp/hcm-api-server-mcp-schema-cache.json"
-	}
-	if s.StaleAlertAfter <= 0 {
-		s.StaleAlertAfter = 30 * time.Minute
-	}
-}
-
-// Validate 校验 schema 同步配置。仅在 internal.enable=true 时被调用。
-func (s MCPSchemaSyncSetting) Validate() error {
-	if strings.TrimSpace(s.GatewayURL) == "" {
-		return errors.New("gatewayURL is empty (required when mcp.internal.enable=true)")
-	}
-	if !strings.HasPrefix(s.GatewayURL, "http://") && !strings.HasPrefix(s.GatewayURL, "https://") {
-		return fmt.Errorf("gatewayURL must start with http:// or https://: %q", s.GatewayURL)
+	if !strings.HasPrefix(tool.Backend.Path, "/") {
+		return fmt.Errorf("backend.path must start with '/': %q", tool.Backend.Path)
 	}
 	return nil
 }

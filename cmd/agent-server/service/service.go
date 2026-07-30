@@ -363,7 +363,8 @@ func (s *Service) mountA2A(mux *http.ServeMux) error {
 		return nil
 	}
 
-	srv, err := a2a.New(cfg, s.runTime.AGUIRunner, cc.AgentServer().AGUI.Model.Stream)
+	srv, err := a2a.New(cfg, s.runTime.AGUIRunner, cc.AgentServer().AGUI.Model.Stream,
+		s.runTime.CheckpointSaver())
 	if err != nil {
 		return fmt.Errorf("create A2A server failed: %v", err)
 	}

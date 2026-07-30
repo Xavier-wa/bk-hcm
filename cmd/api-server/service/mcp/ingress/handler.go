@@ -28,6 +28,16 @@ import (
 	mcpsdk "trpc.group/trpc-go/trpc-mcp-go"
 )
 
+// ConfirmRequest 是 OpenClaw/MCP 通道对 HITL（如 tool.confirm）中断的结构化确认入参，
+// 语义对齐 AG-UI forwardedProps.resumeValue：confirm 时回传可编辑的工具入参，cancel 时取消。
+type ConfirmRequest struct {
+	// Action 为 confirm 或 cancel。
+	Action string
+	// Args 为确认后的工具入参（通常回传上一轮 _meta.confirm.data）；cancel 时可省略。
+	// confirm 且 Args 为空时，agent-server 使用中断时的原始 tool_call 入参。
+	Args map[string]any
+}
+
 // SendMessageRequest 是 BridgeHandler.SendMessage 的入参，
 // 由 ingress 层负责从 MCP CallToolRequest 中解析得到，业务层无需关心 MCP 协议细节。
 //
@@ -42,6 +52,8 @@ type SendMessageRequest struct {
 	BkBizID int64
 	// ModelName 是模型名称，可选。
 	ModelName string
+	// Confirm 是可选的 HITL 结构化确认；非 nil 时桥接层写入 A2A metadata.resumeValue。
+	Confirm *ConfirmRequest
 	// ProgressToken 是 MCP 客户端在 _meta.progressToken 字段中携带的进度令牌，
 	// BridgeHandler 用它把 A2A 流式事件转换为 notifications/progress，
 	// 并在 notifications/cancelled 时反向查找对应的 A2A taskId。

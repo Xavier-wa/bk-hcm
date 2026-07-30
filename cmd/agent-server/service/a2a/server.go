@@ -37,6 +37,7 @@ import (
 	"hcm/pkg/logs"
 
 	a2aserver "trpc.group/trpc-go/trpc-a2a-go/server"
+	"trpc.group/trpc-go/trpc-agent-go/graph"
 	"trpc.group/trpc-go/trpc-agent-go/runner"
 	agoa2a "trpc.group/trpc-go/trpc-agent-go/server/a2a"
 )
@@ -57,10 +58,13 @@ type Server struct {
 
 // New 构建一个 A2A Server，使用传入的 runner.Runner（与 AG-UI 链路共享同一实例）。
 //
+// The saver parameter enables MCP/OpenClaw HITL auto-resume (checkpoint + structured
+// confirm). A nil saver disables auto-resume enrichment but still mounts A2A.
+//
 // 调用方负责：
 //   - 在挂载到 ServeMux 前先做 Enable 判断（cfg.Enable=false 时直接跳过本函数）；
 //   - 在 mux 上分别注册 server.JSONRPCPath() / AgentCardPath() / AgentLegacyCardPath()。
-func New(cfg cc.A2ASetting, r runner.Runner, streaming bool) (*Server, error) {
+func New(cfg cc.A2ASetting, r runner.Runner, streaming bool, saver graph.CheckpointSaver) (*Server, error) {
 	if r == nil {
 		return nil, fmt.Errorf("a2a.New: runner is nil")
 	}
@@ -70,10 +74,10 @@ func New(cfg cc.A2ASetting, r runner.Runner, streaming bool) (*Server, error) {
 
 	card := buildAgentCard(cfg, streaming)
 	logs.Infof("a2a: building server, basePath=%s, jsonRPCPath=%s, "+
-		"cardName=%q, cardVersion=%q, skills=%d",
-		basePath, jsonRPCPath, card.Name, card.Version, len(card.Skills))
+		"cardName=%q, cardVersion=%q, skills=%d, autoResume=%t",
+		basePath, jsonRPCPath, card.Name, card.Version, len(card.Skills), saver != nil)
 
-	a2aSrv, err := agoa2a.New(
+	opts := []agoa2a.Option{
 		agoa2a.WithRunner(r),
 		agoa2a.WithAgentCard(card),
 		// 显式声明 X-Bkapi-User-Name 作为 A2A user ID 来源；
@@ -88,7 +92,22 @@ func New(cfg cc.A2ASetting, r runner.Runner, streaming bool) (*Server, error) {
 			a2aserver.WithBasePath(basePath),
 			a2aserver.WithJSONRPCEndpoint(jsonRPCPath),
 		),
-	)
+		// MCP/OpenClaw 的 HITL 依赖中断事件透传其 state_delta：graph.Interrupt 触发的
+		// 中断事件 object 类型为 graph.pregel.step，payload（推荐/拆单/选账号/提单确认）与
+		// InterruptKey/Value 都在其 _pregel_metadata 里。框架默认白名单只放行 graph.execution，
+		// 会把中断事件连同 payload 一并丢弃，导致 bridge 无法还原 _meta.confirm。此处显式放行
+		// graph.pregel.step，AG-UI 链路使用独立 translator，不受影响。
+		agoa2a.WithGraphEventObjectAllowlist(
+			graph.ObjectTypeGraphExecution,
+			graph.ObjectTypeGraphPregelStep,
+		),
+	}
+	if saver != nil {
+		// Align MCP/OpenClaw resume with AG-UI tryPrepareAutoResume.
+		opts = append(opts, agoa2a.WithProcessMessageHook(newAutoResumeHook(saver)))
+	}
+
+	a2aSrv, err := agoa2a.New(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("a2a.New: build a2a server failed: %w", err)
 	}

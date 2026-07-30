@@ -236,14 +236,25 @@ func resolveForwardedResumeValue(ctx context.Context) string {
 	}
 
 	raw := inv.RunOptions.RuntimeState[constant.StateKeyForwardedResumeValue]
-	forwarded, ok := raw.(string)
-	if !ok || forwarded == "" {
+	if raw == nil {
 		return ""
 	}
-
-	logs.Infof("after_tool_hitl: forwarded resume value=%s, rid: %s", forwarded, rid)
-
-	return forwarded
+	switch v := raw.(type) {
+	case string:
+		if v == "" {
+			return ""
+		}
+		logs.Infof("after_tool_hitl: forwarded resume value=%s, rid: %s", v, rid)
+		return v
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			logs.Warnf("after_tool_hitl: marshal forwarded resume value failed, err: %v, rid: %s", err, rid)
+			return ""
+		}
+		logs.Infof("after_tool_hitl: forwarded resume value=%s, rid: %s", string(b), rid)
+		return string(b)
+	}
 }
 
 // emitForwardedResumeEvent emits a custom event carrying the structured forwarded resume value,

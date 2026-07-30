@@ -20,7 +20,6 @@
 package cc
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -65,14 +64,15 @@ func TestMCPIngressSetting_Validate_RequiresLeadingSlash(t *testing.T) {
 func TestMCPBridgeSetting_TrySetDefault(t *testing.T) {
 	cfg := MCPBridgeSetting{}
 	cfg.trySetDefault()
-	if cfg.ConnectTimeout != 5*time.Second {
-		t.Errorf("ConnectTimeout = %v, want 5s", cfg.ConnectTimeout)
+	if cfg.ConnectTimeout != constant.MCPBridgeDefaultConnectTimeout {
+		t.Errorf("ConnectTimeout = %v, want %v", cfg.ConnectTimeout, constant.MCPBridgeDefaultConnectTimeout)
 	}
-	if cfg.ReadTimeout != 300*time.Second {
-		t.Errorf("ReadTimeout = %v, want 300s", cfg.ReadTimeout)
+	if cfg.ReadTimeout != constant.MCPBridgeDefaultReadTimeout {
+		t.Errorf("ReadTimeout = %v, want %v", cfg.ReadTimeout, constant.MCPBridgeDefaultReadTimeout)
 	}
-	if cfg.MaxIdleConnsPerHost != 100 {
-		t.Errorf("MaxIdleConnsPerHost = %d, want 100", cfg.MaxIdleConnsPerHost)
+	if cfg.MaxIdleConnsPerHost != constant.MCPBridgeDefaultMaxIdleConnsPerHost {
+		t.Errorf("MaxIdleConnsPerHost = %d, want %d", cfg.MaxIdleConnsPerHost,
+			constant.MCPBridgeDefaultMaxIdleConnsPerHost)
 	}
 }
 
@@ -86,28 +86,139 @@ func TestMCPBridgeSetting_Validate_NoStrictRequirement(t *testing.T) {
 }
 
 func TestMCPInternalSetting_TrySetDefault(t *testing.T) {
-	cfg := MCPInternalSetting{}
+	cfg := MCPInternalSetting{Servers: []MCPInternalServerSetting{{Name: "hcm-apply"}}}
 	cfg.trySetDefault()
 
-	if cfg.BasePath != constant.MCPInternalBasePathDefault {
-		t.Errorf("BasePath = %q, want %q", cfg.BasePath, constant.MCPInternalBasePathDefault)
-	}
-	if cfg.SchemaSync.Interval != 5*time.Minute {
-		t.Errorf("SchemaSync.Interval = %v, want 5m", cfg.SchemaSync.Interval)
-	}
-	if cfg.SchemaSync.Timeout != 30*time.Second {
-		t.Errorf("SchemaSync.Timeout = %v, want 30s", cfg.SchemaSync.Timeout)
-	}
-	if !strings.HasSuffix(cfg.SchemaSync.CachePath, ".json") {
-		t.Errorf("SchemaSync.CachePath = %q, want *.json suffix", cfg.SchemaSync.CachePath)
+	if cfg.Servers[0].ServerVersion != constant.MCPInternalServerDefaultVersion {
+		t.Errorf("ServerVersion = %q, want %q", cfg.Servers[0].ServerVersion,
+			constant.MCPInternalServerDefaultVersion)
 	}
 }
 
-func TestMCPInternalSetting_Validate_RequiresGatewayURL(t *testing.T) {
+func TestMCPInternalSetting_Validate_RequiresServers(t *testing.T) {
 	cfg := MCPInternalSetting{Enable: true}
-	cfg.trySetDefault()
 	if err := cfg.Validate(); err == nil {
-		t.Error("expected error on empty schemaSync.gatewayURL when internal.enable=true")
+		t.Error("expected error on empty servers when internal.enable=true")
+	}
+}
+
+func TestMCPInternalSetting_Validate_DefaultsPass(t *testing.T) {
+	cfg := MCPInternalSetting{Enable: true, Servers: []MCPInternalServerSetting{
+		{Name: "hcm-apply", BasePath: "/api/v1/mcp/internal/hcm-apply/mcp", OpenAPISpecPath: "x.yaml"},
+	}}
+	cfg.trySetDefault()
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("valid internal server setting should pass validate, got %v", err)
+	}
+}
+
+func TestMCPInternalSetting_Validate_InternalOnlyToolsRules(t *testing.T) {
+	cases := []struct {
+		name string
+		tool InternalOnlyToolSetting
+		want bool // true = expect error
+	}{
+		{"empty name", InternalOnlyToolSetting{Backend: InternalOnlyToolBackend{Method: "POST", Path: "/api/v1/x"}}, true},
+		{"empty method", InternalOnlyToolSetting{Name: "x", Backend: InternalOnlyToolBackend{Path: "/api/v1/x"}}, true},
+		{"path no leading slash", InternalOnlyToolSetting{Name: "x", Backend: InternalOnlyToolBackend{Method: "POST", Path: "api/v1/x"}}, true},
+		{"ok", InternalOnlyToolSetting{Name: "x", Backend: InternalOnlyToolBackend{Method: "POST", Path: "/api/v1/x"}}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := MCPInternalSetting{Enable: true, Servers: []MCPInternalServerSetting{{
+				Name:              "hcm-apply",
+				BasePath:          "/api/v1/mcp/internal/hcm-apply/mcp",
+				OpenAPISpecPath:   "x.yaml",
+				InternalOnlyTools: []InternalOnlyToolSetting{c.tool},
+			}}}
+			cfg.trySetDefault()
+			err := cfg.Validate()
+			if c.want && err == nil {
+				t.Error("expected validate error, got nil")
+			}
+			if !c.want && err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestMCPInternalSetting_MultipleServers(t *testing.T) {
+	cfg := MCPInternalSetting{
+		Enable: true,
+		Servers: []MCPInternalServerSetting{
+			{
+				Name:                "hcm-apply",
+				BasePath:            "/api/v1/mcp/internal/hcm-apply/mcp",
+				OpenAPISpecPath:     "internal_mcp.yaml",
+				IncludeOperationIDs: []string{"get_apply_*"},
+			},
+			{
+				Name:                "hcm-resource",
+				BasePath:            "/api/v1/mcp/internal/hcm-resource/mcp",
+				OpenAPISpecPath:     "internal_mcp.yaml",
+				IncludeOperationIDs: []string{"list_biz_cvm"},
+			},
+		},
+	}
+	cfg.trySetDefault()
+
+	for _, server := range cfg.Servers {
+		if server.ServerVersion != constant.MCPInternalServerDefaultVersion {
+			t.Fatalf("server %s version = %q, want default version", server.Name, server.ServerVersion)
+		}
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("multiple internal MCP servers should pass validate, got %v", err)
+	}
+}
+
+func TestMCPInternalSetting_Validate_MultipleServerRules(t *testing.T) {
+	cases := []struct {
+		name    string
+		servers []MCPInternalServerSetting
+	}{
+		{
+			name: "empty name",
+			servers: []MCPInternalServerSetting{
+				{BasePath: "/api/v1/mcp/internal/a/mcp", OpenAPISpecPath: "x.yaml"},
+			},
+		},
+		{
+			name: "duplicated name",
+			servers: []MCPInternalServerSetting{
+				{Name: "a", BasePath: "/api/v1/mcp/internal/a/mcp", OpenAPISpecPath: "x.yaml"},
+				{Name: "a", BasePath: "/api/v1/mcp/internal/b/mcp", OpenAPISpecPath: "x.yaml"},
+			},
+		},
+		{
+			name: "duplicated basePath",
+			servers: []MCPInternalServerSetting{
+				{Name: "a", BasePath: "/api/v1/mcp/internal/a/mcp", OpenAPISpecPath: "x.yaml"},
+				{Name: "b", BasePath: "/api/v1/mcp/internal/a/mcp", OpenAPISpecPath: "x.yaml"},
+			},
+		},
+		{
+			name: "basePath no leading slash",
+			servers: []MCPInternalServerSetting{
+				{Name: "a", BasePath: "api/v1/mcp/internal/a/mcp", OpenAPISpecPath: "x.yaml"},
+			},
+		},
+		{
+			name: "empty openapiSpecPath",
+			servers: []MCPInternalServerSetting{
+				{Name: "a", BasePath: "/api/v1/mcp/internal/a/mcp"},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := MCPInternalSetting{Enable: true, Servers: c.servers}
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("expected validate error, got nil")
+			}
+		})
 	}
 }
 
