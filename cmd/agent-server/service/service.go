@@ -793,6 +793,25 @@ func makeRunOptionResolver(saver graph.CheckpointSaver, sessionSvc agentsession.
 
 		opts = append(opts, agent.WithRuntimeState(runtimeState))
 
+		// WithGraphEmitFinalModelResponses(true)：让 Graph 流式 LLM 的最终完整回复进入 session。
+		//
+		// 问题：UI 已展示 Agent 收口文案（如带序号的候选机型表），但下一轮模型上下文里没有；
+		// 用户回「第 N 个」时无法锚定。不止机型选号——凡依赖「上一轮 Agent 文本」做多轮锚定的场景都会卡住或者重拉数据。
+		//
+		// 原因：框架默认 GraphEmitFinalModelResponses=false，只 emit 流式 partial chunk（Done=false）。
+		// chunk 走 SSE/track 拼给前端；runner 落库要求非 partial + 有效 content，最终 Done=true
+		// 的完整回复若不 emit，则进不了 aiagent_session_events，下一轮 seed 看不见。
+		// （历史 tool 结果还会被裁成 placeholder）
+		//
+		// 方案：打开本开关，流结束后 emit Done=true 完整 model response，经 shouldPersistEvent
+		// 写入 session_events，下一轮与 fallback/子图从 session seed 时才能拿到收口文案。
+		//
+		// 附带影响：
+		// 1) 每轮可能多持久化 1 条最终 response 事件，session_events 体积略增；
+		// 2) AG-UI 对同 response.ID 应收束为 TEXT_MESSAGE_END，一般不双刷气泡——若出现双气泡需排查翻译层；
+		// 3) 不新增 LLM 往返，仅多 emit/落库一次已生成的完整文本。
+		opts = append(opts, agent.WithGraphEmitFinalModelResponses(true))
+
 		// Dynamic tool filtering.
 		if toolFilter != nil {
 			opts = append(opts, agent.WithToolFilter(toolFilter))
