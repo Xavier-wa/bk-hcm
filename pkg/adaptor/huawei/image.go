@@ -73,7 +73,7 @@ func (h *HuaWei) ListImage(kt *kit.Kit, opt *image.HuaWeiImageListOption) (*imag
 			Architecture: changeArchitecture(pImage.OsBit),
 			Platform:     pImage.Platform.Value(),
 			State:        model.GetListImagesRequestStatusEnum().ACTIVE.Value(),
-			Type:         "public",
+			Type:         string(enumor.ImageTypePublic),
 			OsType:       image.GetOsTypeByPlatform(enumor.HuaWei, pImage.Platform.Value()),
 		})
 	}

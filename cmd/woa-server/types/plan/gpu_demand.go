@@ -203,3 +203,58 @@ type ListResPlanDemandGpuSubOrderResp struct {
 	Details   []gpusuborder.ResPlanDemandGpuSubOrderTable `json:"details"`
 	TplConfig []ResPlanDemandGpuTplConfig                 `json:"tpl_config"`
 }
+
+// ResPlanDemandGpuSubOrderSummaryReq is GPU demand suborder summary request (MCP / agent).
+type ResPlanDemandGpuSubOrderSummaryReq struct {
+	// OrderID 需求主单 ID
+	OrderID string `json:"order_id" validate:"required,lte=64"`
+	// Statuses 子单状态，多值 in；空表示不过滤
+	Statuses []enumor.RPDemandGPUSubOrderStatus `json:"statuses" validate:"omitempty,max=10,dive"`
+	// DemandYear 需求年份，可选
+	DemandYear *int64 `json:"demand_year"`
+	// DemandMonth 需求月份，可选
+	DemandMonth *int64 `json:"demand_month"`
+	// DemandType 需求分类，可选
+	DemandType string `json:"demand_type" validate:"omitempty,lte=64"`
+}
+
+// Validate validate summary request.
+func (r *ResPlanDemandGpuSubOrderSummaryReq) Validate() error {
+	if err := validator.Validate.Struct(r); err != nil {
+		return err
+	}
+
+	for _, status := range r.Statuses {
+		if err := status.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if r.DemandYear != nil && cvt.PtrToVal(r.DemandYear) <= 0 {
+		return errors.New("demand_year should be > 0")
+	}
+
+	if r.DemandMonth != nil {
+		month := cvt.PtrToVal(r.DemandMonth)
+		if month < 1 || month > 12 {
+			return errors.New("demand_month should be >= 1 and <= 12")
+		}
+	}
+
+	return nil
+}
+
+// ResPlanDemandGpuSubOrderSummaryResp is GPU demand suborder summary response.
+type ResPlanDemandGpuSubOrderSummaryResp struct {
+	OrderID string                                `json:"order_id"`
+	Details []ResPlanDemandGpuSubOrderSummaryElem `json:"details"`
+}
+
+// ResPlanDemandGpuSubOrderSummaryElem is one demand_type summary row.
+type ResPlanDemandGpuSubOrderSummaryElem struct {
+	DemandType string `json:"demand_type"`
+	GPUNum     int64  `json:"gpu_num"`
+	QpmMax     int64  `json:"qpm_max"`
+	// Months 按月度量，key 为 YYYY-MM；值为该月 gpu_num 与 qpm_max 之和（二者通常互斥）
+	Months map[string]int64 `json:"months"`
+}

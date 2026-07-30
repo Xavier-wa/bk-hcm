@@ -1909,3 +1909,262 @@ paths:
           userVerifiedRequired: true
         disabledStages: []
         descriptionEn:
+  /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/images/list:
+    post:
+      operationId: list_biz_image_ext
+      description: 获取业务可使用的镜像列表
+      tags:
+        - Cvm
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                    description: 状态码
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: number
+                        description: 当前规则能匹配到的总记录条数，仅在count查询参数设置为true时返回
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: 镜像 HCM ID
+                            name:
+                              type: string
+                              description: 镜像名称
+                            type:
+                              type: string
+                              description: 镜像类型（私有、公共或其他类型）
+                            state:
+                              type: string
+                              description: 镜像状态，CREATING-创建中，NORMAL-正常，CREATEFAILED-创建失败，USING-使用中，SYNCING-同步中，IMPORTING-导入中，IMPORTFAILED-导入失败
+                            region:
+                              type: string
+                              description: 地域
+                            vendor:
+                              type: string
+                              description: 云厂商
+                            creator:
+                              type: string
+                              description: 创建者
+                            os_type:
+                              type: string
+                              description: 操作系统类型，如Linux、Windows
+                            reviser:
+                              type: string
+                              description: 修改者
+                            cloud_id:
+                              type: string
+                              description: 镜像在云厂商上的ID
+                            platform:
+                              type: string
+                              description: 镜像平台
+                            created_at:
+                              type: string
+                              description: 创建时间，标准格式：2006-01-02T15:04:05Z
+                            updated_at:
+                              type: string
+                              description: 更新时间，标准格式：2006-01-02T15:04:05Z
+                            architecture:
+                              type: string
+                              description: 镜像架构
+                        description: 查询返回的数据，仅在count查询参数设置为false时返回
+                    description: 响应数据
+                  message:
+                    type: string
+                    description: 请求信息
+          description: ''
+      parameters:
+        - in: path
+          name: vendor
+          schema:
+            type: string
+          required: true
+          description: 云厂商（枚举值：tcloud、tcloud-ziyan、aws、gcp、huawei、azure）
+        - in: path
+          name: bk_biz_id
+          schema:
+            type: number
+          required: true
+          description: 业务ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - page
+              properties:
+                name:
+                  type: string
+                  default: ''
+                  description: 镜像名称关键字，模糊匹配（不区分大小写）
+                page:
+                  type: object
+                  default: ''
+                  required:
+                    - count
+                    - limit
+                    - start
+                  properties:
+                    sort:
+                      type: string
+                      default: ''
+                      description: 用哪个字段排序
+                    count:
+                      type: boolean
+                      default: ''
+                      description: 是否返回总记录条数。为 true 时仅返回 count，不返回 details，且 start/limit 需为 0；为 false 时按 start/limit 返回 details，不返回 count
+                    limit:
+                      type: number
+                      default: ''
+                      description: 每页限制条数，最大 500，不能为 0
+                    order:
+                      type: string
+                      default: ''
+                      description: 排序顺序（枚举值：ASC、DESC）
+                    start:
+                      type: number
+                      default: ''
+                      description: 记录开始位置，起始值为 0
+                  description: 分页配置
+                type:
+                  type: string
+                  default: ''
+                  description: 归一化镜像类型。枚举值：public / private / shared
+                region:
+                  type: string
+                  default: ''
+                  description: 地域，精确匹配。如 ap-guangzhou
+                platform:
+                  type: string
+                  default: ''
+                  description: 镜像平台，精确匹配。如 CentOS、TencentOS
+        required: false
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/images/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: [ ]
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/plans/resources/gpu/demands/suborders/summary:
+    post:
+      operationId: list_biz_gpu_demand_suborder_summary
+      description: 按 GPU 需求主单汇总子单数据（按需求分类汇总卡数 / QPM，并带按月列）
+      tags:
+        - SCR
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            months:
+                              type: object
+                              properties:
+                                2026-04:
+                                  type: number
+                              description: months 是一个字典，key为需求年月：`YYYY-MM`，value 为该月 gpu_num 与 qpm_max 之和（二者通常互斥）
+                            gpu_num:
+                              type: number
+                              description: 该类别下子单 gpu_num 之和
+                            qpm_max:
+                              type: number
+                              description: 该类别下子单 qpm_max 之和
+                            demand_type:
+                              type: string
+                      order_id:
+                        type: string
+                  message:
+                    type: string
+          description: ''
+      parameters:
+        - in: path
+          name: bk_biz_id
+          schema:
+            type: number
+          required: true
+          description: 业务ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - order_id
+              properties:
+                order_id:
+                  type: string
+                  default: ''
+                  description: 需求单据ID
+                statuses:
+                  type: array
+                  items:
+                    type: string
+                    default: ''
+                  default: ''
+                  description: 子单据状态列表，不传时查询全部，最多传20个
+                demand_type:
+                  type: string
+                  default: ''
+                  description: 需求分类（需求表格的子 sheet 名称）
+                demand_year:
+                  type: number
+                  default: ''
+                  description: 需求年份
+                demand_month:
+                  type: number
+                  default: ''
+                  description: 需求月份
+        required: false
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/plans/resources/gpu/demands/suborders/summary
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
