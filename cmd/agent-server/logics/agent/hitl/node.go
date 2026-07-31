@@ -93,7 +93,7 @@ func makeHITLNode(reg *Registry) graph.NodeFunc {
 			logs.Infof("hitl node: no structured value, treating as cancel for tool %q, rid: %s", toolName, rid)
 			result, err = handler.OnResume(ctx, tc, CancelActionSignal)
 			if err == nil {
-				injectCancelUserMessage(&result, toolName, resumeValue)
+				injectCancelUserMessage(&result, handler, toolName, resumeValue)
 			}
 		}
 		if err != nil {
@@ -215,13 +215,28 @@ func resolveHITLForwardedResumeValue(ctx context.Context) string {
 // injectCancelUserMessage adjusts a cancel ResumeResult so that the user's free-form input
 // (typed when dismissing the interrupt) is forwarded to the LLM as a user message instead of
 // being discarded. If userInput is empty, a synthetic "用户取消申领 <toolName>" message is used.
-func injectCancelUserMessage(result *ResumeResult, toolName string, userInput any) {
+//
+// 当 handler 实现 CancelNoticer 时，会在 user 消息之前插入一条 assistant 引导消息，最终顺序为
+// tool（取消结果）→ assistant（引导说明）→ user（用户自由文本）。这个顺序是两条约束夹出来的：
+//   - 取消结果不能排到 user 消息之后：OpenAI 协议要求 tool 消息紧跟发起 tool_calls 的 assistant
+//     消息，中间插入 user 会被服务端拒绝；
+//   - 取消结果排在 user 消息之前时，其内容会被 llm 节点的 MakeHistoricalToolResultFilter 当作历史
+//     结果替换为占位符（该过滤器以最后一条 user 消息为历史分界），模型因此看不到工具被拦截，可能
+//     误以为提单已成功。assistant 消息不受该过滤器影响，故用它承载引导说明。
+func injectCancelUserMessage(result *ResumeResult, handler Handler, toolName string, userInput any) {
 	userMsg, _ := userInput.(string)
 	if userMsg == "" {
-		userMsg = "用户取消申领 " + toolName
+		userMsg = "用户取消调用" + toolName
 	}
 	// Override ClearUserInput so that StateKeyUserInput is not blanked by buildResumeDelta.
 	result.ClearUserInput = false
+	if noticer, ok := handler.(CancelNoticer); ok {
+		if notice := noticer.CancelNotice(); notice != "" {
+			result.AppendMessages = append(result.AppendMessages,
+				model.Message{Role: model.RoleAssistant, Content: notice},
+			)
+		}
+	}
 	result.AppendMessages = append(result.AppendMessages,
 		model.Message{Role: model.RoleUser, Content: userMsg},
 	)

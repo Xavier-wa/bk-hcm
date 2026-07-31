@@ -215,10 +215,35 @@ func TestApplyGateOnResume(t *testing.T) {
 		if !res.ClearUserInput {
 			t.Errorf("cancel should clear user input")
 		}
+		// 引导用户点击确认按钮的说明由 CancelNotice 提供、hitl 节点以 assistant 消息注入，
+		// 门禁自身只写回 tool 结果。
 		if len(res.AppendMessages) != 1 || res.AppendMessages[0].Role != model.RoleTool {
 			t.Errorf("cancel should append one tool message, got %+v", res.AppendMessages)
 		}
+		if res.AppendMessages[0].Content != applyCancelToolResult {
+			t.Errorf("cancel tool result = %q, want %q", res.AppendMessages[0].Content, applyCancelToolResult)
+		}
 	})
+}
+
+// TestApplyGateCancelNotice 校验门禁实现了 hitl.CancelNoticer，且引导说明覆盖三个关键点：
+// 用户输入的文字不能替代点击、必须先用文字说明、可按用户意愿重新弹出确认卡片。
+// 前两点缺一不可：用户输入「确认提交」时，模型会把它当成提交许可直接重新调用提单工具，
+// 于是又弹一次确认卡片，用户始终收不到需要点击按钮的说明。
+func TestApplyGateCancelNotice(t *testing.T) {
+	notice := newCreateCvmApplyGate(nil).(hitl.CancelNoticer).CancelNotice()
+	if !strings.Contains(notice, "不能作为提交依据") {
+		t.Errorf("cancel notice = %q, want it to reject free text as a submit approval", notice)
+	}
+	if !strings.Contains(notice, "必须先用文字说明") {
+		t.Errorf("cancel notice = %q, want it to require a text reply first", notice)
+	}
+	if !strings.Contains(notice, "重新弹出确认卡片") {
+		t.Errorf("cancel notice = %q, want it to allow re-opening the confirm card", notice)
+	}
+	if !strings.Contains(notice, "确认提交") {
+		t.Errorf("cancel notice = %q, want it to name the confirm button", notice)
+	}
 }
 
 func TestApplyGateOnResumeBusinessReject(t *testing.T) {

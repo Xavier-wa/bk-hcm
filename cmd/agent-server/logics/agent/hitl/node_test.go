@@ -21,6 +21,7 @@ package hitl
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	agenttool "hcm/cmd/agent-server/logics/tool"
@@ -172,4 +173,81 @@ func TestIsJSONObjectString(t *testing.T) {
 	if isJSONObjectString("确认提交") {
 		t.Error("free text should not match")
 	}
+}
+
+// noticeHandler 是实现 CancelNoticer 的测试桩，用于校验取消引导消息的注入位置。
+type noticeHandler struct{ notice string }
+
+func (h noticeHandler) ToolName() string  { return "gated_tool" }
+func (h noticeHandler) EventKind() string { return "notice_test_event" }
+
+func (h noticeHandler) BuildPayload(context.Context, *model.ToolCall) (any, error) { return nil, nil }
+
+func (h noticeHandler) OnResume(context.Context, *model.ToolCall, any) (ResumeResult, error) {
+	return ResumeResult{}, nil
+}
+
+func (h noticeHandler) CancelNotice() string { return h.notice }
+
+func TestInjectCancelUserMessage(t *testing.T) {
+	newCancelResult := func() ResumeResult {
+		return ResumeResult{
+			Next:           enumor.CvmApplyNodeLLM,
+			ClearUserInput: true,
+			AppendMessages: []model.Message{{Role: model.RoleTool, ToolID: "c1", Content: "cancelled"}},
+		}
+	}
+	roles := func(msgs []model.Message) []model.Role {
+		got := make([]model.Role, len(msgs))
+		for i := range msgs {
+			got[i] = msgs[i].Role
+		}
+		return got
+	}
+
+	// 引导消息必须落在 tool 结果与 user 消息之间：tool 结果不能排到 user 之后（协议要求紧跟
+	// tool_calls），而排在 user 之前时其内容会被历史工具结果过滤器替换为占位符。
+	t.Run("notice goes between tool result and user input", func(t *testing.T) {
+		const notice = "如需继续提交，请点击确认按钮"
+		res := newCancelResult()
+		injectCancelUserMessage(&res, noticeHandler{notice: notice}, "gated_tool", "顺便查下配额")
+
+		want := []model.Role{model.RoleTool, model.RoleAssistant, model.RoleUser}
+		if got := roles(res.AppendMessages); !reflect.DeepEqual(got, want) {
+			t.Fatalf("roles = %v, want %v", got, want)
+		}
+		if res.AppendMessages[1].Content != notice {
+			t.Errorf("notice = %q, want %q", res.AppendMessages[1].Content, notice)
+		}
+		if res.AppendMessages[2].Content != "顺便查下配额" {
+			t.Errorf("user message = %q, want the free-form input", res.AppendMessages[2].Content)
+		}
+		if res.ClearUserInput {
+			t.Errorf("cancel with user input should not clear user input")
+		}
+	})
+
+	t.Run("empty notice appends user message only", func(t *testing.T) {
+		res := newCancelResult()
+		injectCancelUserMessage(&res, noticeHandler{}, "gated_tool", "顺便查下配额")
+
+		want := []model.Role{model.RoleTool, model.RoleUser}
+		if got := roles(res.AppendMessages); !reflect.DeepEqual(got, want) {
+			t.Fatalf("roles = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("handler without notice support falls back to synthetic user message", func(t *testing.T) {
+		res := newCancelResult()
+		toolName := constant.HumanConfirmToolName
+		injectCancelUserMessage(&res, NewHumanConfirmHandler(), toolName, "")
+
+		want := []model.Role{model.RoleTool, model.RoleUser}
+		if got := roles(res.AppendMessages); !reflect.DeepEqual(got, want) {
+			t.Fatalf("roles = %v, want %v", got, want)
+		}
+		if res.AppendMessages[1].Content != "用户取消申领 "+toolName {
+			t.Errorf("user message = %q, want synthetic cancel text", res.AppendMessages[1].Content)
+		}
+	})
 }

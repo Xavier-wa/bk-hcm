@@ -51,6 +51,14 @@ type Handler interface {
 	OnResume(ctx context.Context, tc *model.ToolCall, resumeValue any) (ResumeResult, error)
 }
 
+// CancelNoticer 是 Handler 的可选接口。用户以自由文本（而非确认组件）回复中断时，HITL 节点把该说明
+// 作为一条 assistant 消息注入上下文，用于引导模型下一条回复；该消息只进模型上下文，不发前端事件。
+// 未实现该接口的 handler（如 human_confirm）行为不变。
+type CancelNoticer interface {
+	// CancelNotice 返回取消后引导模型下一条回复的说明，返回空串表示不需要引导。
+	CancelNotice() string
+}
+
 // ResumeResult 是 handler 处理用户 resume 值后的结果。
 type ResumeResult struct {
 	// Next 是要路由到的下一节点：enumor.CvmApplyNodeTool 或 enumor.CvmApplyNodeLLM。

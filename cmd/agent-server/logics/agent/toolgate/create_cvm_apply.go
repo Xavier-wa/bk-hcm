@@ -41,6 +41,22 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/model"
 )
 
+const (
+	// applyCancelToolResult 是用户未点击确认按钮时写回该 tool_call 的结果。
+	applyCancelToolResult = "本次申领提单未提交：用户没有点击申领确认卡片上的「确认提交」按钮。"
+	// applyCancelNotice 是用户以自由文本回复确认卡片时，注入上下文用于引导模型下一条回复的说明。
+	// 用户常直接输入「确认提交」这类文字，模型容易把它当成提交许可就直接重新调用提单工具，结果又弹一次
+	// 确认卡片且没有任何文字说明。这里的要求是：先用文字讲清「文字不能替代点击」，再由模型按用户意愿
+	// 决定是否重新调用提单工具重新弹卡片，让用户可以接着点击按钮完成提交。
+	applyCancelNotice = "提单工具已被确认门禁拦截，单据未提交。用户在输入框输入的文字" +
+		"（包括「确认」「确认提交」「提交」等）都不能作为提交依据，只有点击申领确认卡片上的" +
+		"「确认提交」按钮才会真正提单。回复时必须先用文字说明这一点：如需提交本次申领，" +
+		"请在申领确认卡片上点击「确认提交」按钮；若用户已表达继续提交的意愿，" +
+		"可在该说明之后再次调用提单工具重新弹出确认卡片，方便用户直接点击按钮。"
+	// applyArgsParseFailed 是申领参数无法解析时写回该 tool_call 的结果。
+	applyArgsParseFailed = "申领参数解析失败，暂时无法提单。"
+)
+
 // applyCheckFunc 提单前只读校验调用，默认走 woa-server，便于单测注入桩。
 type applyCheckFunc func(ctx context.Context, bizID int64, req *woatypes.ApplyReq) (*woatypes.CheckApplyOrderResp,
 	error)
@@ -52,7 +68,10 @@ type createCvmApplyGate struct {
 	check  applyCheckFunc
 }
 
-var _ hitl.Handler = (*createCvmApplyGate)(nil)
+var (
+	_ hitl.Handler       = (*createCvmApplyGate)(nil)
+	_ hitl.CancelNoticer = (*createCvmApplyGate)(nil)
+)
 
 // newCreateCvmApplyGate 创建主机申领门禁，注入用于 woa 校验调用的 client set。
 func newCreateCvmApplyGate(clientSet *client.ClientSet) hitl.Handler {
@@ -92,6 +111,11 @@ func (g *createCvmApplyGate) EventKind() string {
 	return constant.ToolConfirmCreateCvmApplyInterruptKey
 }
 
+// CancelNotice 返回取消提单后引导模型下一条回复的说明，实现 hitl.CancelNoticer。
+func (g *createCvmApplyGate) CancelNotice() string {
+	return applyCancelNotice
+}
+
 // BuildPayload 从工具调用入参构造申领确认卡片的 payload。
 func (g *createCvmApplyGate) BuildPayload(ctx context.Context, tc *model.ToolCall) (any, error) {
 	rid := rest.RidFromContext(ctx)
@@ -118,20 +142,18 @@ func (g *createCvmApplyGate) OnResume(ctx context.Context, tc *model.ToolCall, r
 
 	args, ok := resumeValue.(string)
 	if !ok || args == "" {
-		logs.Infof("apply gate: no resume value or empty, treat as cancel, rid: %s", rid)
-		return g.reject(tc, "您已取消本次申领提单。如需继续，请重新发起申领。"), nil
+		return g.onCancel(ctx, tc, "no resume value or empty"), nil
 	}
 
 	if args == hitl.CancelActionSignal {
-		logs.Infof("apply gate: cancel action signal, treat as cancel, rid: %s", rid)
-		return g.reject(tc, "您已取消本次申领提单。如需继续，请重新发起申领。"), nil
+		return g.onCancel(ctx, tc, "cancel action signal"), nil
 	}
 
 	// 将 args 反序列化为 map[string]any
 	var confirmedArgs map[string]any
 	if err := json.Unmarshal([]byte(args), &confirmedArgs); err != nil {
 		logs.Errorf("apply gate: unmarshal confirmed args failed, err: %v, rid: %s", err, rid)
-		return g.reject(tc, "申领参数解析失败，暂时无法提单。"), nil
+		return g.reject(tc, applyArgsParseFailed), nil
 	}
 
 	return g.onConfirm(ctx, tc, confirmedArgs)
@@ -150,7 +172,7 @@ func (g *createCvmApplyGate) onConfirm(ctx context.Context, tc *model.ToolCall, 
 		var err error
 		if finalArgs, err = unmarshalArgs(ctx, tc); err != nil {
 			logs.Errorf("apply gate: unmarshal original args failed, err: %v, rid: %s", err, rid)
-			return g.reject(tc, "申领参数解析失败，暂时无法提单。"), nil
+			return g.reject(tc, applyArgsParseFailed), nil
 		}
 	}
 
@@ -181,11 +203,13 @@ func (g *createCvmApplyGate) onConfirm(ctx context.Context, tc *model.ToolCall, 
 	return g.proceed(tc, confirmedArgs, rid)
 }
 
-// onCancel 处理取消动作：以面向用户的提示关闭该 tool_call 并回退到 llm 节点。
-func (g *createCvmApplyGate) onCancel(ctx context.Context, tc *model.ToolCall) hitl.ResumeResult {
-	rid := rest.RidFromContext(ctx)
-	logs.Infof("apply gate: user cancelled apply, rid: %s", rid)
-	return g.reject(tc, "您已取消本次申领提单。如需继续，请重新发起申领。")
+// onCancel 处理取消动作：关闭该 tool_call 并回退到 llm 节点。
+// reason 说明本次取消的判定来源，仅用于日志。
+// 引导用户重新点击确认按钮的说明由 CancelNotice 提供，经 hitl 节点以 assistant 消息注入：
+// 用户手动输入时该 tool 结果会被 llm 节点的历史工具结果过滤器替换为占位符，无法承载引导内容。
+func (g *createCvmApplyGate) onCancel(ctx context.Context, tc *model.ToolCall, reason string) hitl.ResumeResult {
+	logs.Infof("apply gate: user cancelled apply, reason: %s, rid: %s", reason, rest.RidFromContext(ctx))
+	return g.reject(tc, applyCancelToolResult)
 }
 
 // proceed 构造放行到 tool 节点的 ResumeResult。
