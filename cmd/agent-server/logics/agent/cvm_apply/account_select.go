@@ -113,10 +113,19 @@ func NewAccountSelectNode(cloudClient *cloudserver.Client, sessSvc session.Servi
 			}
 			logs.Infof("account_select: persisted account_id=%s no longer usable in biz=%d, re-select, rid: %s",
 				accountID, bkBizID, rid)
+			clearSelectedAccount(ctx, inv, sessSvc, appName)
 		}
 
 		return routeByAccountCount(ctx, state, inv, sessSvc, appName, accounts)
 	}
+}
+
+// isAccountEnabled 是账号可用性的唯一判据：当前仅支持自研云（tcloud-ziyan）账号申领。
+//
+// 路由判定、复用判定、卡片选项禁用态、select_account 工具校验必须共用它，否则会出现
+// 「自动选中 → 下一轮判失效 → 再自动选中」这类互相打架的空转。
+func isAccountEnabled(acc *protocloud.AccountBizRelWithAccount) bool {
+	return acc != nil && acc.Vendor == enumor.TCloudZiyan
 }
 
 // isAccountUsable 判断待复用的 account_id 是否仍存在于当前业务可用账号列表中，且 vendor 受支持
@@ -127,7 +136,7 @@ func isAccountUsable(accountID string, accounts []*protocloud.AccountBizRelWithA
 	}
 	for _, acc := range accounts {
 		if acc.ID == accountID {
-			return acc.Vendor == enumor.TCloudZiyan
+			return isAccountEnabled(acc)
 		}
 	}
 	return false
@@ -150,19 +159,32 @@ func listAccountsForBiz(ctx context.Context, client *cloudserver.Client, bkBizID
 	return client.Account.ListByUsageBizID(kt, bkBizID, enumor.ResourceAccount)
 }
 
-// routeByAccountCount selects the next graph node based on the number of available accounts.
+// routeByAccountCount selects the next graph node based on the number of usable accounts.
+// 可用数==0（含总数为 0）→ fallback；总数==1（此时必然可用）→ 自动选中；其余 → 弹卡片让用户选择
+// （非自研云账号在卡片内标记禁用+原因，只要还有可用账号就不改变是否弹卡片）。
 func routeByAccountCount(ctx context.Context, state graph.State, inv *trpcagent.Invocation,
 	sessSvc session.Service, appName string, accounts []*protocloud.AccountBizRelWithAccount) (
 	any, error) {
 
 	rid := rest.RidFromContext(ctx)
-	switch count := len(accounts); {
-	case count == 0:
-		return graph.State{constant.AccountSelectNextNodeKey: enumor.CvmApplyNodeFallback}, nil
+	count := len(accounts)
+	// 过滤出可用账号
+	enabledAccounts := filterEnabledAccounts(accounts)
+	enabledCount := len(enabledAccounts)
+	switch {
+	// 如果用户只有不可用账号或者无任何账号，都走”无可用账号提示分支“
+	case count == 0 || enabledCount == 0:
+		// 无任何账号，或有账号但一个都不支持申领：给出无权限提示后交还主图 fallback。
+		// 后者若继续弹卡片，用户面对的是全禁用选项，点不动也退不出，只能在
+		// account_gate → select_account → human_confirm 之间空转。
+		logs.Infof("account_select: no enabled account, total=%d, enabledCount=%d, route fallback, rid: %s",
+			count, enabledCount, rid)
+		return noUsableAccountFallback(ctx, state), nil
 
 	case count == 1:
-		accountID := accounts[0].ID
-		logs.Infof("account_select: auto-select account_id=%s, rid: %s", accountID, rid)
+		// 单一可用账号（enabledCount > 0 已保证其可用）：自动选中并落库，无需 HITL、无需模型。
+		accountID := enabledAccounts[0].ID
+		logs.Infof("account_select: auto-select single account_id=%s, rid: %s", accountID, rid)
 		injectAccountIDToRuntimeState(ctx, inv, accountID, sessSvc, appName)
 		return graph.State{
 			constant.SessionAccountIDTempKey:  accountID,
@@ -170,6 +192,7 @@ func routeByAccountCount(ctx context.Context, state graph.State, inv *trpcagent.
 		}, nil
 
 	default:
+		// 多账号且至少有一个可用：一律弹卡片，让用户看到全部账号及禁用原因后选择。
 		messages, _ := state[graph.StateKeyMessages].([]trpcmodel.Message)
 		// 上一步没有产生助手回复，需要进行emit事件封装，生成AGUI消息
 		lastResp := "已进入主机申领模式。请先选择需要操作的云账号。"
@@ -182,19 +205,52 @@ func routeByAccountCount(ctx context.Context, state graph.State, inv *trpcagent.
 		//（makeSubgraphInputMapper 会剥键），回退用 interrupt 返回的 userInput 匹配选项
 		//（前端选账号时 resume 命令即为 account_id 字符串，如 "0000002b"）。
 		accountID := resolveSelectedAccountID(ctx, inv, userInput, accounts)
-		if accountID != "" {
-			injectAccountIDToRuntimeState(ctx, inv, accountID, sessSvc, appName)
-		}
 
 		// 用户看到的账号选项并不在模型对话上下文中，这里将其作为助手消息注入，
 		// 让模型理解 resume 后用户输入所针对的选项
 		optionsMsg := buildAccountOptionsMessage(ctx, accounts)
 		lastResp = lastResp + "\n" + optionsMsg
 		delta := message.BuildFallbackResumeDelta(ctx, state, messages, lastResp, userInput)
-		delta[constant.SessionAccountIDTempKey] = accountID
+
+		// 仅在成功解析出 account_id 时注入并写入 delta；自由文本未命中时不下传空值，
+		// 避免污染后续 tryReuseAccountID 复用判定（账号由 select_account 工具兜底接住）。
+		// 只有可用账号才会记录进state，不可用账号通过LLM拒绝执行
+		if accountID != "" && isAccountUsable(accountID, accounts) {
+			injectAccountIDToRuntimeState(ctx, inv, accountID, sessSvc, appName)
+			delta[constant.SessionAccountIDTempKey] = accountID
+		}
 		delta[constant.AccountSelectNextNodeKey] = enumor.CvmApplyNodeLLM
 		return delta, nil
 	}
+}
+
+// noUsableAccountFallback 发出「无可用云账号」提示，并把控制权交还主图 fallback。
+//
+// 文案由本节点自己 emit 并落成 assistant 消息：子图 state 只有 messages 会经 output mapper 回填父图，
+// 路由键 AccountSelectNextNodeKey 留在子图内不外传。主图 fallback 随后从消息尾部的 assistant 回复
+// 复用同一句文案去 interrupt，且因尾部已是 assistant 而跳过重复 emit。
+func noUsableAccountFallback(ctx context.Context, state graph.State) graph.State {
+	messages, _ := state[graph.StateKeyMessages].([]trpcmodel.Message)
+	message.EmitFallbackMessage(ctx, messages, state, constant.AccountUnavailableEmitKey,
+		string(enumor.CvmApplyNodeAccountSelect), constant.NoPermissionFallbackMessage)
+
+	return graph.State{
+		constant.AccountSelectNextNodeKey: enumor.CvmApplyNodeFallback,
+		graph.StateKeyMessages: []trpcmodel.Message{
+			{Role: trpcmodel.RoleAssistant, Content: constant.NoPermissionFallbackMessage},
+		},
+	}
+}
+
+// filterEnabledAccounts 返回支持申领的可用账号（判据见 isAccountEnabled）。
+func filterEnabledAccounts(accounts []*protocloud.AccountBizRelWithAccount) []*protocloud.AccountBizRelWithAccount {
+	enabled := make([]*protocloud.AccountBizRelWithAccount, 0, len(accounts))
+	for _, acc := range accounts {
+		if isAccountEnabled(acc) {
+			enabled = append(enabled, acc)
+		}
+	}
+	return enabled
 }
 
 // promptAccountSelection triggers an HITL interrupt with the available account options and
@@ -291,7 +347,7 @@ func buildAccountOptions(accounts []*protocloud.AccountBizRelWithAccount) []acco
 			AccountID:   acc.ID,
 			AccountName: acc.Name,
 			Vendor:      string(acc.Vendor),
-			Enabled:     acc.Vendor == enumor.TCloudZiyan,
+			Enabled:     isAccountEnabled(acc),
 		}
 		// TODO 目前仅支持自研云申领，后续公有云支持后可放开
 		if !opt.Enabled {
@@ -334,6 +390,38 @@ func injectAccountIDToRuntimeState(ctx context.Context, inv *trpcagent.Invocatio
 	}
 	logs.Infof("account_select: persist selected account_id=%s success, key=%+v, rid: %s",
 		accountID, key, rest.RidFromContext(ctx))
+}
+
+// clearSelectedAccount 抹掉已失效账号的记忆：当轮 RuntimeState 与 session 后端两处都要清。
+//
+// 只「不复用」是不够的：RuntimeState 里的残留会被 instruction prompt 渲染成当前账号，
+// 更会让 account_gate 的 AccountExistInContext 误判为已选账号而放行申领类工具；
+// session 后端的残留则会在下一轮 run 起点被 loadSelectedAccountID 重新回填。
+func clearSelectedAccount(ctx context.Context, inv *trpcagent.Invocation, sessSvc session.Service,
+	appName string) {
+
+	rid := rest.RidFromContext(ctx)
+	if inv != nil && inv.RunOptions.RuntimeState != nil {
+		delete(inv.RunOptions.RuntimeState, constant.SessionAccountIDTempKey)
+	}
+
+	if sessSvc == nil {
+		return
+	}
+	key := sessionKeyFromInvocation(ctx, inv, appName)
+	if key.SessionID == "" || key.AppName == "" {
+		logs.Errorf("account_select: skip clear selected account due to invalid key=%+v, rid: %s", key, rid)
+		return
+	}
+
+	// session.Service 没有会话级 state 的删除方法，写空值等价于清除：
+	// 两个读侧（getSelectedAccountIDFromSession、service.loadSelectedAccountID）均按 len == 0 判空。
+	if err := sessSvc.UpdateSessionState(ctx, key, session.StateMap{
+		constant.SessionSelectedAccountIDStateKey: []byte{}}); err != nil {
+		logs.Errorf("account_select: clear stale account_id failed, err: %v, key=%+v, rid: %s", err, key, rid)
+		return
+	}
+	logs.Infof("account_select: clear stale account_id success, key=%+v, rid: %s", key, rid)
 }
 
 // tryReuseAccountID 查找本会话可复用的已选账号，命中则跳过账号选择 HITL。
@@ -400,18 +488,31 @@ func buildInterruptKey(state graph.State, base string) string {
 }
 
 // parseBkBizID 解析 bk_biz_id，兼容 checkpoint 反序列化后 int64→float64 的类型变化。
-// 优先读 RuntimeState（每轮 fresh），回退 graph State（子图 resume 时父 RuntimeState 可能未带入）。
+// 优先读 RuntimeState（每轮 fresh 为 int64；resume 时经 checkpoint JSON 反序列化会变成 float64），
+// 回退 graph State（子图 resume 时父 RuntimeState 可能未带入；工具场景 state 可能为 nil）。
 func parseBkBizID(ctx context.Context, inv *trpcagent.Invocation, state graph.State) int64 {
 	rid := rest.RidFromContext(ctx)
 	if inv != nil && inv.RunOptions.RuntimeState != nil {
-		if v, ok := inv.RunOptions.RuntimeState[constant.SessionBkBizIDStateKey].(int64); ok && v > 0 {
-			return v
+		if id := bkBizIDFromValue(inv.RunOptions.RuntimeState[constant.SessionBkBizIDStateKey]); id > 0 {
+			return id
 		}
 	}
 
-	id, err := util.GetInt64ByInterface(state[constant.SessionBkBizIDStateKey])
+	if id := bkBizIDFromValue(state[constant.SessionBkBizIDStateKey]); id > 0 {
+		return id
+	}
+	logs.Errorf("account_select: bk_biz_id not found in runtime state or graph state, rid: %s", rid)
+	return 0
+}
+
+// bkBizIDFromValue 将任意来源（int64 / float64 / string 等）的 bk_biz_id 安全转换为 int64。
+// raw 为 nil 或非法值时返回 0，避免直接调用 util.GetInt64ByInterface(nil) 触发反射空指针 panic。
+func bkBizIDFromValue(raw any) int64 {
+	if raw == nil {
+		return 0
+	}
+	id, err := util.GetInt64ByInterface(raw)
 	if err != nil {
-		logs.Errorf("account_select: parse bk_biz_id failed, err: %v, rid: %s", err, rid)
 		return 0
 	}
 	return id

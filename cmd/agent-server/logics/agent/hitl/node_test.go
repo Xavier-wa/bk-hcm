@@ -93,7 +93,8 @@ func TestExtractHandledToolCall(t *testing.T) {
 		msgs := []model.Message{
 			{Role: model.RoleUser, Content: "hi"},
 			{Role: model.RoleAssistant, ToolCalls: []model.ToolCall{
-				{ID: "c1", Function: model.FunctionDefinitionParam{Name: constant.HumanConfirmToolName}},
+				{ID: "c1", Function: model.FunctionDefinitionParam{
+					Name: string(enumor.DeclToolHumanConfirm)}},
 			}},
 		}
 		if tc := extractHandledToolCall(msgs, reg); tc == nil || tc.ID != "c1" {
@@ -104,7 +105,8 @@ func TestExtractHandledToolCall(t *testing.T) {
 	t.Run("stops at user message", func(t *testing.T) {
 		msgs := []model.Message{
 			{Role: model.RoleAssistant, ToolCalls: []model.ToolCall{
-				{ID: "c1", Function: model.FunctionDefinitionParam{Name: constant.HumanConfirmToolName}},
+				{ID: "c1", Function: model.FunctionDefinitionParam{
+					Name: string(enumor.DeclToolHumanConfirm)}},
 			}},
 			{Role: model.RoleUser, Content: "new turn"},
 		}
@@ -128,14 +130,14 @@ func TestExtractHandledToolCall(t *testing.T) {
 func TestRegistry(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(nil)
-	if reg.Has(constant.HumanConfirmToolName) {
+	if reg.Has(string(enumor.DeclToolHumanConfirm)) {
 		t.Errorf("empty registry should not have handler")
 	}
 	reg.Register(NewHumanConfirmHandler())
-	if !reg.Has(constant.HumanConfirmToolName) {
+	if !reg.Has(string(enumor.DeclToolHumanConfirm)) {
 		t.Errorf("registry should have human_confirm handler")
 	}
-	if _, ok := reg.Lookup(constant.HumanConfirmToolName); !ok {
+	if _, ok := reg.Lookup(string(enumor.DeclToolHumanConfirm)); !ok {
 		t.Errorf("lookup should find human_confirm handler")
 	}
 }

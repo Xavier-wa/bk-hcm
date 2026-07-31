@@ -221,12 +221,17 @@ func buildHostApplySubgraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository,
 	*graph.Graph, error) {
 
 	staticPrompt := resolveStaticPrompt(promptStore)
-	llmOpts := genLLMNodeOptions(toolset, haToolProxy, modelCfg)
+	// host_apply 追加账号前置门禁：未选账号时拦截白名单外的工具，引导先调用 select_account。
+	llmOpts := genLLMNodeOptions(toolset, haToolProxy, modelCfg, makeAccountGateBeforeTool())
 	// 子图 LLM 回调：host_apply 场景的系统提示词（空场景串 = 默认 host_apply 提示词）
 	modelCb := buildModelCallbacks(promptStore, skillRepo, agentName, "")
 	llmOpts = append(llmOpts, graph.WithModelCallbacks(modelCb))
 
 	skillTools := buildSkillTools(skillRepo)
+	// select_account 为 host_apply 专用本地工具：模型确定账号后调用它上报 account_id，由工具校验并落库.
+	skillTools[string(enumor.DeclToolSelectAccount)] = cvmapply.NewSelectAccountTool(
+		clientSet.CloudServer(), sessionSvc, agentName)
+
 	toolsOpts := genToolNodeOptions(toolset, haToolProxy, agentName)
 
 	hitlReg := buildHITLRegistry(
@@ -288,7 +293,7 @@ func buildSkillTools(skillRepo skillpkg.Repository) map[string]trpctool.Tool {
 	skillTools[constant.SkillListDocsToolName] = toolskill.NewListDocsTool(skillRepo)
 	skillTools[constant.SkillSelectDocsToolName] = toolskill.NewSelectDocsTool(skillRepo)
 	// 注册 HITL 工具（纯声明工具，路由到 hitl 节点处理，不经过 tool 节点执行）
-	skillTools[constant.HumanConfirmToolName] = hitl.GetToolWrapper()
+	skillTools[string(enumor.DeclToolHumanConfirm)] = hitl.GetToolWrapper()
 	return skillTools
 }
 
@@ -644,8 +649,10 @@ func makeSubgraphRoutingFunc(subGraphName string, hitlReg *hitl.Registry) func(c
 	}
 }
 
+// genLLMNodeOptions builds the LLM node options. extraBeforeTool lets a specific scene append
+// scene-scoped BeforeTool callbacks (e.g. host_apply 的账号门禁)，共享此函数的其他子图不受影响。
 func genLLMNodeOptions(toolset *agenttool.MCPToolSet, toolProxy *toolproxy.ToolProxy,
-	modelCfg cc.AgentModelGeneralConfig) []graph.Option {
+	modelCfg cc.AgentModelGeneralConfig, extraBeforeTool ...trpctool.BeforeToolCallbackStructured) []graph.Option {
 
 	generationConfig := trpcmodel.GenerationConfig{
 		MaxTokens:   cvt.ValToPtr(modelCfg.MaxTokens),
@@ -670,6 +677,7 @@ func genLLMNodeOptions(toolset *agenttool.MCPToolSet, toolProxy *toolproxy.ToolP
 
 	toolCb := logger.ToolLoggerCallback()
 	toolCb.BeforeTool = append(toolCb.BeforeTool, agenttool.MakeParamFixCallbacks())
+	toolCb.BeforeTool = append(toolCb.BeforeTool, extraBeforeTool...)
 	opts = append(opts, graph.WithToolCallbacks(toolCb))
 
 	return opts
@@ -740,6 +748,11 @@ func makeFallbackNode() graph.NodeFunc {
 
 // resolveFallbackLastResp 计算当前 fallback 轮次应使用的回复文本。
 // 优先顺序：消息尾部 assistant 回复（LLM→fallback 路径）→ StateKeyLastResponse → 意图兜底文案。
+//
+// account_select 因无可用云账号交还 fallback 的场景走第一优先级：该节点已自行 emit 无权限提示
+// 并把它落成 assistant 消息，经 output mapper 合并进主图 messages，此处直接复用、不重复 emit。
+// 子图的路由键 AccountSelectNextNodeKey 不会进入主图 state（output mapper 只回填 messages 与 turn），
+// 因此不能作为此处的判定依据。
 func resolveFallbackLastResp(state graph.State) string {
 	messages, _ := state[graph.StateKeyMessages].([]trpcmodel.Message)
 	if len(messages) > 0 && messages[len(messages)-1].Role == trpcmodel.RoleAssistant {
@@ -747,10 +760,6 @@ func resolveFallbackLastResp(state graph.State) string {
 	}
 	if lastResp, ok := state[graph.StateKeyLastResponse].(string); ok && lastResp != "" {
 		return lastResp
-	}
-	// account_select 因当前业务无可用云账号路由到 fallback 时，返回无权限提示文案
-	if next, _ := state[constant.AccountSelectNextNodeKey].(enumor.CvmApplyNode); next == enumor.CvmApplyNodeFallback {
-		return constant.NoPermissionFallbackMessage
 	}
 	return unsupportedIntentFallbackMessage(state)
 }

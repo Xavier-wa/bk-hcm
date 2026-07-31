@@ -2,7 +2,7 @@
 
 ## Purpose
 
-在 graph 模式 CVM 申领 workflow 启动时，自动完成账号识别与选择：查询当前业务下的可用账号，根据账号数量分别处理零账号（无权限中断）、单账号（自动选择）、多账号（用户选择中断）三种场景，并将最终选定的账号 ID 写入 graph State 后进入 `llm` 节点，确保所有 CVM graph 执行都经过账号识别步骤。
+在 graph 模式 CVM 申领 workflow 启动时，自动完成账号识别与选择：查询当前业务下的账号列表，先按**可用账号数**判定是否还有可选空间（可用数为 0 时路由主图 fallback 给出无权限提示），再按**账号总数**分别处理单账号（自动选择并落库）、多账号（一律弹卡片，可用性仅影响选项禁用态）两种场景，并将最终选定的账号 ID 写入 graph State 后进入 `llm` 节点；自由文本未命中时不下传空账号，由 `select_account` 工具兜底。
 
 ## Requirements
 
@@ -17,32 +17,42 @@
 - **WHEN** cloud-server 请求超过 3 秒或返回错误
 - **THEN** 系统终止当前 graph 执行并向上层写入错误信息，不影响其他节点
 
-### Requirement: 零账号无权限处理
-当查询结果为空（账号数量为 0）时，系统 SHALL 通过 `no_permission_fallback` 节点触发 `no_permission.interrupt` 中断，告知用户当前业务下无可用账号权限。
+### Requirement: 无可用账号时的无权限处理
+当当前业务下**可用账号数为 0** 时（账号列表为空，或有账号但无一支持申领），`account_select` SHALL 自行 emit 无权限提示文案（`NoPermissionFallbackMessage`）并将其作为 assistant 消息写入 graph State，同时把 `AccountSelectNextNodeKey` 置为 `fallback`，子图结束并将控制权交还主图 `fallback`。两种情况复用同一条文案。
 
-#### Scenario: 无账号触发中断
+文案由 `account_select` 而非主图 fallback 产出：子图配置了 output mapper 后，框架只采用 mapper 返回的 delta（`finalizeAgentNodeOutput`），子图 State 中的 `AccountSelectNextNodeKey` 不会进入主图 State，主图无从据此判定文案；而 messages 本就在 mapper 的合并范围内。主图 fallback SHALL 复用消息尾部的 assistant 回复作为本轮 `last_response`，并因尾部已是 assistant 而跳过重复 emit。
+
+系统 MUST NOT 在无可用账号时弹出账号选择卡片：卡片内全部选项均为禁用态，用户既点不动也退不出，只能在 `account_gate` → `select_account` → `human_confirm` 之间空转。
+
+#### Scenario: 无账号路由 fallback
 - **WHEN** 账号列表为空（count == 0）
-- **THEN** 路由至 `no_permission_fallback` 节点，发出如下中断载荷：
-  ```json
-  {
-    "type": "no_permission.interrupt",
-    "message": "当前用户在该业务下没有可用的账号权限，无法继续主机申领流程"
-  }
-  ```
+- **THEN** 系统 SHALL emit 无权限提示并路由至 `fallback`（子图 `graph.End` → 主图 fallback），不进入 `llm`
 
-#### Scenario: 用户确认后重试
-- **WHEN** 前端回传任意字符串 resume value
-- **THEN** graph 从 `no_permission_fallback` 路由回 `account_select` 节点重新查询账号
+#### Scenario: 有账号但全部不支持申领时路由 fallback
+- **GIVEN** 账号列表非空，但其中没有任何 `vendor == tcloud-ziyan` 的账号（唯一账号为非自研云，或多个账号全为非自研云）
+- **WHEN** 进入 `account_select` 且未命中已选账号复用
+- **THEN** 系统 SHALL emit 无权限提示并路由至 `fallback`，MUST NOT 触发 `account_select.interrupt`，MUST NOT 写入或持久化 `account_id`
+
+#### Scenario: 提示文案经 messages 带回主图
+- **WHEN** `account_select` 因无可用账号结束子图
+- **THEN** 该提示 SHALL 以 assistant 消息形式经子图 output mapper 合并进主图 `messages`，主图 fallback 据消息尾部复用同一句文案去 interrupt，用户只收到一条提示
 
 ### Requirement: 单账号自动选择
-当查询结果恰好有 1 个账号时，系统 SHALL 自动将该账号 ID 写入 graph State 的 `account_id` 字段，无需用户干预，直接路由至 `llm` 节点。
+账号选择是否触发用户交互 SHALL 先以**可用账号数**为前置判定（为 0 时按「无可用账号时的无权限处理」路由 `fallback`），在存在可用账号的前提下再以**账号总数**为判定基准：账号总数恰为 1 时（此时该账号必然可用），系统 SHALL 自动将该账号 ID 写入 graph State 的 `account_id` 字段并持久化，无需用户干预、无需模型参与，直接路由至 `llm` 节点；账号总数 ≥ 2 时一律弹卡片请用户选择（可用性判定只影响卡片内选项是否禁用，不改变是否弹卡片）。
 
-#### Scenario: 单账号自动写入
-- **WHEN** 账号列表包含且仅包含 1 个账号（count == 1）
-- **THEN** `state["account_id"]` 被设置为该账号的 ID，并路由至 `llm` 节点继续执行
+#### Scenario: 唯一账号且可用时自动写入
+- **WHEN** 账号列表包含且仅包含 1 个账号（count == 1）且该账号 `vendor == tcloud-ziyan`
+- **THEN** `state["account_id"]` 被设置为该账号 ID 并落库，路由至 `llm` 节点
+
+#### Scenario: 多账号且存在可用账号时一律弹卡片
+- **GIVEN** 账号总数 ≥ 2 且其中至少有 1 个可用账号
+- **WHEN** 进入 `account_select` 且未命中已选账号复用
+- **THEN** 系统 SHALL 触发 `account_select.interrupt` 弹卡片，卡片展示全部账号，非 `tcloud-ziyan` 账号标记为禁用并附原因
 
 ### Requirement: vendor 过滤与 enabled/reason 计算
 `ListByUsageBizID` 接口返回的账号列表不含 `enabled`/`reason` 字段。系统 SHALL 在 `account_select` 节点内部根据 vendor 自行计算这两个字段：当前版本仅支持 `vendor = tcloud-ziyan` 的账号，其他 vendor 账号标记为不可用。
+
+账号可用性 SHALL 由**唯一判据** `isAccountEnabled` 给出，路由判定、已选账号复用判定、卡片选项禁用态、`select_account` 工具校验必须共用它；各处若各自判断 vendor，会出现「自动选中 → 下一轮判失效 → 再自动选中」这类互相打架的空转。
 
 #### Scenario: tcloud-ziyan 账号标记为可用
 - **WHEN** 账号的 `vendor == "tcloud-ziyan"`
@@ -53,10 +63,10 @@
 - **THEN** `enabled = false`，`reason = "当前仅支持自研云（tcloud-ziyan）账号"`
 
 ### Requirement: 多账号用户选择
-当查询结果包含 2 个及以上账号时，系统 SHALL 通过 `account_select.interrupt` 中断请求用户选择，并在 resume 后将所选账号 ID 写入 graph State。`options` 中的 `enabled`/`reason` 由节点内部 vendor 过滤规则计算，不来自接口响应。
+当查询结果包含 2 个及以上账号且其中至少有 1 个可用账号时，系统 SHALL 通过 `account_select.interrupt` 中断请求用户选择，并在 resume 后将所选账号 ID 写入 graph State。`options` 中的 `enabled`/`reason` 由节点内部 vendor 过滤规则计算，不来自接口响应。
 
 #### Scenario: 多账号触发选择中断
-- **WHEN** 账号列表包含 2 个或更多账号（count >= 2）
+- **WHEN** 账号列表包含 2 个或更多账号（count >= 2）且至少有 1 个可用账号
 - **THEN** 系统发出如下中断载荷：
   ```json
   {
@@ -78,10 +88,6 @@
 - **WHEN** 前端回传选中的 `account_id` 字符串（非空）作为 resume value
 - **THEN** `state["account_id"]` 被设置为该值，并路由至 `llm` 节点继续执行
 
-#### Scenario: resume value 为空时拒绝
-- **WHEN** 前端回传的 resume value 为空字符串
-- **THEN** 系统拒绝继续，返回错误，不写入 `account_id`
-
 ### Requirement: graph 拓扑调整
 系统 SHALL 将 graph START 入口从 `llm` 改为 `account_select`，确保所有 CVM graph 执行都经过账号识别步骤。
 
@@ -94,15 +100,19 @@
 - **THEN** 下一个执行节点为 `llm`，开始正常 ReAct 循环
 
 ### Requirement: interrupt key 常量定义
-系统 SHALL 在 `pkg/criteria/constant/aiagent.go` 中定义两个新的 interrupt key 常量，与现有 `HITLInterruptKey`、`FallbackInterruptKey` 保持同文件管理。
-
-#### Scenario: 常量可被节点引用
-- **WHEN** `no_permission_fallback` 节点触发中断
-- **THEN** 使用常量 `NoPermissionInterruptKey = "no_permission.interrupt"`
+系统 SHALL 在 `pkg/criteria/constant/aiagent.go` 中定义账号选择相关 interrupt key 常量，与现有 `HITLInterruptKey`、`FallbackInterruptKey` 保持同文件管理。
 
 #### Scenario: 多账号中断使用专属常量
 - **WHEN** `account_select` 节点触发多账号选择中断
 - **THEN** 使用常量 `AccountSelectInterruptKey = "account_select.interrupt"`
+
+### Requirement: 自由文本未匹配时不下传空账号
+在多账号 HITL 场景下，当用户以自由文本 resume（如"选择自研云账号"）且未能解析出 `account_id` 时，系统 MUST NOT 将空 `account_id` 写入 graph State/`delta`（避免污染后续 `tryReuseAccountID` 复用判定）；账号的最终解析与持久化 SHALL 由 `cvm-account-tool-resolution` 能力（`select_account` 工具 + 申领工具门禁）保证。
+
+#### Scenario: 自由文本未命中时不污染状态
+- **GIVEN** 多账号 HITL，用户自由文本无法被 `matchAccountIDFromUserInput` 匹配为 `account_id`
+- **WHEN** `resolveSelectedAccountID` 返回空
+- **THEN** 系统不写入 `delta[account_id]=""`，且账号由 `select_account` 工具与门禁最终结构化接住并落库，使同会话下一轮不再重复弹账号选择
 
 ### Requirement: 统一 AGUI session key 读写选中账号
 
@@ -140,7 +150,7 @@
 #### Scenario: 三源皆无时走正常选择
 
 - **WHEN** session 后端、RuntimeState 与 graph State 均无已选账号
-- **THEN** `account_select` 按既有逻辑查询业务账号列表，并走零账号 / 单账号自动选 / 多账号 HITL，行为不退化
+- **THEN** `account_select` 按既有逻辑查询业务账号列表，并走无可用账号 fallback / 单账号自动选 / 多账号 HITL，行为不退化
 
 ### Requirement: 选中账号持久化失败可观测
 

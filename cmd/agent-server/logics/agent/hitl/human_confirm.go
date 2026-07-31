@@ -44,7 +44,7 @@ func NewHumanConfirmHandler() Handler {
 
 // ToolName 返回 human_confirm 工具名。
 func (h *humanConfirmHandler) ToolName() string {
-	return constant.HumanConfirmToolName
+	return string(enumor.DeclToolHumanConfirm)
 }
 
 // EventKind 将中断路由到 hitl.interrupt 前端事件。
@@ -102,7 +102,7 @@ type HumanConfirmArgs struct {
 // 这是一个没有实际执行逻辑的纯声明型工具，中断逻辑由 HITL 节点处理。
 func HumanConfirmTool() *tool.Declaration {
 	return &tool.Declaration{
-		Name:        constant.HumanConfirmToolName,
+		Name:        string(enumor.DeclToolHumanConfirm),
 		Description: "请求用户确认或选择，当需要用户在多个选项中做出选择时使用",
 		InputSchema: &tool.Schema{
 			Type: "object",

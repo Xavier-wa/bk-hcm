@@ -34,7 +34,7 @@ func newConfirmToolCall() *model.ToolCall {
 	return &model.ToolCall{
 		ID: "c1",
 		Function: model.FunctionDefinitionParam{
-			Name:      constant.HumanConfirmToolName,
+			Name:      string(enumor.DeclToolHumanConfirm),
 			Arguments: []byte(`{"question":"确认删除？","options":["是","否"]}`),
 		},
 	}
@@ -42,7 +42,7 @@ func newConfirmToolCall() *model.ToolCall {
 
 func TestHumanConfirmHandlerBasics(t *testing.T) {
 	h := NewHumanConfirmHandler()
-	if h.ToolName() != constant.HumanConfirmToolName {
+	if h.ToolName() != string(enumor.DeclToolHumanConfirm) {
 		t.Errorf("tool name = %q", h.ToolName())
 	}
 	if h.EventKind() != constant.HITLInterruptKey {
@@ -95,8 +95,9 @@ func TestHumanConfirmTool_Declaration(t *testing.T) {
 	decl := HumanConfirmTool()
 
 	// 验证工具名称
-	if decl.Name != constant.HumanConfirmToolName {
-		t.Errorf("HumanConfirmTool().Name = %q, want %q", decl.Name, constant.HumanConfirmToolName)
+	if decl.Name != string(enumor.DeclToolHumanConfirm) {
+		t.Errorf("HumanConfirmTool().Name = %q, want %q", decl.Name,
+			string(enumor.DeclToolHumanConfirm))
 	}
 
 	// 验证工具描述非空

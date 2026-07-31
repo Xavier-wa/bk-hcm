@@ -524,12 +524,19 @@ func (s *Service) sessionCodeMiddleware(next http.Handler) http.Handler {
 
 		isAGUI := strings.HasSuffix(r.URL.Path, "/agui")
 		if isAGUI {
-			go s.asyncIncrContentCount(kt, sessionCode, threadID, sessionMeta.SessionTag)
+			go s.asyncIncrContentCount(kt, sessionCode)
 			if sessionMeta.BkBizID > 0 {
 				r = r.WithContext(authlogic.WithBkBizID(r.Context(), sessionMeta.BkBizID))
 			}
 		}
 		next.ServeHTTP(w, r)
+
+		// SSE 流结束（next.ServeHTTP 返回）后 graph 已跑完、checkpoint 已落盘，此时对账回写
+		// session_tag 才能读到本轮 scene_dispatch 提交的标签，确保首轮识别即可回写。
+		// 不能在 Run 前并发启动：那样会读到尚未提交 tag 的 checkpoint，导致需要第二条消息才回写。
+		if isAGUI {
+			go s.asyncReconcileSessionTag(kt, sessionCode, threadID, sessionMeta.SessionTag)
+		}
 	})
 }
 
@@ -574,9 +581,7 @@ func (s *Service) resolveAndValidateSession(kt *kit.Kit, sessionCode string) (*s
 }
 
 // asyncIncrContentCount asynchronously increments the session_content_count for the given sessionCode.
-func (s *Service) asyncIncrContentCount(kt *kit.Kit, sessionCode string, threadID string,
-	sessionTag enumor.IntentType) {
-
+func (s *Service) asyncIncrContentCount(kt *kit.Kit, sessionCode string) {
 	ctx, cancel := context.WithTimeout(context.Background(), constant.SessionIncrContentCountTimeout)
 	defer cancel()
 
@@ -586,8 +591,19 @@ func (s *Service) asyncIncrContentCount(kt *kit.Kit, sessionCode string, threadI
 		logs.Errorf("async incr content count failed, session_code: %s, err: %v, rid: %s",
 			sessionCode, err, asyncKt.Rid)
 	}
-	// Run 结束后对账：意图识别命中受支持场景时回写 session_tag
-	s.reconcileSessionTag(asyncKt, sessionCode, threadID, sessionTag)
+}
+
+// asyncReconcileSessionTag reconciles the session tag after a run finishes. It must be invoked
+// after next.ServeHTTP returns so that the graph run has committed StateKeySessionTag into the
+// latest checkpoint. It runs with a fresh background context since the request context is done.
+func (s *Service) asyncReconcileSessionTag(kt *kit.Kit, sessionCode, threadID string,
+	originalTag enumor.IntentType) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), constant.SessionIncrContentCountTimeout)
+	defer cancel()
+
+	asyncKt := kt.NewSubKitWithCtx(ctx)
+	s.reconcileSessionTag(asyncKt, sessionCode, threadID, originalTag)
 }
 
 // injectForwardedSessionTag merges the session tag into the request body's forwardedProps map.

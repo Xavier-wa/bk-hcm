@@ -330,3 +330,26 @@ func (n ToolName) Validate() error {
 func (n ToolName) IsRecommend() bool {
 	return n == ToolNameRecommendByStatic || n == ToolNameRecommendByPlan || n == ToolNameRecommendSplitSuborder
 }
+
+// DeclarativeToolName is the name of a locally declared agent tool
+// (not routed through MCP tool_proxy), such as human_confirm / select_account.
+type DeclarativeToolName string
+
+const (
+	// DeclToolHumanConfirm is the human confirmation tool.
+	// LLM calls this tool when it needs user confirmation or choice.
+	DeclToolHumanConfirm DeclarativeToolName = "human_confirm"
+	// DeclToolSelectAccount 是模型在多账号场景下上报所选 account_id 的本地声明工具名，
+	// 与 skill_load / human_confirm 同类（不经 tool_proxy），供后端校验并持久化选中账号。
+	DeclToolSelectAccount DeclarativeToolName = "select_account"
+)
+
+// Validate validates the declarative tool name.
+func (n DeclarativeToolName) Validate() error {
+	switch n {
+	case DeclToolHumanConfirm, DeclToolSelectAccount:
+		return nil
+	default:
+		return fmt.Errorf("unsupported declarative tool name: %s", n)
+	}
+}

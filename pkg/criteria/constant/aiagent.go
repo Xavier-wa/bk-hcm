@@ -175,6 +175,12 @@ const (
 	// composed as "<toolset>_<tool>" (e.g. "tool_proxy_execute_tool"). The LLM calls real MCP
 	// tools through this meta-tool, carrying the real tool name in the "tool_name" argument.
 	ProxyExecuteToolFullName = ProxyToolSetName + "_" + ExecuteToolToolName
+	// ProxySearchToolsFullName is the LLM-facing name of the proxy search_tools meta-tool,
+	// composed as "<toolset>_<tool>" (e.g. "tool_proxy_search_tools").
+	ProxySearchToolsFullName = ProxyToolSetName + "_" + SearchToolsToolName
+	// ProxyGetToolSchemaFullName is the LLM-facing name of the proxy get_tool_schema meta-tool,
+	// composed as "<toolset>_<tool>" (e.g. "tool_proxy_get_tool_schema").
+	ProxyGetToolSchemaFullName = ProxyToolSetName + "_" + GetToolSchemaToolName
 )
 
 // Default upper bounds for the agent invocation loop.
@@ -283,10 +289,6 @@ const StateKeySubgraphTurnPrefix = "subgraph_turn_"
 
 // HITL (Human-in-the-Loop) constants
 const (
-	// HumanConfirmToolName is the name of the human confirmation tool.
-	// LLM calls this tool when it needs user confirmation or choice.
-	HumanConfirmToolName = "human_confirm"
-
 	// HITLInterruptKey is the key used for graph.Interrupt in HITL flow.
 	// This key is used to identify the interrupt in ResumeMap.
 	HITLInterruptKey = "hitl.interrupt"
@@ -303,6 +305,11 @@ const (
 	// AccountSelectInterruptKey is the key used for graph.Interrupt when multiple accounts are
 	// detected and the user must choose one to proceed with the CVM apply workflow.
 	AccountSelectInterruptKey = "account_select.interrupt"
+
+	// AccountUnavailableEmitKey 是「当前业务无可用云账号」提示的 emit 去重键。
+	// 该路径只发消息、不触发 interrupt，独立成键可避免复用 AccountSelectInterruptKey 时
+	// 撞上账号卡片的 resume 记录，被误判为「恢复重放」而跳过提示。
+	AccountUnavailableEmitKey = "account_select.no_usable_account"
 
 	// AfterToolHITLRecommendSelectInterruptKey 推荐方案选择场景的中断 key
 	AfterToolHITLRecommendSelectInterruptKey = "after_tool_hitl.recommend_select.interrupt"
@@ -369,6 +376,16 @@ const (
 	// 这类中断以纯文本恢复：把可选项展示给用户，用同一 contextId 将用户选择以 text 续聊即可。
 	MCPSelectPendingMessage = "需要先向用户展示以下可选项并由其确认后才能继续。请使用同一 contextId 再次调用 " +
 		"send_message，将用户的选择以纯文本传入 text 即可（无需 confirm 参数）。"
+)
+
+// account select tool constants
+const (
+	// SelectAccountArgKey 是 select_account 工具的账号入参字段名。
+	SelectAccountArgKey = "account_id"
+
+	// SelectAccountRequiredMsg 是账号未解析时门禁返回给模型的引导文案，要求先调用 select_account。
+	// 门禁默认拦截全部业务工具（含只读查询），文案不限定「申领」以免只读工具被拦时语义不符。
+	SelectAccountRequiredMsg = "尚未选定云账号，请先调用 select_account 工具选定账号后再重新调用本工具"
 )
 
 // bkaidev

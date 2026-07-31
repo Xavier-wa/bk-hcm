@@ -151,7 +151,7 @@ func TestMakeRoutingFuncGate(t *testing.T) {
 	}
 	confirmCall := trpcmodel.ToolCall{
 		ID:       "c3",
-		Function: trpcmodel.FunctionDefinitionParam{Name: constant.HumanConfirmToolName},
+		Function: trpcmodel.FunctionDefinitionParam{Name: string(enumor.DeclToolHumanConfirm)},
 	}
 	// 真实场景：LLM 经 proxy execute_tool 调用 create_biz_apply，真实工具名在 arguments 内。
 	proxyGatedCall := trpcmodel.ToolCall{
@@ -687,5 +687,59 @@ func TestMakeSubgraphOutputMapperNoGrowthNoTurnReturnsNil(t *testing.T) {
 	})
 	if out != nil {
 		t.Fatalf("expected nil when no growth and no turn in delta, got %+v", out)
+	}
+}
+
+// account_select 无可用账号时自行 emit 提示并把它落成 assistant 消息，主图 fallback 随后要复用同一条
+// 消息而不是再追加一条。本用例串起「子图完成态 → output mapper → 主图 fallback 取文案 → resume 回填」
+// 整条缝，确认历史里该文案只出现一次。
+func TestNoUsableAccountFallbackMessageNotDuplicated(t *testing.T) {
+	parentMsgs := []trpcmodel.Message{{Role: trpcmodel.RoleUser, Content: "申请一台主机"}}
+	// 子图完成态：account_select 在父图消息之后追加了一条无权限提示。
+	childMsgs := append(append([]trpcmodel.Message{}, parentMsgs...),
+		trpcmodel.Message{Role: trpcmodel.RoleAssistant, Content: constant.NoPermissionFallbackMessage})
+	rawMsgs, err := json.Marshal(childMsgs)
+	if err != nil {
+		t.Fatalf("marshal child messages failed, err: %v", err)
+	}
+
+	parent := graph.State{
+		graph.StateKeyMessages:  parentMsgs,
+		constant.StateKeyIntent: string(enumor.IntentTypeHostApply),
+	}
+	out := makeSubgraphOutputMapper("host_apply")(parent, graph.SubgraphResult{
+		RawStateDelta: map[string][]byte{graph.StateKeyMessages: rawMsgs},
+	})
+	merged, _ := out[graph.StateKeyMessages].([]trpcmodel.Message)
+	if len(merged) != 1 || merged[0].Content != constant.NoPermissionFallbackMessage {
+		t.Fatalf("output mapper delta = %+v, want single no-permission assistant message", merged)
+	}
+
+	// 主图 fallback 看到的 state：父图消息 + mapper 合并进来的那一条。
+	parent[graph.StateKeyMessages] = append(append([]trpcmodel.Message{}, parentMsgs...), merged...)
+	lastResp := resolveFallbackLastResp(parent)
+	if lastResp != constant.NoPermissionFallbackMessage {
+		t.Fatalf("fallback last response = %q, want no-permission message", lastResp)
+	}
+
+	// resume 时只应追加用户输入：assistant 尾部已是同一条文案，不能再补一条。
+	history, _ := parent[graph.StateKeyMessages].([]trpcmodel.Message)
+	delta := message.BuildFallbackResumeDelta(context.Background(), parent, history, lastResp, "换个业务试试")
+	resumeMsgs, ok := delta[graph.StateKeyMessages].([]trpcmodel.Message)
+	if !ok {
+		t.Fatalf("resume delta messages type = %T, want []trpcmodel.Message", delta[graph.StateKeyMessages])
+	}
+	if len(resumeMsgs) != 1 || resumeMsgs[0].Role != trpcmodel.RoleUser {
+		t.Fatalf("resume delta = %+v, want only the user message", resumeMsgs)
+	}
+
+	count := 0
+	for _, msg := range append(history, resumeMsgs...) {
+		if msg.Content == constant.NoPermissionFallbackMessage {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("no-permission message appears %d times in history, want 1", count)
 	}
 }
