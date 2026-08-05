@@ -176,16 +176,23 @@ func (a HuaweiSupportMonthTask) splitCommonExpense(kt *kit.Kit, opt *MonthTaskAc
 		return nil, nil
 	}
 
-	// 计算总额，再按比例分摊给各个二级账号
+	costs := make([]decimal.Decimal, len(summaryList))
 	summaryTotal := decimal.Zero
-	for _, summaryMain := range summaryList {
+	for i, summaryMain := range summaryList {
+		costs[i] = summaryMain.CurrentMonthCost
 		summaryTotal = summaryTotal.Add(summaryMain.CurrentMonthCost)
 	}
+	if summaryTotal.IsZero() && batchSum.IsZero() {
+		logs.Infof("skip huawei common expense split, batchSum and summaryTotal are zero, opt: %#v, rid: %s",
+			opt, kt.Rid)
+		return nil, nil
+	}
+	shares := allocateCommonExpense(batchSum, summaryTotal, costs)
 
 	billItems := make([]bill.BillItemCreateReq[json.RawMessage], 0, len(summaryList))
-	for _, summary := range summaryList {
+	for i, summary := range summaryList {
 		mainAccount := mainAccountMap[summary.MainAccountID]
-		cost := batchSum.Mul(summary.CurrentMonthCost).Div(summaryTotal)
+		cost := shares[i]
 		extJson, err := convHuaweiBillItemExtension(constant.BillCommonExpenseName, opt, mainAccount.CloudID, cost)
 		if err != nil {
 			logs.Errorf("fail to marshal huawei common expense extension to json, err: %v, rid: %s", err, kt.Rid)
