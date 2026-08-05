@@ -74,10 +74,39 @@ func (r *Returner) DealRecycleOrder(kt *kit.Kit, order *table.RecycleOrder) *eve
 	task, err := r.initReturnTask(order)
 	if err != nil {
 		logs.Errorf("failed to init return task for order %s, err: %v, rid: %s", order.SuborderID, err, kt.Rid)
-		return &event.Event{Type: event.ReturnFailed, Error: err}
+		return r.syncTransitingHostFailed(kt, order.SuborderID, &event.Event{Type: event.ReturnFailed, Error: err})
 	}
 
-	return r.dealReturnTask(kt, task)
+	return r.syncTransitingHostFailed(kt, order.SuborderID, r.dealReturnTask(kt, task))
+}
+
+// syncTransitingHostFailed 退回失败时，把仍停留在「中转中」的设备明细回写为「退回失败」。
+// 设备只在退回单创建成功后才会被批量刷成「退回中」，所以退回单创建失败时设备会一直停留在
+// 中转阶段写入的「中转中」，与子单的「退回失败」不一致。
+// 「退回中」的设备仍需依赖后续查询退回单进度来确定终态，不能在这里提前置为失败。
+func (r *Returner) syncTransitingHostFailed(kt *kit.Kit, subOrderID string, ev *event.Event) *event.Event {
+	if ev == nil || ev.Type != event.ReturnFailed {
+		return ev
+	}
+
+	filter := mapstr.MapStr{
+		"suborder_id": subOrderID,
+		"status":      table.RecycleStatusTransiting,
+	}
+
+	update := mapstr.MapStr{
+		"stage":     table.RecycleStageReturn,
+		"status":    table.RecycleStatusReturnFailed,
+		"update_at": time.Now(),
+	}
+
+	// 设备明细状态只用于展示，回写失败不阻断子单的失败流转
+	if err := dao.Set().RecycleHost().UpdateRecycleHost(kt.Ctx, &filter, &update); err != nil {
+		logs.Errorf("failed to sync return failed status to transiting hosts, subOrderID: %s, err: %v, rid: %s",
+			subOrderID, err, kt.Rid)
+	}
+
+	return ev
 }
 
 func (r *Returner) getRecycleHosts(orderId string) ([]*table.RecycleHost, error) {
@@ -518,10 +547,11 @@ func (r *Returner) transferHost2BizIdle(kt *kit.Kit, assetIds []string, destBizI
 		err := r.cmdbCli.HostsCrTransit2Idle(kt, req)
 		begin = end
 		if err != nil {
-			logs.Errorf("failed to transfer host back to idle module, err: %v", err)
+			logs.Errorf("failed to transfer host back to idle module, err: %v, hosts: %v, rid: %s", err, req.AssetIDs,
+				kt.Rid)
 			return err
 		}
-		logs.Infof("transfer host back to idle module success, hosts: %v", req.AssetIDs)
+		logs.Infof("transfer host back to idle module success, hosts: %v, rid: %s", req.AssetIDs, kt.Rid)
 	}
 
 	return nil

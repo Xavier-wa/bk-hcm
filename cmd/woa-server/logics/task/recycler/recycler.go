@@ -153,6 +153,7 @@ type recycler struct {
 	cvm cvmapi.CVMClientInterface
 
 	dispatcher    *dispatcher.Dispatcher
+	returner      *returner.Returner
 	authorizer    auth.Authorizer
 	configLogics  configLogics.Logics
 	rsLogic       rslogics.Logics
@@ -205,6 +206,7 @@ func New(ctx context.Context, thirdCli *thirdparty.Client, bizLogic biz.Logics, 
 		cc:            cmdbCli,
 		cvm:           thirdCli.CVM,
 		dispatcher:    dispatch,
+		returner:      moduleReturner,
 		authorizer:    authorizer,
 		configLogics:  configLogics,
 		rsLogic:       rsLogic,
@@ -1735,6 +1737,14 @@ func (r *recycler) terminateOrder(kt *kit.Kit, orders []*table.RecycleOrder) err
 				logs.Errorf("fail to call dispatcher to cancel detecting order %s, err: %s, rid: %s",
 					order.SuborderID, err, kt.Rid)
 				return err
+			}
+		case table.RecycleStatusReturnFailed:
+			// 子单已中转成功并进入过退回阶段，退回失败的主机滞留在回收中转池，
+			// 必须先回滚到业务空闲机模块，回滚未完全成功则不允许单据进入终止态
+			if err := r.returner.RollbackReturnFailedHosts(kt, order); err != nil {
+				logs.Errorf("failed to rollback return failed hosts of order %s, err: %v, rid: %s",
+					order.SuborderID, err, kt.Rid)
+				return fmt.Errorf("failed to terminate order %s, err: %v", order.SuborderID, err)
 			}
 		}
 

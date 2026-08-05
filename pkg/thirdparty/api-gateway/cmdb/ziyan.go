@@ -44,6 +44,8 @@ type ZiyanCmdbClient interface {
 	GetBizInternalModule(kt *kit.Kit, req *GetBizInternalModuleReq) (*BizInternalModuleRespRst, error)
 	// GetBizRecycleModuleID get business's recycle module id
 	GetBizRecycleModuleID(kt *kit.Kit, bizID int64) (int64, error)
+	// GetBizInternalModuleIDs get business's all internal module ids
+	GetBizInternalModuleIDs(kt *kit.Kit, bizID int64) ([]int64, error)
 
 	// ListHost same as ListHostWithoutBiz
 	ListHost(kt *kit.Kit, req *ListHostReq) (*ListHostResult, error)
@@ -319,6 +321,29 @@ func (c *cmdbApiGateWay) GetBizRecycleModuleID(kt *kit.Kit, bizID int64) (int64,
 	}
 
 	return moduleID, nil
+}
+
+// GetBizInternalModuleIDs get business's all internal module IDs, i.e. 空闲机/故障机/待回收。
+// 内置模块的 Default 字段非 0，自定义模块（如回收中转池）的 Default 为 0，
+// 因此主机落在内置模块即可判定其不在任何自定义模块中。
+func (c *cmdbApiGateWay) GetBizInternalModuleIDs(kt *kit.Kit, bizID int64) ([]int64, error) {
+	resp, err := c.GetBizInternalModule(kt, &GetBizInternalModuleReq{BkBizID: bizID})
+	if err != nil {
+		return nil, err
+	}
+
+	moduleIDs := make([]int64, 0, len(resp.Module))
+	for _, module := range resp.Module {
+		switch module.Default {
+		case DftModuleIdle, DftModuleFault, DftModuleRecycle:
+			moduleIDs = append(moduleIDs, module.BkModuleId)
+		}
+	}
+	if len(moduleIDs) == 0 {
+		return nil, errors.New("get no biz internal module ID")
+	}
+
+	return moduleIDs, nil
 }
 
 // GetHostIDByAssetID gets host id by ip in cc 3.0
