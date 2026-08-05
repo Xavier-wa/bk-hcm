@@ -42,9 +42,11 @@ func findRecommendToolCall(messages []trpcmodel.Message) *recommendToolCall {
 			continue
 		}
 		for _, tc := range messages[i].ToolCalls {
-			name := enumor.ToolName(toolproxy.ResolveToolCall(&tc).Name)
+			resolved := toolproxy.ResolveToolCall(&tc)
+			name := enumor.ToolName(resolved.Name)
 			if name.IsRecommend() {
-				return &recommendToolCall{toolName: name, id: tc.ID, limit: extractLimit(tc.Function.Arguments)}
+				return &recommendToolCall{toolName: name, id: tc.ID,
+					limit: extractLimit(tc.Function.Arguments), args: resolved.Arguments}
 			}
 		}
 		return nil
@@ -84,6 +86,26 @@ func extractLimit(argsRaw json.RawMessage) int {
 		return direct.BodyParam.Limit
 	}
 	return constant.DefaultRecommendLimit
+}
+
+// bodyParamOccupied models the occupied suborders nested under body_param in a tool call's arguments.
+type bodyParamOccupied struct {
+	BodyParam struct {
+		OccupiedSuborders []*woaserver.ApplyRecommendSuborder `json:"occupied_suborders"`
+	} `json:"body_param"`
+}
+
+// extractOccupiedSuborders 从工具调用入参中还原已占用子单。
+func extractOccupiedSuborders(argsRaw json.RawMessage, rid string) []*woaserver.ApplyRecommendSuborder {
+	if len(argsRaw) == 0 {
+		return nil
+	}
+	var args bodyParamOccupied
+	if err := json.Unmarshal(argsRaw, &args); err != nil {
+		logs.Warnf("parse occupied suborders failed, fallback to incremental only, err: %v, rid: %s", err, rid)
+		return nil
+	}
+	return args.BodyParam.OccupiedSuborders
 }
 
 // parseItems extracts recommend items from a (possibly enveloped) tool result string.
@@ -195,6 +217,21 @@ func mergeCandidates(existing, add []*woaserver.ApplyRecommendItem) []*woaserver
 				continue
 			}
 			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// mergeSuborders 按「已占用在前、本次增量在后」拼接为完整清单并过滤空项。
+// 与 mergeCandidates 取舍一致，不做去重：占用子单由模型从上一轮确认结果透传，语义上与本次增量互斥。
+func mergeSuborders(occupied, incremental []*woaserver.ApplyRecommendSuborder) []*woaserver.ApplyRecommendSuborder {
+	out := make([]*woaserver.ApplyRecommendSuborder, 0, len(occupied)+len(incremental))
+	for _, list := range [][]*woaserver.ApplyRecommendSuborder{occupied, incremental} {
+		for _, sub := range list {
+			if sub == nil {
+				continue
+			}
+			out = append(out, sub)
 		}
 	}
 	return out

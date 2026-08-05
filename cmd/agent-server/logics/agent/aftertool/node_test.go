@@ -25,7 +25,9 @@ import (
 
 	"hcm/pkg/criteria/constant"
 
+	"github.com/stretchr/testify/assert"
 	agent "trpc.group/trpc-go/trpc-agent-go/agent"
+	"trpc.group/trpc-go/trpc-agent-go/graph"
 )
 
 // ctxWithForwarded builds a context carrying an invocation whose RuntimeState holds the given
@@ -73,4 +75,27 @@ func TestResolveAfterToolForwardedResumeValue(t *testing.T) {
 			t.Errorf("got %q, want empty (JSON free text must not be sniffed as forwarded)", got)
 		}
 	})
+}
+
+// splitArgsWithOccupied is the split_suborder tool arguments carrying one occupied S2 suborder,
+// mirroring the incremental split scenario (an existing S2 plus a newly requested S3).
+const splitArgsWithOccupied = `{"path_param":{"bk_biz_id":213},"body_param":{"bk_biz_id":213,` +
+	`"device_type":"S3.MEDIUM4","region":"ap-nanjing","zone":"all","replicas":2,"require_type":1,` +
+	`"occupied_suborders":[{"require_type":1,"region":"ap-nanjing","zone":"all",` +
+	`"device_type":"S2.MEDIUM4","replicas":2,"charge_type":"PREPAID"}]}}`
+
+// TestHandleSplitSuborderRecommendNoIncrement 锁定拆单试算的中断判定只看本次增量子单：
+// 即便入参带了已占用子单，本次增量为空（余量/库存不足）时也不得中断，否则会弹出一张
+// 没有任何新内容的确认卡片。
+func TestHandleSplitSuborderRecommendNoIncrement(t *testing.T) {
+	call := &recommendToolCall{args: []byte(splitArgsWithOccupied)}
+
+	// 前置断言：入参中确实存在已占用子单，避免用例因入参失效而假通过。
+	assert.Len(t, extractOccupiedSuborders(call.args, "rid"), 1)
+
+	got, err := handleSplitSuborderRecommend(context.Background(), graph.State{}, nil, call,
+		`{"suborders":[]}`)
+
+	assert.NoError(t, err)
+	assert.Equal(t, graph.State{}, got)
 }

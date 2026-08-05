@@ -47,6 +47,8 @@ type recommendToolCall struct {
 	id string
 	// limit is the requested recommend count, parsed from the tool call arguments.
 	limit int
+	// args is the tool call arguments, parsed from the tool call.
+	args json.RawMessage
 }
 
 // MakeRoutingFunc returns the conditional edge routing function for the tool node.
@@ -84,7 +86,7 @@ func GetNode() graph.NodeFunc {
 		case enumor.ToolNameRecommendByPlan:
 			return handlePlanRecommend(ctx, state, messages, result)
 		case enumor.ToolNameRecommendSplitSuborder:
-			return handleSplitSuborderRecommend(ctx, state, messages, result)
+			return handleSplitSuborderRecommend(ctx, state, messages, call, result)
 		default:
 			return graph.State{}, nil
 		}
@@ -119,18 +121,28 @@ func handlePlanRecommend(ctx context.Context, state graph.State, messages []trpc
 	return graph.State{constant.StateKeyRecommendCandidates: marshalCandidates(merged)}, nil
 }
 
-// handleSplitSuborderRecommend 处理 split_suborder（拆单试算）：出子单则构造主单+子单 payload 并中断，否则回 llm。
+// handleSplitSuborderRecommend 处理 split_suborder（拆单试算）：出增量子单则构造主单+子单 payload 并中断，
+// 否则回 llm。
+//
+// 拆单试算接口在增量拆分场景下只返回本次新算出的增量子单、不回显入参的 occupied_suborders，
+// 因此确认卡片所需的完整清单需把入参中的已占用子单还原后合并，否则「已有 S2 再加一条 S3」时
+// 卡片只剩 S3，此前已确认的子单被静默丢弃。
+//
+// 中断判定仍只看增量子单数：若改用合并后总数，本次增量为 0（余量/库存不足）时会因历史占用
+// 把总数撑到 >= 1，从而弹出一张没有任何新内容的确认卡片。
 func handleSplitSuborderRecommend(ctx context.Context, state graph.State, messages []trpcmodel.Message,
-	result string) (any, error) {
+	call *recommendToolCall, result string) (any, error) {
 
 	rid := rest.RidFromContext(ctx)
 	subs := parseSuborders(result, rid)
-	logs.Infof("after_tool_hitl: split suborders=%d, rid: %s", len(subs), rid)
-
-	if len(subs) >= 1 {
-		return interruptWithRecommendSuborders(ctx, state, messages, subs)
+	if len(subs) < 1 {
+		logs.Infof("after_tool_hitl: split suborders=0, route to llm, rid: %s", rid)
+		return graph.State{}, nil
 	}
-	return graph.State{}, nil
+
+	merged := mergeSuborders(extractOccupiedSuborders(call.args, rid), subs)
+	logs.Infof("after_tool_hitl: split suborders=%d, merged=%d, rid: %s", len(subs), len(merged), rid)
+	return interruptWithRecommendSuborders(ctx, state, messages, merged)
 }
 
 // interruptWithRecommend emits a prompt, interrupts with the candidate recommendations payload, and
