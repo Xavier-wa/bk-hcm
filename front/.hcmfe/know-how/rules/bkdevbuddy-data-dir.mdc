@@ -1,0 +1,25 @@
+---
+description: "bkdevbuddy 数据目录解析—— know-how / workflow / requirements / docs 等持久化路径均相对 projectRoot，目录名由 .bkdevbuddyrc.json 的 dir 配置，勿写死 .bkdevbuddy。在 /workflow-dev、docs、requirement 相关任务中必读。关键词：dataDir、dir、路径、projectRoot、workflow、requirements、docs。"
+alwaysApply: false
+---
+
+<BKDEVBUDDY-DATA-DIR>
+know-how、workflow、requirements、docs、tapd 等 bkdevbuddy 持久化数据都在**消费方 projectRoot** 下的**数据目录**内。目录名**不是固定的** `.bkdevbuddy`，由 `.bkdevbuddyrc.json` 的 `dir` 字段决定（缺省 `.bkdevbuddy`）。
+
+## 如何得到正确路径（按优先级）
+
+1. **优先用 MCP 工具返回值**（已含正确前缀，相对 projectRoot）：
+   - `bkdevbuddy_workflow_init` / `bkdevbuddy_workflow_status` → `paths`（含 `dataDir`、`artifactRefBase`、`artifacts.*.ref`）
+   - `bkdevbuddy_req_init`（preview/created）→ `requirementDirRef`、`manifestRef`
+   - `bkdevbuddy_docs_init`（preview/created）→ `dataDir`、`docsRootRef`、`blueprintRef`、`indexRef`
+   - `bkdevbuddy_docs_status` → `dataDir`（及 `docsRootRef` 等，init preview 同）
+   - `artifact_add` 的 `ref` **必须与上述返回的 ref 一致**，不要自行拼默认目录名。
+
+2. **需要自行拼路径时**：读 projectRoot 下 `.bkdevbuddyrc.json` 的 `dir`（字符串，缺省 `.bkdevbuddy`），记为 `<dataDir>`，再拼 `<dataDir>/workflow/<id>/prd.md` 等。
+
+3. **monorepo**：`projectRoot` 是含 `.bkdevbuddyrc.json` 的目录（常与 `front/` 同级于 IDE workspace root）。路径相对 projectRoot，**不要**加 `front/` 前缀（除非 projectRoot 本身就是 repo 根）。
+
+## 文档占位符
+
+本仓库 know-how 文档中的 `<dataDir>` 均指上述解析结果，**禁止**在运行时代码或 Write 工具中字面写入 `<dataDir>` 字符串。
+</BKDEVBUDDY-DATA-DIR>

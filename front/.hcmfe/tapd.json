@@ -1,0 +1,42 @@
+{
+  "workspaces": {
+    "69995598": {
+      "workspaceId": "69995598",
+      "statusModel": {
+        "story": [
+          {
+            "semantic": "backlog",
+            "key": "status_8",
+            "label": "backlog(新)"
+          },
+          {
+            "semantic": "todo",
+            "key": "status_10",
+            "label": "todo(已规划)"
+          },
+          {
+            "semantic": "doing",
+            "key": "status_11",
+            "label": "doing(开发中)"
+          },
+          {
+            "semantic": "for_test",
+            "key": "status_12",
+            "label": "for test(提测)"
+          },
+          {
+            "semantic": "tested",
+            "key": "status_13",
+            "label": "tested(测试通过)"
+          },
+          {
+            "semantic": "done",
+            "key": "status_14",
+            "label": "done(已上线)"
+          }
+        ]
+      },
+      "syncedAt": "2026-07-29T01:58:50.063Z"
+    }
+  }
+}

@@ -1,0 +1,432 @@
+{
+  "version": 1,
+  "project": "hcm",
+  "generatedAt": "2026-07-14T09:49:59.375Z",
+  "updatedAt": "2026-07-28T11:49:48.786Z",
+  "modules": [
+    {
+      "id": "base",
+      "kind": "base",
+      "title": "基础/共享接缝",
+      "summary": "跨模块共享层：HTTP 客户端、API 封装、全局组件、hooks、store、常量/类型、样式与工具函数等。已拆出 model/menu-route/auth 三个基础能力模块。【架构北极星、逻辑特性→物理落点映射表沉淀在本模块文档，index 仅为工具生成的模块 TOC，动手前先读 base.md】",
+      "globs": [
+        "src/api/**",
+        "src/assets/**",
+        "src/common/**",
+        "src/components/**",
+        "src/constants/**",
+        "src/css/**",
+        "src/decorator/**",
+        "src/directive/**",
+        "src/hooks/**",
+        "src/http/**",
+        "src/language/**",
+        "src/store/**",
+        "src/style/**",
+        "src/types/**",
+        "src/typings/**",
+        "src/utils/**",
+        "src/vendor/**"
+      ],
+      "relates": [
+        "menu-route",
+        "auth"
+      ],
+      "doc": "modules/base.md",
+      "status": "drafted",
+      "fingerprint": {
+        "computedAt": "2026-07-23T01:39:05.307Z",
+        "rootHash": "d67ef9e362ba271b5ac02d3bb4b744624793eebf"
+      },
+      "updatedAt": "2026-07-23T01:39:05.307Z"
+    },
+    {
+      "id": "component-variant",
+      "kind": "module",
+      "title": "组件级多云与内外版差异化",
+      "summary": "系统基础特色能力：单组件同时应对多云（运行时 Factory + vendor 属性映射）与内外版（构建时 .plugin ↔ -internal.plugin 模块替换，由 bk.config.js NormalModuleReplacementPlugin 在 TARGET_MODE=bcc 时切换）。典范：components/account-selector。新代码内外版差异优先用文件级 .plugin 替换而非退场中的 plugin-handler。",
+      "globs": [
+        "src/**/*.plugin.ts",
+        "src/**/*-internal.plugin.ts"
+      ],
+      "doc": "modules/component-variant.md",
+      "status": "drafted",
+      "relates": [
+        "model",
+        "plugin-handler",
+        "page-variant"
+      ],
+      "fingerprint": {
+        "computedAt": "2026-07-14T12:38:36.974Z",
+        "rootHash": "02dfd5783f67c0cb4ab6c69f2ca90503557cf9f2"
+      },
+      "updatedAt": "2026-07-15T04:01:34.440Z"
+    },
+    {
+      "id": "page-variant",
+      "kind": "module",
+      "title": "页面级内外版差异化",
+      "summary": "系统基础特色能力：与 component-variant 同一 .plugin 构建替换机制，但替换整块 UI 片段——Vue SFC(.plugin.vue) 或 TSX 渲染函数(.plugin.tsx)。内版常在外版基础上加流程/分支（如 MOA 校验、bpaas 来源）。典范：security-group single-delete-button、ticket apply-content-render。",
+      "globs": [
+        "src/**/*.plugin.vue",
+        "src/**/*-internal.plugin.vue",
+        "src/**/*.plugin.tsx",
+        "src/**/*-internal.plugin.tsx"
+      ],
+      "doc": "modules/page-variant.md",
+      "status": "drafted",
+      "relates": [
+        "component-variant",
+        "plugin-handler"
+      ],
+      "fingerprint": {
+        "computedAt": "2026-07-14T12:38:37.019Z",
+        "rootHash": "4fc7fcf5279fadc5ffd5f487a704f5c9e09c1527"
+      },
+      "updatedAt": "2026-07-15T04:01:34.534Z"
+    },
+    {
+      "id": "menu-route",
+      "kind": "module",
+      "title": "菜单与路由",
+      "summary": "横切关注点（从 base 拆出）：三级一级视图（业务/工作台/资源运营）、去中心化路由、菜单与路由解耦、routerAction 统一跳转。关键文件 src/router/**、src/constants/menu-symbol.ts；各模块路由分散在 views/<模块>/route-config.ts。",
+      "globs": [
+        "src/router/**",
+        "src/constants/menu-symbol.ts"
+      ],
+      "doc": "modules/menu-route.md",
+      "status": "drafted",
+      "relates": [
+        "base",
+        "auth"
+      ],
+      "fingerprint": {
+        "computedAt": "2026-07-28T11:49:48.786Z",
+        "rootHash": "5165c555b82d6e91b299875dbd1b9d6bad519cad"
+      },
+      "updatedAt": "2026-07-28T11:49:48.786Z"
+    },
+    {
+      "id": "auth",
+      "kind": "module",
+      "title": "权限控制",
+      "summary": "横切关注点（从 base 拆出）：视图级权限（路由守卫 + auth.view）与操作级权限（HcmAuth 组件）。关键文件 src/common/auth-service.ts、src/constants/auth-symbols.ts、src/components/auth/**、src/components/permission/**。旧 useVerify/PermissionDialog 方案已废弃。",
+      "globs": [
+        "src/common/auth-service.ts",
+        "src/constants/auth-symbols.ts",
+        "src/components/auth/**",
+        "src/components/permission/**"
+      ],
+      "doc": "modules/auth.md",
+      "status": "drafted",
+      "relates": [
+        "base",
+        "menu-route"
+      ],
+      "fingerprint": {
+        "computedAt": "2026-07-14T12:09:36.331Z",
+        "rootHash": "0d7c29242d75484bb50d2773be261e7848c43ee6"
+      },
+      "updatedAt": "2026-07-15T04:01:34.725Z"
+    },
+    {
+      "id": "operation-log",
+      "kind": "module",
+      "title": "操作记录",
+      "summary": "操作审计日志。目标原子模块的正面样板：功能自洽、菜单挂载与模块归属解耦。",
+      "globs": [
+        "src/views/operation-log/**"
+      ],
+      "doc": "modules/operation-log.md",
+      "status": "drafted",
+      "fingerprint": null,
+      "updatedAt": "2026-07-15T04:01:34.819Z"
+    },
+    {
+      "id": "resource",
+      "kind": "module",
+      "title": "资源运营一级视图（容器·待拆解）",
+      "summary": "一级视图 /resource/ 的菜单容器，非原子模块，体量最大。现状聚合了账号管理(accountmanage)、回收站(recyclebin-manager)、资源纳管(resource-manage：host/vpc/subnet/安全组/cvm 等多种 IaaS 资源)。目标：账号管理、回收站、各 IaaS 资源类型各自打平为原子模块。详见 base 模块「一级视图容器」表。",
+      "globs": [
+        "src/views/resource/**"
+      ],
+      "doc": "modules/resource.md",
+      "status": "drafted",
+      "fingerprint": {
+        "computedAt": "2026-07-14T12:38:37.063Z",
+        "rootHash": "a472254f9f1a04613d849e96812e33576c1708c4"
+      },
+      "updatedAt": "2026-07-15T04:01:34.915Z"
+    },
+    {
+      "id": "business",
+      "kind": "module",
+      "title": "业务一级视图（容器·待拆解）",
+      "summary": "一级视图 /business/:bizId 的菜单容器，非原子模块。现状聚合了业务管理自身 + 主机/证书/负载均衡/资源预测/滚服等功能，是「按菜单笼统归一」的现状刻画。目标：这些功能各自打平为原子模块，容器仅留业务管理。详见 base 模块「一级视图容器」表。",
+      "globs": [
+        "src/views/business/**"
+      ],
+      "doc": "modules/business.md",
+      "status": "drafted",
+      "relates": [
+        "load-balancer",
+        "resource-plan",
+        "rolling-server"
+      ],
+      "fingerprint": {
+        "computedAt": "2026-07-14T12:29:00.811Z",
+        "rootHash": "2dcb8615fa9091229019d2d5a8e7fcdbe010740f"
+      },
+      "updatedAt": "2026-07-15T04:01:35.012Z"
+    },
+    {
+      "id": "ziyan-scr",
+      "kind": "module",
+      "title": "自研上云（退场中）",
+      "summary": "状态: 退场中。历史组织形式，内部混杂 cvm/主机申请/回收/滚动资源等。原则: 只迁不增，新需求就近迁往对应原子模块。",
+      "globs": [
+        "src/views/ziyanScr/**"
+      ],
+      "doc": "modules/ziyan-scr.md",
+      "status": "drafted",
+      "relates": [
+        "rolling-server",
+        "resource"
+      ],
+      "fingerprint": null,
+      "updatedAt": "2026-07-15T04:01:35.107Z"
+    },
+    {
+      "id": "service",
+      "kind": "module",
+      "title": "工作台一级视图（容器·待拆解）",
+      "summary": "一级视图 /service/ 的菜单容器，非原子模块。现状聚合了我的申请、我的审批、服务申请 + 资源预测。目标：申请审批(服务单据)成原子模块；resource-plan 已独立。详见 base 模块「一级视图容器」表。",
+      "globs": [
+        "src/views/service/**"
+      ],
+      "doc": "modules/service.md",
+      "status": "drafted",
+      "relates": [
+        "resource-plan"
+      ],
+      "fingerprint": {
+        "computedAt": "2026-07-14T12:29:03.319Z",
+        "rootHash": "fe9c1ee0f8bb9111f99f74f423123c4a528d5947"
+      },
+      "updatedAt": "2026-07-15T04:01:35.207Z"
+    },
+    {
+      "id": "cloud-account-manage",
+      "kind": "module",
+      "title": "云账号管理",
+      "summary": "云账号密钥、权限策略/模板、二级/三级账号管理。",
+      "globs": [
+        "src/views/cloud-account-manage/**"
+      ],
+      "doc": "modules/cloud-account-manage.md",
+      "status": "drafted",
+      "fingerprint": null,
+      "updatedAt": "2026-07-15T04:01:35.303Z"
+    },
+    {
+      "id": "load-balancer",
+      "kind": "module",
+      "title": "负载均衡",
+      "summary": "CLB/监听器/目标组/设备。功能物理分散在顶层与 business 下，目标收敛为单一原子模块。物理落点见 base 模块逻辑特性映射表。",
+      "globs": [
+        "src/views/load-balancer/**"
+      ],
+      "doc": "modules/load-balancer.md",
+      "status": "drafted",
+      "relates": [
+        "business"
+      ],
+      "fingerprint": null,
+      "updatedAt": "2026-07-15T04:01:35.402Z"
+    },
+    {
+      "id": "bill",
+      "kind": "module",
+      "title": "账单",
+      "summary": "账单与账号账单视图。",
+      "globs": [
+        "src/views/bill/**"
+      ],
+      "doc": "modules/bill.md",
+      "status": "drafted",
+      "fingerprint": null,
+      "updatedAt": "2026-07-15T04:01:35.499Z"
+    },
+    {
+      "id": "ticket",
+      "kind": "module",
+      "title": "单据/工单",
+      "summary": "工单流程，含业务/服务两套入口。",
+      "globs": [
+        "src/views/ticket/**"
+      ],
+      "doc": "modules/ticket.md",
+      "status": "drafted",
+      "fingerprint": {
+        "computedAt": "2026-07-24T03:04:33.415Z",
+        "rootHash": "99063f1eaea8d007e96b3071dffad01887f815ed"
+      },
+      "updatedAt": "2026-07-24T03:04:33.415Z"
+    },
+    {
+      "id": "scheme",
+      "kind": "module",
+      "title": "资源选型方案",
+      "summary": "选型方案列表/详情/推荐。",
+      "globs": [
+        "src/views/scheme/**"
+      ],
+      "doc": "modules/scheme.md",
+      "status": "drafted",
+      "fingerprint": null,
+      "updatedAt": "2026-07-15T04:01:35.695Z"
+    },
+    {
+      "id": "task",
+      "kind": "module",
+      "title": "任务管理",
+      "summary": "异步任务（cvm/clb 等）列表与详情。",
+      "globs": [
+        "src/views/task/**"
+      ],
+      "doc": "modules/task.md",
+      "status": "drafted",
+      "fingerprint": null,
+      "updatedAt": "2026-07-15T04:01:35.791Z"
+    },
+    {
+      "id": "stats",
+      "kind": "module",
+      "title": "交付统计",
+      "summary": "交付相关统计报表。",
+      "globs": [
+        "src/views/stats/**"
+      ],
+      "doc": "modules/stats.md",
+      "status": "drafted",
+      "fingerprint": null,
+      "updatedAt": "2026-07-15T04:01:35.885Z"
+    },
+    {
+      "id": "rolling-server",
+      "kind": "module",
+      "title": "滚服",
+      "summary": "滚服：账单/配额/用量。功能物理分散在顶层、business、ziyanScr 下，目标收敛为单一原子模块。物理落点见 base 模块逻辑特性映射表。",
+      "globs": [
+        "src/views/rolling-server/**"
+      ],
+      "doc": "modules/rolling-server.md",
+      "status": "drafted",
+      "relates": [
+        "business",
+        "ziyan-scr"
+      ],
+      "fingerprint": null,
+      "updatedAt": "2026-07-15T04:01:35.986Z"
+    },
+    {
+      "id": "resource-plan",
+      "kind": "module",
+      "title": "资源预测",
+      "summary": "资源预测（GPU 等资源用量/容量预测）。物理分散在顶层、business、service 下，目标收敛为单一原子模块。物理落点见 base 模块逻辑特性映射表。",
+      "globs": [
+        "src/views/resource-plan/**"
+      ],
+      "doc": "modules/resource-plan.md",
+      "status": "drafted",
+      "relates": [
+        "business",
+        "service"
+      ],
+      "fingerprint": null,
+      "updatedAt": "2026-07-15T04:01:36.092Z"
+    },
+    {
+      "id": "green-channel",
+      "kind": "module",
+      "title": "小额绿通",
+      "summary": "小额绿通相关页面。",
+      "globs": [
+        "src/views/green-channel/**"
+      ],
+      "doc": "modules/green-channel.md",
+      "status": "drafted",
+      "fingerprint": null,
+      "updatedAt": "2026-07-15T04:01:36.196Z"
+    },
+    {
+      "id": "chatbot",
+      "kind": "module",
+      "title": "智能助手",
+      "summary": "对话式助手入口。",
+      "globs": [
+        "src/views/chatbot/**",
+        "src/components/chatbot/**",
+        "src/components/ai-assistant/**",
+        "src/hooks/chatbot/**",
+        "src/store/chatbot/**"
+      ],
+      "doc": "modules/chatbot.md",
+      "status": "drafted",
+      "fingerprint": {
+        "computedAt": "2026-07-23T01:39:05.361Z",
+        "rootHash": "59303989f38b45c71f779903103151a305b5e870"
+      },
+      "updatedAt": "2026-07-23T01:39:05.361Z"
+    },
+    {
+      "id": "app-shell",
+      "kind": "module",
+      "title": "门户框架/首页/错误页/通知",
+      "summary": "应用外壳与通用页面：首页布局(home 已废弃)、错误页、全局通知、views 根入口。",
+      "globs": [
+        "src/views/home/**",
+        "src/views/error-pages/**",
+        "src/views/notice/**",
+        "src/views/index.ts"
+      ],
+      "doc": "modules/app-shell.md",
+      "status": "drafted",
+      "fingerprint": null,
+      "updatedAt": "2026-07-15T04:01:36.391Z"
+    },
+    {
+      "id": "model",
+      "kind": "module",
+      "title": "模型驱动与页面模式",
+      "summary": "系统基础特色能力：装饰器字段元数据模型（@Model/@Column + getModel，一次声明多场景投影）、多云 Factory 编码模式、展示/表单/列表三场景通用组件模式。分步 how-to 见 skill page-list/page-form/page-detail。",
+      "globs": [
+        "src/model/**"
+      ],
+      "doc": "modules/model.md",
+      "status": "drafted",
+      "relates": [
+        "menu-route",
+        "auth"
+      ],
+      "fingerprint": {
+        "computedAt": "2026-07-14T12:22:01.331Z",
+        "rootHash": "92682ff20f7584d50176e60a731addaa94824155"
+      },
+      "updatedAt": "2026-07-15T04:01:36.487Z"
+    },
+    {
+      "id": "plugin-handler",
+      "kind": "module",
+      "title": "内外版版本模式（退场中）",
+      "summary": "状态: 退场中。承载内外版（内部版/外部版）版本模式差异的历史插件式组织形式。原则: 只迁不增，新需求改用现行组件/hooks 方案。",
+      "globs": [
+        "src/plugin-handler/**"
+      ],
+      "doc": "modules/plugin-handler.md",
+      "status": "drafted",
+      "fingerprint": null,
+      "updatedAt": "2026-07-15T04:01:36.582Z"
+    }
+  ]
+}

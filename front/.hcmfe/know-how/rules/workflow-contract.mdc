@@ -1,0 +1,64 @@
+---
+description: "开发任务工作流强制契约（仅 /workflow-dev 与 /requirement-guardian 会话内必读）—— 先走 workflow intent，编码后 drift check。未调用上述 skill 时不要自动建流。关键词：工作流、需求、迭代、drift、workflow-dev、requirement-guardian。"
+alwaysApply: false
+---
+
+<MANDATORY-WORKFLOW-CONTRACT>
+**适用范围**：仅在用户显式调用 `/workflow-dev` 或 `/requirement-guardian`（或等价「按 bkdevbuddy 工作流推进」）的会话内生效。普通对话、未声明走工作流的后端/其它任务**不要**因本文件自动 `workflow_intent` / `workflow_init`。
+
+在本 skill 会话内、响应开发任务前 (新功能 / 修 bug / 改组件 / 写接口 / 重构 / 迭代...), 你**必须**按顺序执行:
+
+1. 调用 `bkdevbuddy_workflow_intent` (utterance 用用户原话, branch / changedFiles 不传服务端会自动采集)
+2. 根据返回的 `decision`:
+   - `attach_existing_iteration` → 静默 attach, 简短告知用户"已识别为 <requirement> 的 <iteration> 迭代", 然后调 `bkdevbuddy_workflow_status` 恢复上下文
+   - `attach_existing_requirement` → 询问用户"是否在需求 <id> (<title>) 下开启新迭代", 用户同意后调 `bkdevbuddy_workflow_init({ requirement: '<id>', title: '...' })`
+   - `create_new_requirement` → 只有在 TAPD MCP 已确认当前 TAPD 单据存在父需求时才允许; 先询问并确认需求标题, 再调 `bkdevbuddy_req_init` (带上 intent 返回的 id / workflowId / tapdParentRequirementId, 默认 preview 且 `wrote=false`) 展示 Requirement 目录名 / `manifest.id` / `manifestRef` / manifest 内容; 只有用户明确同意后才再次调用 `bkdevbuddy_req_init(confirm=true)` 真正创建 (返回 `mode=created|existing`), 然后再 `bkdevbuddy_workflow_init({ requirement: '<新id>' })`
+   - `create_workflow_only` → 开发任务成立, 但没有 TAPD 父需求证据或已确认无父需求; **不要**创建 Requirement。**调用 `bkdevbuddy_workflow_init` 之前必须先定 lite 还是 full —— 这是 init 前的强制闸口, 顺序不能颠倒**:
+     1. 先判断任务是否像小需求 / 独立小改动 / bugfix / 一行修复 / 微调。
+     2. 若像小改动, **必须先向用户说明"识别为小改动, 建议走 lite (默认链 coding→test→done, 见 workflow-dev skill [轻量模式 lite])"并询问确认**; 用户确认后才 `bkdevbuddy_workflow_init({ mode: 'lite', utterance: '<用户原话>' })`, 用户拒绝则 `bkdevbuddy_workflow_init({ utterance: '<用户原话>' })` 走 full。**init 时应传入 `utterance`（用户原话）**，以便返回准确的 `tapdOffer`。
+     3. **严禁**先以 full 建流 / 写 prd.md 之后再补问 lite; 也**不得**自行决定切 lite。拿不准体量时默认 full, 但仍应把 lite 判断放在 init 之前。
+     4. **口头建 TAPD 单 (tapdOffer)**: `workflow_init` 若返回 `tapdOffer`（工作流尚未绑定 TAPD）, **必须在进入主工作 / 处理 stageNodes 之前**：先定 workspace → 用 TAPD MCP 查模板/字段必填（story: `get_stories_template_list` + `get_default_story_template`；bug: `tapd_fields_summary_get` / `tapd_field_detail_get`）→ 补齐 **处理人**（story=`owner`，bug=`current_owner`；有模板默认用默认，否则**询问用户**，禁止臆造）及模板标为必填的其它字段 → 展示含处理人的完整草稿并询问是否创建。用户明确同意后: TAPD MCP `stories_create`/`bugs_create`（带齐必填）→ 必要时 `bkdevbuddy_tapd_status_sync` → `bkdevbuddy_tapd_link`；用户拒绝则不建不 link，**本会话不再重复询问**（除非用户主动要求建单）。**禁止**静默建单或空处理人硬撞。默认 `objectType=story`；仅当用户原话明确要「创建 bug 单 / 建缺陷单」时为 bug。无父需求的新建 story **仍不**自动 `req_init`。
+   - `no_workflow_needed` → 直接回答, 跳过工作流
+
+3. 进入编码后, **每完成一组代码改动**必须调 `bkdevbuddy_drift_check({ requirementId })`，并同批读 `bkdevbuddy_workflow_status` 的 `artifactFreshness.coding`（P0 产物保鲜；**无**独立 stop hook）:
+   - `hasDrift=false` → 静默继续（仍须看下方 freshness）
+   - `hasDrift=true` → 必须告知用户漂移列表, 询问"是否同步更新 PRD/Design/API"; 用户同意 → `bkdevbuddy_req_reconcile` 拿任务包 → 提议 doc patch → 用户确认后写文档 → `bkdevbuddy_req_baseline` 重置基线; 用户拒绝 (确认是无文档影响的重构等) → `bkdevbuddy_req_baseline` 直接重置基线
+   - **产物保鲜 (coding)**: `artifactFreshness.coding.status` 为 `stale` / `untracked` 时 → 更新 `coding.md` 后调 `bkdevbuddy_workflow_artifact_seat({ mode: 'align' })`（可先 `bkdevbuddy_workflow_artifact_reconcile` 拿任务包）; 用户确认无文档影响 → `mode: 'waive'` 且 `note` 必填。`artifactPolicy=required` 时未处理会挡住 `coding→test`。**禁止**为对齐实现去改 prd/design。`waived` 跳过; `optional` 仅提示不硬挡。
+   - **多单 coding 单据节**: 绑定 ≥2 张单时，`coding.md` 须按「一单一节」写 `## 单据 N`（含 `**TAPD**` / `**文件**` / `**改动点**`）。**每组代码改动后**同步对应节的 `**文件**` 完整列表与 `**改动点**` 摘要；`codingItemStructure` 有 `uncoveredCodeFiles` 或 `ok===false` 时先修文档再 `workflow_next` / 按单 commit。
+4. **TAPD 绑定与状态追平** (`tapdSync`):
+   - `bkdevbuddy_tapd_link` **仅绑定**工作流与 TAPD 单据，引擎**不会**自动调用 TAPD MCP 改状态；返回的 `tapdSync` 是 Agent 侧执行指引 (`childTargets` / `resolvedTargets` / `ownerAction`)。已绑定后再传单个 `itemId` 时**默认 append** 进 `items`（返回 `linkOp`/`boundCount`）；显式 `items[]` 为整表替换；仅当用户明确要求时用 `mode=replace` 覆盖。
+   - **中途追加单据**: 工作流已 link 后用户又贴 TAPD id → **必须**再调 `bkdevbuddy_tapd_link`（单 id 默认 append）；禁止只绑新单覆盖旧单，除非用户明确要求 replace。追加后若当前在 coding（或多单已启用 `codingItemStructure`），**立刻**在 `coding.md` 补对应 `## 单据 N`（`**TAPD**` 必填，`**文件**` 可暂空），再继续编码 / next / commit。
+   - 当 `bkdevbuddy_tapd_link` / `bkdevbuddy_workflow_status` / `bkdevbuddy_workflow_next` 返回 `tapdSync` 且工作流已绑定单据时，Agent 必须据此帮用户流转 TAPD 状态: 先 `stories_get`/`bugs_get`(with_v_status=1) 读当前状态, 只在**严格前进**时用真实 `status` key 调 `stories_update`/`bugs_update` (单调只进不退; 工作流向后 `set_stage` 时**绝不**回退 TAPD)。有 `parentId` 时子单据更新后拉全部子项调 `bkdevbuddy_tapd_rollup`, `shouldAdvance=true` 才更新父需求。
+   - **追平不跳级 (lite 与 full 都适用)**: 语义链 `backlog < todo < doing < for_test < tested < done` 逐级只进不退, 单据从 `backlog` 起必须先到 `todo` 再到 `doing`, **绝不能**跳过 `todo` 直达 `doing`。
+   - **何时执行追平 (通用)**: 须在**进入当前阶段主工作之前**完成 `tapdSync` 追平。**若 link 时仍有 pending `stageNodes.pre` / `post`** → 先处理完这些节点, **再**按 `tapdSync` 追平, **然后**进入主工作 (link 时**不要**提前执行 TAPD 状态更新)。**若无 pending stageNodes** → link 后即可按 `tapdSync` 追平。lite 从 `coding` (语义 `doing`) 起步且没有「推进进入 coding」的 `next`, 追平路径 (如 `[todo, doing]`) 由 `tapd_link`/`status` 的 `tapdSync` 给出; **不可**拖到已进入主工作或多次 `next` 之后仍未追平。
+   - **多单据绑定**: 绑定可为多张单（`tapdSync.items`），追平/收口须**按每张单自己的** `childTargets`/`resolvedTargets`/`ownerAction` 覆盖全部单据；混绑时 story 与 bug 目标可以不同；done 收口完成判据 = 每张单按其 `objectType` 验收通过 (见下)。
+   - **`pendingTapdActions` 硬闸 (非 stageNodes)**: `workflow_status` / `workflow_next` / `tapd_link` 若带非空 `pendingTapdActions`（如 bug 的 `reassign_to_reporter`）→ **禁止**再 `workflow_next`；须先按 `tapdSync` 完成 TAPD 更新（含回交处理人），再 `bkdevbuddy_tapd_action_complete`（`note` 必填）清项。
+   - **`done` 是工作流完成态, 不以真实上线为前提 (按 objectType 分型)**: 对 **story**, 按 `tapdSync` 给出的 `[tested, done]` 把单据一路推到 TAPD `done`, **不得**以「代码尚未提交 / 部署 / 上线」为由停在 `tested`；对 **bug**, 工作流推进到 done **不**推 TAPD `tested`/`done`, TAPD 最高停在 `for_test` (留给测试人工关单)。若该 bug 的 `tapdSync.ownerAction.type === 'reassign_to_reporter'`, 在进入 `for_test` 时先 `bugs_get` 取 reporter, 再 `bugs_update` 把 `current_owner` 改为提单人，再 `tapd_action_complete`。详见 workflow-dev skill [TAPD 单据状态自动流转]。
+   - **收口硬闸 (非自觉)**: TAPD 追平的最后一跳由 required 收口节点承载 (项目声明, 如 HCM 的 `hcm-tapd-sync-done`, `anchorStage=done`)。进入 done 后 `workflow_status` / `workflow_next` 会返回 `closeout: { complete:false, blockingActions }`, `stop` hook 亦会**硬阻断**结束本轮, 直到该节点 `workflow_node_complete` (确需跳过经用户同意后 `workflow_node_skip` 带 note)。对 bug, 该节点的验收判据是「仍在 `for_test`」(或已由测试推到更高态则 forward-only 跳过)；**禁止**为了收口把 bug 强推到 TAPD `done`。**Smart Mode 拦截 `stories_update`/`bugs_update` 属预期 (仓外共享状态写入), 必须 `requestSmartModeApproval` 重试拿审批, 严禁改口「用户手动改」**。
+
+5. 当 `bkdevbuddy_workflow_status` / `bkdevbuddy_workflow_init` / `bkdevbuddy_tapd_link` / `bkdevbuddy_workflow_next` 返回 `stageNodes` 且 `pre` 或 `post` 非空时, **必须先做完当前 pending 的前置/后置处理, 再进入阶段主工作** (写 prd.md / coding.md / 编码等):
+   - `optional: true` → **禁止自行跳过**; 必须向用户说明节点 id + hint, 询问是否执行; 用户拒绝才可 `bkdevbuddy_workflow_node_skip` (note 必填); 用户同意则按 `executors` 顺序执行后 `bkdevbuddy_workflow_node_complete`。
+   - `required: true` → 默认执行; 未完成不得 `workflow_next`。
+   - **lite 不豁免**: 若 lite 的 `coding.pre` 仍有 pending 项 (如 HCM 的澄清/评估), **禁止**以「lite 跳过了 PRD」为由静默忽略; 仍须询问。
+   - `executors` 含 `type: agent` + `ref: tapd-analyst` 时, **严格按该节点声明的顺序**派发 (先读 `agents/tapd-analyst.md`), **禁止**主线用 `stories_get`/读图手搓替代该步, 也**禁止**为「抢跑」而在节点前另派一次。
+   - `tapd_link` 与这些处理步骤**无固定全局先后**: 何时出现由 `when` 决定 (如 `tapdLinked: true` 的项只在 link 后出现, link 后若又有 pending 须再处理一轮)。**推荐默认 (通用)**: 有 TAPD 单据时 `workflow_init` 后先 `bkdevbuddy_tapd_link` (**仅绑定**, 防止遗忘关联); 不配 `tapdLinked` 的节点不受 link 影响。TAPD **状态追平**时机见 §4 (有 pending `stageNodes` 时须在节点完成后再追平, link 时不要提前改 TAPD 状态)。项目专属细节 (如 HCM 澄清与 backlog 状态) 见该项目 `workflow-nodes.json` 的 `hint`。
+   - 详见 workflow-dev skill [阶段前置/后置处理]。
+
+6. **TAPD 全量解读 (tapd-analyst) — 通用 full/PRD 闸口** (与项目前置/后置处理正交):
+   - 适用: 已拿到 TAPD 单据 id, 且本次 workflow **会进入 prd 阶段** (full 或 stages 含 prd)。
+   - **写 prd.md 之前**必须已有一份经 `tapd-analyst` 子 agent 回传的结构化摘要 (净需求点清单), 并以其为 PRD 需求点来源。
+   - **如何满足** (二选一, 勿重复):
+     1. 当前 pending `stageNodes` 的 `executors` **已含** `tapd-analyst` → 处理该节点时按声明顺序执行到该步即可 (例如 HCM: 澄清 → 评估 → analyst)。
+     2. 节点**未**声明 `tapd-analyst` → 在进入 prd 主工作 / 写 prd.md **之前**, 用 Task(`generalPurpose`) 单独派发, prompt 要求先读 `<dataDir>/know-how/agents/tapd-analyst.md`（`<dataDir>` 见 `bkdevbuddy-data-dir` rule；优先用 MCP 返回路径）。
+   - **禁止**: 主 agent 用 `stories_get` / `bugs_get` / `get_workitem_desc_images` / `comments_get` 自行拼凑「需求理解」来写 prd.md (查父需求、`tapdSync` 读/改状态除外)。
+   - **豁免**: lite 且活跃链**不含** prd; 或用户明确确认跳过全量解读 (须在对话中说明理由)。详见 workflow-dev skill [TAPD 需求全量解读]。
+
+7. **文档底座沉淀 (存在 `<dataDir>/docs/blueprint.json` 时适用；`<dataDir>` 解析见 `bkdevbuddy-data-dir` rule)**:
+   - **进入编码前（热写入 · 读后即写）**: 若存在 `<dataDir>/docs/index.md`（或 MCP 返回的 `indexRef`），先读它定位相关模块，再读 `modules/<id>.md`；若有 TOC 指向 `modules/<id>/<topic>.md`，只打开命中明细。若文档缺/错/stub 且本轮理解可复用 → **当场**增量写入（遵守 docs-navigation 自检三问），再 `bkdevbuddy_docs_deepen({ id })`。未触及模块**禁止**顺手批量补全。明细约定与分层职责见 docs-navigation / docs-loop-guide。
+   - **每完成一组代码改动后（热写入 · 改后同批，与 §3 drift check 同批）**: 调 `bkdevbuddy_docs_status({ changedFiles })` 得 `touchedModules`；只更新命中模块中**本次改动导致的结构/行为变化**（稳定结构进 docs；`coding.md` 只记本迭代改动，不重述模块百科）；再 `bkdevbuddy_docs_deepen({ changedFiles })`。无 blueprint 时跳过，可提示 `bkdevbuddy docs init`。
+   - **工作流到达 `done` 时 (结果/意外信号)**: 回顾"哪里返工 / 与预期不符 / 有无可复用套路"。**仅当**存在高价值信号时 `bkdevbuddy_docs_promote({ title, summary, why, kind })`；**不要**无差别记录每次改动。
+   - **强提示（不阻塞 done）**: closeout / `docs_status` 若 `promotionQueue.totalOpen > 0`，**必须向用户确认**是否现在进入 `promotions-review`；用户稍后/跳过则结束；**禁止**未确认就 accept/ship；**不要**把评审做成 required 节点。
+   - **文档收口硬闸 (存在底座且 docs 开启时)**: 项目 required 节点（如 HCM `hcm-docs-closeout`，`anchorStage=test` `timing=post`，`when.docsBaseExists`）挡住 `test→done`。收口语义是**核对 + 缺口补写**（不是唯一写入点）：`docs_status({ changedFiles })` 后令 `gaps` = touched 且 (`status==stub` 或 `hasDrift`)；**gaps 非空**必须更新对应 `modules/<id>.md`（及所需 topic）再 `docs_deepen`，**禁止**只 `node_complete`；**gaps 为空**可跳过正文，note 说明中途已沉淀后 `node_complete`；确无文档影响经用户同意 `workflow_node_skip`（note 必填）。`config.docs.enabled=false` 或无 blueprint 时节点不出现、`docs` stop hook 空转；TAPD 收口独立。**禁止**在未实际更新模块文档正文的情况下调用 `docs_deepen` / `bkdevbuddy_docs_deepen`（deepen 只用于刚写完之后刷基线，热写入与收口皆同此红线）。
+
+违反契约的后果: 用户的需求会被错关联到不相干的工作流, 文档会与代码漂移, coding.md 与实现脱节, 项目配置的前置/后置处理会被静默跳过, PRD 会建立在不完整的 TAPD 理解上, 文档底座逐渐与代码脱节且经验无法沉淀, 后续 AI 看到的上下文不可信。
+</MANDATORY-WORKFLOW-CONTRACT>

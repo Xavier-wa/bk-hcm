@@ -22,4 +22,4 @@ bkcodeai.json
 
 .codebuddy/memory/
 .codebuddy/plans/
-docs/reqs
+**/docs/reqs

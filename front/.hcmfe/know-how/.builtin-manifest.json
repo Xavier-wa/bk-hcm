@@ -1,24 +1,20 @@
 {
   "resources": [
     {
-      "type": "skills",
-      "name": "page-detail"
+      "type": "agents",
+      "name": "code-reviewer.md"
     },
     {
-      "type": "skills",
-      "name": "page-form"
+      "type": "agents",
+      "name": "tapd-analyst.md"
     },
     {
-      "type": "skills",
-      "name": "page-list"
+      "type": "rules",
+      "name": "bkdevbuddy-data-dir.mdc"
     },
     {
-      "type": "skills",
-      "name": "workflow-design-figma-intake"
-    },
-    {
-      "type": "skills",
-      "name": "workflow-test-checklist"
+      "type": "rules",
+      "name": "docs-navigation.mdc"
     },
     {
       "type": "rules",
@@ -42,15 +38,7 @@
     },
     {
       "type": "rules",
-      "name": "fe-list-search-architecture.mdc"
-    },
-    {
-      "type": "rules",
       "name": "fe-menu-route-architecture.mdc"
-    },
-    {
-      "type": "rules",
-      "name": "fe-model-column-meta.mdc"
     },
     {
       "type": "rules",
@@ -58,19 +46,115 @@
     },
     {
       "type": "rules",
+      "name": "fe-no-backend-edit.mdc"
+    },
+    {
+      "type": "rules",
       "name": "fe-router-action.mdc"
     },
     {
-      "type": "commands",
-      "name": "archive-export.md"
+      "type": "rules",
+      "name": "tapd-clarification-desc-preserve.mdc"
     },
     {
-      "type": "commands",
-      "name": "cherry-pick-pr.md"
+      "type": "rules",
+      "name": "workflow-contract.mdc"
     },
     {
-      "type": "commands",
-      "name": "update-env.md"
+      "type": "skills",
+      "name": "blueking-figma-dev"
+    },
+    {
+      "type": "skills",
+      "name": "comp-data-list"
+    },
+    {
+      "type": "skills",
+      "name": "comp-detail"
+    },
+    {
+      "type": "skills",
+      "name": "comp-field-model"
+    },
+    {
+      "type": "skills",
+      "name": "comp-form"
+    },
+    {
+      "type": "skills",
+      "name": "fe-expert"
+    },
+    {
+      "type": "skills",
+      "name": "git-archive-export"
+    },
+    {
+      "type": "skills",
+      "name": "git-branch-new"
+    },
+    {
+      "type": "skills",
+      "name": "git-cherry-pick-pr"
+    },
+    {
+      "type": "skills",
+      "name": "git-commit"
+    },
+    {
+      "type": "skills",
+      "name": "git-update-env"
+    },
+    {
+      "type": "skills",
+      "name": "page-creator"
+    },
+    {
+      "type": "skills",
+      "name": "page-detail"
+    },
+    {
+      "type": "skills",
+      "name": "page-form"
+    },
+    {
+      "type": "skills",
+      "name": "page-list"
+    },
+    {
+      "type": "skills",
+      "name": "promotions-review"
+    },
+    {
+      "type": "skills",
+      "name": "requirement-guardian"
+    },
+    {
+      "type": "skills",
+      "name": "wf-design-comp-intake"
+    },
+    {
+      "type": "skills",
+      "name": "wf-design-figma-intake"
+    },
+    {
+      "type": "skills",
+      "name": "wf-design-icon-intake"
+    },
+    {
+      "type": "skills",
+      "name": "wf-docs-closeout"
+    },
+    {
+      "type": "skills",
+      "name": "wf-tapd-closeout"
+    },
+    {
+      "type": "skills",
+      "name": "wf-test-checklist"
+    },
+    {
+      "type": "skills",
+      "name": "workflow-dev"
     }
   ]
 }

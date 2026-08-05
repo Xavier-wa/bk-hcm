@@ -1,0 +1,36 @@
+---
+description: "项目文档导航指针（薄）—— 动前端/理解模块前先读 <dataDir>/docs/index.md；读后可按需热写入 modules；支持 modules/<id>/<topic>.md 下钻。关键词：文档、导航、模块、架构、docs、index、热写入、读后即写、workflow-dev。"
+alwaysApply: false
+---
+
+<DOCS-NAVIGATION-POINTER>
+数据目录 `<dataDir>` 的解析见 rule `bkdevbuddy-data-dir`（优先 MCP `docs_init`/`docs_status` 返回的 `*Ref`；否则读 `.bkdevbuddyrc.json` 的 `dir`）。
+
+本指针在 `/workflow-dev` **或** 编辑/理解 projectRoot 下前端源码时适用；projectRoot 外的后端等任务可忽略。
+
+## 读取（先目录，再按需下钻）
+
+在开始任何「需要理解现有代码」的工作前（定位模块 / 读架构 / 改已有功能 / 排查）：
+
+1. 若存在 `<dataDir>/docs/index.md`，**先读它**，只根据任务选相关模块。
+2. 再读 `<dataDir>/docs/modules/<id>.md`。若其中 TOC 链到 `modules/<id>/<topic>.md`，**仅打开命中的 topic**，不要预读该模块下全部明细。
+3. 若不存在 index，可提示用户 `bkdevbuddy docs init`（扫仓 → 人审校 → 落盘），本轮照常继续。
+
+`index.md` 只列基础域与业务模块卡片，**不会**列出 topic；不要把明细链接写进 index。
+
+## 读后即写（热写入，主路径之一）
+
+读完模块文档后，若文档明显缺/错/仍为 stub，且本轮已形成**可复用**理解 → **当场**增量更新 `modules/<id>.md`（或按拆分约定新建 `modules/<id>/<topic>.md`），再调 `bkdevbuddy_docs_deepen({ id })`（或 CLI `docs deepen <id>`）。不必等到工作流收口。
+
+写入前自检三问，**全部通过才写**：
+
+1. 是否指出至少一处本轮实际打开过的入口路径/符号？
+2. 是否表达稳定结构（职责/边界/关键流），而非「这次打算怎么改」？
+3. 是否不含未验证猜测（拿不准标「待核实」或不写）？
+
+**不要**：仅「打开看过」就写；把临时推理/大段源码/changelog 流水账写入；对**未触及**模块顺手批量补全；把同一事实复制进父 md、topic 与 `coding.md`。
+
+明细组织：优先写在 `modules/<id>.md` 章节内；某块稳定变长或需独立打开时再拆 `modules/<id>/<topic>.md`，父文件只留一行 TOC 摘要，**禁止**正文复制。
+
+本指针负责可发现性与热写入边界，不承载具体业务知识。
+</DOCS-NAVIGATION-POINTER>
