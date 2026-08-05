@@ -46,7 +46,7 @@ func (req *CloudResourceUpdateAuditReq) Validate() error {
 	}
 
 	if len(req.Updates) > constant.BatchOperationMaxLimit {
-		return fmt.Errorf("updates shuold <= %d", constant.BatchOperationMaxLimit)
+		return fmt.Errorf("updates should <= %d", constant.BatchOperationMaxLimit)
 	}
 
 	return nil
@@ -100,7 +100,7 @@ func (req *CloudResourceAssignAuditReq) Validate() error {
 	}
 
 	if len(req.Assigns) > constant.BatchOperationMaxLimit {
-		return fmt.Errorf("assign shuold <= %d", constant.BatchOperationMaxLimit)
+		return fmt.Errorf("assign should <= %d", constant.BatchOperationMaxLimit)
 	}
 
 	return nil
@@ -173,7 +173,7 @@ func (req *CloudResourceOperationAuditReq) Validate() error {
 	}
 
 	if len(req.Operations) > constant.BatchOperationMaxLimit {
-		return fmt.Errorf("assign shuold <= %d", constant.BatchOperationMaxLimit)
+		return fmt.Errorf("operations should <= %d", constant.BatchOperationMaxLimit)
 	}
 
 	return nil
