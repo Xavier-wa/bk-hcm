@@ -18,7 +18,7 @@
  */
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9
+    SQLVER=0083,HCMVER=v1.9.2.8
 
     Notes:
     1. account_bill_sync_record 表新增 sync_mode 字段，标识对外同步模式（full/adjustment_only），默认 full 兼容存量数据
@@ -30,6 +30,6 @@ ALTER TABLE `account_bill_sync_record`
     ADD COLUMN `sync_mode` varchar(32) NOT NULL DEFAULT 'full' COMMENT '同步模式：full-全量同步，adjustment_only-只同步调账' AFTER `adjustment_flow_id`;
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.9.2.8' as `hcm_ver`, '0083' as `sql_ver`;
 
 COMMIT;

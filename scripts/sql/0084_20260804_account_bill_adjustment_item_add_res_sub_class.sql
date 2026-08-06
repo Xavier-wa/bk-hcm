@@ -18,7 +18,7 @@
  */
 
 /*
- SQLVER=9999,HCMVER=v9.9.9
+ SQLVER=0084,HCMVER=v1.9.2.8
 
  Notes:
  1. 账单调整明细表新增资源子类字段，单列承载卡型或模型厂商，语义由同一行的 res_class 决定
@@ -35,7 +35,7 @@ SET `res_class` = 'gpu_card'
 WHERE `res_class` = 'gpu';
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`,
-       '9999'   as `sql_ver`;
+SELECT 'v1.9.2.8' as `hcm_ver`,
+       '0084'   as `sql_ver`;
 
 COMMIT;
