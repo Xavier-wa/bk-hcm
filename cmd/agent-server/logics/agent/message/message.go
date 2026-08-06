@@ -25,7 +25,6 @@ import (
 	"time"
 
 	agentstate "hcm/cmd/agent-server/logics/agent/state"
-	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 	"hcm/pkg/tools/uuid"
@@ -35,9 +34,9 @@ import (
 )
 
 // EmitFallbackMessage emits the fallback text as a proper model execution event so it appears
-// as an assistant text message in the AG-UI stream. This is necessary when the graph routes
-// directly from intent_recognition to fallback (skipping the llm node), because no LLM response
-// is available to produce the TextMessage event sequence.
+// as an assistant text message in the AG-UI stream. This is necessary when scene_dispatch routes
+// straight to fallback (skipping every scene subgraph), because no LLM response is available
+// to produce the TextMessage event sequence.
 func EmitFallbackMessage(ctx context.Context, messages []trpcmodel.Message, state graph.State,
 	interruptKey, nodeID, message string) {
 
@@ -93,7 +92,8 @@ func shouldEmitFallbackResponse(state graph.State, interruptKey string, messages
 }
 
 // BuildFallbackResumeDelta builds state delta after fallback resumes with next user input.
-// For unsupported intent turns, it rebuilds history to assistant+user to avoid stale anchoring.
+// For turns that never entered a scene subgraph, it rebuilds history to assistant+user
+// to avoid stale anchoring.
 //
 // StateKeyUserInput is explicitly cleared in every resume delta. The framework's
 // mergeInitialStateNonInternal only merges keys absent from the restored checkpoint,
@@ -115,13 +115,13 @@ func BuildFallbackResumeDelta(ctx context.Context, state graph.State, messages [
 		graph.StateKeyUserInput: "",
 	}
 
-	// StateKeyIntent 在 intent 节点中以 string 形式写入（见 intent.intentState），
-	// 这里需要先断言成string再转换，避免state在checkpoint回复过程中经过序列化和反序列，导致IntentType类型不匹配.
-	intentType := agentstate.ParseIntent(state)
-	logs.Infof("[ResumeDelta] intentType=%s, rid: %s", intentType, rid)
-	if !intentType.IsSupportedScene() {
-		logs.Infof("[ResumeDelta] clear unsupported intent=%s for re-recognition, rid: %s", intentType, rid)
-		delta[constant.StateKeyIntent] = ""
+	// 以会话场景标签判定本轮是否走过场景子图：进子图之前 scene_dispatch 必然已提交受支持的标签，
+	// 而标签为空（或不受支持）时本轮只可能落到 fallback 的未支持提示分支。
+	// 后者的历史需要重建为 assistant + user，避免旧的拒识回复继续锚定下一轮的场景判断。
+	sessionTag := agentstate.ParseSessionTag(state)
+	logs.Infof("[ResumeDelta] session_tag=%s, rid: %s", sessionTag, rid)
+	if !sessionTag.IsSupportedScene() {
+		logs.Infof("[ResumeDelta] rebuild history for unsupported scene, session_tag=%s, rid: %s", sessionTag, rid)
 		delta[graph.StateKeyMessages] = []graph.MessageOp{
 			graph.AppendMessages{
 				Items: []trpcmodel.Message{

@@ -22,6 +22,7 @@
 package logics
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -50,7 +51,6 @@ import (
 	trpcmodel "trpc.group/trpc-go/trpc-agent-go/model"
 	"trpc.group/trpc-go/trpc-agent-go/runner"
 	"trpc.group/trpc-go/trpc-agent-go/session"
-	skillpkg "trpc.group/trpc-go/trpc-agent-go/skill"
 	trpctool "trpc.group/trpc-go/trpc-agent-go/tool"
 )
 
@@ -340,24 +340,11 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 
 	aguiCfg := cc.AgentServer().AGUI
 
-	// Build per-scene skill repositories. All scenes currently share the same underlying
-	// repository; the SkillRepos structure allows independent per-scene repos in the future.
-	if skillMgr == nil {
-		logs.Errorf("[new agui runner] skill manager is nil")
-		return nil, fmt.Errorf("[new agui runner] skill manager is nil")
-	}
-	var (
-		skillRepos *skill.SkillRepos
-		err        error
-	)
-	skillRepos, err = skill.NewSkillRepos(skillMgr.Repository,
-		enumor.IntentTypeHostApply,
-		enumor.IntentTypeResourceQuery,
-		enumor.IntentTypeChat,
-	)
-	if err != nil {
-		logs.Errorf("[new agui runner] build skill repos: %v", err)
-		return nil, fmt.Errorf("[new agui runner] build skill repos: %w", err)
+	// 全进程只有一个 skill 仓库实例，graph 模式的各子图与 LLM 模式的 agent 共享它。
+	// 仓库缺失意味着所有场景都拿不到 skill，属启动期配置错误，直接失败而非降级运行。
+	if skillMgr == nil || skillMgr.Repository == nil {
+		logs.Errorf("[new agui runner] skill repository is nil")
+		return nil, errors.New("[new agui runner] skill repository is nil")
 	}
 
 	// When any MCP toolset requires per-request authentication (e.g. type "bkaidev"),
@@ -369,7 +356,7 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 	var agt trpcagent.Agent
 	switch aguiCfg.Model.Mode {
 	case enumor.AgentModeGraph:
-		compiledGraph, subAgents, err := agent.BuildGraph(defaultMdl, skillRepos, mcpToolSets, toolProxies,
+		compiledGraph, subAgents, err := agent.BuildGraph(defaultMdl, skillMgr.Repository, mcpToolSets, toolProxies,
 			aguiCfg.AppName, aguiCfg.Model, promptStore, clientSet, sessionSvc, checkpointSaver)
 		if err != nil {
 			return nil, fmt.Errorf("build graph: %w", err)
@@ -380,12 +367,8 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 		}
 	default:
 		promptCfg := cc.AgentServer().Prompt
-		var llmSkillRepo skillpkg.Repository
-		if skillMgr != nil {
-			llmSkillRepo = skillMgr.Repository
-		}
 		agt = agent.NewLLMAgent(defaultMdl, modelsMap, aguiCfg.Model,
-			promptCfg.SystemPrompt, promptCfg.Instruction, llmSkillRepo, mcpToolSets.TS,
+			promptCfg.SystemPrompt, promptCfg.Instruction, skillMgr.Repository, mcpToolSets.TS,
 			refreshOnRun, promptStore)
 	}
 

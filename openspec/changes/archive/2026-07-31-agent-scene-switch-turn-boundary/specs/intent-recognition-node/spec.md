@@ -1,22 +1,6 @@
-## Requirements
+# Capability: intent-recognition-node
 
-### Requirement: IntentType enumeration is defined
-系统 SHALL 在 `pkg/criteria/enumor/aiagent.go` 中定义 `IntentType string` 类型，包含三个枚举值：
-- `IntentTypeHostApply IntentType = "host_apply"`
-- `IntentTypeResourceQuery IntentType = "resource_query"`
-- `IntentTypeChat IntentType = "chat"`
-
-`IntentType` 必须提供 `Validate() error` 方法，当值不在枚举集合中时返回错误。
-
-#### Scenario: Valid intent type passes validation
-- **WHEN** 调用 `IntentTypeHostApply.Validate()`
-- **THEN** 返回 nil
-
-#### Scenario: Unknown intent type fails validation
-- **WHEN** 调用 `IntentType("unknown").Validate()`
-- **THEN** 返回非 nil 错误
-
----
+## MODIFIED Requirements
 
 ### Requirement: Intent recognition node classifies user intent with conversation context
 
@@ -55,8 +39,6 @@
 - **WHEN** `Classify` 返回任意分类结果
 - **THEN** graph state 中不存在承载该结果的键，调用方以局部值消费
 
----
-
 ### Requirement: Intent recognition node falls back to chat on LLM failure
 
 `intent.Classify` SHALL 在以下情况下返回 `IntentTypeChat` 而非向调用方抛出错误：
@@ -83,8 +65,6 @@
 - **WHEN** `promptStore` 为 nil 或分类 Prompt 未配置
 - **THEN** `Classify` 返回 `IntentTypeChat` 并记录 Error 日志，当前 run 继续按原场景执行
 
----
-
 ### Requirement: Intent recognition node handles missing user message gracefully
 
 `intent.Classify` SHALL 在 `messages` 为空或其中不含任何 `RoleUser` 消息时直接返回 `IntentTypeChat`，SHALL NOT 发起 LLM 调用。
@@ -94,33 +74,26 @@
 - **WHEN** `messages` 为空切片
 - **THEN** `Classify` 返回 `IntentTypeChat`，且未调用 `mdl.GenerateContent`
 
----
+## REMOVED Requirements
 
-### Requirement: AgentIntentConfig is validated at startup
-系统 SHALL 在 `AgentIntentConfig.Validate()` 中检查 `IntentPrompt`：当 `intentPromptFile` 未配置或对应文件为空时，返回非 nil 错误，使 agent-server 启动失败。
+### Requirement: StateKeyIntent constant is defined
 
-#### Scenario: Missing intent prompt file causes startup failure
-- **WHEN** `intentPromptFile` 配置为空字符串
-- **THEN** `AgentIntentConfig.Validate()` 返回非 nil 错误
+**Reason**: `StateKeyIntent` 存在的唯一理由是把分类结果从 `intent_recognition` 节点传给 `scene_dispatch` 节点。两个节点合并后分类结果成为局部值，该键不再需要跨节点传递。而它作为 graph state key 长期与 `StateKeySessionTag` 语义重叠——`scene_dispatch` 在有 tag 时会把它强制刷成 tag，二者逐字相等——保留它只会在两个键之间制造需要手工维护的同步不变式。
 
-#### Scenario: Valid config passes validation
-- **WHEN** `intentPromptFile` 指向一个非空文件
-- **THEN** `AgentIntentConfig.Validate()` 返回 nil
+**Migration**: 全仓库仅两处消费方，均在 fallback 路径上，改读 `StateKeySessionTag` 后逐案等价（依据：「本轮路由进了某个场景子图」与「`session_tag` 是受支持场景」互为充要）：
 
----
+- `message.BuildFallbackResumeDelta`：`!ParseIntent(state).IsSupportedScene()` → `!parseSessionTag(state).IsSupportedScene()`
+- `unsupportedIntentFallbackMessage`：按 `StateKeySessionTag` 是否受支持选择兜底文案
 
-### Requirement: Intent recognition supports configurable model
-系统 SHALL 在 `AgentIntentConfig` 中支持 `modelName` 字段：当 `modelName` 非空且在 `modelsMap` 中存在时，使用该模型进行意图识别；否则使用 `defaultMdl`。
+`agentstate.ParseIntent` 与 `intent.intentState` 随之删除。
 
-#### Scenario: Empty modelName uses default model
-- **WHEN** `AgentIntentConfig.ModelName` 为空字符串
-- **THEN** 意图识别节点使用 Graph 的 `defaultMdl`
+### Requirement: Graph entry point is updated to intent_recognition
 
-#### Scenario: Configured modelName uses specified model
-- **WHEN** `AgentIntentConfig.ModelName` 为已注册模型名
-- **THEN** 意图识别节点使用对应的独立模型实例
+**Reason**: 该要求早已被 `agent-scene-dispatch` 的「scene_dispatch 作为 Graph 入口与单一路由决策中心」取代（Graph 入口是 `scene_dispatch` 而非 `intent_recognition`，且 `llm` 节点已被场景子图取代），属于先前重构遗留的陈旧要求。本次删除 `intent_recognition` 节点后它彻底失效。
 
----
+**Migration**: 入口点与路由行为以 `agent-scene-dispatch` 的要求为准。
+
+## ADDED Requirements
 
 ### Requirement: Intent classification latency is observable
 

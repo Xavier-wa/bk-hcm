@@ -208,6 +208,11 @@ const (
 	// SessionIncrContentCountTimeout is the timeout of the session incr content count.
 	SessionIncrContentCountTimeout = 5 * time.Second
 
+	// SessionTagWriteBackTimeout is the timeout of the in-node session tag write-back.
+	// 该回写在 scene_dispatch 节点内同步执行，超时上限直接计入本轮 run 的延迟，
+	// 因此比 Run 结束后异步对账用的 SessionIncrContentCountTimeout 更短。
+	SessionTagWriteBackTimeout = 3 * time.Second
+
 	// SessionStateUpdateConcurrentWait is the wait time of the session state update to avoid concurrent update.
 	SessionStateUpdateConcurrentWait = 300 * time.Millisecond
 
@@ -259,13 +264,21 @@ const (
 	AvailableSkillsInjected = "available_skills_injected"
 )
 
-// StateKeyIntent is the graph state key for the intent recognised in the current turn.
-// Values are enumor.IntentType strings (e.g. "host_apply", "chat", "resource_query").
-const StateKeyIntent = "intent"
-
 // StateKeySessionTag is the graph state key for the session-level scene tag.
-// 会话级场景标签，区别于本轮意图 StateKeyIntent；取值为 enumor.IntentType 字符串。
+// 会话级场景标签，是主图中「当前处于哪个场景」的唯一真相来源；取值为 enumor.IntentType 字符串。
+// 每个轮次边界由 scene_dispatch 依据本轮意图分类结果重新提交；标签相对上一轮有变化时，
+// scene_dispatch 在判定点同步回写 DB，Run 结束后 service 层的差异对账仅作兜底。
 const StateKeySessionTag = "session_tag"
+
+// StateKeySceneDispatchNext is the graph state key carrying the scene_dispatch routing decision.
+// scene_dispatch 节点完成「当前会话标签 × 本轮意图分类结果」的判定后，把目标节点名写入该键；
+// 条件边路由函数只按该键查表，不重复实现判定逻辑，避免两处判定随决策分支增多而发散。
+const StateKeySceneDispatchNext = "scene_dispatch_next"
+
+// SceneSwitchedCustomEventName is the AG-UI CUSTOM event name emitted by scene_dispatch when a
+// session switches from one supported scene to another. 事件 payload 携带切换前后的场景，
+// 供前端同步会话标签 UI。
+const SceneSwitchedCustomEventName = "scene.switched"
 
 // ForwardedPropSessionTag is the forwardedProps key used to pass the session tag into a graph run.
 const ForwardedPropSessionTag = "sessionTag"

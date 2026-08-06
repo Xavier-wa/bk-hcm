@@ -48,6 +48,12 @@ func TestIntentType_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			// unsupported 是分类降级用的内部取值，不能作为合法分类结果被外部传入
+			name:    "unsupported is an internal fallback and fails validation",
+			intent:  IntentTypeUnsupported,
+			wantErr: true,
+		},
+		{
 			name:    "empty string fails validation",
 			intent:  IntentType(""),
 			wantErr: true,
@@ -66,6 +72,16 @@ func TestIntentType_Validate(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
 		})
+	}
+}
+
+// TestIntentTypesExcludeUnsupported 守住 unsupported 不进入场景列表：IntentTypes 会被用来构建
+// 每个场景的 tool proxy 与 skill 仓库，混入降级取值会凭空多出一个不存在的场景。
+func TestIntentTypesExcludeUnsupported(t *testing.T) {
+	for _, intent := range GetAllIntentTypes() {
+		if intent == IntentTypeUnsupported {
+			t.Errorf("IntentTypes should not contain %q", IntentTypeUnsupported)
+		}
 	}
 }
 

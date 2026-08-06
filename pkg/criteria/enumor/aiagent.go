@@ -124,6 +124,13 @@ const (
 	IntentTypeResourceQuery IntentType = "resource_query"
 	// IntentTypeChat indicates the user is engaging in general conversation.
 	IntentTypeChat IntentType = "chat"
+	// IntentTypeUnsupported 表示本轮意图无法归入任何已识别的类别，是意图分类的降级取值。
+	//
+	// 它不是一个真实场景：模型不会输出该值，它也不会被写回 session_tag，因此既不在 IntentTypes 中，
+	// 也不被 Validate 接受。分类不可用（提示词缺失、LLM 调用失败、响应无法识别等）时用它替代 chat，
+	// 使「分类失败」与「用户确在闲聊」两种语义分离——否则一旦 chat 被实现为受支持场景，
+	// 所有降级路径都会被 IsSupportedScene 判为可切换，导致分类失败时误切场景。
+	IntentTypeUnsupported IntentType = "unsupported"
 )
 
 // IntentTypes lists all recognised intent categories.
@@ -138,7 +145,8 @@ func GetAllIntentTypes() []IntentType {
 	return slices.Clone(IntentTypes)
 }
 
-// Validate checks whether the intent type is one of the declared values.
+// Validate checks whether the intent type is one of the recognised categories.
+// IntentTypeUnsupported 是内部降级取值，不属于合法的分类结果，故不在此放行。
 func (t IntentType) Validate() error {
 	switch t {
 	case IntentTypeHostApply, IntentTypeResourceQuery, IntentTypeChat:
@@ -205,9 +213,8 @@ type MainGraphAgentNode string
 
 const (
 	// MainGraphAgentNodeSceneDispatch is the scene dispatch routing hub node.
+	// 意图识别已并入该节点（intent.Classify），主图不再有独立的 intent_recognition 节点。
 	MainGraphAgentNodeSceneDispatch MainGraphAgentNode = "scene_dispatch"
-	// MainGraphAgentNodeIntentRecognition is the intent recognition node.
-	MainGraphAgentNodeIntentRecognition MainGraphAgentNode = "intent_recognition"
 	// MainGraphAgentNodeFallback is the fallback interrupt node.
 	MainGraphAgentNodeFallback MainGraphAgentNode = "fallback"
 )
@@ -215,7 +222,7 @@ const (
 // Validate validates the main graph agent node.
 func (n MainGraphAgentNode) Validate() error {
 	switch n {
-	case MainGraphAgentNodeSceneDispatch, MainGraphAgentNodeIntentRecognition, MainGraphAgentNodeFallback:
+	case MainGraphAgentNodeSceneDispatch, MainGraphAgentNodeFallback:
 		return nil
 	default:
 		return fmt.Errorf("unsupported main graph agent node: %s", n)

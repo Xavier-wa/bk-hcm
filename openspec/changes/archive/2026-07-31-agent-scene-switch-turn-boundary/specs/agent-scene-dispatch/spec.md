@@ -1,19 +1,6 @@
 # Capability: agent-scene-dispatch
 
-## Purpose
-
-定义 GraphAgent 的场景分发节点 `scene_dispatch`：作为 Graph 入口与单一路由决策中心，在每个轮次边界内部同步调用意图分类，并按「当前 `StateKeySessionTag` × 本轮分类结果」的决策矩阵决定下一跳（进入场景子图或经 `fallback` 给出未支持提示并回流）。主图不含独立的 `intent_recognition` 节点。
-
-## Requirements
-
-### Requirement: scene_dispatch 作为 Graph 入口与单一路由决策中心
-
-`BuildGraph` SHALL 新增纯路由节点 `scene_dispatch` 并将其设为 Graph 入口点。`scene_dispatch` SHALL 作为唯一的路由决策中心：在节点内同步调用 `intent.Classify` 取得本轮分类结果（局部值，不写入 graph state），再依据 `StateKeySessionTag` 与分类结果决定下一跳（场景子图或 `fallback`）。
-
-#### Scenario: scene_dispatch 是新 Run 的第一个节点
-
-- **WHEN** 用户在会话中发送消息触发一次新的 Graph Run（无 interrupted checkpoint）
-- **THEN** `scene_dispatch` 节点先于场景子图与 `fallback` 执行
+## MODIFIED Requirements
 
 ### Requirement: 有受支持 session_tag 时直达 ReAct 子流程
 
@@ -64,14 +51,7 @@
 - **WHEN** 检查主图的环
 - **THEN** 唯一的环为 `scene_dispatch → 子图/fallback → fallback → scene_dispatch`，其每一圈都被 `fallback` 的 interrupt 阻断，需要新的用户消息才能继续
 
-### Requirement: 未支持场景回复提示后回流 scene_dispatch 并重新识别
-
-当未支持场景经 `fallback` 输出提示并中断后，无标签会话在用户下一条消息 resume 时 SHALL 路由回 `scene_dispatch`，由其在节点内重新调用意图分类并判定去向。
-
-#### Scenario: 未支持后下一轮重新意图识别
-
-- **WHEN** 无标签会话上一轮被判未支持并经 `fallback` 中断，用户发送下一条消息
-- **THEN** resume 路由回 `scene_dispatch`，节点内重新分类后再做路由决策
+## ADDED Requirements
 
 ### Requirement: scene_dispatch 节点做判定、路由函数只查表
 

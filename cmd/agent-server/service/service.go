@@ -532,8 +532,9 @@ func (s *Service) sessionCodeMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 
 		// SSE 流结束（next.ServeHTTP 返回）后 graph 已跑完、checkpoint 已落盘，此时对账回写
-		// session_tag 才能读到本轮 scene_dispatch 提交的标签，确保首轮识别即可回写。
+		// session_tag 才能读到本轮 scene_dispatch 提交的标签。
 		// 不能在 Run 前并发启动：那样会读到尚未提交 tag 的 checkpoint，导致需要第二条消息才回写。
+		// 常态回写已由 scene_dispatch 在判定点完成，这里只作兜底，见 reconcileSessionTag。
 		if isAGUI {
 			go s.asyncReconcileSessionTag(kt, sessionCode, threadID, sessionMeta.SessionTag)
 		}
@@ -596,6 +597,14 @@ func (s *Service) asyncIncrContentCount(kt *kit.Kit, sessionCode string) {
 // asyncReconcileSessionTag reconciles the session tag after a run finishes. It must be invoked
 // after next.ServeHTTP returns so that the graph run has committed StateKeySessionTag into the
 // latest checkpoint. It runs with a fresh background context since the request context is done.
+//
+// 这是兜底路径：常态下标签已由 scene_dispatch 在判定点同步回写，本函数用 background ctx 重跑一次
+// 差异比对，覆盖节点内回写失败（含请求 ctx 被 cancel）的情形，并刷新 resolver 缓存。
+//
+// 正常完成路径无竞态：图执行器同步落盘 checkpoint，`close(eventChan)` 在同一 goroutine 的 defer 中
+// 排在其后，而 SSE 侧要读到 channel 关闭才返回，因此「ServeHTTP 返回」蕴含「本轮 checkpoint 已落盘」。
+// 客户端断连或 SSE 写失败时 ServeHTTP 会在图跑完前提前返回，本轮回写落空——不做重试等待，
+// 该差异由下一轮 Run 结束后的差异回写补齐。
 func (s *Service) asyncReconcileSessionTag(kt *kit.Kit, sessionCode, threadID string,
 	originalTag enumor.IntentType) {
 
@@ -616,20 +625,19 @@ func injectForwardedSessionTag(reqMap map[string]interface{}, sessionTag enumor.
 	reqMap["forwardedProps"] = fp
 }
 
-// reconcileSessionTag writes back the scene tag recognised during the run when the
-// session started without a tag. It reads the latest checkpoint for StateKeySessionTag,
-// persists it via data-service, and refreshes the resolver cache.
-// 该操作为尽力而为，失败仅记录 Warn 日志，不影响对话。
+// reconcileSessionTag writes back the scene tag the graph settled on during this run.
+// It reads StateKeySessionTag from the latest checkpoint and, when it differs from the tag
+// the session carried at the beginning of this request, persists it via data-service and
+// refreshes the resolver cache.
+//
+// 差异回写同时覆盖两种情形：无标签会话首次识别出受支持场景，以及已有标签的会话在轮次边界
+// 切换到新场景。必须在 Run 结束后调用（见 asyncReconcileSessionTag），否则读到的是本轮开始前
+// 的 checkpoint。该操作为尽力而为，失败仅记录 Warn 日志，不影响对话。
+//
+// 本函数是兜底：scene_dispatch 已在判定点回写过一次，且它不刷 resolver 缓存（节点内只有 threadID，
+// 拿不到 sessionCode）。originalTag 是请求进入时的缓存快照，看不到节点内那次写入，因此常态下这里
+// 会再写一次同值——两次写入幂等，为省一次调用而共享判据反而要在 ctx 上多挂请求级状态，暂不做。
 func (s *Service) reconcileSessionTag(kt *kit.Kit, sessionCode, threadID string, originalTag enumor.IntentType) {
-	// TODO：目前会话标签不允许修改，所有有标签的会话不需要回写，只会写意图识别出来的场景
-	// 未来需要支持修改标签时，需要修改这里
-	if originalTag != "" {
-		// 已绑定标签的会话无需回写
-		logs.Infof("reconcile session tag: session already has tag, session_code: %s, tag: %s, rid: %s",
-			sessionCode, originalTag, kt.Rid)
-		return
-	}
-
 	saver := s.runTime.CheckpointSaver()
 	if saver == nil {
 		logs.Infof("reconcile session tag: checkpoint saver is nil, session_code: %s, rid: %s",
@@ -660,6 +668,14 @@ func (s *Service) reconcileSessionTag(kt *kit.Kit, sessionCode, threadID string,
 			sessionCode, kt.Rid)
 		return
 	}
+	if tag == originalTag {
+		logs.Infof("reconcile session tag: tag unchanged, session_code: %s, tag: %s, rid: %s",
+			sessionCode, tag, kt.Rid)
+		return
+	}
+
+	logs.Infof("reconcile session tag: write back, session_code: %s, from: %s, to: %s, rid: %s",
+		sessionCode, originalTag, tag, kt.Rid)
 
 	updateReq := &dsaiagent.UpdateAiagentSessionReq{
 		ID:         threadID,

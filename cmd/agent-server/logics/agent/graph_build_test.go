@@ -22,18 +22,166 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"hcm/cmd/agent-server/logics/agent/hitl"
 	"hcm/cmd/agent-server/logics/agent/message"
+	agentstate "hcm/cmd/agent-server/logics/agent/state"
 	"hcm/cmd/agent-server/logics/agent/toolgate"
+	"hcm/cmd/agent-server/logics/prompt"
+	dsaiagent "hcm/pkg/api/data-service/aiagent"
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/kit"
 
+	trpcagent "trpc.group/trpc-go/trpc-agent-go/agent"
+	"trpc.group/trpc-go/trpc-agent-go/event"
 	"trpc.group/trpc-go/trpc-agent-go/graph"
 	trpcmodel "trpc.group/trpc-go/trpc-agent-go/model"
 )
+
+// testAgentName is the agent name passed to scene_dispatch in tests; it only scopes the
+// session-level skill state keys, which stay untouched when the context carries no invocation.
+const testAgentName = "hcm-agent"
+
+// stubIntentModel is a trpcmodel.Model that always classifies the user intent as a fixed value,
+// so that scene_dispatch tests can drive the decision matrix without a real LLM.
+type stubIntentModel struct {
+	intent enumor.IntentType
+}
+
+func newStubIntentModel(intent enumor.IntentType) *stubIntentModel {
+	return &stubIntentModel{intent: intent}
+}
+
+func (m *stubIntentModel) GenerateContent(_ context.Context, _ *trpcmodel.Request) (
+	<-chan *trpcmodel.Response, error) {
+
+	ch := make(chan *trpcmodel.Response, 1)
+	ch <- &trpcmodel.Response{
+		Choices: []trpcmodel.Choice{{Message: trpcmodel.Message{Content: string(m.intent)}}},
+	}
+	close(ch)
+	return ch, nil
+}
+
+func (m *stubIntentModel) Info() trpcmodel.Info {
+	return trpcmodel.Info{Name: "stub-intent-model"}
+}
+
+// newTestIntentPromptStore returns a prompt store carrying a placeholder intent recognition prompt.
+func newTestIntentPromptStore() *prompt.Store {
+	s := prompt.NewStore("")
+	_ = s.Set(constant.IntentRecognitionPromptKey, prompt.PromptEntry{Content: "classify intent"})
+	return s
+}
+
+// ridContext returns a context carrying rid, mirroring what the HTTP layer injects.
+func ridContext(rid string) context.Context {
+	return context.WithValue(context.Background(), constant.RidKey, rid)
+}
+
+// newTestSceneDispatchNode 构造 scene_dispatch 节点。
+// sessionTagCli 传 nil 表示本用例不关心标签回写——回写侧按「未注入」跳过，无需架起 data-service 客户端。
+func newTestSceneDispatchNode(classified enumor.IntentType,
+	sessionTagCli agentstate.SessionTagUpdater) graph.NodeFunc {
+
+	return makeSceneDispatchNode(newStubIntentModel(classified), newTestIntentPromptStore(),
+		testAgentName, 5, sessionTagCli)
+}
+
+// stubSessionTagUpdater 记录 session_tag 回写请求，并可注入错误或观测回调。
+type stubSessionTagUpdater struct {
+	reqs []*dsaiagent.UpdateAiagentSessionReq
+	err  error
+	// onUpdate 在记录请求前触发，用于观测回写发生的时刻（如此时事件是否已发出）。
+	onUpdate func()
+}
+
+func (s *stubSessionTagUpdater) Update(_ *kit.Kit, req *dsaiagent.UpdateAiagentSessionReq) error {
+	if s.onUpdate != nil {
+		s.onUpdate()
+	}
+	s.reqs = append(s.reqs, req)
+	return s.err
+}
+
+// sceneDispatchCtx 在 rid context 上挂 invocation，使节点内的标签回写能解析出 threadID。
+func sceneDispatchCtx(rid, threadID string) context.Context {
+	inv := &trpcagent.Invocation{
+		RunOptions: trpcagent.RunOptions{
+			RuntimeState: map[string]any{graph.CfgKeyLineageID: threadID},
+		},
+	}
+	return trpcagent.NewInvocationContext(ridContext(rid), inv)
+}
+
+// tagOrNil converts an empty scene tag into nil so that turnBoundaryState leaves the session untagged.
+func tagOrNil(tag enumor.IntentType) any {
+	if tag == "" {
+		return nil
+	}
+	return tag
+}
+
+// turnBoundaryState builds the state scene_dispatch sees at a turn boundary: a pending user
+// message plus the session tag the session currently carries (nil means an untagged session).
+// 用户消息是必需的——没有它意图分类会直接降级为 chat，测不出决策矩阵的其它分支。
+func turnBoundaryState(tag any) graph.State {
+	state := graph.State{
+		graph.StateKeyMessages: []trpcmodel.Message{
+			{Role: trpcmodel.RoleUser, Content: "帮我处理一下"},
+		},
+	}
+	if tag != nil {
+		state[constant.StateKeySessionTag] = tag
+	}
+	return state
+}
+
+// stateWithEventChan returns state plus the execution context that graph.GetEventEmitterWithContext
+// needs to produce a real (non-noop) emitter, together with the channel receiving emitted events.
+func stateWithEventChan(state graph.State) (graph.State, chan *event.Event) {
+	eventChan := make(chan *event.Event, 8)
+	state[graph.StateKeyExecContext] = &graph.ExecutionContext{
+		EventChan:    eventChan,
+		InvocationID: "test-invocation",
+	}
+	return state, eventChan
+}
+
+// collectSceneSwitchedPayloads drains ch and returns the payload of every scene.switched event.
+func collectSceneSwitchedPayloads(t *testing.T, ch chan *event.Event) []message.SceneSwitchedPayload {
+	t.Helper()
+	close(ch)
+
+	payloads := make([]message.SceneSwitchedPayload, 0, len(ch))
+	for evt := range ch {
+		raw, ok := evt.StateDelta[graph.MetadataKeyNodeCustom]
+		if !ok {
+			continue
+		}
+		var meta struct {
+			EventType string                       `json:"eventType"`
+			NodeID    string                       `json:"nodeId"`
+			Payload   message.SceneSwitchedPayload `json:"payload"`
+		}
+		if err := json.Unmarshal(raw, &meta); err != nil {
+			t.Fatalf("unmarshal node custom metadata failed, err: %v", err)
+		}
+		if meta.EventType != constant.SceneSwitchedCustomEventName {
+			continue
+		}
+		if meta.NodeID != string(enumor.MainGraphAgentNodeSceneDispatch) {
+			t.Errorf("scene.switched node_id = %q, want %q", meta.NodeID,
+				enumor.MainGraphAgentNodeSceneDispatch)
+		}
+		payloads = append(payloads, meta.Payload)
+	}
+	return payloads
+}
 
 func TestIntentType_IsSupportedScene(t *testing.T) {
 	tests := []struct {
@@ -43,6 +191,7 @@ func TestIntentType_IsSupportedScene(t *testing.T) {
 		{enumor.IntentTypeHostApply, true},
 		{enumor.IntentTypeResourceQuery, true},
 		{enumor.IntentTypeChat, false},
+		{enumor.IntentTypeUnsupported, false},
 		{"", false},
 		{"unknown", false},
 	}
@@ -60,58 +209,165 @@ func TestSceneNodeTarget(t *testing.T) {
 	}{
 		{enumor.IntentTypeHostApply, string(enumor.SubgraphAgentNodeHostApply)},
 		{enumor.IntentTypeResourceQuery, string(enumor.SubgraphAgentNodeResourceQuery)},
+		{"unknown", string(enumor.SubgraphAgentNodeResourceQuery)},
 	}
 	for _, tc := range tests {
-		if got := sceneNodeTarget(tc.scene); got != tc.want {
+		if got := sceneNodeTarget(tc.scene, "test-rid"); got != tc.want {
 			t.Errorf("sceneNodeTarget(%q) = %q, want %q", tc.scene, got, tc.want)
 		}
 	}
 }
 
-func TestMakeSceneDispatchNode(t *testing.T) {
-	node := makeSceneDispatchNode()
-	ctx := context.Background()
-
+// TestDecideSceneDispatch 覆盖「当前会话标签 × 本轮分类结果」决策矩阵的每一格。
+func TestDecideSceneDispatch(t *testing.T) {
 	tests := []struct {
-		name    string
-		state   graph.State
-		wantTag enumor.IntentType // expected committed StateKeySessionTag, empty means no-op
+		name       string
+		tag        enumor.IntentType
+		classified enumor.IntentType
+		want       sceneDispatchDecision
 	}{
 		{
-			name:    "recognised host_apply commits session_tag",
-			state:   graph.State{constant.StateKeyIntent: string(enumor.IntentTypeHostApply)},
-			wantTag: enumor.IntentTypeHostApply,
+			name:       "switch to another supported scene",
+			tag:        enumor.IntentTypeHostApply,
+			classified: enumor.IntentTypeResourceQuery,
+			want: sceneDispatchDecision{
+				nextNode:   string(enumor.SubgraphAgentNodeResourceQuery),
+				sessionTag: enumor.IntentTypeResourceQuery,
+				switched:   true,
+			},
 		},
 		{
-			name:    "recognised resource_query commits session_tag",
-			state:   graph.State{constant.StateKeyIntent: string(enumor.IntentTypeResourceQuery)},
-			wantTag: enumor.IntentTypeResourceQuery,
+			name:       "switch back to the other supported scene",
+			tag:        enumor.IntentTypeResourceQuery,
+			classified: enumor.IntentTypeHostApply,
+			want: sceneDispatchDecision{
+				nextNode:   string(enumor.SubgraphAgentNodeHostApply),
+				sessionTag: enumor.IntentTypeHostApply,
+				switched:   true,
+			},
 		},
 		{
-			name:    "already tagged re-commits same tag",
-			state:   graph.State{constant.StateKeySessionTag: enumor.IntentTypeHostApply},
-			wantTag: enumor.IntentTypeHostApply,
+			name:       "follow-up in the same scene does not switch",
+			tag:        enumor.IntentTypeHostApply,
+			classified: enumor.IntentTypeHostApply,
+			want: sceneDispatchDecision{
+				nextNode:   string(enumor.SubgraphAgentNodeHostApply),
+				sessionTag: enumor.IntentTypeHostApply,
+			},
 		},
 		{
-			name:    "already tagged as string re-commits same tag",
-			state:   graph.State{constant.StateKeySessionTag: string(enumor.IntentTypeHostApply)},
-			wantTag: enumor.IntentTypeHostApply,
+			name:       "chat inside a tagged session stays in the current scene",
+			tag:        enumor.IntentTypeHostApply,
+			classified: enumor.IntentTypeChat,
+			want: sceneDispatchDecision{
+				nextNode:   string(enumor.SubgraphAgentNodeHostApply),
+				sessionTag: enumor.IntentTypeHostApply,
+			},
 		},
 		{
-			name:    "unsupported intent is no-op",
-			state:   graph.State{constant.StateKeyIntent: string(enumor.IntentTypeChat)},
-			wantTag: "",
+			name:       "first tagging of an untagged session is not a switch",
+			tag:        "",
+			classified: enumor.IntentTypeHostApply,
+			want: sceneDispatchDecision{
+				nextNode:   string(enumor.SubgraphAgentNodeHostApply),
+				sessionTag: enumor.IntentTypeHostApply,
+			},
 		},
 		{
-			name:    "no tag no intent is no-op",
-			state:   graph.State{},
-			wantTag: "",
+			name:       "untagged session with unsupported intent falls back",
+			tag:        "",
+			classified: enumor.IntentTypeChat,
+			want:       sceneDispatchDecision{nextNode: string(enumor.MainGraphAgentNodeFallback)},
+		},
+		{
+			name:       "unrecognised tag is overwritten without reporting a switch",
+			tag:        "legacy_unknown",
+			classified: enumor.IntentTypeResourceQuery,
+			want: sceneDispatchDecision{
+				nextNode:   string(enumor.SubgraphAgentNodeResourceQuery),
+				sessionTag: enumor.IntentTypeResourceQuery,
+			},
+		},
+		{
+			name:       "unrecognised tag with unsupported intent falls back",
+			tag:        "legacy_unknown",
+			classified: enumor.IntentTypeChat,
+			want:       sceneDispatchDecision{nextNode: string(enumor.MainGraphAgentNodeFallback)},
+		},
+		{
+			name:       "classification failure keeps the current scene",
+			tag:        enumor.IntentTypeResourceQuery,
+			classified: enumor.IntentTypeUnsupported,
+			want: sceneDispatchDecision{
+				nextNode:   string(enumor.SubgraphAgentNodeResourceQuery),
+				sessionTag: enumor.IntentTypeResourceQuery,
+			},
+		},
+		{
+			name:       "classification failure in an untagged session falls back",
+			tag:        "",
+			classified: enumor.IntentTypeUnsupported,
+			want:       sceneDispatchDecision{nextNode: string(enumor.MainGraphAgentNodeFallback)},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := node(ctx, tc.state)
+			if got := decideSceneDispatch(tc.tag, tc.classified, "test-rid"); got != tc.want {
+				t.Errorf("decideSceneDispatch(%q, %q) = %+v, want %+v", tc.tag, tc.classified, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMakeSceneDispatchNode 校验节点把决策落进 state：目标节点、会话标签、本轮 rid。
+func TestMakeSceneDispatchNode(t *testing.T) {
+	const testRid = "rid-scene-dispatch"
+	ctx := ridContext(testRid)
+
+	tests := []struct {
+		name string
+		// tag is the session tag already present in state; nil means an untagged session.
+		// 用 any 是为了同时覆盖 enumor.IntentType（首轮注入）与 string（checkpoint 反序列化后）两种存法。
+		tag          any
+		classified   enumor.IntentType
+		wantNextNode string
+		wantTag      enumor.IntentType // empty means the node must not commit a tag
+	}{
+		{
+			name:         "untagged session commits the classified scene",
+			classified:   enumor.IntentTypeHostApply,
+			wantNextNode: string(enumor.SubgraphAgentNodeHostApply),
+			wantTag:      enumor.IntentTypeHostApply,
+		},
+		{
+			name:         "tagged session switches to the newly classified scene",
+			tag:          enumor.IntentTypeHostApply,
+			classified:   enumor.IntentTypeResourceQuery,
+			wantNextNode: string(enumor.SubgraphAgentNodeResourceQuery),
+			wantTag:      enumor.IntentTypeResourceQuery,
+		},
+		{
+			name:         "tag stored as string is parsed and kept",
+			tag:          string(enumor.IntentTypeHostApply),
+			classified:   enumor.IntentTypeChat,
+			wantNextNode: string(enumor.SubgraphAgentNodeHostApply),
+			wantTag:      enumor.IntentTypeHostApply,
+		},
+		{
+			name:         "untagged session with unsupported intent routes to fallback without a tag",
+			classified:   enumor.IntentTypeChat,
+			wantNextNode: string(enumor.MainGraphAgentNodeFallback),
+			wantTag:      "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			state := turnBoundaryState(tc.tag)
+			node := newTestSceneDispatchNode(tc.classified, nil)
+
+			got, err := node(ctx, state)
 			if err != nil {
 				t.Fatalf("node() error = %v", err)
 			}
@@ -119,11 +375,317 @@ func TestMakeSceneDispatchNode(t *testing.T) {
 			if !ok {
 				t.Fatalf("node() returned %T, want graph.State", got)
 			}
-			tag := parseSessionTag(st)
-			if tag != tc.wantTag {
+
+			if next, _ := st[constant.StateKeySceneDispatchNext].(string); next != tc.wantNextNode {
+				t.Errorf("scene_dispatch_next = %q, want %q", next, tc.wantNextNode)
+			}
+			if tag := agentstate.ParseSessionTag(st); tag != tc.wantTag {
 				t.Errorf("committed session_tag = %q, want %q", tag, tc.wantTag)
 			}
+			if rid, _ := st[constant.SessionRidStateKey].(string); rid != testRid {
+				t.Errorf("session_rid = %q, want refreshed to %q", rid, testRid)
+			}
 		})
+	}
+}
+
+// TestMakeSceneDispatchNodeEmitsSceneSwitched 校验 scene.switched 事件的发送时机与内容：
+// 只有真正跨场景时才发，首次打标与场景内追问都不发。
+func TestMakeSceneDispatchNodeEmitsSceneSwitched(t *testing.T) {
+	ctx := ridContext("rid-scene-switched")
+
+	tests := []struct {
+		name        string
+		tag         enumor.IntentType
+		classified  enumor.IntentType
+		wantPayload []message.SceneSwitchedPayload
+	}{
+		{
+			name:       "switching scenes emits from and to",
+			tag:        enumor.IntentTypeHostApply,
+			classified: enumor.IntentTypeResourceQuery,
+			wantPayload: []message.SceneSwitchedPayload{
+				{From: enumor.IntentTypeHostApply, To: enumor.IntentTypeResourceQuery},
+			},
+		},
+		{
+			name:        "first tagging emits nothing",
+			tag:         "",
+			classified:  enumor.IntentTypeHostApply,
+			wantPayload: []message.SceneSwitchedPayload{},
+		},
+		{
+			name:        "follow-up in the same scene emits nothing",
+			tag:         enumor.IntentTypeHostApply,
+			classified:  enumor.IntentTypeHostApply,
+			wantPayload: []message.SceneSwitchedPayload{},
+		},
+		{
+			name:        "chat inside a tagged session emits nothing",
+			tag:         enumor.IntentTypeHostApply,
+			classified:  enumor.IntentTypeChat,
+			wantPayload: []message.SceneSwitchedPayload{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			state, eventChan := stateWithEventChan(turnBoundaryState(tagOrNil(tc.tag)))
+
+			node := newTestSceneDispatchNode(tc.classified, nil)
+			if _, err := node(ctx, state); err != nil {
+				t.Fatalf("node() error = %v", err)
+			}
+
+			got := collectSceneSwitchedPayloads(t, eventChan)
+			if len(got) != len(tc.wantPayload) {
+				t.Fatalf("scene.switched events = %+v, want %+v", got, tc.wantPayload)
+			}
+			for i := range got {
+				if got[i] != tc.wantPayload[i] {
+					t.Errorf("scene.switched payload[%d] = %+v, want %+v", i, got[i], tc.wantPayload[i])
+				}
+			}
+		})
+	}
+}
+
+// TestMakeSceneDispatchNodeWritesBackChangedTag 校验标签回写的触发判据：只要本轮要提交的标签与
+// 上一轮不同就回写，与是否构成场景切换无关（首次打标不发事件但必须回写）。
+func TestMakeSceneDispatchNodeWritesBackChangedTag(t *testing.T) {
+	const testThreadID = "thread-scene-dispatch"
+	ctx := sceneDispatchCtx("rid-tag-write-back", testThreadID)
+
+	tests := []struct {
+		name       string
+		tag        any
+		classified enumor.IntentType
+		// wantWriteTag 为空表示本轮不应发起回写
+		wantWriteTag enumor.IntentType
+	}{
+		{
+			name:         "first tagging writes back although no switch event is emitted",
+			classified:   enumor.IntentTypeHostApply,
+			wantWriteTag: enumor.IntentTypeHostApply,
+		},
+		{
+			name:         "scene switch writes back the new tag",
+			tag:          enumor.IntentTypeHostApply,
+			classified:   enumor.IntentTypeResourceQuery,
+			wantWriteTag: enumor.IntentTypeResourceQuery,
+		},
+		{
+			name:       "follow-up in the same scene does not write back",
+			tag:        enumor.IntentTypeHostApply,
+			classified: enumor.IntentTypeHostApply,
+		},
+		{
+			name:       "unsupported intent keeping the current tag does not write back",
+			tag:        enumor.IntentTypeHostApply,
+			classified: enumor.IntentTypeChat,
+		},
+		{
+			name:       "untagged session falling back does not write back",
+			classified: enumor.IntentTypeChat,
+		},
+		{
+			name:         "unrecognised tag overwritten by a supported scene writes back",
+			tag:          "legacy_unknown",
+			classified:   enumor.IntentTypeResourceQuery,
+			wantWriteTag: enumor.IntentTypeResourceQuery,
+		},
+		{
+			name:       "unrecognised tag with unsupported intent does not write back",
+			tag:        "legacy_unknown",
+			classified: enumor.IntentTypeChat,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			updater := &stubSessionTagUpdater{}
+			node := newTestSceneDispatchNode(tc.classified, updater)
+
+			if _, err := node(ctx, turnBoundaryState(tc.tag)); err != nil {
+				t.Fatalf("node() error = %v", err)
+			}
+
+			if tc.wantWriteTag == "" {
+				if len(updater.reqs) != 0 {
+					t.Fatalf("write back requests = %+v, want none", updater.reqs)
+				}
+				return
+			}
+
+			if len(updater.reqs) != 1 {
+				t.Fatalf("write back called %d times, want 1", len(updater.reqs))
+			}
+			req := updater.reqs[0]
+			if req.ID != testThreadID {
+				t.Errorf("write back id = %q, want %q", req.ID, testThreadID)
+			}
+			if req.SessionTag != tc.wantWriteTag {
+				t.Errorf("write back session_tag = %q, want %q", req.SessionTag, tc.wantWriteTag)
+			}
+		})
+	}
+}
+
+// TestMakeSceneDispatchNodeWriteBackPrecedesSceneSwitched 锁定回写与事件的先后：DB 必须先更新，
+// 前端才收到 scene.switched。顺序反了会重新打开「切走再切回读到旧标签」的窗口。
+func TestMakeSceneDispatchNodeWriteBackPrecedesSceneSwitched(t *testing.T) {
+	ctx := sceneDispatchCtx("rid-write-back-order", "thread-order")
+	state, eventChan := stateWithEventChan(turnBoundaryState(enumor.IntentTypeHostApply))
+
+	eventsAtWriteBack := -1
+	updater := &stubSessionTagUpdater{
+		onUpdate: func() { eventsAtWriteBack = len(eventChan) },
+	}
+
+	node := newTestSceneDispatchNode(enumor.IntentTypeResourceQuery, updater)
+	if _, err := node(ctx, state); err != nil {
+		t.Fatalf("node() error = %v", err)
+	}
+
+	if len(updater.reqs) != 1 {
+		t.Fatalf("write back called %d times, want 1", len(updater.reqs))
+	}
+	if eventsAtWriteBack != 0 {
+		t.Errorf("events already emitted at write-back time = %d, want 0", eventsAtWriteBack)
+	}
+	if got := collectSceneSwitchedPayloads(t, eventChan); len(got) != 1 {
+		t.Fatalf("scene.switched events = %+v, want exactly one", got)
+	}
+}
+
+// TestMakeSceneDispatchNodeWriteBackFailureKeepsDecision 校验回写失败只是丢一次投影更新：
+// 路由结果、提交的标签与切换事件都不受影响，节点也不返回错误。
+func TestMakeSceneDispatchNodeWriteBackFailureKeepsDecision(t *testing.T) {
+	ctx := sceneDispatchCtx("rid-write-back-failed", "thread-failed")
+	state, eventChan := stateWithEventChan(turnBoundaryState(enumor.IntentTypeHostApply))
+
+	updater := &stubSessionTagUpdater{err: errors.New("data-service unavailable")}
+	node := newTestSceneDispatchNode(enumor.IntentTypeResourceQuery, updater)
+
+	got, err := node(ctx, state)
+	if err != nil {
+		t.Fatalf("node() error = %v", err)
+	}
+	st, ok := got.(graph.State)
+	if !ok {
+		t.Fatalf("node() returned %T, want graph.State", got)
+	}
+
+	if next, _ := st[constant.StateKeySceneDispatchNext].(string); next !=
+		string(enumor.SubgraphAgentNodeResourceQuery) {
+
+		t.Errorf("scene_dispatch_next = %q, want %q", next, enumor.SubgraphAgentNodeResourceQuery)
+	}
+	if tag := agentstate.ParseSessionTag(st); tag != enumor.IntentTypeResourceQuery {
+		t.Errorf("committed session_tag = %q, want %q", tag, enumor.IntentTypeResourceQuery)
+	}
+	if payloads := collectSceneSwitchedPayloads(t, eventChan); len(payloads) != 1 {
+		t.Fatalf("scene.switched events = %+v, want exactly one", payloads)
+	}
+}
+
+// mainGraphNodeNames lists every node the main graph is expected to contain.
+var mainGraphNodeNames = []string{
+	string(enumor.MainGraphAgentNodeSceneDispatch),
+	string(enumor.MainGraphAgentNodeFallback),
+	string(enumor.SubgraphAgentNodeHostApply),
+	string(enumor.SubgraphAgentNodeResourceQuery),
+}
+
+// buildMainGraphTopologyTest compiles the main graph with placeholder nodes so that the topology
+// can be asserted without pulling in models, tool sets or client sets.
+func buildMainGraphTopologyTest(t *testing.T) *graph.Graph {
+	t.Helper()
+
+	stateGraph := graph.NewStateGraph(graph.MessagesStateSchema())
+	noop := func(_ context.Context, _ graph.State) (any, error) { return graph.State{}, nil }
+	for _, name := range mainGraphNodeNames {
+		stateGraph.AddNode(name, noop)
+	}
+	buildMainGraphTopology(stateGraph)
+
+	g, err := stateGraph.Compile()
+	if err != nil {
+		t.Fatalf("compile main graph failed, err: %v", err)
+	}
+	return g
+}
+
+// TestWireMainGraphTopologyHasNoIntentRecognitionNode 守住「意图识别已并入 scene_dispatch」这一结构决策：
+// 主图不得再出现独立的意图识别节点。
+func TestWireMainGraphTopologyHasNoIntentRecognitionNode(t *testing.T) {
+	g := buildMainGraphTopologyTest(t)
+
+	got := make(map[string]struct{}, len(g.Nodes()))
+	for _, n := range g.Nodes() {
+		got[n.ID] = struct{}{}
+	}
+
+	if _, exists := got["intent_recognition"]; exists {
+		t.Error("main graph still contains an intent_recognition node")
+	}
+	if len(got) != len(mainGraphNodeNames) {
+		t.Errorf("main graph nodes = %v, want exactly %v", got, mainGraphNodeNames)
+	}
+	for _, name := range mainGraphNodeNames {
+		if _, exists := got[name]; !exists {
+			t.Errorf("main graph is missing node %q", name)
+		}
+	}
+}
+
+// TestWireMainGraphTopologySceneDispatchIncomingEdges 守住「scene_dispatch 执行 ⟺ 轮次边界」契约：
+// 它的入边只能是入口点与 fallback。任何新增入边都会让本节点在非轮次边界上执行，
+// 从而在子图中途重跑意图识别、误切场景。
+func TestWireMainGraphTopologySceneDispatchIncomingEdges(t *testing.T) {
+	g := buildMainGraphTopologyTest(t)
+	sceneDispatch := string(enumor.MainGraphAgentNodeSceneDispatch)
+
+	if entry := g.EntryPoint(); entry != sceneDispatch {
+		t.Errorf("entry point = %q, want %q", entry, sceneDispatch)
+	}
+
+	var sources []string
+	for _, name := range mainGraphNodeNames {
+		for _, e := range g.Edges(name) {
+			if e.To == sceneDispatch {
+				sources = append(sources, name)
+			}
+		}
+	}
+
+	want := []string{string(enumor.MainGraphAgentNodeFallback)}
+	if len(sources) != len(want) || sources[0] != want[0] {
+		t.Errorf("scene_dispatch incoming edges = %v, want %v (plus the entry point)", sources, want)
+	}
+}
+
+// TestWireMainGraphTopologySceneDispatchTargets 校验条件边的目标集合与路由函数的返回值域一致。
+func TestWireMainGraphTopologySceneDispatchTargets(t *testing.T) {
+	g := buildMainGraphTopologyTest(t)
+
+	condEdge, ok := g.ConditionalEdge(string(enumor.MainGraphAgentNodeSceneDispatch))
+	if !ok {
+		t.Fatal("scene_dispatch has no conditional edge")
+	}
+
+	want := map[string]string{
+		string(enumor.SubgraphAgentNodeHostApply):     string(enumor.SubgraphAgentNodeHostApply),
+		string(enumor.SubgraphAgentNodeResourceQuery): string(enumor.SubgraphAgentNodeResourceQuery),
+		string(enumor.MainGraphAgentNodeFallback):     string(enumor.MainGraphAgentNodeFallback),
+	}
+	if len(condEdge.PathMap) != len(want) {
+		t.Fatalf("scene_dispatch path map = %v, want %v", condEdge.PathMap, want)
+	}
+	for key, target := range want {
+		if got := condEdge.PathMap[key]; got != target {
+			t.Errorf("scene_dispatch path map[%q] = %q, want %q", key, got, target)
+		}
 	}
 }
 
@@ -263,29 +825,32 @@ func TestMakeSceneDispatchRoutingFunc(t *testing.T) {
 		wantTarget string
 	}{
 		{
-			name:       "supported session_tag routes to host_apply subgraph",
-			state:      graph.State{constant.StateKeySessionTag: enumor.IntentTypeHostApply},
+			name:       "host_apply decision routes to host_apply subgraph",
+			state:      graph.State{constant.StateKeySceneDispatchNext: string(enumor.SubgraphAgentNodeHostApply)},
 			wantTarget: string(enumor.SubgraphAgentNodeHostApply),
 		},
 		{
-			name:       "resource_query session_tag routes to resource_query subgraph",
-			state:      graph.State{constant.StateKeySessionTag: enumor.IntentTypeResourceQuery},
-			wantTarget: "resource_query",
+			name: "resource_query decision routes to resource_query subgraph",
+			state: graph.State{
+				constant.StateKeySceneDispatchNext: string(enumor.SubgraphAgentNodeResourceQuery),
+			},
+			wantTarget: string(enumor.SubgraphAgentNodeResourceQuery),
 		},
 		{
-			name:       "this-turn unsupported intent routes to fallback",
-			state:      graph.State{constant.StateKeyIntent: string(enumor.IntentTypeChat)},
+			name:       "fallback decision routes to fallback",
+			state:      graph.State{constant.StateKeySceneDispatchNext: string(enumor.MainGraphAgentNodeFallback)},
 			wantTarget: string(enumor.MainGraphAgentNodeFallback),
 		},
 		{
-			name:       "supported intent without committed tag routes to intent_recognition",
-			state:      graph.State{constant.StateKeyIntent: string(enumor.IntentTypeResourceQuery)},
-			wantTarget: string(enumor.MainGraphAgentNodeIntentRecognition),
+			// 路由函数只查表：即使 session_tag 指向某个场景，缺少决策键也必须安全兜底而非自行判定。
+			name:       "missing decision key falls back instead of re-deriving from session_tag",
+			state:      graph.State{constant.StateKeySessionTag: enumor.IntentTypeHostApply},
+			wantTarget: string(enumor.MainGraphAgentNodeFallback),
 		},
 		{
-			name:       "no tag no intent routes to intent_recognition",
-			state:      graph.State{},
-			wantTarget: string(enumor.MainGraphAgentNodeIntentRecognition),
+			name:       "unknown node name falls back",
+			state:      graph.State{constant.StateKeySceneDispatchNext: "no_such_node"},
+			wantTarget: string(enumor.MainGraphAgentNodeFallback),
 		},
 	}
 
@@ -302,26 +867,45 @@ func TestMakeSceneDispatchRoutingFunc(t *testing.T) {
 	}
 }
 
-// TestSceneDispatchNodeThenRouting 校验节点提交标签后，路由按场景直达对应入口节点的组合行为。
+// TestSceneDispatchNodeThenRouting 把节点与路由函数串起来，确认判定结果能被条件边如实还原。
 func TestSceneDispatchNodeThenRouting(t *testing.T) {
-	node := makeSceneDispatchNode()
 	route := makeSceneDispatchRoutingFunc()
-	ctx := context.Background()
+	ctx := ridContext("rid-dispatch-then-route")
 
 	tests := []struct {
 		name       string
-		intent     enumor.IntentType
+		tag        enumor.IntentType
+		classified enumor.IntentType
 		wantTarget string
 	}{
-		{name: "host_apply dispatch then route to host_apply subgraph", intent: enumor.IntentTypeHostApply,
-			wantTarget: string(enumor.SubgraphAgentNodeHostApply)},
-		{name: "resource_query dispatch then route to subgraph", intent: enumor.IntentTypeResourceQuery,
-			wantTarget: "resource_query"},
+		{
+			name:       "untagged session classified as host_apply enters host_apply subgraph",
+			classified: enumor.IntentTypeHostApply,
+			wantTarget: string(enumor.SubgraphAgentNodeHostApply),
+		},
+		{
+			name:       "host_apply session switching to resource_query enters resource_query subgraph",
+			tag:        enumor.IntentTypeHostApply,
+			classified: enumor.IntentTypeResourceQuery,
+			wantTarget: string(enumor.SubgraphAgentNodeResourceQuery),
+		},
+		{
+			name:       "chat inside a tagged session stays in the tagged subgraph",
+			tag:        enumor.IntentTypeResourceQuery,
+			classified: enumor.IntentTypeChat,
+			wantTarget: string(enumor.SubgraphAgentNodeResourceQuery),
+		},
+		{
+			name:       "untagged session classified as chat enters fallback",
+			classified: enumor.IntentTypeChat,
+			wantTarget: string(enumor.MainGraphAgentNodeFallback),
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			state := graph.State{constant.StateKeyIntent: string(tc.intent)}
+			state := turnBoundaryState(tagOrNil(tc.tag))
+			node := newTestSceneDispatchNode(tc.classified, nil)
 			got, err := node(ctx, state)
 			if err != nil {
 				t.Fatalf("node() error = %v", err)
@@ -342,38 +926,39 @@ func TestSceneDispatchNodeThenRouting(t *testing.T) {
 	}
 }
 
-func TestUnsupportedIntentFallbackMessage(t *testing.T) {
+func TestUnsupportedSceneFallbackMessage(t *testing.T) {
 	const (
-		unsupportedMsg = "目前AI助手仅支持主机申领相关能力，其他云资源管理功能即将上线，如需要申领主机，请直接描述您的配置需求。"
-		genericMsg     = "抱歉，我暂时无法处理您的请求。"
+		unsupportedMsg = "目前AI助手支持主机申领和云资源查询相关能力，其他云资源管理功能即将上线。" +
+			"如需申领主机，请直接描述您的配置需求；如需查询云资源，请告诉我您想查询的内容。"
+		genericMsg = "抱歉，我暂时无法处理您的请求。"
 	)
 
 	tests := []struct {
-		name   string
-		intent enumor.IntentType
-		want   string
+		name string
+		tag  enumor.IntentType
+		want string
 	}{
 		{
-			name:   "unsupported chat intent returns guidance message",
-			intent: enumor.IntentTypeChat,
-			want:   unsupportedMsg,
+			name: "empty session tag returns guidance message",
+			tag:  "",
+			want: unsupportedMsg,
 		},
 		{
-			name:   "empty intent returns guidance message",
-			intent: "",
-			want:   unsupportedMsg,
+			name: "unsupported session tag returns guidance message",
+			tag:  enumor.IntentTypeChat,
+			want: unsupportedMsg,
 		},
 		{
-			name:   "supported resource_query intent returns generic message",
-			intent: enumor.IntentTypeResourceQuery,
-			want:   genericMsg,
+			name: "supported resource_query tag returns generic message",
+			tag:  enumor.IntentTypeResourceQuery,
+			want: genericMsg,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			state := graph.State{constant.StateKeyIntent: string(tc.intent)}
-			got := unsupportedIntentFallbackMessage(state)
+			state := graph.State{constant.StateKeySessionTag: string(tc.tag)}
+			got := unsupportedSceneFallbackMessage(state)
 			if got != tc.want {
 				t.Errorf("message = %q, want %q", got, tc.want)
 			}
@@ -381,22 +966,18 @@ func TestUnsupportedIntentFallbackMessage(t *testing.T) {
 	}
 }
 
-func TestBuildFallbackResumeDeltaClearsUnsupportedIntentHistory(t *testing.T) {
+// TestBuildFallbackResumeDeltaRebuildsUnsupportedSceneHistory 覆盖「无标签会话吃到未支持提示」后的
+// resume：历史被重建为 assistant 提示 + 新用户输入，旧的拒识回复不会继续锚定下一轮的场景判断。
+func TestBuildFallbackResumeDeltaRebuildsUnsupportedSceneHistory(t *testing.T) {
 	fallbackText := "目前AI助手仅支持主机申领相关能力，其他云资源管理功能即将上线，如需要申领主机，请直接描述您的配置需求。"
-	// Use chat intent (genuinely unsupported) to test clearing logic.
-	// resource_query is now a supported intent and its history is preserved (not cleared).
-	state := graph.State{constant.StateKeyIntent: string(enumor.IntentTypeChat)}
+	// 空标签代表本轮落在「无标签 + 分类不受支持」分支；受支持标签的会话历史则原样保留。
+	state := graph.State{}
 	messages := []trpcmodel.Message{
 		{Role: trpcmodel.RoleUser, Content: "给我讲个故事"},
 	}
 
 	delta := message.BuildFallbackResumeDelta(context.Background(), state, messages, fallbackText,
 		"那帮我申领一台主机吧")
-
-	intentVal, _ := delta[constant.StateKeyIntent].(string)
-	if intentVal != "" {
-		t.Fatalf("intent = %q, want cleared", intentVal)
-	}
 
 	ops, ok := delta[graph.StateKeyMessages].([]graph.MessageOp)
 	if !ok {
@@ -418,6 +999,33 @@ func TestBuildFallbackResumeDeltaClearsUnsupportedIntentHistory(t *testing.T) {
 	}
 }
 
+// TestBuildFallbackResumeDeltaKeepsTaggedSceneHistory 覆盖「有标签会话子图跑完」的 resume：
+// 历史必须原样保留、只追加本轮消息。判据从 intent 换成 session_tag 后若判反，
+// 这里会退化成整段历史重建，用户可见地丢上下文。
+func TestBuildFallbackResumeDeltaKeepsTaggedSceneHistory(t *testing.T) {
+	const lastResp = "已为你生成 3 个申领方案"
+
+	state := graph.State{constant.StateKeySessionTag: string(enumor.IntentTypeHostApply)}
+	messages := []trpcmodel.Message{
+		{Role: trpcmodel.RoleUser, Content: "帮我申请一台主机"},
+		{Role: trpcmodel.RoleAssistant, Content: lastResp},
+	}
+
+	delta := message.BuildFallbackResumeDelta(context.Background(), state, messages, lastResp, "改成 16 核")
+
+	if _, rebuilt := delta[graph.StateKeyMessages].([]graph.MessageOp); rebuilt {
+		t.Fatal("history was rebuilt for a tagged session, want plain append")
+	}
+	appended, ok := delta[graph.StateKeyMessages].([]trpcmodel.Message)
+	if !ok {
+		t.Fatalf("messages delta = %T, want []trpcmodel.Message", delta[graph.StateKeyMessages])
+	}
+	// assistant 尾部已是同一条回复，本轮只应追加用户输入。
+	if len(appended) != 1 || appended[0].Role != trpcmodel.RoleUser || appended[0].Content != "改成 16 核" {
+		t.Fatalf("messages delta = %+v, want only the new user message", appended)
+	}
+}
+
 // TestBuildFallbackResumeDeltaClearsUserInput verifies that the resume delta always
 // clears StateKeyUserInput. mergeInitialStateNonInternal skips keys that already
 // exist in the restored checkpoint, so a stale user_input written during a run that
@@ -434,14 +1042,14 @@ func TestBuildFallbackResumeDeltaClearsUserInput(t *testing.T) {
 		userInput string
 	}{
 		{
-			name:      "clearing unsupported intent path clears user_input",
-			state:     graph.State{constant.StateKeyIntent: string(enumor.IntentTypeChat)},
+			name:      "unsupported scene rebuild path clears user_input",
+			state:     graph.State{},
 			messages:  []trpcmodel.Message{{Role: trpcmodel.RoleUser, Content: "查看预测"}},
 			userInput: "我要申请主机",
 		},
 		{
 			name:  "normal resume path also clears user_input",
-			state: graph.State{},
+			state: graph.State{constant.StateKeySessionTag: enumor.IntentTypeHostApply},
 			messages: []trpcmodel.Message{
 				{Role: trpcmodel.RoleAssistant, Content: fallbackText},
 			},
@@ -704,8 +1312,8 @@ func TestNoUsableAccountFallbackMessageNotDuplicated(t *testing.T) {
 	}
 
 	parent := graph.State{
-		graph.StateKeyMessages:  parentMsgs,
-		constant.StateKeyIntent: string(enumor.IntentTypeHostApply),
+		graph.StateKeyMessages:      parentMsgs,
+		constant.StateKeySessionTag: string(enumor.IntentTypeHostApply),
 	}
 	out := makeSubgraphOutputMapper("host_apply")(parent, graph.SubgraphResult{
 		RawStateDelta: map[string][]byte{graph.StateKeyMessages: rawMsgs},

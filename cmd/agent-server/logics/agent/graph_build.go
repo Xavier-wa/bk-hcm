@@ -62,14 +62,13 @@ import (
 // BuildGraph constructs a ReAct graph topology with scene_dispatch as the single routing hub:
 //
 //	[Main Graph] entry: scene_dispatch
-//	  START → scene_dispatch → ConditionalEdge
-//	    ├─ supported session_tag (host_apply)     → host_apply (subgraph)
-//	    ├─ supported session_tag (resource_query) → resource_query (subgraph)
-//	    ├─ this-turn intent recognised but unsupported → fallback
-//	    └─ no tag / no intent this turn           → intent_recognition → scene_dispatch
+//	  START → scene_dispatch (classifies intent in-process) → ConditionalEdge
+//	    ├─ scene_dispatch_next = host_apply     → host_apply (subgraph)
+//	    ├─ scene_dispatch_next = resource_query → resource_query (subgraph)
+//	    └─ scene_dispatch_next = fallback       → fallback (unsupported scene hint)
 //	  host_apply     → fallback  (subgraph finished)
 //	  resource_query → fallback  (subgraph finished)
-//	  fallback (interrupt) → scene_dispatch (re-dispatch; this-turn intent always cleared)
+//	  fallback (interrupt) → scene_dispatch (next turn re-dispatch)
 //
 //	[host_apply subgraph] entry: account_select
 //	  account_select → ConditionalEdge
@@ -89,9 +88,17 @@ import (
 //	    ├─ other tool calls → tool → llm
 //	    └─ no tool_calls → END (subgraph finished → main fallback)
 //
-// The scene_dispatch node is the single routing brain: it commits a recognised supported
-// intent into StateKeySessionTag and decides the next hop.
-// The intent_recognition node only classifies user intent (writes StateKeyIntent) and returns to scene_dispatch.
+// The scene_dispatch node is the single routing brain. It runs exactly once per turn boundary:
+// it classifies the user intent in-process (intent.Classify), commits the resulting scene into
+// StateKeySessionTag, and writes the next hop into StateKeySceneDispatchNext for the conditional
+// edge to look up. Re-classifying on every turn boundary is what makes scene switching possible.
+//
+// 「scene_dispatch 执行 ⟺ 轮次边界」是主图拓扑的隐式契约，由入边集合仅为 {START, fallback} 保证：
+// 上一轮若停在子图内部的 HITL 中断上，框架 resume 到的是子图中断节点，本节点不会执行。
+// 主图唯一的环是 fallback → scene_dispatch，而它每一圈都被 fallback 的 interrupt 阻断
+// （必须有新的用户消息才能继续），因此无需任何死循环护栏。改动主图拓扑时务必维持该契约，
+// TestBuildGraphSceneDispatchIncomingEdges 会对入边集合做断言。
+//
 // The host_apply subgraph node handles the host apply ReAct sub-flow (account_select + llm + hitl + tool).
 // The resource_query subgraph node handles the resource query ReAct sub-flow.
 // The fallback node normalizes the LLM response and interrupts to wait for the next user message.
@@ -100,7 +107,12 @@ import (
 // which is necessary for nested interrupt/resume when a subgraph's hitl node triggers.
 //
 // sessionSvc 传入 host_apply 子图的 account_select，用于跨 Run 读写已选账号。
-func BuildGraph(mdl trpcmodel.Model, skillRepos *skill.SkillRepos, toolset *agenttool.MCPToolSet,
+//
+// skillRepo 是全进程唯一的 skill 仓库实例，所有子图共享同一份：skill 只有 BKAIDev 同步下来的
+// 一个本地目录这一个来源，场景差异体现在 LLM 选择加载哪个 skill，而非仓库本身可见哪些 skill。
+// 与之相对，proxies 仍按场景取——ToolProxy 持有各自的工具注册表与检索索引，按场景裁剪工具集
+// 是真实需求。
+func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *agenttool.MCPToolSet,
 	proxies *toolproxy.ToolProxies, agentName string, modelCfg cc.AgentModelGeneralConfig,
 	promptStore *prompt.Store, clientSet *client.ClientSet, sessionSvc session.Service,
 	saver graph.CheckpointSaver) (
@@ -109,32 +121,32 @@ func BuildGraph(mdl trpcmodel.Model, skillRepos *skill.SkillRepos, toolset *agen
 	schema := graph.MessagesStateSchema()
 	stateGraph := graph.NewStateGraph(schema)
 
-	// 1. Scene Dispatch Node: single routing hub; commits supported intent into StateKeySessionTag.
-	stateGraph.AddNode(string(enumor.MainGraphAgentNodeSceneDispatch), makeSceneDispatchNode())
-	// 2. Intent Recognition Node: classifies intent and writes StateKeyIntent, then returns to scene_dispatch.
-	stateGraph.AddNode(string(enumor.MainGraphAgentNodeIntentRecognition),
-		intent.MakeIntentRecognitionNode(mdl, promptStore, cc.AgentServer().Intent.ContextWindowSize))
-	// 3. Fallback Node: delivers LLM response, interrupts, and routes the next user message.
+	// 1. Scene Dispatch Node: single routing hub; classifies the intent of this turn and
+	//    commits the resulting scene into StateKeySessionTag.
+	stateGraph.AddNode(string(enumor.MainGraphAgentNodeSceneDispatch),
+		makeSceneDispatchNode(mdl, promptStore, agentName, cc.AgentServer().Intent.ContextWindowSize,
+			sessionTagUpdater(clientSet)))
+	// 2. Fallback Node: delivers LLM response, interrupts, and routes the next user message.
 	stateGraph.AddNode(string(enumor.MainGraphAgentNodeFallback), makeFallbackNode())
 
-	// 4. Host Apply Subgraph: build and register as a subgraph node.
+	// 3. Host Apply Subgraph: build and register as a subgraph node.
 	haSubAgent, err := registerSubgraphNode(stateGraph, string(enumor.SubgraphAgentNodeHostApply),
 		"HCM host apply ReAct subgraph agent",
 		func() (*graph.Graph, error) {
-			return buildHostApplySubgraph(mdl, skillRepos.SceneRepo(enumor.IntentTypeHostApply),
-				toolset, proxies.SceneProxy(enumor.IntentTypeHostApply), agentName, modelCfg, promptStore,
+			return buildHostApplySubgraph(mdl, skillRepo, toolset,
+				proxies.SceneProxy(enumor.IntentTypeHostApply), agentName, modelCfg, promptStore,
 				clientSet, sessionSvc)
 		}, saver)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// 5. Resource Query Subgraph: build and register as a subgraph node.
+	// 4. Resource Query Subgraph: build and register as a subgraph node.
 	rqSubAgent, err := registerSubgraphNode(stateGraph, string(enumor.SubgraphAgentNodeResourceQuery),
 		"HCM resource query ReAct subgraph agent",
 		func() (*graph.Graph, error) {
-			return buildResourceQuerySubgraph(mdl, skillRepos.SceneRepo(enumor.IntentTypeResourceQuery),
-				toolset, proxies.SceneProxy(enumor.IntentTypeResourceQuery),
+			return buildResourceQuerySubgraph(mdl, skillRepo, toolset,
+				proxies.SceneProxy(enumor.IntentTypeResourceQuery),
 				agentName, modelCfg, promptStore, clientSet)
 		}, saver)
 	if err != nil {
@@ -143,22 +155,30 @@ func BuildGraph(mdl trpcmodel.Model, skillRepos *skill.SkillRepos, toolset *agen
 
 	subAgents := []trpcagent.Agent{haSubAgent, rqSubAgent}
 
+	buildMainGraphTopology(stateGraph)
+
+	compiledGraph, err := stateGraph.Compile()
+	if err != nil {
+		return nil, nil, err
+	}
+	return compiledGraph, subAgents, nil
+}
+
+// buildMainGraphTopology sets the entry point and all edges of the main graph.
+//
+// 拓扑单独成函数，是为了让它可以脱离模型/工具集等重型依赖被单测直接断言——
+// scene_dispatch 的入边集合是「执行 ⟺ 轮次边界」这一契约的唯一保障，值得被守住。
+func buildMainGraphTopology(stateGraph *graph.StateGraph) {
 	// Entry point: every new run starts with scene_dispatch.
 	stateGraph.SetEntryPoint(string(enumor.MainGraphAgentNodeSceneDispatch))
 
-	// scene_dispatch → host_apply / resource_query / fallback / intent_recognition
+	// scene_dispatch → host_apply / resource_query / fallback，由 StateKeySceneDispatchNext 决定。
 	stateGraph.AddConditionalEdges(string(enumor.MainGraphAgentNodeSceneDispatch),
 		makeSceneDispatchRoutingFunc(), map[string]string{
 			string(enumor.SubgraphAgentNodeHostApply):     string(enumor.SubgraphAgentNodeHostApply),
 			string(enumor.SubgraphAgentNodeResourceQuery): string(enumor.SubgraphAgentNodeResourceQuery),
 			string(enumor.MainGraphAgentNodeFallback):     string(enumor.MainGraphAgentNodeFallback),
-			string(enumor.MainGraphAgentNodeIntentRecognition): string(
-				enumor.MainGraphAgentNodeIntentRecognition),
 		})
-
-	// intent_recognition always returns to scene_dispatch for the routing decision.
-	stateGraph.AddEdge(string(enumor.MainGraphAgentNodeIntentRecognition),
-		string(enumor.MainGraphAgentNodeSceneDispatch))
 
 	// After host_apply subgraph finishes, enter main fallback to deliver the reply and
 	// interrupt waiting for the next user message.
@@ -173,12 +193,6 @@ func BuildGraph(mdl trpcmodel.Model, skillRepos *skill.SkillRepos, toolset *agen
 	// the next user message regardless of whether the session already has a tag.
 	stateGraph.AddEdge(string(enumor.MainGraphAgentNodeFallback),
 		string(enumor.MainGraphAgentNodeSceneDispatch))
-
-	compiledGraph, err := stateGraph.Compile()
-	if err != nil {
-		return nil, nil, err
-	}
-	return compiledGraph, subAgents, nil
 }
 
 // registerSubgraphNode builds a subgraph via builder, wraps it into a graphagent sub-agent,
@@ -501,81 +515,144 @@ func turnFeedbackDelta(nodePrefix string, r graph.SubgraphResult) graph.State {
 	return graph.State{subgraphTurnKey(nodePrefix): turn}
 }
 
-// parseSessionTag 从 graph state 中容错解析会话场景标签。
+// sceneDispatchDecision 是 scene_dispatch 对本轮去向的完整判定结果。
+type sceneDispatchDecision struct {
+	// nextNode 本轮要路由到的主图节点名
+	nextNode string
+	// sessionTag 本轮结束时会话应持有的场景标签，为空表示不提交标签
+	sessionTag enumor.IntentType
+	// switched 本轮是否发生了场景切换，决定要不要向前端发 scene.switched 事件
+	switched bool
+}
+
+// decideSceneDispatch 依据「当前会话标签 × 本轮意图分类结果」决定 scene_dispatch 的去向。
 //
-// session_tag 在 state 中的具体类型并不稳定：fresh 注入（service 层）时是 enumor.IntentType，
-// 而节点写回或经 checkpoint JSON 序列化/反序列化恢复后会变成 plain string。这里统一兼容两种类型，
-// 避免直接 .(enumor.IntentType) 断言因类型不符而拿到零值。
-func parseSessionTag(state graph.State) enumor.IntentType {
-	switch v := state[constant.StateKeySessionTag].(type) {
-	case enumor.IntentType:
-		return v
-	case string:
-		return enumor.IntentType(v)
-	default:
-		return ""
+// 纯决策函数，不依赖 ctx；rid 仅透传给 sceneNodeTarget 供兜底 Warn 日志。决策矩阵：
+//
+//	当前 tag | 本轮分类结果       | 决策
+//	---------|--------------------|--------------------------------------------------
+//	受支持   | 受支持且 != tag    | 提交新 tag，路由新场景子图，发 scene.switched
+//	受支持   | 受支持且 == tag    | 保持 tag，路由原场景子图
+//	受支持   | 不受支持（chat 等）| 保持 tag，路由原场景子图，由场景 LLM 回答
+//	空       | 受支持             | 提交 tag，路由对应子图；首次打标不算切换，不发事件
+//	空       | 不受支持           | 不提交 tag，路由 fallback 给出未支持提示
+//
+// 分类失败时 intent.Classify 返回 unsupported，落入「不受支持」分支，因此失败方向恒为「不切换」。
+func decideSceneDispatch(tag, classified enumor.IntentType, rid string) sceneDispatchDecision {
+	if classified.IsSupportedScene() {
+		return sceneDispatchDecision{
+			nextNode:   sceneNodeTarget(classified, rid),
+			sessionTag: classified,
+			// 仅当原标签本身是受支持场景时才算切换：脏数据标签被覆盖等同于首次打标，前端无需提示。
+			switched: tag.IsSupportedScene() && tag != classified,
+		}
 	}
+
+	if tag.IsSupportedScene() {
+		return sceneDispatchDecision{nextNode: sceneNodeTarget(tag, rid), sessionTag: tag}
+	}
+
+	return sceneDispatchDecision{nextNode: string(enumor.MainGraphAgentNodeFallback)}
 }
 
 // makeSceneDispatchNode returns the scene_dispatch node function.
-// 场景分发节点：会话无标签但本轮意图命中受支持场景时，将其提交到 StateKeySessionTag。
-// 仅做 state 提交，不写 DB；DB 回写由 middleware 在 Run 结束后对账完成。
-func makeSceneDispatchNode() graph.NodeFunc {
+//
+// 场景分发节点是主图唯一的路由中枢，每个轮次边界执行一次：先在节点内同步完成本轮意图分类，
+// 再按决策矩阵得出去向，最后把目标节点名写入 StateKeySceneDispatchNext 供条件边查表。
+// 发生场景切换时卸载旧场景已加载的 skill，并向前端发出 scene.switched 事件。
+//
+// 标签相对上一轮有变化时（含无标签会话首次打标），本节点在判定点同步把 session_tag 回写 DB，
+// 且排在 scene.switched 之前，使前端无论消费事件还是重新拉取会话都读到新标签。
+// 回写失败只记日志，由 service 层在 Run 结束后的差异对账兜底。
+func makeSceneDispatchNode(mdl trpcmodel.Model, promptStore *prompt.Store, agentName string,
+	contextWindowSize int, sessionTagCli agentstate.SessionTagUpdater) graph.NodeFunc {
+
 	return func(ctx context.Context, state graph.State) (any, error) {
 		rid := rest.RidFromContext(ctx)
-		tag := parseSessionTag(state)
-		if tag.IsSupportedScene() {
-			return graph.State{
-				constant.StateKeySessionTag: string(tag),
-				constant.StateKeyIntent:     string(tag),
-			}, nil
+		tag := agentstate.ParseSessionTag(state)
+
+		messages, _ := state[graph.StateKeyMessages].([]trpcmodel.Message)
+		classified := intent.Classify(ctx, mdl, promptStore, messages, contextWindowSize)
+
+		decision := decideSceneDispatch(tag, classified, rid)
+		logs.Infof("[scene dispatch] session_tag=%s, classified=%s, next=%s, switched=%v, rid: %s",
+			tag, classified, decision.nextNode, decision.switched, rid)
+
+		// 标签相对上一轮有变化就立刻落库，判据与 decision.switched 支持无标签会话首次打标签的场景
+		// 不发 scene.switched，但同样要让前端马上读到新标签，因此不能只在切换分支里回写。
+		if decision.sessionTag != "" && decision.sessionTag != tag {
+			agentstate.PersistSessionTag(ctx, sessionTagCli, decision.sessionTag)
 		}
 
-		// 检查是否意图识别出来了支持的场景，是则提交到 StateKeySessionTag
-		intentType := agentstate.ParseIntent(state)
-		if intentType.IsSupportedScene() {
-			logs.Infof("[scene dispatch] commit session_tag=%s from intent, rid: %s", intentType, rid)
-			return graph.State{constant.StateKeySessionTag: intentType}, nil
+		if decision.switched {
+			// 先卸载旧场景的 skill 再放行到新场景子图：skill 的加载状态是会话级的，各场景共用同一个
+			// agentName 与 skill 仓库，不清掉的话新场景 LLM 的系统提示词里仍带着旧场景的 SKILL 正文，
+			// 会按旧场景的规则拒识用户请求（如在资源查询里回「请重新发起对话」）。
+			skill.ClearLoadedSkills(ctx, agentName)
+			message.EmitSceneSwitched(ctx, state, string(enumor.MainGraphAgentNodeSceneDispatch),
+				tag, decision.sessionTag)
 		}
 
-		return graph.State{}, nil
+		// session_rid 每轮强制刷新：框架的 mergeInitialStateNonInternal 只补 checkpoint 中缺失的 key，
+		// 第二轮起 run 入口注入的 rid 会被 checkpoint 里的旧值压制，子图 mapper 的 trace 日志因此串轮。
+		delta := graph.State{
+			constant.StateKeySceneDispatchNext: decision.nextNode,
+			constant.SessionRidStateKey:        rid,
+		}
+		if decision.sessionTag != "" {
+			delta[constant.StateKeySessionTag] = string(decision.sessionTag)
+		}
+		return delta, nil
 	}
+}
+
+// sessionTagUpdater 从 client set 取出会话标签的回写客户端。
+// 依赖链上任一环缺失即返回 nil，交由 PersistSessionTag 按「未注入」跳过回写：直接返回 nil 指针会
+// 变成非 nil 的接口值，反而要等到调用时才 panic（构图单测不会注入 client set）。
+func sessionTagUpdater(clientSet *client.ClientSet) agentstate.SessionTagUpdater {
+	if clientSet == nil {
+		return nil
+	}
+	dataSvc := clientSet.DataService()
+	if dataSvc == nil || dataSvc.Aiagent == nil || dataSvc.Aiagent.Session == nil {
+		return nil
+	}
+	return dataSvc.Aiagent.Session
 }
 
 // sceneNodeTarget 将受支持的场景标签映射到主图中对应的子图节点名。
-func sceneNodeTarget(scene enumor.IntentType) string {
+func sceneNodeTarget(scene enumor.IntentType, rid string) string {
 	switch scene {
 	case enumor.IntentTypeResourceQuery:
 		return string(enumor.SubgraphAgentNodeResourceQuery)
-	default:
-		// host_apply 及其它默认进入 host_apply 子图
+	case enumor.IntentTypeHostApply:
 		return string(enumor.SubgraphAgentNodeHostApply)
+	default:
+		// 默认走资源查询：IsSupportedScene 已放行但此处未映射时落此分支，需及时补 case。
+		logs.Warnf("unsupported scene %q, fallback to resource query, rid: %s", scene, rid)
+		return string(enumor.SubgraphAgentNodeResourceQuery)
 	}
 }
 
-// makeSceneDispatchRoutingFunc 根据会话标签与本轮意图决定 scene_dispatch 的后续路由。
+// makeSceneDispatchRoutingFunc 返回 scene_dispatch 的条件边路由函数。
+//
+// 它只做查表：读取节点写入的 StateKeySceneDispatchNext 并校验其为合法目标，不重复任何
+// 标签/分类结果的判定——判定全部收敛在 decideSceneDispatch 中，避免两处实现随分支增多而发散。
+// 读到空值或未知节点名时兜底到 fallback 并记 Warn，不返回 error 中断整个 run。
 func makeSceneDispatchRoutingFunc() func(ctx context.Context, state graph.State) (string, error) {
 	return func(ctx context.Context, state graph.State) (string, error) {
 		rid := rest.RidFromContext(ctx)
-		tag := parseSessionTag(state)
-		logs.Infof("scene dispatch routing: graph state session_tag=%s, type is %T, rid: %s", tag, tag, rid)
-		if tag.IsSupportedScene() {
-			target := sceneNodeTarget(tag)
-			logs.Infof("[scene dispatch routing] session_tag=%s, route to %s, rid: %s", tag, target, rid)
-			return target, nil
-		}
+		next, _ := state[constant.StateKeySceneDispatchNext].(string)
 
-		// 本轮意图非空且不受支持：直接路由到 fallback 给出拒识回复，
-		// 避免 intent_recognition 与 scene_dispatch 之间反复循环。
-		intentType := agentstate.ParseIntent(state)
-		if intentType != "" && !intentType.IsSupportedScene() {
-			logs.Infof("[scene dispatch routing] intent=%s unsupported, route to fallback, rid: %s",
-				intentType, rid)
+		switch next {
+		case string(enumor.SubgraphAgentNodeHostApply), string(enumor.SubgraphAgentNodeResourceQuery),
+			string(enumor.MainGraphAgentNodeFallback):
+			logs.Infof("[scene dispatch routing] route to %s, rid: %s", next, rid)
+			return next, nil
+		default:
+			logs.Warnf("[scene dispatch routing] unexpected next node %q, route to fallback, rid: %s", next, rid)
 			return string(enumor.MainGraphAgentNodeFallback), nil
 		}
-
-		logs.Infof("[scene dispatch routing] no tag/intent, route to intent_recognition, rid: %s", rid)
-		return string(enumor.MainGraphAgentNodeIntentRecognition), nil
 	}
 }
 
@@ -747,7 +824,7 @@ func makeFallbackNode() graph.NodeFunc {
 }
 
 // resolveFallbackLastResp 计算当前 fallback 轮次应使用的回复文本。
-// 优先顺序：消息尾部 assistant 回复（LLM→fallback 路径）→ StateKeyLastResponse → 意图兜底文案。
+// 优先顺序：消息尾部 assistant 回复（LLM→fallback 路径）→ StateKeyLastResponse → 未支持场景兜底文案。
 //
 // account_select 因无可用云账号交还 fallback 的场景走第一优先级：该节点已自行 emit 无权限提示
 // 并把它落成 assistant 消息，经 output mapper 合并进主图 messages，此处直接复用、不重复 emit。
@@ -761,7 +838,7 @@ func resolveFallbackLastResp(state graph.State) string {
 	if lastResp, ok := state[graph.StateKeyLastResponse].(string); ok && lastResp != "" {
 		return lastResp
 	}
-	return unsupportedIntentFallbackMessage(state)
+	return unsupportedSceneFallbackMessage(state)
 }
 
 // buildFallbackInterruptKey 为 fallback 节点生成稳定的 interrupt key。
@@ -869,10 +946,12 @@ func buildResourceQuerySubgraph(mdl trpcmodel.Model, skillRepo skillpkg.Reposito
 	return sg.Compile()
 }
 
-// unsupportedIntentFallbackMessage 在未调用 llm 时返回面向用户的兜底回复。
-func unsupportedIntentFallbackMessage(state graph.State) string {
-	intentStr, _ := state[constant.StateKeyIntent].(string)
-	if !enumor.IntentType(intentStr).IsSupportedScene() {
+// unsupportedSceneFallbackMessage 在本轮未进入任何场景子图（未调用 llm）时返回面向用户的兜底回复。
+//
+// 判据用会话场景标签而非本轮分类结果：进子图之前 scene_dispatch 必然已提交受支持的标签，
+// 所以标签为空即代表本轮落在「无标签 + 分类不受支持」这一个分支上。
+func unsupportedSceneFallbackMessage(state graph.State) string {
+	if !agentstate.ParseSessionTag(state).IsSupportedScene() {
 		return "目前AI助手支持主机申领和云资源查询相关能力，其他云资源管理功能即将上线。" +
 			"如需申领主机，请直接描述您的配置需求；如需查询云资源，请告诉我您想查询的内容。"
 	}

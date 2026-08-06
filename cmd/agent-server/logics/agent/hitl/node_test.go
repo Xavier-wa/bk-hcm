@@ -241,7 +241,7 @@ func TestInjectCancelUserMessage(t *testing.T) {
 
 	t.Run("handler without notice support falls back to synthetic user message", func(t *testing.T) {
 		res := newCancelResult()
-		toolName := constant.HumanConfirmToolName
+		toolName := string(enumor.DeclToolHumanConfirm)
 		injectCancelUserMessage(&res, NewHumanConfirmHandler(), toolName, "")
 
 		want := []model.Role{model.RoleTool, model.RoleUser}

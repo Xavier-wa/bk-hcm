@@ -1,4 +1,6 @@
-## Requirements
+# Capability: agent-intent-routing
+
+## MODIFIED Requirements
 
 ### Requirement: Graph entry runs intent recognition when intent is not host_apply
 
@@ -62,15 +64,6 @@ When `scene_dispatch` classifies a non-scene intent (e.g. `chat` or unrecognized
 
 - **WHEN** the fallback node resumes with a new user message
 - **THEN** it rebuilds the assistant/user message tail only when `StateKeySessionTag` is empty or not a supported scene
-
-### Requirement: finish_intent_task is not used
-
-The system SHALL NOT expose or register a `finish_intent_task` tool, and the LLM system prompt SHALL NOT instruct the model to call it.
-
-#### Scenario: Tool list for graph agent
-
-- **WHEN** the graph agent is built with skill and HITL tools
-- **THEN** `finish_intent_task` is absent from the tool set and tool node callbacks
 
 ### Requirement: Intent task status enum is not used for routing
 

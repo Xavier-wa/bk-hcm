@@ -88,10 +88,17 @@ func MakeSkillInjectWithModelCallback(agentName string, repo skillpkg.Repository
 	}
 }
 
+// collectLoadedSkills returns the skills currently loaded for agentName.
+//
+// 值为空表示该 skill 已被卸载：session.Service 没有删除接口，ClearLoadedSkills 以写空值表达清除，
+// 因此这里必须按值判空，不能只看 key 是否存在。
 func collectLoadedSkills(agentName string, state map[string][]byte) []string {
 	loadedPrefix := skillpkg.LoadedPrefix(agentName)
 	var loadedSkills []string
-	for key := range state {
+	for key, value := range state {
+		if len(value) == 0 {
+			continue
+		}
 		if skillName, ok := strings.CutPrefix(key, loadedPrefix); ok && skillName != "" {
 			loadedSkills = append(loadedSkills, skillName)
 		}

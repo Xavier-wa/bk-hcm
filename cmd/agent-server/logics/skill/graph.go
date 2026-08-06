@@ -22,6 +22,7 @@ package skill
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"hcm/cmd/agent-server/logics/agent/state"
 	"hcm/pkg/criteria/constant"
@@ -147,4 +148,51 @@ func recordSkillSelectedDocsToState(ctx context.Context, tc model.ToolCall, agen
 	}
 	logs.Infof("[skill_graph] skill docs selected: agent=%s skill=%s all=%v docs=%v, rid: %s",
 		agentName, params.Skill, params.IncludeAllDocs, params.Docs, rid)
+}
+
+// ClearLoadedSkills clears every loaded-skill marker and doc selection of agentName from the
+// current session, so that the next LLM call stops injecting the previous skill body into the
+// system prompt.
+//
+// 场景切换时必须调用：skill 的加载状态是会话级的，而各场景子图共用同一个 agentName 与
+// skill 仓库，切换后旧场景的 SKILL 正文仍会被 collectLoadedSkills 取到并注入系统提示词，
+// 让新场景的模型按旧场景的规则拒识用户请求。
+//
+// session.Service 没有会话级 state 的删除接口，写空值等价于清除：读侧（collectLoadedSkills、
+// appendSelectedDocs 以及框架内部的 skill 状态读取）一律按 len == 0 判定为未加载。
+func ClearLoadedSkills(ctx context.Context, agentName string) {
+	rid := rest.RidFromContext(ctx)
+	inv, ok := trpcagent.InvocationFromContext(ctx)
+	if !ok || inv == nil || inv.Session == nil {
+		logs.Warnf("[skill_graph] no invocation or session in context, skip clearing loaded skills "+
+			"(ok=%v inv=%v session=%v), rid: %s",
+			ok, inv != nil, inv != nil && inv.Session != nil, rid)
+		return
+	}
+
+	loadedPrefix := skillpkg.LoadedPrefix(agentName)
+	docsPrefix := skillpkg.DocsPrefix(agentName)
+	orderKey := skillpkg.LoadedOrderKey(agentName)
+
+	cleared := make(session.StateMap)
+	var clearedSkills []string
+	for key, value := range inv.Session.SnapshotState() {
+		if !strings.HasPrefix(key, loadedPrefix) && !strings.HasPrefix(key, docsPrefix) && key != orderKey {
+			continue
+		}
+		if len(value) == 0 {
+			continue
+		}
+		cleared[key] = []byte{}
+		if skillName, isLoadedKey := strings.CutPrefix(key, loadedPrefix); isLoadedKey && skillName != "" {
+			clearedSkills = append(clearedSkills, skillName)
+		}
+	}
+	if len(cleared) == 0 {
+		return
+	}
+
+	state.PersistStateToService(ctx, cleared)
+	logs.Infof("[skill_graph] cleared loaded skills: agent=%s skills=%v keys=%d, rid: %s",
+		agentName, clearedSkills, len(cleared), rid)
 }
