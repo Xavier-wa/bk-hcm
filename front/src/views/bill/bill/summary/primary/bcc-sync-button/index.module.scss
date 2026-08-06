@@ -1,6 +1,7 @@
 .vendor-wrapper,
+.sync-scope-wrapper,
 .sync-content-wrapper {
-  margin: 16px 0 16px;
+  margin: 16px 0;
 
   .title {
     margin-bottom: 12px;
@@ -9,16 +10,42 @@
   }
 }
 
+.sync-scope-wrapper {
+  :global(.bk-radio) {
+    margin-right: 24px;
+
+    &:last-child {
+      margin-right: 0;
+    }
+  }
+}
+
 .sync-content-wrapper {
   .item {
-    span {
-      line-height: 24px;
-      display: inline-block;
+    display: flex;
+    align-items: center;
+    line-height: 20px;
+    margin-bottom: 4px;
+
+    .label {
+      flex: 0 0 176px;
+      font-size: 12px;
+      color: #313238;
+      text-align: right;
+      white-space: nowrap;
+
+      &::after {
+        content: ':';
+        margin: 0 10px 0 5px;
+      }
     }
 
-    span:first-of-type {
-      width: 150px;
+    .short-label {
+      flex: 0 0 160px;
+      font-size: 12px;
+      color: #313238;
       text-align: right;
+      white-space: nowrap;
 
       &::after {
         content: ':';
@@ -27,17 +54,22 @@
     }
 
     .money {
-      font-family: MicrosoftYaHei-Bold;
+      font-family: MicrosoftYaHei-Bold, sans-serif;
       font-weight: 700;
-      font-size: 16px;
-      color: #ff9c01;
+      font-size: 14px;
+      color: #f59500;
     }
 
     .count {
-      font-family: MicrosoftYaHei;
+      font-family: MicrosoftYaHei, sans-serif;
       font-size: 14px;
       color: #313238;
     }
+  }
+
+  .block {
+    padding: 8px 0 4px;
+    background-color: #f5f7fa;
   }
 }
 

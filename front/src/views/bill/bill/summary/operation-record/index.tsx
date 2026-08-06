@@ -9,7 +9,8 @@ import Panel from '@/components/panel';
 import { useI18n } from 'vue-i18n';
 import useColumns from '@/views/resource/resource-manage/hooks/use-columns';
 import { useTable } from '@/hooks/useTable/useTable';
-import { reqBillsSyncRecordList } from '@/api/bill';
+import { reqBillsExchangeRateList, reqBillsSyncRecordList } from '@/api/bill';
+import { QueryRuleOPEnum } from '@/typings';
 
 export default defineComponent({
   name: 'BillSummaryOperationRecord',
@@ -25,12 +26,44 @@ export default defineComponent({
     ];
     const activeActionType = ref('sync');
 
+    // 当月汇率映射（key为 `year-month`，value 为 USD->CNY 汇率），与云账单管理头部当月汇率同源
+    const exchangeRateMap = ref<Record<string, string>>(null);
+    const ensureExchangeRateMap = async () => {
+      if (exchangeRateMap.value) return exchangeRateMap.value;
+      const res = await reqBillsExchangeRateList({
+        filter: {
+          op: QueryRuleOPEnum.AND,
+          rules: [
+            { field: 'from_currency', op: QueryRuleOPEnum.EQ, value: 'USD' },
+            { field: 'to_currency', op: QueryRuleOPEnum.EQ, value: 'CNY' },
+          ],
+        },
+        page: { start: 0, limit: 500, count: false },
+      });
+      const map: Record<string, string> = {};
+      (res.data?.details || []).forEach((item: any) => {
+        map[`${item.year}-${item.month}`] = item.exchange_rate;
+      });
+      exchangeRateMap.value = map;
+      return map;
+    };
+
+    // 为每行注入"人民币+美金"：美金按各行账单月份的汇率转人民币后，再加上人民币金额
+    const resolveDataListCb = async (dataList: any[]) => {
+      const rateMap = await ensureExchangeRateMap();
+      return dataList.map((row) => {
+        const rate = Number(rateMap[`${row.bill_year}-${row.bill_month}`] || 0);
+        const combined = Number(row.cost || 0) * rate + Number(row.rmb_cost || 0);
+        return { ...row, rmb_usd_combined: combined };
+      });
+    };
+
     const { CommonTable } = useTable({
       searchOptions: { disabled: true },
       tableOptions: {
         columns,
       },
-      requestOption: { apiMethod: reqBillsSyncRecordList },
+      requestOption: { apiMethod: reqBillsSyncRecordList, resolveDataListCb },
     });
 
     return () => (

@@ -144,14 +144,28 @@ export interface BillsSummarySum {
   cost_map: CostMap;
 }
 export interface CostMap {
-  USD: USD;
+  [currency: string]: CurrencyCost;
+  USD?: CurrencyCost;
+  CNY?: CurrencyCost;
 }
-interface USD {
+export interface CurrencyCost {
   Cost: string;
   RMBCost: string;
   Currency: string;
 }
+// 兼容旧命名
+export type USD = CurrencyCost;
 export type BillsSummarySumResData = IQueryResData<BillsSummarySum>;
+
+// 调账数据汇总
+export interface AdjustmentItemSumReqParams {
+  filter: FilterType;
+}
+export interface AdjustmentItemSumResult {
+  count: number;
+  cost_map: Record<'increase' | 'decrease', CostMap>;
+}
+export type AdjustmentItemSumResData = IQueryResData<AdjustmentItemSumResult>;
 
 // 账单明细-zenlayer导入预览
 export interface BillImportPreview {

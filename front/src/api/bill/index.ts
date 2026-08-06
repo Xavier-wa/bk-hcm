@@ -3,6 +3,8 @@ import http from '@/http';
 import { FilterType, IPageQuery } from '@/typings';
 import {
   AdjustmentItem,
+  AdjustmentItemSumReqParams,
+  AdjustmentItemSumResData,
   BillImportPreviewItems,
   BillImportPreviewResData,
   BillsExportReqParams,
@@ -98,6 +100,11 @@ export const createBillsAdjustment = async (data: {
   items: AdjustmentItem[];
 }) => {
   return http.post(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/account/bills/adjustment_items/create`, data);
+};
+
+// 调账数据汇总
+export const reqBillsAdjustmentSum = async (data: AdjustmentItemSumReqParams): Promise<AdjustmentItemSumResData> => {
+  return http.post(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/account/bills/adjustment_items/sum`, data);
 };
 
 // 查询调账明细
@@ -201,7 +208,12 @@ export const exportBillsAdjustmentItems = async (data: BillsExportReqParams) => 
 };
 
 // 账单同步(云厂商)
-export const syncRecordsBills = async (data: { bill_year: number; bill_month: number; vendor: VendorEnum }) => {
+export const syncRecordsBills = async (data: {
+  bill_year: number;
+  bill_month: number;
+  vendor: VendorEnum;
+  sync_mode: 'full' | 'adjustment_only';
+}) => {
   return http.post(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/account/bills/sync_records`, data);
 };
 
