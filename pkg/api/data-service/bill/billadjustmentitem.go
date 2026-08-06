@@ -50,6 +50,7 @@ type BillAdjustmentItemCreateReq struct {
 	BillDay       int                           `json:"bill_day" validate:"required"`
 	Type          enumor.BillAdjustmentType     `json:"type" validate:"required"`
 	ResClass      enumor.BillAdjustmentResClass `json:"res_class" validate:"required"`
+	ResSubClass   string                        `json:"res_sub_class" validate:"omitempty,max=64"`
 	Operator      string                        `json:"operator"`
 	Memo          *string                       `json:"memo"`
 	Currency      enumor.CurrencyCode           `json:"currency" validate:"required"`
@@ -89,6 +90,7 @@ type BillAdjustmentItemUpdateReq struct {
 	BillDay       int                           `json:"bill_day" `
 	Type          enumor.BillAdjustmentType     `json:"type"`
 	ResClass      enumor.BillAdjustmentResClass `json:"res_class"`
+	ResSubClass   *string                       `json:"res_sub_class" validate:"omitempty,max=64"`
 	Operator      string                        `json:"operator"`
 	Currency      enumor.CurrencyCode           `json:"currency"`
 	Cost          *decimal.Decimal              `json:"cost" `

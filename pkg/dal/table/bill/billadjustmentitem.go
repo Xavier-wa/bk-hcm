@@ -48,6 +48,7 @@ var AccountBillAdjustmentItemColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "bill_day", NamedC: "bill_day", Type: enumor.Numeric},
 	{Column: "type", NamedC: "type", Type: enumor.String},
 	{Column: "res_class", NamedC: "res_class", Type: enumor.String},
+	{Column: "res_sub_class", NamedC: "res_sub_class", Type: enumor.String},
 	{Column: "memo", NamedC: "memo", Type: enumor.String},
 	{Column: "operator", NamedC: "operator", Type: enumor.String},
 	{Column: "currency", NamedC: "currency", Type: enumor.String},
@@ -83,6 +84,8 @@ type AccountBillAdjustmentItem struct {
 	Type string `db:"type" json:"type"`
 	// ResClass 调账资源类别
 	ResClass enumor.BillAdjustmentResClass `db:"res_class" json:"res_class"`
+	// ResSubClass 调账资源子类，语义由 ResClass 决定：gpu_card 下为卡型、gpu_api 下为模型厂商，其余类别为空。
+	ResSubClass *string `db:"res_sub_class" json:"res_sub_class"`
 	// Memo 注解
 	Memo *string `db:"memo" json:"memo"`
 	// Operator 操作人
