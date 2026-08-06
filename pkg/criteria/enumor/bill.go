@@ -257,6 +257,26 @@ const (
 	BillSyncRecordStateFailed BillSyncState = "failed"
 )
 
+// BillSyncMode 云账单对外（OBS）同步模式
+type BillSyncMode string
+
+const (
+	// BillSyncModeFull 全量同步：bill_item 明细全量推送后再同步调账
+	BillSyncModeFull BillSyncMode = "full"
+	// BillSyncModeAdjustmentOnly 只同步调账：跳过 bill_item 明细推送，仅计数后同步调账
+	BillSyncModeAdjustmentOnly BillSyncMode = "adjustment_only"
+)
+
+// Validate 校验同步模式取值
+func (b BillSyncMode) Validate() error {
+	switch b {
+	case BillSyncModeFull, BillSyncModeAdjustmentOnly:
+	default:
+		return fmt.Errorf("unsupported bill sync mode: %s", b)
+	}
+	return nil
+}
+
 // RootAccountMonthBillTaskState 一级账号月度账单（除去每日账单）状态
 type RootAccountMonthBillTaskState string
 

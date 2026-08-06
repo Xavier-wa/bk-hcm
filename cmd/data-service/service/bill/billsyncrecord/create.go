@@ -25,6 +25,7 @@ import (
 
 	"hcm/pkg/api/core"
 	dsbill "hcm/pkg/api/data-service/bill"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/orm"
 	tablebill "hcm/pkg/dal/table/bill"
@@ -48,6 +49,10 @@ func (svc *service) CreateBillSyncRecord(cts *rest.Contexts) (interface{}, error
 	idList, err := svc.dao.Txn().AutoTxn(cts.Kit, func(txn *sqlx.Tx, opt *orm.TxnOption) (interface{}, error) {
 		var itemList []tablebill.AccountBillSyncRecord
 		for _, item := range req.Items {
+			syncMode := item.SyncMode
+			if len(syncMode) == 0 {
+				syncMode = enumor.BillSyncModeFull
+			}
 			item := tablebill.AccountBillSyncRecord{
 				Vendor:    item.Vendor,
 				BillYear:  item.BillYear,
@@ -58,6 +63,7 @@ func (svc *service) CreateBillSyncRecord(cts *rest.Contexts) (interface{}, error
 				Cost:      &types.Decimal{Decimal: item.Cost},
 				RMBCost:   &types.Decimal{Decimal: item.RMBCost},
 				Detail:    cvt.ValToPtr(types.JsonField("[]")),
+				SyncMode:  syncMode,
 				Operator:  cts.Kit.User,
 				Creator:   cts.Kit.User,
 				Reviser:   cts.Kit.User,

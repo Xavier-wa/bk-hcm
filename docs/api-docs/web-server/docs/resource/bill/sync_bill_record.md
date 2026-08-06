@@ -10,11 +10,12 @@ POST /api/v1/account/bills/sync_records
 
 ### 输入参数
 
-| 参数名称       | 类型     | 必选 | 描述   |
-|------------|--------|----|------|
-| vendor     | string | 是  | 云服务商 |
-| bill_year  | int    | 是  | 账单年份 |
-| bill_month | int    | 是  | 账单月份 |
+| 参数名称       | 类型     | 必选 | 描述                                                                              |
+|------------|--------|----|---------------------------------------------------------------------------------|
+| vendor     | string | 是  | 云服务商                                                                            |
+| bill_year  | int    | 是  | 账单年份                                                                            |
+| bill_month | int    | 是  | 账单月份                                                                            |
+| sync_mode  | string | 否  | 同步模式，枚举值：full-全量同步（默认）、adjustment_only-只同步调账；缺省按 full 处理 |
 
 ### 调用示例
 
@@ -22,7 +23,8 @@ POST /api/v1/account/bills/sync_records
 {
   "vendor": "huawei",
   "bill_year": 2021,
-  "bill_month": 1
+  "bill_month": 1,
+  "sync_mode": "adjustment_only"
 }
 ```
 

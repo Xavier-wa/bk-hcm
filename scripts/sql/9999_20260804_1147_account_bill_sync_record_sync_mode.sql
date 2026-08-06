@@ -1,7 +1,7 @@
 /*
  * TencentBlueKing is pleased to support the open source community by making
  * 蓝鲸智云 - 混合云管理平台 (BlueKing - Hybrid Cloud Management System) available.
- * Copyright (C) 2022 THL A29 Limited,
+ * Copyright (C) 2024 THL A29 Limited,
  * a Tencent company. All rights reserved.
  * Licensed under the MIT License (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,32 +17,19 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-// Package bill ...
-package bill
+/*
+    SQLVER=9999,HCMVER=v9.9.9
 
-import (
-	"hcm/pkg/criteria/enumor"
-	"hcm/pkg/criteria/validator"
-)
+    Notes:
+    1. account_bill_sync_record 表新增 sync_mode 字段，标识对外同步模式（full/adjustment_only），默认 full 兼容存量数据
+*/
 
-// BillSyncRecordCreateReq create request
-type BillSyncRecordCreateReq struct {
-	Vendor    enumor.Vendor       `json:"vendor" validate:"required"`
-	BillYear  int                 `json:"bill_year" validate:"required"`
-	BillMonth int                 `json:"bill_month" validate:"required"`
-	SyncMode  enumor.BillSyncMode `json:"sync_mode" validate:"omitempty"`
-}
+START TRANSACTION;
 
-// Validate ...
-func (c *BillSyncRecordCreateReq) Validate() error {
-	if err := validator.Validate.Struct(c); err != nil {
-		return err
-	}
-	// 缺省视为 full，仅在显式传入时校验取值
-	if len(c.SyncMode) != 0 {
-		if err := c.SyncMode.Validate(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
+ALTER TABLE `account_bill_sync_record`
+    ADD COLUMN `sync_mode` varchar(32) NOT NULL DEFAULT 'full' COMMENT '同步模式：full-全量同步，adjustment_only-只同步调账' AFTER `adjustment_flow_id`;
+
+CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
+SELECT 'v9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+
+COMMIT;
