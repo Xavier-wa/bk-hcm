@@ -27,6 +27,9 @@ export default defineComponent({
               <HeadColumn required minWidth={120} width={450}>
                 {t('资源类别')}
               </HeadColumn>
+              <HeadColumn minWidth={120} width={450}>
+                {t('资源子类')}
+              </HeadColumn>
               <HeadColumn required minWidth={120} width={450}>
                 {t('金额')}
               </HeadColumn>

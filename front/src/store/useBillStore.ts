@@ -500,6 +500,8 @@ export interface AdjustmentItem {
   currency: string; // 币种
   cost: string; // 金额
   memo?: string; // 备注信息
+  res_class: ResClassEnum; // 资源类别
+  res_sub_class: string; // 资源子类
 }
 
 // 批量创建调账明细参数类型
@@ -521,6 +523,7 @@ export interface UpdateAdjustmentItemParams {
   bill_day?: number; // 所属日期
   type?: 'increase' | 'decrease'; // 调账类型
   res_class?: ResClassEnum; // 资源类别
+  res_sub_class?: string; // 资源子类，含义由资源类别决定
   currency?: string; // 币种
   cost?: string; // 金额
   rmb_cost?: string; // 对应人民币金额

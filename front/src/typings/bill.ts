@@ -130,7 +130,8 @@ export interface AdjustmentItem {
   bill_month: number; // 所属月份
   bill_day: number; // 所属日期
   type: 'increase' | 'decrease'; // 调账类型 枚举值（increase、decrease）
-  res_class: ResClassEnum; // 资源类别 枚举值（cpu、gpu）
+  res_class: ResClassEnum; // 资源类别 枚举值（cpu、gpu_card、gpu_api、gpu_other）
+  res_sub_class: string; // 资源子类，含义由资源类别决定
   currency: string; // 币种
   cost: string; // 金额
   rmb_cost: string; // 对应人民币金额

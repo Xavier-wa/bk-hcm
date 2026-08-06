@@ -105,6 +105,16 @@ export const reqBillsAdjustmentList = async (data: { filter: FilterType; page: I
   return http.post(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/account/bills/adjustment_items/list`, data);
 };
 
+// 查询调账 GPU 卡型候选
+export const reqBillsAdjustmentGpuCards = (vendor: VendorEnum) => {
+  return http.get(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/account/vendors/${vendor}/bills/adjustment_items/gpu_cards`);
+};
+
+// 查询调账 GPU API 模型厂商候选
+export const reqBillsAdjustmentApiBrands = (vendor: VendorEnum) => {
+  return http.get(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/account/vendors/${vendor}/bills/adjustment_items/api_brands`);
+};
+
 // 编辑调账明细，已确定的调账明细不能编辑，该接口不能确认调账明细
 export const updateBillsAdjustment = async (
   id: string,
@@ -118,6 +128,8 @@ export const updateBillsAdjustment = async (
     bill_month?: number; // 所属月份
     bill_day?: number; // 所属日期
     type?: 'increase' | 'decrease'; // 调账类型 枚举值（increase、decrease）
+    res_class?: string; // 资源类别枚举值（cpu、gpu_card、gpu_api、gpu_other）
+    res_sub_class?: string; // 资源子类，含义由资源类别决定
     currency?: string; // 币种
     cost?: string; // 金额
     rmb_cost?: string; // 对应人民币金额

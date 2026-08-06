@@ -1,3 +1,5 @@
+import { VendorEnum } from '@/common/constant';
+
 // 账单下共用的业务key
 export const BILL_BIZS_KEY = 'bill_bizs';
 // 账单下共有的二级账号key
@@ -39,18 +41,26 @@ export const BILL_ADJUSTMENT_TYPE__MAP = {
 // 资源类别
 export enum ResClassEnum {
   Cpu = 'cpu',
-  Gpu = 'gpu',
+  GpuCard = 'gpu_card',
+  GpuApi = 'gpu_api',
+  GpuOther = 'gpu_other',
 }
 
 export const ResClassList = [
   { label: 'CPU', value: ResClassEnum.Cpu },
-  { label: 'GPU', value: ResClassEnum.Gpu },
+  { label: 'GPU卡', value: ResClassEnum.GpuCard },
+  { label: 'GPU API', value: ResClassEnum.GpuApi },
+  { label: 'GPU其他', value: ResClassEnum.GpuOther },
 ];
 
 export const RES_CLASS_MAP = {
   [ResClassEnum.Cpu]: 'CPU',
-  [ResClassEnum.Gpu]: 'GPU',
+  [ResClassEnum.GpuCard]: 'GPU卡',
+  [ResClassEnum.GpuApi]: 'GPU API',
+  [ResClassEnum.GpuOther]: 'GPU其他',
 };
+
+export const BILL_ADJUSTMENT_SUPPORTED_VENDORS = [VendorEnum.AWS, VendorEnum.GCP, VendorEnum.HUAWEI];
 
 // 币种
 export const CURRENCY_ALIAS_MAP = {

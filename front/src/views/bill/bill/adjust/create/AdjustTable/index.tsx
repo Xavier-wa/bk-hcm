@@ -30,12 +30,13 @@ export default defineComponent({
   setup(props, { expose }) {
     const Record = (): Partial<AdjustmentItem> => {
       return {
-        product_id: '',
+        product_id: undefined,
         bk_biz_id: '',
         type: AdjustTypeEnum.Increase,
-        res_class: ResClassEnum.Gpu,
+        res_class: ResClassEnum.Cpu,
+        res_sub_class: undefined,
         cost: '',
-        main_account_id: '',
+        main_account_id: undefined,
         memo: '',
       };
     };
