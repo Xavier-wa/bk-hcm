@@ -3,6 +3,7 @@
 - 该接口提供版本：v1.2.1+。
 - 该接口所需权限：账号录入。
 - 该接口功能描述：创建用于创建账号的申请。
+- 说明：当 `type=registration`（登记账号）时走免审直连交付，不创建 ITSM 审批单、不落 HCM 申请单，同步创建账号；当 `type=resource` / `security_audit` 时仍走 ITSM 审批并创建申请单。
 
 ### URL
 
@@ -211,8 +212,11 @@ POST /api/v1/cloud/applications/types/add_account
 
 ### 响应示例
 
+#### 需审批账号（resource / security_audit）
+
 ```json
 {
+  "result": true,
   "code": 0,
   "message": "",
   "data": {
@@ -221,16 +225,46 @@ POST /api/v1/cloud/applications/types/add_account
 }
 ```
 
+> 此时 `data.id` 为**申请单 ID**，可据此查询单据详情 / 跳转「我的申请」。
+
+#### 登记账号免审（registration）
+
+```json
+{
+  "result": true,
+  "code": 0,
+  "message": "",
+  "data": {
+    "id": "00000b05"
+  }
+}
+```
+
+> 此时 `data.id` 为**账号 ID**（不是申请单 ID）。登记账号不会创建 HCM 申请单，请勿将该 ID 当作单据 ID 使用。
+
+#### 失败示例
+
+```json
+{
+  "result": false,
+  "code": 2000006,
+  "message": "create account success, but add create action associate permissions failed, err: xxx"
+}
+```
+
+> 常见错误码：`2000001`（InvalidParameter，参数校验失败）、`2000006`（Aborted，业务处理/交付失败）。登记账号免审失败时同步返回错误，不会生成申请单。
+
 ### 响应参数说明
 
 | 参数名称    | 参数类型   | 描述   |
 |---------|--------|------|
+| result  | bool   | 请求是否成功 |
 | code    | int32  | 状态码  |
 | message | string | 请求信息 |
-| data    | object | 响应数据 |
+| data    | object | 响应数据；失败时通常为空或不返回业务数据 |
 
 #### data
 
 | 参数名称 | 参数类型   | 描述   |
 |------|--------|------|
-| id   | string | 单据ID |
+| id   | string | 业务结果 ID。`type=resource` / `security_audit` 时为申请单 ID；`type=registration` 时为新创建的账号 ID |

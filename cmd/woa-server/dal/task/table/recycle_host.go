@@ -51,7 +51,7 @@ type RecycleHost struct {
 	CreateAt        time.Time            `json:"create_at" bson:"create_at"`
 	UpdateAt        time.Time            `json:"update_at" bson:"update_at"`
 	ResourceType    ResourceType         `json:"-" bson:"resource_type"`
-	RecycleType     RecycleType          `json:"-" bson:"recycle_type"`
+	RecycleType     RecycleType          `json:"recycle_type" bson:"recycle_type"`
 	ReturnPlan      RetPlanType          `json:"-" bson:"return_type"`
 	Pool            PoolType             `json:"-" bson:"pool_type"`
 	ObsProject      string               `json:"-" bson:"obs_project"`

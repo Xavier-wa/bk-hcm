@@ -66,6 +66,7 @@ func (s *service) initDissolveService(h *rest.Handler) {
 	h.Add("ListHostDetail", http.MethodPost, "/dissolve/host/detail/list", s.ListHostDetail)
 	h.Add("ListExportHostDetail", http.MethodPost, "/dissolve/host/detail/export/list", s.ListExportHostDetail)
 	h.Add("ListResDissolveTable", http.MethodPost, "/dissolve/table/list", s.ListResDissolveTable)
+	h.Add("ListExpectAbolishTime", http.MethodPost, "/dissolve/expect_abolish_time/list", s.ListExpectAbolishTime)
 
 	// summary
 	h.Add("ListDissolveCpuCoreSummary", http.MethodPost, "/dissolve/cpu_core/summary", s.ListDissolveCpuCoreSummary)

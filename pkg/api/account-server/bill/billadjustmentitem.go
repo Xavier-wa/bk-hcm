@@ -63,6 +63,7 @@ type BillAdjustmentItemCreateReq struct {
 	BillMonth     int                           `json:"bill_month" validate:"omitempty"`
 	Type          enumor.BillAdjustmentType     `json:"type" validate:"required"`
 	ResClass      enumor.BillAdjustmentResClass `json:"res_class" validate:"required"`
+	ResSubClass   string                        `json:"res_sub_class" validate:"omitempty,max=64"`
 	Currency      enumor.CurrencyCode           `json:"currency" validate:"required"`
 	Cost          decimal.Decimal               `json:"cost" validate:"required"`
 	RmbCost       decimal.Decimal               `json:"rmb_cost" validate:"required"`
@@ -89,6 +90,7 @@ type BillAdjustmentItemUpdateReq struct {
 	BkBizID       int64                         `json:"bk_biz_id" validate:"omitempty"`
 	Type          enumor.BillAdjustmentType     `json:"type"`
 	ResClass      enumor.BillAdjustmentResClass `json:"res_class"`
+	ResSubClass   *string                       `json:"res_sub_class" validate:"omitempty,max=64"`
 	Cost          *decimal.Decimal              `json:"cost"`
 	RmbCost       *decimal.Decimal              `json:"rmb_cost"`
 	Memo          *string                       `json:"memo"`
@@ -107,6 +109,18 @@ func (r *BillAdjustmentItemUpdateReq) Validate() error {
 	}
 
 	return nil
+}
+
+// AdjustmentGpuCardListResult 调账卡型枚举查询结果
+type AdjustmentGpuCardListResult struct {
+	// Details 该云厂商可选的卡型清单，已去重并稳定排序；无来源时为空列表
+	Details []string `json:"details"`
+}
+
+// AdjustmentAPIBrandListResult 调账模型厂商枚举查询结果
+type AdjustmentAPIBrandListResult struct {
+	// Details 该云厂商可选的模型厂商清单，无来源时为空列表
+	Details []string `json:"details"`
 }
 
 // AdjustmentItemExportReq ...

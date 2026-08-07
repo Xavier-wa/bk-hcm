@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ModelProperty } from '@/model/typings';
-import { ref, watchEffect } from 'vue';
+import { ref, watchEffect, useAttrs } from 'vue';
 defineOptions({ name: 'hcm-search-enum' });
 
 const model = defineModel<string | string[]>();
@@ -9,6 +9,8 @@ const props = withDefaults(defineProps<{ multiple: boolean; option: ModelPropert
   multiple: true,
   option: () => ({}),
 });
+
+const attrs = useAttrs();
 
 const localOption = ref<ModelProperty['option']>({});
 
@@ -28,6 +30,7 @@ watchEffect(async () => {
     :multiple-mode="multiple ? 'tag' : 'default'"
     :collapse-tags="true"
     filterable
+    v-bind="attrs"
   >
     <bk-option v-for="(name, id) in localOption" :key="id" :id="id" :name="name"></bk-option>
   </bk-select>

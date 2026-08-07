@@ -61,6 +61,10 @@ func (b *billAdjustmentSvc) CreateBillAdjustmentItem(cts *rest.Contexts) (any, e
 		return nil, err
 	}
 
+	if err := b.validateCreateResSubClass(cts.Kit, req); err != nil {
+		return nil, err
+	}
+
 	// 1. 校验一级账号和二级账号是否存在并匹配
 	summaryRootListReq := &dsbill.BillSummaryRootListReq{
 		Filter: tools.ExpressionAnd(tools.RuleEqual("root_account_id", req.RootAccountID)),
@@ -120,6 +124,7 @@ func (b *billAdjustmentSvc) convBillAdjustmentCreate(kt *kit.Kit, summaryRoot *b
 			State:         enumor.BillAdjustmentStateUnconfirmed,
 			Type:          item.Type,
 			ResClass:      item.ResClass,
+			ResSubClass:   item.ResSubClass,
 			Operator:      kt.User,
 			Currency:      summaryRoot.Currency,
 			Cost:          item.Cost,
@@ -243,7 +248,12 @@ func (b *billAdjustmentSvc) UpdateBillAdjustmentItem(cts *rest.Contexts) (any, e
 		return nil, err
 	}
 
-	if err := b.checkAdjustmentUnconfirmed(cts, []string{id}); err != nil {
+	records, err := b.checkAdjustmentUnconfirmed(cts, []string{id})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := b.validateUpdateResSubClass(cts.Kit, records[0], req); err != nil {
 		return nil, err
 	}
 
@@ -254,6 +264,7 @@ func (b *billAdjustmentSvc) UpdateBillAdjustmentItem(cts *rest.Contexts) (any, e
 		BkBizID:       req.BkBizID,
 		Type:          req.Type,
 		ResClass:      req.ResClass,
+		ResSubClass:   req.ResSubClass,
 		Memo:          req.Memo,
 		Cost:          req.Cost,
 	}
@@ -283,7 +294,7 @@ func (b *billAdjustmentSvc) BatchConfirmBillAdjustmentItem(cts *rest.Contexts) (
 		return nil, err
 	}
 
-	if err := b.checkAdjustmentUnconfirmed(cts, req.IDs); err != nil {
+	if _, err := b.checkAdjustmentUnconfirmed(cts, req.IDs); err != nil {
 		return nil, err
 	}
 
@@ -308,7 +319,7 @@ func (b *billAdjustmentSvc) DeleteBillAdjustmentItem(cts *rest.Contexts) (any, e
 		return nil, err
 	}
 
-	if err := b.checkAdjustmentUnconfirmed(cts, []string{id}); err != nil {
+	if _, err := b.checkAdjustmentUnconfirmed(cts, []string{id}); err != nil {
 		return nil, err
 	}
 
@@ -341,7 +352,7 @@ func (b *billAdjustmentSvc) BatchDeleteBillAdjustmentItem(cts *rest.Contexts) (a
 		return nil, err
 	}
 
-	if err := b.checkAdjustmentUnconfirmed(cts, req.Ids); err != nil {
+	if _, err := b.checkAdjustmentUnconfirmed(cts, req.Ids); err != nil {
 		return nil, err
 	}
 
@@ -356,23 +367,26 @@ func (b *billAdjustmentSvc) BatchDeleteBillAdjustmentItem(cts *rest.Contexts) (a
 	return nil, nil
 }
 
-// 检查给定的调整明细是否都是未确认调账条目，如果存在已确定条目会返回错误
-func (b *billAdjustmentSvc) checkAdjustmentUnconfirmed(cts *rest.Contexts, ids []string) error {
+// 检查给定的调整明细是否都是未确认调账条目，如果存在已确定条目会返回错误。
+// 同时返回读出的记录，供更新路径复用其云厂商与资源类别做校验，避免新增查询轮次。
+func (b *billAdjustmentSvc) checkAdjustmentUnconfirmed(cts *rest.Contexts, ids []string) (
+	[]*billcore.AdjustmentItem, error) {
+
 	// 检查是否已确认调账明细
 	listReq := &core.ListReq{
 		Filter: tools.ContainersExpression("id", ids),
 		Page:   core.NewDefaultBasePage(),
-		Fields: []string{"id", "state"},
+		Fields: []string{"id", "state", "vendor", "res_class", "res_sub_class"},
 	}
 	itemResp, err := b.client.DataService().Global.Bill.ListBillAdjustmentItem(cts.Kit, listReq)
 	if err != nil {
 		logs.Errorf("fail to query bill adjustment for check unconfirmed, err: %v, ids: %v, rid: %s",
 			err, ids, cts.Kit.Rid)
-		return err
+		return nil, err
 	}
 
 	if len(itemResp.Details) != len(ids) {
-		return errf.New(errf.RecordNotFound, "item not found")
+		return nil, errf.New(errf.RecordNotFound, "item not found")
 	}
 	confirmed := make([]string, 0)
 	for _, detail := range itemResp.Details {
@@ -381,10 +395,10 @@ func (b *billAdjustmentSvc) checkAdjustmentUnconfirmed(cts *rest.Contexts, ids [
 		}
 	}
 	if len(confirmed) > 0 {
-		return errf.New(errf.InvalidParameter, "confirmed items can not be modified, ids: "+strings.Join(confirmed,
-			","))
+		return nil, errf.New(errf.InvalidParameter, "confirmed items can not be modified, ids: "+
+			strings.Join(confirmed, ","))
 	}
-	return nil
+	return itemResp.Details, nil
 }
 
 // ImportBillAdjustment 导入账单明细

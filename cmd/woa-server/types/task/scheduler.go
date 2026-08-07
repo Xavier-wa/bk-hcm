@@ -14,6 +14,7 @@
 package task
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -68,13 +69,28 @@ type ApplyOrder struct {
 	ObsProject      enumor.ObsProject `json:"obs_project" bson:"obs_project"`
 	RetryTime       uint              `json:"retry_time" bson:"retry_time"`
 	ModifyTime      uint              `json:"modify_time" bson:"modify_time"`
-	CreateAt        time.Time         `json:"create_at" bson:"create_at"`
-	UpdateAt        time.Time         `json:"update_at" bson:"update_at"`
+	CreatedAt       time.Time         `json:"created_at" bson:"create_at"`
+	UpdatedAt       time.Time         `json:"updated_at" bson:"update_at"`
 }
 
 // IsSuborderTerminated 判断子单是否已终止：终止后剩余的主机不再继续生产
 func (subOrder *ApplyOrder) IsSuborderTerminated() bool {
 	return subOrder.Stage == enumor.TicketStageTerminate
+}
+
+// MarshalJSON 向后兼容旧版本 create_at/update_at 字段，避免影响已有直调接口的用户，
+// 新老字段同时输出，值均来源于 CreatedAt/UpdatedAt。
+func (o ApplyOrder) MarshalJSON() ([]byte, error) {
+	type alias ApplyOrder
+	return json.Marshal(struct {
+		alias
+		CreateAt time.Time `json:"create_at"`
+		UpdateAt time.Time `json:"update_at"`
+	}{
+		alias:    alias(o),
+		CreateAt: o.CreatedAt,
+		UpdateAt: o.UpdatedAt,
+	})
 }
 
 // UpgradeCVMSpec cvm升降配规格
@@ -431,8 +447,23 @@ type DeviceInfo struct {
 	DiskCheckTaskLink string    `json:"disk_check_task_link" bson:"disk_check_task_link"`
 	IsManualMatched   bool      `json:"is_manual_matched" bson:"is_manual_matched"` // 是否手工匹配
 	OwnerIP           string    `json:"owner_ip" bson:"owner_ip"`                   // 所属的母机IP
-	CreateAt          time.Time `json:"create_at" bson:"create_at"`
-	UpdateAt          time.Time `json:"update_at" bson:"update_at"`
+	CreatedAt         time.Time `json:"created_at" bson:"create_at"`
+	UpdatedAt         time.Time `json:"updated_at" bson:"update_at"`
+}
+
+// MarshalJSON 向后兼容旧版本 create_at/update_at 字段，避免影响已有直调接口的用户，
+// 新老字段同时输出，值均来源于 CreatedAt/UpdatedAt。
+func (d DeviceInfo) MarshalJSON() ([]byte, error) {
+	type alias DeviceInfo
+	return json.Marshal(struct {
+		alias
+		CreateAt time.Time `json:"create_at"`
+		UpdateAt time.Time `json:"update_at"`
+	}{
+		alias:    alias(d),
+		CreateAt: d.CreatedAt,
+		UpdateAt: d.UpdatedAt,
+	})
 }
 
 // ApplyTicket resource apply ticket
@@ -449,10 +480,25 @@ type ApplyTicket struct {
 	Remark       string             `json:"remark" bson:"remark"`
 	Suborders    []*Suborder        `json:"suborders" bson:"suborders"`
 	OldSuborders []*Suborder        `json:"old_suborders" bson:"old_suborders"`
-	CreateAt     time.Time          `json:"create_at" bson:"create_at"`
-	UpdateAt     time.Time          `json:"update_at" bson:"update_at"`
+	CreatedAt    time.Time          `json:"created_at" bson:"create_at"`
+	UpdatedAt    time.Time          `json:"updated_at" bson:"update_at"`
 	// 生产类型(business:业务生产 admin:管理员生产)
 	ProductType enumor.ProductType `json:"product_type"`
+}
+
+// MarshalJSON 向后兼容旧版本 create_at/update_at 字段，避免影响已有直调接口的用户，
+// 新老字段同时输出，值均来源于 CreatedAt/UpdatedAt。
+func (t ApplyTicket) MarshalJSON() ([]byte, error) {
+	type alias ApplyTicket
+	return json.Marshal(struct {
+		alias
+		CreateAt time.Time `json:"create_at"`
+		UpdateAt time.Time `json:"update_at"`
+	}{
+		alias:    alias(t),
+		CreateAt: t.CreatedAt,
+		UpdateAt: t.UpdatedAt,
+	})
 }
 
 // TicketStage resource apply ticket stage（类型定义已下沉至 pkg/criteria/enumor/cvm_apply.go）
@@ -1061,7 +1107,7 @@ func (m UnifyOrderList) Swap(i, j int) {
 
 // Less compares two items
 func (m UnifyOrderList) Less(i, j int) bool {
-	return m[i].CreateAt.Before(m[j].CreateAt)
+	return m[i].CreatedAt.Before(m[j].CreatedAt)
 }
 
 // UnifyOrder get apply order result object, including apply ticket and order
@@ -1087,8 +1133,23 @@ type UnifyOrder struct {
 	ProductNum        uint                     `json:"product_num" bson:"product_num"` // 实际生产成功的总数量
 	ModifyTime        uint                     `json:"modify_time" bson:"modify_time"`
 	Source            enumor.ApplyTicketSource `json:"source" bson:"source"`
-	CreateAt          time.Time                `json:"create_at" bson:"create_at"`
-	UpdateAt          time.Time                `json:"update_at" bson:"update_at"`
+	CreatedAt         time.Time                `json:"created_at" bson:"create_at"`
+	UpdatedAt         time.Time                `json:"updated_at" bson:"update_at"`
+}
+
+// MarshalJSON 向后兼容旧版本 create_at/update_at 字段，避免影响已有直调接口的用户，
+// 新老字段同时输出，值均来源于 CreatedAt/UpdatedAt。
+func (u UnifyOrder) MarshalJSON() ([]byte, error) {
+	type alias UnifyOrder
+	return json.Marshal(struct {
+		alias
+		CreateAt time.Time `json:"create_at"`
+		UpdateAt time.Time `json:"update_at"`
+	}{
+		alias:    alias(u),
+		CreateAt: u.CreatedAt,
+		UpdateAt: u.UpdatedAt,
+	})
 }
 
 // GetApplyParam get apply order request parameter

@@ -131,15 +131,6 @@ watch:
   rsName: rs0
   socketTimeoutSeconds: 10
 
-redis:
-  host: 127.0.0.1:6379
-  pwd: test
-  sentinelPwd:
-  database: "0"
-  maxOpenConns: 3000
-  maxIdleConns: 100
-  masterName:
-
 cvm:
   old_host: http://127.0.0.1
   host: http://127.0.0.1

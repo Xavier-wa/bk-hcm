@@ -30,6 +30,7 @@ import (
 	tablebill "hcm/pkg/dal/table/bill"
 	"hcm/pkg/dal/table/types"
 	"hcm/pkg/rest"
+	cvt "hcm/pkg/tools/converter"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -58,6 +59,7 @@ func (svc *service) CreateBillAdjustmentItem(cts *rest.Contexts) (interface{}, e
 				BillDay:       item.BillDay,
 				Type:          string(item.Type),
 				ResClass:      item.ResClass,
+				ResSubClass:   cvt.ValToPtr(item.ResSubClass),
 				Memo:          item.Memo,
 				Currency:      item.Currency,
 				Cost:          &types.Decimal{Decimal: item.Cost},

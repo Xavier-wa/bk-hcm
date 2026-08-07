@@ -1,6 +1,6 @@
 ---
 name: wf-test-checklist
-description: 在 test 阶段为新功能产出可执行的手测验证清单 (P0/P1/P2 用例 + 数据准备 + 期望结果), 落到 .bkdevbuddy/workflow/<id>/ 下。当 bkdevbuddy wf 进入 test 阶段或需要为某个 feature 设计验证用例时使用。
+description: 在 test 阶段为新功能产出可执行的手测验证清单 (P0/P1/P2 用例 + 数据准备 + 期望结果), 落到 <dataDir>/workflow/<id>/ 下。当 bkdevbuddy wf 进入 test 阶段或需要为某个 feature 设计验证用例时使用。
 ---
 
 # Test Checklist Skill
@@ -17,10 +17,10 @@ description: 在 test 阶段为新功能产出可执行的手测验证清单 (P0
 
 调用本 skill 前应已读到当前 workflow 的：
 
-- 用户故事（来自 `.bkdevbuddy/workflow/<id>/prd.md`）
-- 关键 UI 元素 / 交互（来自 `.bkdevbuddy/workflow/<id>/design.md`）
-- 涉及的接口（来自 `.bkdevbuddy/workflow/<id>/api.md`）
-- 已实施方案（来自 `.bkdevbuddy/workflow/<id>/coding.md`，如果存在）
+- 用户故事（来自 `<dataDir>/workflow/<id>/prd.md`）
+- 关键 UI 元素 / 交互（来自 `<dataDir>/workflow/<id>/design.md`）
+- 涉及的接口（来自 `<dataDir>/workflow/<id>/api.md`）
+- 已实施方案（来自 `<dataDir>/workflow/<id>/coding.md`，如果存在）
 
 如果不确定，先调 `bkdevbuddy_workflow_status` 拿到 `state.artifacts`，再读对应文件。缺失就回到对应阶段补。
 
@@ -28,7 +28,7 @@ description: 在 test 阶段为新功能产出可执行的手测验证清单 (P0
 
 | 文件 | 路径 | 是否必需 |
 |---|---|---|
-| 手测清单 | `.bkdevbuddy/workflow/<id>/test.md` | ✅ 必需，是 test 阶段的硬性产物 |
+| 手测清单 | `<dataDir>/workflow/<id>/test.md` | ✅ 必需，是 test 阶段的硬性产物 |
 
 > 不要把这份文件放到 `tests/`、`docs/` 或 `e2e/` 目录。
 
@@ -36,31 +36,31 @@ description: 在 test 阶段为新功能产出可执行的手测验证清单 (P0
 
 - `./assets/test-checklist-template.md` —— `test.md` 模板
 
-> 这份模板在 know-how 同步后位于 `<projectRoot>/.bkdevbuddy/know-how/skills/wf-test-checklist/assets/`，可直接读出来作为初始内容。
+> 这份模板在 know-how 同步后位于 `<projectRoot>/<dataDir>/know-how/skills/wf-test-checklist/assets/`，可直接读出来作为初始内容。
 
 ## 操作步骤（AI 必须按序执行）
 
 1. **读上下文**
    - 调 `bkdevbuddy_workflow_status` 拿当前 `id` 与已登记产物
-   - 读 `.bkdevbuddy/workflow/<id>/{prd,design,api,coding}.md`（缺失的可跳过），列出本次改动的核心交互、接口和已实施范围
+   - 读 `<dataDir>/workflow/<id>/{prd,design,api,coding}.md`（缺失的可跳过），列出本次改动的核心交互、接口和已实施范围
    - 若 `design.md` 与 `coding.md` 冲突，以实际已实施的 `coding.md` 为准，并在 `test.md` 备注中指出设计文档需要修正
    - 验证项只能覆盖本次实际落地的行为，**不要**把 PRD 中未实施的设想写成验收项
 
 2. **写 `test.md`**
-   - 用 Cursor 的 Write 工具创建 `.bkdevbuddy/workflow/<id>/test.md`
+   - 用 Cursor 的 Write 工具创建 `<dataDir>/workflow/<id>/test.md`
    - 初始内容用 `assets/test-checklist-template.md`，把 `<workflow-id>` 替换成当前 `id`
    - 用上一步的上下文填 P0 / P1 / P2 用例（描述用动宾短语，断言针对业务语义）
    - "测试环境"小节中的前端入口写占位说明，**不要**把具体测试域名 / 个人开发地址写入仓库
    - 调 `bkdevbuddy_workflow_artifact_add` 把它登记为 test 阶段产物：
      ```
      stage: test
-     ref:   .bkdevbuddy/workflow/<id>/test.md
+     ref:   <dataDir>/workflow/<id>/test.md
      ```
 
 3. **执行 / 分配**
    - 询问用户本次是**自测**还是**交给 QA**
    - 自测情境下，AI **不替代用户操作浏览器**，让用户按 P0 / P1 用例操作；用户可让 AI 准备测试数据 / 提供 mock 接口建议
-   - 如果是 QA 测试，把 `.bkdevbuddy/workflow/<id>/test.md` 链接 / 内容贴给 QA 即可
+   - 如果是 QA 测试，把 `<dataDir>/workflow/<id>/test.md` 链接 / 内容贴给 QA 即可
 
 4. **回写结论**
    - 用户验证完成后，把每条用例的结果（PASS / FAIL / Skipped + 备注）写回 `test.md` 的“验证结论”小节

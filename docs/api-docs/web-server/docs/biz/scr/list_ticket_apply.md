@@ -103,6 +103,8 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/findmany/apply
         "success_num": 5,
         "pending_num": 5,
         "product_num": 5,
+        "created_at": "2022-01-02T15:04:05.004Z",
+        "updated_at": "2022-01-02T15:04:05.004Z",
         "create_at": "2022-01-02T15:04:05.004Z",
         "update_at": "2022-01-02T15:04:05.004Z"
       }

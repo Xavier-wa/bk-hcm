@@ -26,6 +26,7 @@ import (
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	"hcm/pkg/thirdparty/cvmapi"
+	cvt "hcm/pkg/tools/converter"
 )
 
 // ApplyRecommendTopReq is the request for getting top apply recommendations.
@@ -79,6 +80,10 @@ func (r *ApplyRecommendByStaticReq) Validate() error {
 		if err := r.RequireType.Validate(); err != nil {
 			return err
 		}
+		// 滚服项目依赖固资号/继承实例能力，暂不支持。
+		if cvt.PtrToVal(r.RequireType) == enumor.RequireTypeRollServer {
+			return fmt.Errorf("require type %s is temporarily not supported", r.RequireType.GetName())
+		}
 	}
 	if r.ResAssign != nil {
 		if err := r.ResAssign.Validate(); err != nil {
@@ -110,6 +115,10 @@ func (r *ApplyRecommendByPlanReq) Validate() error {
 	if r.RequireType != nil {
 		if err := r.RequireType.Validate(); err != nil {
 			return err
+		}
+		// 滚服项目依赖固资号/继承实例能力，暂不支持。
+		if cvt.PtrToVal(r.RequireType) == enumor.RequireTypeRollServer {
+			return fmt.Errorf("require type %s is temporarily not supported", r.RequireType.GetName())
 		}
 	}
 	if r.ResAssign != nil {
@@ -155,6 +164,10 @@ func (r *ApplyRecommendSplitSubOrderReq) Validate() error {
 	}
 	if err := r.RequireType.Validate(); err != nil {
 		return err
+	}
+	// 滚服项目依赖固资号/继承实例能力，暂不支持。
+	if r.RequireType == enumor.RequireTypeRollServer {
+		return fmt.Errorf("require type %s is temporarily not supported", r.RequireType.GetName())
 	}
 	if err := r.ResAssign.Validate(); err != nil {
 		return err

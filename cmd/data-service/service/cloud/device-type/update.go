@@ -28,6 +28,7 @@ import (
 	"hcm/pkg/dal/dao/orm"
 	"hcm/pkg/dal/dao/tools"
 	devicetype "hcm/pkg/dal/table/cloud/device-type"
+	tabletypes "hcm/pkg/dal/table/types"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 	cvt "hcm/pkg/tools/converter"
@@ -108,6 +109,9 @@ func batchUpdateDeviceType(cts *rest.Contexts, svc *service, vendor enumor.Vendo
 			}
 			if updateReq.GenerationType != nil {
 				record.GenerationType = cvt.PtrToVal(updateReq.GenerationType)
+			}
+			if updateReq.TechClassResAmt != nil {
+				record.TechClassResAmt = &tabletypes.Decimal{Decimal: cvt.PtrToVal(updateReq.TechClassResAmt)}
 			}
 
 			flt := tools.EqualExpression("id", updateReq.ID)

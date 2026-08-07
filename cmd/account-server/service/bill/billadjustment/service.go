@@ -61,6 +61,10 @@ func InitBillAdjustmentService(c *capability.Capability) {
 		"/bills/adjustment_items/sum", svc.SumBillAdjustmentItem)
 	h.Add("ExportBillAdjustmentItem", "POST",
 		"/bills/adjustment_items/export", svc.ExportBillAdjustmentItem)
+	h.Add("ListAdjustmentGpuCard", "GET",
+		"/vendors/{vendor}/bills/adjustment_items/gpu_cards", svc.ListAdjustmentGpuCard)
+	h.Add("ListAdjustmentAPIBrand", "GET",
+		"/vendors/{vendor}/bills/adjustment_items/api_brands", svc.ListAdjustmentAPIBrand)
 
 	h.Load(c.WebService)
 }

@@ -49,19 +49,20 @@ func (c *BatchCreateRecycleHostReq) Validate() error {
 
 // RecycleHostCreateReq single create request.
 type RecycleHostCreateReq struct {
-	AssetID      string              `json:"asset_id" validate:"required"`
-	InnerIP      string              `json:"inner_ip" validate:"omitempty"`
-	DeviceType   string              `json:"device_type" validate:"omitempty"`
-	Module       string              `json:"module" validate:"required"`
-	AbolishPhase enumor.AbolishPhase `json:"abolish_phase" validate:"required"`
-	ProjectName  string              `json:"project_name" validate:"required"`
-	ProjectID    int                 `json:"project_id" validate:"required"`
-	Region       string              `json:"region" validate:"omitempty"`
-	BkBizID      int64               `json:"bk_biz_id" validate:"omitempty"`
-	GroupID      int64               `json:"group_id" validate:"omitempty"`
-	Operators    []string            `json:"operators" validate:"omitempty"`
-	CPUCore      int                 `json:"cpu_core" validate:"omitempty"`
-	IsIgnore     bool                `json:"is_ignore" validate:"omitempty"`
+	AssetID           string              `json:"asset_id" validate:"required"`
+	InnerIP           string              `json:"inner_ip" validate:"omitempty"`
+	DeviceType        string              `json:"device_type" validate:"omitempty"`
+	Module            string              `json:"module" validate:"required"`
+	AbolishPhase      enumor.AbolishPhase `json:"abolish_phase" validate:"required"`
+	ProjectName       string              `json:"project_name" validate:"required"`
+	ProjectID         int                 `json:"project_id" validate:"required"`
+	Region            string              `json:"region" validate:"omitempty"`
+	BkBizID           int64               `json:"bk_biz_id" validate:"omitempty"`
+	GroupID           int64               `json:"group_id" validate:"omitempty"`
+	Operators         []string            `json:"operators" validate:"omitempty"`
+	CPUCore           int                 `json:"cpu_core" validate:"omitempty"`
+	IsIgnore          bool                `json:"is_ignore" validate:"omitempty"`
+	ExpectAbolishTime string              `json:"expect_abolish_time" validate:"omitempty"`
 }
 
 // Validate RecycleHostCreateReq.
@@ -103,17 +104,18 @@ func (c *BatchUpdateRecycleHostReq) Validate() error {
 
 // RecycleHostUpdateData update data fields.
 type RecycleHostUpdateData struct {
-	AbolishPhase *enumor.AbolishPhase `json:"abolish_phase"`
-	ProjectName  *string              `json:"project_name"`
-	Module       *string              `json:"module"`
-	InnerIP      *string              `json:"inner_ip"`
-	DeviceType   *string              `json:"device_type"`
-	Region       *string              `json:"region"`
-	BkBizID      *int64               `json:"bk_biz_id"`
-	GroupID      *int64               `json:"group_id"`
-	Operators    []string             `json:"operators"`
-	CPUCore      *int                 `json:"cpu_core"`
-	IsIgnore     *bool                `json:"is_ignore"`
+	AbolishPhase      *enumor.AbolishPhase `json:"abolish_phase"`
+	ProjectName       *string              `json:"project_name"`
+	Module            *string              `json:"module"`
+	InnerIP           *string              `json:"inner_ip"`
+	DeviceType        *string              `json:"device_type"`
+	Region            *string              `json:"region"`
+	BkBizID           *int64               `json:"bk_biz_id"`
+	GroupID           *int64               `json:"group_id"`
+	Operators         []string             `json:"operators"`
+	CPUCore           *int                 `json:"cpu_core"`
+	IsIgnore          *bool                `json:"is_ignore"`
+	ExpectAbolishTime *string              `json:"expect_abolish_time"`
 }
 
 // BatchDeleteRecycleHostReq batch delete recycle host request.
@@ -127,4 +129,20 @@ func (d *BatchDeleteRecycleHostReq) Validate() error {
 		return errf.New(errf.InvalidParameter, "filter is required")
 	}
 	return nil
+}
+
+// ListRecycleHostExpectAbolishTimeReq 裁撤截止时间去重查询请求。
+type ListRecycleHostExpectAbolishTimeReq struct {
+	Filter *filter.Expression `json:"filter" validate:"omitempty"`
+}
+
+// Validate ListRecycleHostExpectAbolishTimeReq.
+func (req *ListRecycleHostExpectAbolishTimeReq) Validate() error {
+	return validator.Validate.Struct(req)
+}
+
+// ListRecycleHostExpectAbolishTimeResult 裁撤截止时间去重查询结果。
+type ListRecycleHostExpectAbolishTimeResult struct {
+	// ExpectAbolishTimes 去重升序的裁撤截止时间列表
+	ExpectAbolishTimes []string `json:"expect_abolish_times"`
 }

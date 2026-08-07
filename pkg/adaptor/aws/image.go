@@ -949,7 +949,7 @@ func (a *Aws) ListImage(kt *kit.Kit, opt *image.AwsImageListOption) (*image.AwsI
 			State:        *pImage.State,
 			Architecture: *pImage.Architecture,
 			Platform:     converter.PtrToVal(pImage.PlatformDetails),
-			Type:         "public",
+			Type:         string(enumor.ImageTypePublic),
 			OsType:       image.GetOsTypeByPlatform(enumor.Aws, converter.PtrToVal(pImage.PlatformDetails)),
 		})
 	}

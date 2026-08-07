@@ -717,7 +717,7 @@ export default (type: string, isSimpleShow = false) => {
       exportFormatter: (row: any) => timeFormatter(row.updated_at),
     },
     {
-      label: '申请时间',
+      label: '生产时间',
       field: 'created_at',
       width: 160,
       render: ({ cell }: any) => timeFormatter(cell),
@@ -1093,6 +1093,10 @@ export default (type: string, isSimpleShow = false) => {
       field: 'module_name',
     },
     {
+      label: '项目类型',
+      field: 'recycle_type',
+    },
+    {
       label: '标记',
       field: 'return_tag',
     },
@@ -1138,7 +1142,7 @@ export default (type: string, isSimpleShow = false) => {
       field: 'return_time',
       width: 160,
       render: ({ cell }: any) => timeFormatter(cell),
-      formatter: ({ create_at }: any) => timeFormatter(create_at),
+      formatter: ({ return_time }: any) => timeFormatter(return_time),
     },
     {
       label: '备注',
@@ -1647,10 +1651,10 @@ export default (type: string, isSimpleShow = false) => {
   const ApplicationListColumns = [
     {
       label: '申请时间',
-      field: 'create_at',
-      width: 150,
+      field: 'created_at',
+      width: 160,
       render: ({ cell }: any) => timeFormatter(cell),
-      formatter: ({ create_at }: any) => timeFormatter(create_at),
+      formatter: ({ created_at }: any) => timeFormatter(created_at),
     },
     {
       label: '期望交付时间',

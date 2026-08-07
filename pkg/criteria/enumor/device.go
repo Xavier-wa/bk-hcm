@@ -136,6 +136,46 @@ const (
 	DeviceTypeSourceManually DeviceTypeSource = "manually"
 )
 
+// CvmTechnicalClass CVM机型技术分类
+type CvmTechnicalClass string
+
+const (
+	// CvmTechnicalClassStandard 标准型
+	CvmTechnicalClassStandard CvmTechnicalClass = "标准型"
+	// CvmTechnicalClassMemory 内存型
+	CvmTechnicalClassMemory CvmTechnicalClass = "内存型"
+	// CvmTechnicalClassHighIO 高IO型
+	CvmTechnicalClassHighIO CvmTechnicalClass = "高IO型"
+	// CvmTechnicalClassBigData 大数据
+	CvmTechnicalClassBigData CvmTechnicalClass = "大数据"
+	// CvmTechnicalClassHighFreq 高主频
+	CvmTechnicalClassHighFreq CvmTechnicalClass = "高主频"
+	// TODO: 推理GPU、训练GPU、GPU-其他的技术分类资源量是等效L20卡数，目前暂时没数据，等后续接口对接完再实现
+	// CvmTechnicalClassInferGPU 推理GPU
+	CvmTechnicalClassInferGPU CvmTechnicalClass = "推理GPU"
+	// CvmTechnicalClassTrainGPU 训练GPU
+	CvmTechnicalClassTrainGPU CvmTechnicalClass = "训练GPU"
+	// CvmTechnicalClassGPUDeprecated GPU-其他
+	CvmTechnicalClassGPUDeprecated CvmTechnicalClass = "GPU-其他"
+)
+
+// Validate 校验CvmTechnicalClass
+func (c CvmTechnicalClass) Validate() error {
+	switch c {
+	case CvmTechnicalClassStandard,
+		CvmTechnicalClassMemory,
+		CvmTechnicalClassHighIO,
+		CvmTechnicalClassBigData,
+		CvmTechnicalClassHighFreq,
+		CvmTechnicalClassInferGPU,
+		CvmTechnicalClassTrainGPU,
+		CvmTechnicalClassGPUDeprecated:
+		return nil
+	default:
+		return fmt.Errorf("unsupported technical class: %s", c)
+	}
+}
+
 // Validate DeviceTypeSource.
 func (s DeviceTypeSource) Validate() error {
 	switch s {

@@ -23,9 +23,11 @@ package audit
 import (
 	protoaudit "hcm/pkg/api/data-service/audit"
 	dataservice "hcm/pkg/client/data-service"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/tools/slice"
 )
 
 // Interface define audit interface.
@@ -72,44 +74,52 @@ type audit struct {
 }
 
 // ResBizAssignAudit resource assign to biz audit.
+// resIDs 按 constant.BatchOperationMaxLimit 分批调用 data-service，避免关联资源数量超过上限导致请求被拒绝。
 func (a audit) ResBizAssignAudit(kt *kit.Kit, resType enumor.AuditResourceType, resIDs []string, bizID int64) error {
-	req := &protoaudit.CloudResourceAssignAuditReq{
-		Assigns: make([]protoaudit.CloudResourceAssignInfo, 0, len(resIDs)),
-	}
+	for _, batch := range slice.Split(resIDs, constant.BatchOperationMaxLimit) {
+		req := &protoaudit.CloudResourceAssignAuditReq{
+			Assigns: make([]protoaudit.CloudResourceAssignInfo, 0, len(batch)),
+		}
 
-	for _, resID := range resIDs {
-		req.Assigns = append(req.Assigns, protoaudit.CloudResourceAssignInfo{
-			ResType:         resType,
-			ResID:           resID,
-			AssignedResType: enumor.BizAuditAssignedResType,
-			AssignedResID:   bizID,
-		})
-	}
-	if err := a.dataCli.Global.Audit.CloudResourceAssignAudit(kt.Ctx, kt.Header(), req); err != nil {
-		logs.Errorf("request dataservice CloudResourceAssignAudit failed, err: %v, req: %v, rid: %s", err, req, kt.Rid)
-		return err
+		for _, resID := range batch {
+			req.Assigns = append(req.Assigns, protoaudit.CloudResourceAssignInfo{
+				ResType:         resType,
+				ResID:           resID,
+				AssignedResType: enumor.BizAuditAssignedResType,
+				AssignedResID:   bizID,
+			})
+		}
+		if err := a.dataCli.Global.Audit.CloudResourceAssignAudit(kt.Ctx, kt.Header(), req); err != nil {
+			logs.Errorf("request dataservice CloudResourceAssignAudit failed, err: %v, req: %v, rid: %s",
+				err, req, kt.Rid)
+			return err
+		}
 	}
 
 	return nil
 }
 
 // ResDeliverAudit resource deliver to biz audit.
+// resIDs 按 constant.BatchOperationMaxLimit 分批调用 data-service，避免关联资源数量超过上限导致请求被拒绝。
 func (a audit) ResDeliverAudit(kt *kit.Kit, resType enumor.AuditResourceType, resIDs []string, bizID int64) error {
-	req := &protoaudit.CloudResourceAssignAuditReq{
-		Assigns: make([]protoaudit.CloudResourceAssignInfo, 0, len(resIDs)),
-	}
+	for _, batch := range slice.Split(resIDs, constant.BatchOperationMaxLimit) {
+		req := &protoaudit.CloudResourceAssignAuditReq{
+			Assigns: make([]protoaudit.CloudResourceAssignInfo, 0, len(batch)),
+		}
 
-	for _, resID := range resIDs {
-		req.Assigns = append(req.Assigns, protoaudit.CloudResourceAssignInfo{
-			ResType:         resType,
-			ResID:           resID,
-			AssignedResType: enumor.DeliverAssignedResType,
-			AssignedResID:   bizID,
-		})
-	}
-	if err := a.dataCli.Global.Audit.CloudResourceAssignAudit(kt.Ctx, kt.Header(), req); err != nil {
-		logs.Errorf("request dataservice CloudResourceAssignAudit failed, err: %v, req: %v, rid: %s", err, req, kt.Rid)
-		return err
+		for _, resID := range batch {
+			req.Assigns = append(req.Assigns, protoaudit.CloudResourceAssignInfo{
+				ResType:         resType,
+				ResID:           resID,
+				AssignedResType: enumor.DeliverAssignedResType,
+				AssignedResID:   bizID,
+			})
+		}
+		if err := a.dataCli.Global.Audit.CloudResourceAssignAudit(kt.Ctx, kt.Header(), req); err != nil {
+			logs.Errorf("request dataservice CloudResourceAssignAudit failed, err: %v, req: %v, rid: %s",
+				err, req, kt.Rid)
+			return err
+		}
 	}
 
 	return nil
@@ -122,25 +132,29 @@ type ResCloudAreaBindOption struct {
 }
 
 // ResCloudAreaBindAudit resource bind cloud area audit.
+// opt 按 constant.BatchOperationMaxLimit 分批调用 data-service，避免关联资源数量超过上限导致请求被拒绝。
 func (a audit) ResCloudAreaBindAudit(kt *kit.Kit, resType enumor.AuditResourceType,
 	opt []ResCloudAreaBindOption) error {
 
-	req := &protoaudit.CloudResourceAssignAuditReq{
-		Assigns: make([]protoaudit.CloudResourceAssignInfo, 0, len(opt)),
-	}
+	for _, batch := range slice.Split(opt, constant.BatchOperationMaxLimit) {
+		req := &protoaudit.CloudResourceAssignAuditReq{
+			Assigns: make([]protoaudit.CloudResourceAssignInfo, 0, len(batch)),
+		}
 
-	for _, op := range opt {
-		req.Assigns = append(req.Assigns, protoaudit.CloudResourceAssignInfo{
-			ResType:         resType,
-			ResID:           op.ResID,
-			AssignedResType: enumor.CloudAreaAuditAssignedResType,
-			AssignedResID:   op.CloudID,
-		})
-	}
+		for _, op := range batch {
+			req.Assigns = append(req.Assigns, protoaudit.CloudResourceAssignInfo{
+				ResType:         resType,
+				ResID:           op.ResID,
+				AssignedResType: enumor.CloudAreaAuditAssignedResType,
+				AssignedResID:   op.CloudID,
+			})
+		}
 
-	if err := a.dataCli.Global.Audit.CloudResourceAssignAudit(kt.Ctx, kt.Header(), req); err != nil {
-		logs.Errorf("request dataservice CloudResourceAssignAudit failed, err: %v, req: %v, rid: %s", err, req, kt.Rid)
-		return err
+		if err := a.dataCli.Global.Audit.CloudResourceAssignAudit(kt.Ctx, kt.Header(), req); err != nil {
+			logs.Errorf("request dataservice CloudResourceAssignAudit failed, err: %v, req: %v, rid: %s",
+				err, req, kt.Rid)
+			return err
+		}
 	}
 
 	return nil

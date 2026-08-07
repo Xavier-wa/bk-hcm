@@ -5,6 +5,18 @@
       "name": "code-reviewer.md"
     },
     {
+      "type": "agents",
+      "name": "tapd-analyst.md"
+    },
+    {
+      "type": "rules",
+      "name": "bkdevbuddy-data-dir.mdc"
+    },
+    {
+      "type": "rules",
+      "name": "docs-navigation.mdc"
+    },
+    {
       "type": "rules",
       "name": "fe-auth-migration.mdc"
     },
@@ -26,15 +38,7 @@
     },
     {
       "type": "rules",
-      "name": "fe-list-search-architecture.mdc"
-    },
-    {
-      "type": "rules",
       "name": "fe-menu-route-architecture.mdc"
-    },
-    {
-      "type": "rules",
-      "name": "fe-model-column-meta.mdc"
     },
     {
       "type": "rules",
@@ -42,7 +46,15 @@
     },
     {
       "type": "rules",
+      "name": "fe-no-backend-edit.mdc"
+    },
+    {
+      "type": "rules",
       "name": "fe-router-action.mdc"
+    },
+    {
+      "type": "rules",
+      "name": "tapd-clarification-desc-preserve.mdc"
     },
     {
       "type": "rules",
@@ -50,19 +62,47 @@
     },
     {
       "type": "skills",
-      "name": "archive-export"
+      "name": "blueking-figma-dev"
     },
     {
       "type": "skills",
-      "name": "cherry-pick-pr"
+      "name": "comp-data-list"
     },
     {
       "type": "skills",
-      "name": "design-figma-intake"
+      "name": "comp-detail"
     },
     {
       "type": "skills",
-      "name": "expert"
+      "name": "comp-field-model"
+    },
+    {
+      "type": "skills",
+      "name": "comp-form"
+    },
+    {
+      "type": "skills",
+      "name": "fe-expert"
+    },
+    {
+      "type": "skills",
+      "name": "git-archive-export"
+    },
+    {
+      "type": "skills",
+      "name": "git-branch-new"
+    },
+    {
+      "type": "skills",
+      "name": "git-cherry-pick-pr"
+    },
+    {
+      "type": "skills",
+      "name": "git-commit"
+    },
+    {
+      "type": "skills",
+      "name": "git-update-env"
     },
     {
       "type": "skills",
@@ -82,15 +122,35 @@
     },
     {
       "type": "skills",
+      "name": "promotions-review"
+    },
+    {
+      "type": "skills",
       "name": "requirement-guardian"
     },
     {
       "type": "skills",
-      "name": "test-checklist"
+      "name": "wf-design-comp-intake"
     },
     {
       "type": "skills",
-      "name": "update-env"
+      "name": "wf-design-figma-intake"
+    },
+    {
+      "type": "skills",
+      "name": "wf-design-icon-intake"
+    },
+    {
+      "type": "skills",
+      "name": "wf-docs-closeout"
+    },
+    {
+      "type": "skills",
+      "name": "wf-tapd-closeout"
+    },
+    {
+      "type": "skills",
+      "name": "wf-test-checklist"
     },
     {
       "type": "skills",

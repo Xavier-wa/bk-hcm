@@ -23,6 +23,114 @@ import (
 	"testing"
 )
 
+// TestBillAdjustmentResClassValidate 验证调账资源类别四值枚举。
+func TestBillAdjustmentResClassValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   BillAdjustmentResClass
+		wantErr string
+	}{
+		{"cpu 合法", BillAdjustmentResClassCPU, ""},
+		{"gpu_card 合法", BillAdjustmentResClassGpuCard, ""},
+		{"gpu_api 合法", BillAdjustmentResClassGpuAPI, ""},
+		{"gpu_other 合法", BillAdjustmentResClassGpuOther, ""},
+		{"已下线的 gpu 非法", "gpu", "unsupported bill adjustment res class: gpu"},
+		{"空值非法", "", "unsupported bill adjustment res class: "},
+		{"未知值非法", "tpu", "unsupported bill adjustment res class: tpu"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.input.Validate()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("Validate(%q) = %v, want nil", tt.input, err)
+				}
+				return
+			}
+			if err == nil || err.Error() != tt.wantErr {
+				t.Errorf("Validate(%q) = %v, want %q", tt.input, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestBillAdjustmentResClassFlags 验证由资源类别推出的 GPU / API / 子类必填三个标志。
+func TestBillAdjustmentResClassFlags(t *testing.T) {
+	tests := []struct {
+		input           BillAdjustmentResClass
+		isGPU           bool
+		isAPI           bool
+		needResSubClass bool
+	}{
+		{BillAdjustmentResClassCPU, false, false, false},
+		{BillAdjustmentResClassGpuCard, true, false, true},
+		{BillAdjustmentResClassGpuAPI, true, true, true},
+		{BillAdjustmentResClassGpuOther, true, false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.input), func(t *testing.T) {
+			if got := tt.input.IsGPU(); got != tt.isGPU {
+				t.Errorf("IsGPU(%q) = %v, want %v", tt.input, got, tt.isGPU)
+			}
+			if got := tt.input.IsAPI(); got != tt.isAPI {
+				t.Errorf("IsAPI(%q) = %v, want %v", tt.input, got, tt.isAPI)
+			}
+			if got := tt.input.NeedResSubClass(); got != tt.needResSubClass {
+				t.Errorf("NeedResSubClass(%q) = %v, want %v", tt.input, got, tt.needResSubClass)
+			}
+		})
+	}
+}
+
+// TestListGcpGpuCardL1 验证一级卡型清单的内容与去重。
+func TestListGcpGpuCardL1(t *testing.T) {
+	cards := ListGcpGpuCardL1()
+
+	if len(cards) != len(gcpGpuCardL1Keywords) {
+		t.Errorf("ListGcpGpuCardL1() returns %d cards, want %d", len(cards), len(gcpGpuCardL1Keywords))
+	}
+
+	seen := make(map[string]struct{}, len(cards))
+	for _, card := range cards {
+		if _, ok := seen[card]; ok {
+			t.Errorf("ListGcpGpuCardL1() returns duplicated card %q", card)
+		}
+		seen[card] = struct{}{}
+	}
+
+	// tpu7x 的短卡型名以代码为准取 TPU
+	for _, want := range []string{"H200", "H100", "A100", "RTX6000PRO", "L4", "TPU", "V100", "P100", "P4", "K80"} {
+		if _, ok := seen[want]; !ok {
+			t.Errorf("ListGcpGpuCardL1() misses card %q", want)
+		}
+	}
+}
+
+// TestListBillAdjustmentAPIBrands 验证调账模型厂商清单固定为归并后的四值。
+func TestListBillAdjustmentAPIBrands(t *testing.T) {
+	brands := ListBillAdjustmentAPIBrands()
+
+	want := []string{"claude", "gemini", "jina", "kimi"}
+	if len(brands) != len(want) {
+		t.Fatalf("ListBillAdjustmentAPIBrands() = %v, want %v", brands, want)
+	}
+	for i, brand := range brands {
+		if brand != want[i] {
+			t.Errorf("ListBillAdjustmentAPIBrands()[%d] = %q, want %q", i, brand, want[i])
+		}
+	}
+
+	// veo/imagen/lyria 在上报侧已归并为 gemini，不得出现在调账下拉中
+	for _, brand := range brands {
+		switch BillItemAIFlag(brand) {
+		case BillItemAIFlagVeo, BillItemAIFlagImagen, BillItemAIFlagLyria:
+			t.Errorf("ListBillAdjustmentAPIBrands() must not contain merged brand %q", brand)
+		}
+	}
+}
+
 // TestIsAIBillItem ...
 func TestIsAIBillItem(t *testing.T) {
 	// 定义测试用例表
@@ -108,7 +216,7 @@ func TestMatchGcpGpuCardByKeyword(t *testing.T) {
 		{"L4 大小写混合", "nvidia l4 gpu", "L4"},
 		{"RTX Pro 6000 命中 RTX6000PRO", "NVIDIA RTX Pro 6000 GPU", "RTX6000PRO"},
 		{"RTX 6000 96GB 命中 RTX6000PRO", "RTX 6000 96GB running in Delhi", "RTX6000PRO"},
-		{"TPU7x 命中", "TPU7x running in Americas", "TPU7x"},
+		{"TPU7x 命中", "TPU7x running in Americas", "TPU"},
 		{"V100 命中", "Nvidia Tesla V100 GPU", "V100"},
 		{"P100 命中", "Nvidia Tesla P100 GPU", "P100"},
 		{"P4 命中", "Nvidia Tesla P4 GPU", "P4"},

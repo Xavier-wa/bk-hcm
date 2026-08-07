@@ -48,6 +48,7 @@ type RecycleHost interface {
 	List(kt *kit.Kit, opt *types.ListOption, whereOpts ...*filter.SQLWhereOption) (*host.ListRecycleHostDetails,
 		error)
 	DeleteWithTx(kt *kit.Kit, tx *sqlx.Tx, expr *filter.Expression) error
+	ListExpectAbolishTime(kt *kit.Kit, expr *filter.Expression) ([]string, error)
 }
 
 var _ RecycleHost = new(Dao)
@@ -213,4 +214,43 @@ func (d *Dao) DeleteWithTx(kt *kit.Kit, tx *sqlx.Tx, filterExpr *filter.Expressi
 	}
 
 	return nil
+}
+
+// ListExpectAbolishTime 按 expect_abolish_time 分组去重、升序返回非空的裁撤截止时间列表。
+func (d *Dao) ListExpectAbolishTime(kt *kit.Kit, expr *filter.Expression) ([]string, error) {
+	// 恒定排除空串截止时间
+	rules := []filter.RuleFactory{tools.RuleNotEqual("expect_abolish_time", "")}
+	if expr != nil {
+		rules = append(rules, expr)
+	}
+	finalExpr := &filter.Expression{Op: filter.And, Rules: rules}
+
+	if err := finalExpr.Validate(filter.NewExprOption(
+		filter.RuleFields(define.RecycleHostColumns.ColumnTypes()))); err != nil {
+		return nil, err
+	}
+
+	whereExpr, whereValue, err := finalExpr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		return nil, err
+	}
+
+	sql := fmt.Sprintf(`SELECT expect_abolish_time FROM %s %s GROUP BY expect_abolish_time `+
+		`ORDER BY expect_abolish_time ASC`, table.RecycleHostInfo, whereExpr)
+
+	rows := make([]struct {
+		ExpectAbolishTime string `db:"expect_abolish_time"`
+	}, 0)
+	if err = d.orm.Do().Select(kt.Ctx, &rows, sql, whereValue); err != nil {
+		logs.ErrorJson("list recycle host expect abolish time failed, err: %v, filter: %v, rid: %s", err,
+			finalExpr, kt.Rid)
+		return nil, err
+	}
+
+	times := make([]string, 0, len(rows))
+	for _, row := range rows {
+		times = append(times, row.ExpectAbolishTime)
+	}
+
+	return times, nil
 }

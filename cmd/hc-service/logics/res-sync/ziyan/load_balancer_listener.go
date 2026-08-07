@@ -205,6 +205,7 @@ func (cli *client) deleteRemovedListener(kt *kit.Kit, lbID, region string, cloud
 		}
 		page.Start += uint32(page.Limit)
 	}
+
 	if len(removedLblCloudIds) != 0 {
 		for _, cloudIds := range slice.Split(removedLblCloudIds, constant.BatchOperationMaxLimit) {
 			if err := cli.deleteListener(kt, lbID, cloudIds); err != nil {
@@ -212,49 +213,110 @@ func (cli *client) deleteRemovedListener(kt *kit.Kit, lbID, region string, cloud
 					err, cloudIds, lbID, kt.Rid)
 				return err
 			}
-
 		}
 	}
 
-	// 清理未被删除的四层规则
-	dblayer4Rule, err := cli.listL4RuleFromDB(kt, lbID, nil)
-	if err != nil {
+	// bottom-out cleanup for orphan rules whose listener is gone from cloud but was not removed by the
+	// cascade above. It only deletes rules, never listeners.
+	if err := cli.deleteOrphanRule(kt, lbID, allCloudIDMap); err != nil {
+		logs.Errorf("fail to delete orphan rule, err: %v, lbID: %s, cloud_lbl_ids: %v, rid: %s",
+			err, lbID, allCloudIDMap, kt.Rid)
 		return err
-	}
-	delLayer4RuleCloudIDs := make([]string, 0)
-	for _, rule := range dblayer4Rule {
-		if _, exists := allCloudIDMap[rule.CloudLBLID]; !exists {
-			delLayer4RuleCloudIDs = append(delLayer4RuleCloudIDs, rule.CloudID)
-		}
-	}
-	if len(delLayer4RuleCloudIDs) > 0 {
-		err := cli.deleteLayer4Rule(kt, lbID, delLayer4RuleCloudIDs)
-		if err != nil {
-			logs.Errorf("fail to clean l4 rule, err: %v, cloud id: %v, rid: %s", err, delLayer4RuleCloudIDs, kt.Rid)
-			return err
-		}
-	}
-
-	// 清理未被删除的️七层规则
-	dblayer7Rule, err := cli.listL7RuleFromDBByLbID(kt, lbID)
-	if err != nil {
-		return err
-	}
-	delLayer7RuleCloudIDs := make([]string, 0)
-	for _, rule := range dblayer7Rule {
-		if _, exists := allCloudIDMap[rule.CloudLBLID]; !exists {
-			delLayer7RuleCloudIDs = append(delLayer7RuleCloudIDs, rule.CloudID)
-		}
-	}
-	if len(delLayer7RuleCloudIDs) > 0 {
-		err := cli.deleteLayer7RuleByLbIDAndCloudIDs(kt, lbID, delLayer7RuleCloudIDs)
-		if err != nil {
-			logs.Errorf("fail to clean l7 rule, err: %v, cloud id: %v, rid: %s", err, delLayer7RuleCloudIDs, kt.Rid)
-			return err
-		}
 	}
 
 	return nil
+}
+
+// deleteOrphanRule cleans up orphan rules whose listener no longer exists on cloud. Such orphans are not
+// expected in the normal flow (listener deletion already cascade-deletes its rules), so this is only a
+// bottom-out safeguard against leftovers, e.g. from historical partial failures. It never deletes listeners.
+func (cli *client) deleteOrphanRule(kt *kit.Kit, lbID string, cloudLblIDMap map[string]struct{}) error {
+	// clean up layer-4 rules that are not backed by any cloud listener
+	dbL4Rules, err := cli.listL4RuleFromDB(kt, lbID, nil)
+	if err != nil {
+		return err
+	}
+	delL4CloudIDs, err := cli.filterDeletableL4RuleCloudIDs(kt, lbID, dbL4Rules, cloudLblIDMap)
+	if err != nil {
+		logs.Errorf("fail to filter deletable l4 rule cloud ids, err: %v, lbID: %s, rid: %s", err, lbID, kt.Rid)
+		return err
+	}
+	if err := cli.deleteLayer4Rule(kt, lbID, delL4CloudIDs); err != nil {
+		logs.Errorf("fail to clean l4 rule, err: %v, cloud_ids: %v, lbID: %s, rid: %s",
+			err, delL4CloudIDs, lbID, kt.Rid)
+		return err
+	}
+
+	// clean up layer-7 rules whose listener is gone from cloud
+	dbL7Rules, err := cli.listL7RuleFromDBByLbID(kt, lbID)
+	if err != nil {
+		return err
+	}
+	delL7CloudIDs := make([]string, 0)
+	for _, rule := range dbL7Rules {
+		if _, exists := cloudLblIDMap[rule.CloudLBLID]; !exists {
+			delL7CloudIDs = append(delL7CloudIDs, rule.CloudID)
+		}
+	}
+	if err := cli.deleteLayer7RuleByLbIDAndCloudIDs(kt, lbID, delL7CloudIDs); err != nil {
+		logs.Errorf("fail to clean l7 rule, err: %v, cloud_ids: %v, lbID: %s, rid: %s",
+			err, delL7CloudIDs, lbID, kt.Rid)
+		return err
+	}
+
+	return nil
+}
+
+// filterDeletableL4RuleCloudIDs filters layer-4 rule cloud IDs that are safe to delete.
+//
+// The cloud listener snapshot can lag behind a just-created listener. In that race, the first listener scan
+// may miss the new DB listener, while the following rule scan can already see its layer-4 rule because
+// BatchCreateListenerWithRule commits listener and rule atomically.
+//
+// Recheck only the candidate DB listeners after reading rules: if a rule is visible and its listener was
+// committed by the same transaction, this later read must also see the listener. Only delete rules whose
+// listener is missing from both the cloud snapshot and the current DB state.
+func (cli *client) filterDeletableL4RuleCloudIDs(kt *kit.Kit, lbID string, dbRules []corelb.TCloudLbUrlRule,
+	cloudLblIDMap map[string]struct{}) ([]string, error) {
+
+	// get candidate rules that are not in the cloud snapshot, along with their listener cloud ids
+	candidateRules := make([]corelb.TCloudLbUrlRule, 0)
+	candidateCloudLBLIDs := make([]string, 0)
+
+	for _, rule := range dbRules {
+		if _, ok := cloudLblIDMap[rule.CloudLBLID]; ok {
+			continue
+		}
+		candidateRules = append(candidateRules, rule)
+		candidateCloudLBLIDs = append(candidateCloudLBLIDs, rule.CloudLBLID)
+	}
+	if len(candidateRules) == 0 {
+		logs.Infof("no candidate rules to delete, lbID: %s, rid: %s", lbID, kt.Rid)
+		return nil, nil
+	}
+
+	// get candidate listener ids from db
+	dbListeners, err := cli.listAllListenerFromDB(kt, lbID, candidateCloudLBLIDs)
+	if err != nil {
+		logs.Errorf("fail to list listeners from db by cloud ids, err: %v, cloud_ids: %v, rid: %s",
+			err, candidateCloudLBLIDs, kt.Rid)
+		return nil, err
+	}
+	existDBListenerMap := cvt.StringSliceToMap(slice.Map(dbListeners, func(listener corelb.TCloudListener) string {
+		return listener.CloudID
+	}))
+
+	delRuleCloudIDs := make([]string, 0, len(candidateRules))
+	for _, rule := range candidateRules {
+		if _, exist := existDBListenerMap[rule.CloudLBLID]; exist {
+			logs.Warnf("skip deleting l4 rule because listener still exists in db, rule_cloud_id: %s, "+
+				"cloud_lbl_id: %s, lb_id: %s, rid: %s", rule.CloudID, rule.CloudLBLID, lbID, kt.Rid)
+			continue
+		}
+		delRuleCloudIDs = append(delRuleCloudIDs, rule.CloudID)
+	}
+
+	return delRuleCloudIDs, nil
 }
 
 func (cli *client) listL7RuleFromDBByLbID(kt *kit.Kit, lbID string) ([]corelb.TCloudLbUrlRule, error) {

@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, inject, type Ref } from 'vue';
 import { AngleDown } from 'bkui-vue/lib/icon';
 import rollRequest from '@blueking/roll-request';
 import http from '@/http';
 import type { ExportColumn } from '@/utils/common';
 import type { PaginationType } from '@/typings';
 import type { ModelPropertyColumn } from '@/model/typings';
-import type { IDissolveDetail } from '@/store/dissolve/quota';
+import type { IDissolveDetail, IDissolveProjectCycle } from '@/store/dissolve/quota';
+import { useDissolveQuotaStore } from '@/store/dissolve/quota';
 import ExportToExcelBatchButton from '@/components/export-to-excel-batch-button/index.vue';
 import CopyToClipboard from '@/components/copy-to-clipboard/index.vue';
 import HcmDropdown from '@/components/hcm-dropdown/index.vue';
@@ -72,7 +73,31 @@ const exportAllRequest = async (signal: AbortSignal, extraParams?: Record<string
   const cond = props.condition || {};
 
   if (cond.bk_biz_ids?.length) params.bk_biz_ids = cond.bk_biz_ids;
-  if (cond.project_ids?.length) params.project_ids = cond.project_ids;
+  if (cond.expect_abolish_times?.length) {
+    if (cond.expect_abolish_times.includes('all')) {
+      try {
+        const timeStore = useDissolveQuotaStore();
+        const times = await timeStore.getExpectAbolishTimeList();
+        params.expect_abolish_times = times;
+      } catch {
+        params.expect_abolish_times = [];
+      }
+    } else {
+      params.expect_abolish_times = cond.expect_abolish_times;
+    }
+  }
+  if (cond.project_ids?.length) {
+    if (cond.project_ids.includes('all')) {
+      const dissolveProjects = inject<Ref<IDissolveProjectCycle[]>>('dissolveProjects', ref([]));
+      const ids = new Set<number>();
+      dissolveProjects.value.forEach((cycle) => {
+        (cycle.projects || []).forEach((proj) => ids.add(proj.id));
+      });
+      params.project_ids = [...ids];
+    } else {
+      params.project_ids = cond.project_ids;
+    }
+  }
   if (cond.group_ids?.length) params.group_ids = cond.group_ids;
   if (cond.operators?.length) params.operators = cond.operators;
   if (cond.inner_ips) params.inner_ips = cond.inner_ips;

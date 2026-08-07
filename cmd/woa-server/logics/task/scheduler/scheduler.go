@@ -301,8 +301,8 @@ func (s *scheduler) createApplyTicket(kt *kit.Kit, param *types.ApplyReq,
 		ExpectTime:   param.ExpectTime,
 		Remark:       param.Remark,
 		Suborders:    param.Suborders,
-		CreateAt:     now,
-		UpdateAt:     now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 		ProductType:  param.ProductType,
 	}
 
@@ -1007,8 +1007,8 @@ func buildApplyOrder(ticket *types.ApplyTicket, suborder *types.Suborder, orderI
 		ObsProject:        ticket.RequireType.ToObsProject(),
 		RetryTime:         0,
 		ModifyTime:        0,
-		CreateAt:          now,
-		UpdateAt:          now,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	if suborder.Source == enumor.ApplyTicketSrcPurchaseToResPool {
 		subOrder.Stage = types.TicketStageUncommit
@@ -1673,8 +1673,8 @@ func (s *scheduler) ticketToUnifyOrder(tickets []*types.ApplyTicket) []*types.Un
 				Description: ticket.Remark,
 				Stage:       ticket.Stage,
 				TotalNum:    0,
-				CreateAt:    ticket.CreateAt,
-				UpdateAt:    ticket.UpdateAt,
+				CreatedAt:   ticket.CreatedAt,
+				UpdatedAt:   ticket.UpdatedAt,
 			}
 			unifyOrders = append(unifyOrders, order)
 			continue
@@ -1708,8 +1708,8 @@ func (s *scheduler) ticketToUnifyOrder(tickets []*types.ApplyTicket) []*types.Un
 				OriginNum:         suborder.Replicas,
 				TotalNum:          suborder.Replicas,
 				Source:            suborder.Source,
-				CreateAt:          ticket.CreateAt,
-				UpdateAt:          ticket.UpdateAt,
+				CreatedAt:         ticket.CreatedAt,
+				UpdatedAt:         ticket.UpdatedAt,
 			}
 			unifyOrders = append(unifyOrders, order)
 		}
@@ -1766,8 +1766,8 @@ func (s *scheduler) orderToUnifyOrder(kt *kit.Kit, orders []*types.ApplyOrder, g
 			ProductNum:        productNum,
 			ModifyTime:        order.ModifyTime,
 			Source:            order.Source,
-			CreateAt:          order.CreateAt,
-			UpdateAt:          order.UpdateAt,
+			CreatedAt:         order.CreatedAt,
+			UpdatedAt:         order.UpdatedAt,
 		}
 		unifyOrders = append(unifyOrders, unifyOrder)
 	}
@@ -2614,7 +2614,7 @@ func (s *scheduler) sendConfirmMessage(kt *kit.Kit, order *types.ApplyOrder, mod
 		logs.Warnf("get location time zone: %s failed, err: %v, rid: %s", cc.WoaServer().LocalTimezone, err, kt.Rid)
 		loc = time.UTC
 	}
-	createTime := order.CreateAt.In(loc).Format(constant.DateTimeLayout)
+	createTime := order.CreatedAt.In(loc).Format(constant.DateTimeLayout)
 	modifyTime := time.Now().In(loc).Format(constant.DateTimeLayout)
 	callbackURL := fmt.Sprintf("%s/api/v1/woa/bizs/%d/task/confirm/apply/record/modify",
 		cc.WoaServer().BkApigwHCMURL, order.BkBizId)

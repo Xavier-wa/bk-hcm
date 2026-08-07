@@ -27,12 +27,22 @@ import (
 
 // BillSyncRecordCreateReq create request
 type BillSyncRecordCreateReq struct {
-	Vendor    enumor.Vendor `json:"vendor" validate:"required"`
-	BillYear  int           `json:"bill_year" validate:"required"`
-	BillMonth int           `json:"bill_month" validate:"required"`
+	Vendor    enumor.Vendor       `json:"vendor" validate:"required"`
+	BillYear  int                 `json:"bill_year" validate:"required"`
+	BillMonth int                 `json:"bill_month" validate:"required"`
+	SyncMode  enumor.BillSyncMode `json:"sync_mode" validate:"omitempty"`
 }
 
 // Validate ...
 func (c *BillSyncRecordCreateReq) Validate() error {
-	return validator.Validate.Struct(c)
+	if err := validator.Validate.Struct(c); err != nil {
+		return err
+	}
+	// 缺省视为 full，仅在显式传入时校验取值
+	if len(c.SyncMode) != 0 {
+		if err := c.SyncMode.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
 }

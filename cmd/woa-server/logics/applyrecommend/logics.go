@@ -30,6 +30,7 @@ import (
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/dal/dao/tools"
 	cvmapply "hcm/pkg/dal/table/cvm-apply"
 	"hcm/pkg/kit"
@@ -109,6 +110,18 @@ func (l *Logics) collectCounts(kt *kit.Kit, lookbackDays int) (map[userCountKey]
 		return nil, nil, err
 	}
 
+	imageIDs := make([]string, 0, len(devices))
+	for _, item := range devices {
+		if item.ImageID != "" {
+			imageIDs = append(imageIDs, item.ImageID)
+		}
+	}
+	validImages, err := l.queryValidImageIDs(kt, slice.Unique(imageIDs))
+	if err != nil {
+		logs.Errorf("query valid image ids failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, nil, err
+	}
+
 	for _, item := range devices {
 		if item.CloudRegion == "" {
 			logs.Warnf("cloud region is empty, id: %s, rid: %s", item.ID, kt.Rid)
@@ -116,6 +129,10 @@ func (l *Logics) collectCounts(kt *kit.Kit, lookbackDays int) (map[userCountKey]
 		}
 		if item.ImageID == "" {
 			logs.Warnf("image id is empty, id: %s, rid: %s", item.ID, kt.Rid)
+			continue
+		}
+		if _, ok := validImages[item.ImageID]; !ok {
+			logs.Warnf("skip invalid image, id: %s, image: %s, rid: %s", item.ID, item.ImageID, kt.Rid)
 			continue
 		}
 
@@ -140,6 +157,42 @@ func (l *Logics) collectCounts(kt *kit.Kit, lookbackDays int) (map[userCountKey]
 	}
 
 	return userCounts, bizCounts, nil
+}
+
+func (l *Logics) queryValidImageIDs(kt *kit.Kit, imageIDs []string) (map[string]struct{}, error) {
+	validImages := make(map[string]struct{}, len(imageIDs))
+	if len(imageIDs) == 0 {
+		return validImages, nil
+	}
+
+	for _, batch := range slice.Split(imageIDs, int(filter.DefaultMaxInLimit)) {
+		req := &core.ListReq{
+			Filter: tools.ExpressionAnd(
+				tools.RuleEqual("vendor", enumor.TCloudZiyan),
+				tools.RuleJSONEqual("extension.enable_cvm", "true"),
+				tools.RuleIn("cloud_id", batch),
+			),
+			Page: core.NewDefaultBasePage(),
+		}
+		for {
+			resp, err := l.client.DataService().TCloudZiyan.ListImage(kt, req)
+			if err != nil {
+				logs.Errorf("list valid images failed, err: %v, rid: %s", err, kt.Rid)
+				return nil, err
+			}
+			for _, image := range resp.Details {
+				if image != nil {
+					validImages[image.CloudID] = struct{}{}
+				}
+			}
+			if len(resp.Details) < int(req.Page.Limit) {
+				break
+			}
+			req.Page.Start += uint32(req.Page.Limit)
+		}
+	}
+
+	return validImages, nil
 }
 
 func (l *Logics) fillOutCloudRegion(kt *kit.Kit, devices []*cvmapply.ZiyanCvmDeviceInfo) (

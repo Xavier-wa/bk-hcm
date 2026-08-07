@@ -28,8 +28,6 @@ data:
       {{- toYaml .Values.mongodb | nindent 6 }}
     watch:
       {{- toYaml .Values.watch | nindent 6 }}
-    redis:
-      {{- toYaml .Values.redis | nindent 6 }}
     cvm:
       {{- toYaml .Values.cvm | nindent 6 }}
     tjj:

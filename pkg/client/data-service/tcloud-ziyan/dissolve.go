@@ -55,6 +55,14 @@ func (d *DissolveClient) ListRecycleHost(kt *kit.Kit, req *dsproto.RecycleHostLi
 		d.client, rest.POST, kt, req, "/dissolve/recycle_hosts/list")
 }
 
+// ListRecycleHostExpectAbolishTime list distinct dissolve recycle host expect abolish times.
+func (d *DissolveClient) ListRecycleHostExpectAbolishTime(kt *kit.Kit,
+	req *dsproto.ListRecycleHostExpectAbolishTimeReq) (*dsproto.ListRecycleHostExpectAbolishTimeResult, error) {
+
+	return common.Request[dsproto.ListRecycleHostExpectAbolishTimeReq, dsproto.ListRecycleHostExpectAbolishTimeResult](
+		d.client, rest.POST, kt, req, "/dissolve/recycle_hosts/expect_abolish_time/list")
+}
+
 // BatchUpdateRecycleHost batch update dissolve recycle host records.
 func (d *DissolveClient) BatchUpdateRecycleHost(kt *kit.Kit, req *dsproto.BatchUpdateRecycleHostReq) error {
 	return common.RequestNoResp[dsproto.BatchUpdateRecycleHostReq](

@@ -64,7 +64,7 @@ func (az *Azure) ListImage(kt *kit.Kit,
 				Platform:     opt.Offer,
 				Sku:          converter.PtrToVal(sku.Name),
 				State:        "available",
-				Type:         "public",
+				Type:         string(enumor.ImageTypePublic),
 				OsType:       image.GetOsTypeByPlatform(enumor.Azure, opt.Offer),
 			})
 		}

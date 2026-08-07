@@ -188,7 +188,8 @@ func (c *Controller) extendResPlanListReq(kt *kit.Kit, req *ptypes.ListResPlanDe
 }
 
 // convResConsumePoolToExpendMap 将 ResConsumePool 转为以 ResPlanDemandExpendKey 为 key 的 map
-// 因为 ResConsumePool 精确指定了deviceType，因此在list时无法进行模糊匹配，需要进行转化后使用
+// 因为 ResConsumePool 精确指定了deviceType，因此在list时无法进行模糊匹配，需要进行转化后使用。
+// 消耗池 key 的 DeviceType 应为原始申领机型；DeviceFamily 取自该机型，不得取自并查代表机型。
 func convResConsumePoolToExpendMap(kt *kit.Kit, pool ResPlanConsumePool,
 	deviceTypes map[string]dt.DistinctDeviceType) map[ptypes.ResPlanDemandExpendKey]int64 {
 
@@ -1395,6 +1396,7 @@ func (c *Controller) getProdResConsumePoolV2(kt *kit.Kit, bkBizIDs []int64, star
 	}
 
 	// get plan product all apply order consume pool map.
+	// 保留原始申领机型，供列表/罚金等按 DeviceFamily 扣减；并查重映射仅在申领校验路径调用。
 	orderConsumePoolMap, err := c.getApplyOrderConsumePoolMapV2(kt, subOrders)
 	if err != nil {
 		logs.Errorf("failed to get apply order consume pool map v2, err: %v, subOrders: %+v, rid: %s",
@@ -1402,13 +1404,23 @@ func (c *Controller) getProdResConsumePoolV2(kt *kit.Kit, bkBizIDs []int64, star
 		return nil, err
 	}
 
+	logs.Infof("get biz resource consume pool v2, bkBizIDs: %v, startDay: %s, endDay: %s, pool: %+v, rid: %s",
+		bkBizIDs, startDay.Format(constant.TimeStdFormat), endDay.Format(constant.TimeStdFormat),
+		orderConsumePoolMap, kt.Rid)
+
+	return orderConsumePoolMap, nil
+}
+
+// remapConsumePoolDeviceTypes 按 IsDeviceMatched 并查，将可通配的消耗池机型合并为同一代表机型。
+// 仅申领校验路径使用；列表/罚金等转 expend key 的消耗池不得调用，以免 DeviceFamily 漂移。
+func (c *Controller) remapConsumePoolDeviceTypes(kt *kit.Kit, pool ResPlanConsumePool) (ResPlanConsumePool, error) {
 	prodConsumePool := make(ResPlanConsumePool)
 	strUnionFind := NewStrUnionFind()
-	for consumePoolKey := range orderConsumePoolMap {
+	for consumePoolKey := range pool {
 		strUnionFind.Add(consumePoolKey.DeviceType)
 	}
 
-	for consumePoolKey, consumeCpuCore := range orderConsumePoolMap {
+	for consumePoolKey, consumeCpuCore := range pool {
 		deviceType := consumePoolKey.DeviceType
 		for _, ele := range strUnionFind.Elements() {
 			matched, err := c.IsDeviceMatched(kt, []string{ele}, consumePoolKey.DeviceType)
@@ -1428,10 +1440,9 @@ func (c *Controller) getProdResConsumePoolV2(kt *kit.Kit, bkBizIDs []int64, star
 		consumePoolKey.DeviceType = deviceType
 		prodConsumePool[consumePoolKey] += consumeCpuCore
 	}
-	logs.Infof("get biz resource consume pool v2, bkBizIDs: %v, startDay: %s, endDay: %s, pool: %+v, "+
-		"strUnionFind: %+v, orderConsumePoolMap: %+v, rid: %s", bkBizIDs, startDay.Format(constant.TimeStdFormat),
-		endDay.Format(constant.TimeStdFormat), prodConsumePool, cvt.PtrToVal(strUnionFind), orderConsumePoolMap, kt.Rid)
 
+	logs.Infof("remap consume pool device types, pool: %+v, strUnionFind: %+v, rid: %s",
+		prodConsumePool, cvt.PtrToVal(strUnionFind), kt.Rid)
 	return prodConsumePool, nil
 }
 
@@ -1555,12 +1566,12 @@ func parseApplyOrderFields(kt *kit.Kit, sub *cvmapplytable.ZiyanCvmApplySuborder
 		return err
 	}
 	var err error
-	apply.CreateAt, err = parseTime(kt, sub.CreatedAt)
+	apply.CreatedAt, err = parseTime(kt, sub.CreatedAt)
 	if err != nil {
 		logs.Errorf("failed to parse created at, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID, kt.Rid)
 		return err
 	}
-	apply.UpdateAt, err = parseTime(kt, sub.UpdatedAt)
+	apply.UpdatedAt, err = parseTime(kt, sub.UpdatedAt)
 	if err != nil {
 		logs.Errorf("failed to parse updated at, err: %v, suborder_id: %s, rid: %s", err, sub.SuborderID, kt.Rid)
 		return err
@@ -1654,7 +1665,7 @@ func (c *Controller) getApplyOrderConsumePoolMapV2(kt *kit.Kit, subOrders []*tas
 			continue
 		}
 
-		demandYear, demandMonth, err := c.demandTime.GetDemandYearMonth(kt, subOrderInfo.CreateAt)
+		demandYear, demandMonth, err := c.demandTime.GetDemandYearMonth(kt, subOrderInfo.CreatedAt)
 		if err != nil {
 			logs.Errorf("failed to get demand year month, err: %v, subOrder: %+v, rid: %s", err, *subOrderInfo,
 				kt.Rid)
@@ -1971,6 +1982,13 @@ func (c *Controller) getCurrMonthPlanConsumePool(kt *kit.Kit, bkBizID int64, req
 	if err != nil {
 		logs.Errorf("failed to get biz resource consume pool v2, bkBizID: %d, excludeSuborderIDs: %v, "+
 			"err: %v, rid: %s", bkBizID, excludeSuborderIDs, err, kt.Rid)
+		return nil, nil, err
+	}
+
+	// 申领校验需要按通配合并机型后再与预测池 compact。
+	prodConsumePool, err = c.remapConsumePoolDeviceTypes(kt, prodConsumePool)
+	if err != nil {
+		logs.Errorf("failed to remap consume pool device types, bkBizID: %d, err: %v, rid: %s", bkBizID, err, kt.Rid)
 		return nil, nil, err
 	}
 

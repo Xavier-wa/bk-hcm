@@ -157,6 +157,11 @@ func isDeviceTypeChanged(cloud devicetype.DeviceType, db devicetype.DeviceType) 
 		return true
 	}
 
+	// 检测 tech_class_res_amt 字段变化
+	if cloud.TechClassResAmt.Cmp(db.TechClassResAmt) != 0 {
+		return true
+	}
+
 	return false
 }
 
@@ -173,6 +178,7 @@ func (cli *client) createDeviceType(kt *kit.Kit, deviceTypes []devicetype.Device
 			GpuAmount:       dt.GpuAmount,
 			DeviceTypeClass: dt.DeviceTypeClass,
 			TechnicalClass:  dt.TechnicalClass,
+			TechClassResAmt: dt.TechClassResAmt,
 			Region:          dt.Region,
 			Zone:            dt.Zone,
 			Disable:         false,
@@ -208,6 +214,7 @@ func (cli *client) updateDeviceType(kt *kit.Kit, deviceTypes map[string]devicety
 			GpuAmount:       &curDt.GpuAmount,
 			DeviceTypeClass: &curDt.DeviceTypeClass,
 			TechnicalClass:  &curDt.TechnicalClass,
+			TechClassResAmt: &curDt.TechClassResAmt,
 			Source:          &curDt.Source,
 			GenerationType:  &curDt.GenerationType,
 		})

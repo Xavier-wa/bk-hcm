@@ -428,8 +428,8 @@ func ConvertMySQLToApplyOrder(mysqlRecord *cvmapplytable.ZiyanCvmApplySuborder) 
 		Remark:        mysqlRecord.Remark,
 		RetryTime:     cvt.PtrToVal(mysqlRecord.RetryTime),
 		ModifyTime:    cvt.PtrToVal(mysqlRecord.ModifyTime),
-		CreateAt:      createdAt,
-		UpdateAt:      updatedAt,
+		CreatedAt:     createdAt,
+		UpdatedAt:     updatedAt,
 		Spec: &types.ResourceSpec{
 			Region:            mysqlRecord.Region,
 			Zone:              mysqlRecord.Zone,

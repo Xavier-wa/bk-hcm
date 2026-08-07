@@ -53,12 +53,12 @@ export default defineComponent({
           formModel.bkUsername.length && { field: 'bk_username', op: 'in', value: formModel.bkUsername },
           formModel.ip.length && { field: 'ip', op: 'in', value: formModel.ip },
           formModel.dateRange[0] && {
-            field: 'updated_at',
+            field: 'created_at',
             op: 'gte',
             value: dayjs(formModel.dateRange[0]).toISOString(),
           },
           formModel.dateRange[1] && {
-            field: 'updated_at',
+            field: 'created_at',
             op: 'lte',
             value: dayjs(formModel.dateRange[1]).endOf('day').toISOString(),
           },
@@ -150,7 +150,7 @@ export default defineComponent({
             <FormItem label='申请人'>
               <hcm-form-user v-model={formModel.bkUsername} />
             </FormItem>
-            <FormItem label='交付时间'>
+            <FormItem label='生产时间'>
               <bk-date-picker type='daterange' v-model={formModel.dateRange} clearable={false} />
             </FormItem>
             <FormItem label='内网 IP'>

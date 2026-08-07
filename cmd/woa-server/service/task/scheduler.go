@@ -2200,7 +2200,7 @@ func (s *service) ListHostApplyItsmTicket(cts *rest.Contexts) (any, error) {
 			Url:           auditInfo.ItsmTicketLink,
 			User:          ticket.User,
 			ApprovalState: stepName.GetApprovalState(),
-			CreateTime:    ticket.CreateAt,
+			CreateTime:    ticket.CreatedAt,
 		})
 	}
 
@@ -2250,7 +2250,7 @@ func (s *service) ListHostApplyCrpTicket(cts *rest.Contexts) (any, error) {
 			Url:           auditCrp.CrpTicketLink,
 			User:          subOrder.User,
 			ApprovalState: crpOrderStatus.GetApprovalState(),
-			CreateTime:    subOrder.CreateAt,
+			CreateTime:    subOrder.CreatedAt,
 		})
 	}
 

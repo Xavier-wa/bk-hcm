@@ -237,8 +237,8 @@ export default defineComponent({
             field: 'stage',
             width: 170,
             render: ({ data }: any) => {
-              const { create_at, stage, resource_type, spec } = data;
-              const diffHours = moment(new Date()).diff(moment(create_at), 'hours');
+              const { created_at, stage, resource_type, spec } = data;
+              const diffHours = moment(new Date()).diff(moment(created_at), 'hours');
               const isAbnormal = diffHours >= 2 && stage === 'RUNNING';
               const resourceTypeName = SCR_RESOURCE_TYPE_NAME[resource_type as keyof typeof ScrResourceType];
 

@@ -41,7 +41,7 @@ MCP 只返回图片的**下载链接**, 你需要真正"看到"图:
 - **总上限**: 评论图片最多识别约 **12 张**; 超过时优先挑"最新的、讨论最集中的、明显与需求变更相关的"; 并在摘要里注明"评论图片过多, 已识别前 12 张信息图, 其余略过"。
 
 ## 脱敏 (回传前强制)
-你的摘要最终会被主 agent **并入 prd.md 并落盘到 `.bkdevbuddy/`**, 所以你回传时就要脱敏 (遵循 workflow-dev skill 的脱敏约定):
+你的摘要最终会被主 agent **并入 prd.md 并落盘到 `<dataDir>/`**（`<dataDir>` 见 `bkdevbuddy-data-dir` rule）, 所以你回传时就要脱敏 (遵循 workflow-dev skill 的脱敏约定):
 - 公司内网域名 / 主机 → `<TAPD_HOST>` / `<GIT_HOST>` / `<SERVICE_HOST>` 等 (只替换 host, 保留协议与路径, 保留单据 ID)
 - 真实人名 / 工号 / 邮箱 → `<DEVELOPER_NAME>` / `<REVIEWER_NAME>` / `<USER_EMAIL>` 等
 - 真实账号 ID / 租户 ID / 资源 ID (讨论形态而非具体值时) → `<ACCOUNT_ID>` / `<TENANT_ID>` / `<RESOURCE_ID>`

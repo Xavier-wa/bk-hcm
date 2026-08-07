@@ -142,7 +142,7 @@ func TestLookupAwsGpuCardCategory(t *testing.T) {
 	}
 }
 
-// TestResolveGcpAPIBrandName 验证 GCP 品牌识别：优先 HcProductName，兜底 SkuDescription。
+// TestResolveGcpAPIBrandName 验证 GCP 品牌识别：优先 HcProductName，兜底 SkuDescription；AIDeduct 走 sku。
 func TestResolveGcpAPIBrandName(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -154,6 +154,8 @@ func TestResolveGcpAPIBrandName(t *testing.T) {
 		{"HcProductName 未命中兜底 SkuDescription", "credit item", "gemini api credit", "gemini"},
 		{"两者均未命中返回空", "normal product", "normal sku", ""},
 		{"兜底命中 veo 归并 gemini", "credit item", "veo usage", "gemini"},
+		{"AIDeduct 从 SkuDescription 识别品牌", constant.GcpAIDeductProductCode, "claude api usage", "claude"},
+		{"AIDeduct 无品牌不强制 API", constant.GcpAIDeductProductCode, "normal sku", ""},
 	}
 
 	for _, tt := range tests {
@@ -163,6 +165,118 @@ func TestResolveGcpAPIBrandName(t *testing.T) {
 				t.Errorf("resolveGcpAPIBrandName() = %q, want %q", got, tt.expected)
 			}
 		})
+	}
+}
+
+// TestIsAIDeductBillItem 验证 AI 扣减产品标识识别。
+func TestIsAIDeductBillItem(t *testing.T) {
+	tests := []struct {
+		name          string
+		hcProductCode string
+		hcProductName string
+		expected      bool
+	}{
+		{"code 为 AIDeduct", constant.AwsAIDeductProductCode, "other", true},
+		{"name 为 AIDeduct", "other", constant.AwsAIDeductProductCode, true},
+		{"非扣减", "AmazonEC2", "AmazonEC2", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isAIDeductBillItem(tt.hcProductCode, tt.hcProductName); got != tt.expected {
+				t.Errorf("isAIDeductBillItem() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestHcProductNameForGPUClass 验证 AI 扣减恢复 AI 前缀占位。
+func TestHcProductNameForGPUClass(t *testing.T) {
+	if got := hcProductNameForGPUClass(constant.AwsAIDeductProductCode, constant.AwsAIDeductProductCode); got != constant.BillItemAIPrefix {
+		t.Errorf("hcProductNameForGPUClass(AIDeduct) = %q, want %q", got, constant.BillItemAIPrefix)
+	}
+	if got := hcProductNameForGPUClass("AmazonEC2", constant.BillItemAIPrefix+"claude"); got != constant.BillItemAIPrefix+"claude" {
+		t.Errorf("hcProductNameForGPUClass(normal) = %q, want original", got)
+	}
+}
+
+// TestResolveAwsAPIBrandName 验证 AWS 品牌识别：AIDeduct 从 extension 还原，不强制 API。
+func TestResolveAwsAPIBrandName(t *testing.T) {
+	tests := []struct {
+		name                string
+		hcProductCode       string
+		hcProductName       string
+		productProductName  string
+		lineItemDescription string
+		expected            string
+	}{
+		{
+			name:               "原始账单仍用 HcProductName",
+			hcProductCode:      "AmazonBedrock",
+			hcProductName:      constant.BillItemAIPrefix + "claude",
+			productProductName: "other",
+			expected:           "claude",
+		},
+		{
+			name:               "AIDeduct 从 ProductProductName 识别 claude",
+			hcProductCode:      constant.AwsAIDeductProductCode,
+			hcProductName:      constant.AwsAIDeductProductCode,
+			productProductName: "Claude API on Marketplace",
+			expected:           "claude",
+		},
+		{
+			name:                "AIDeduct ProductName 未命中时用行描述",
+			hcProductCode:       constant.AwsAIDeductProductCode,
+			hcProductName:       constant.AwsAIDeductProductCode,
+			productProductName:  "Amazon Elastic Compute Cloud",
+			lineItemDescription: "kimi api tokens",
+			expected:            "kimi",
+		},
+		{
+			name:               "AIDeduct 无品牌不强制 API",
+			hcProductCode:      constant.AwsAIDeductProductCode,
+			hcProductName:      constant.AwsAIDeductProductCode,
+			productProductName: "Amazon Elastic Compute Cloud",
+			expected:           "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveAwsAPIBrandName(tt.hcProductCode, tt.hcProductName, tt.productProductName, tt.lineItemDescription)
+			if got != tt.expected {
+				t.Errorf("resolveAwsAPIBrandName() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestAIDeductGPUClassification 验证 AIDeduct GPU 场景：无品牌时 isGPU=true，卡型可填充。
+func TestAIDeductGPUClassification(t *testing.T) {
+	awsGpuMap := map[string]string{"g5.12xlarge": "A10G"}
+
+	hcName := hcProductNameForGPUClass(constant.AwsAIDeductProductCode, constant.AwsAIDeductProductCode)
+	isGPU := isAwsGPU("AmazonEC2", "g5.12xlarge", hcName, awsGpuMap)
+	if !isGPU {
+		t.Fatalf("AIDeduct with GPU instance should be isGPU=true")
+	}
+	brand := resolveAwsAPIBrandName(constant.AwsAIDeductProductCode, constant.AwsAIDeductProductCode,
+		"Amazon Elastic Compute Cloud", "")
+	if brand != "" {
+		t.Fatalf("AIDeduct GPU without brand keywords must not force API brand, got %q", brand)
+	}
+	card := lookupAwsGpuCardCategory("Amazon Elastic Compute Cloud", "g5.12xlarge", awsGpuMap)
+	if card != "A10G" {
+		t.Fatalf("GpuCardCategory = %q, want A10G", card)
+	}
+
+	// GCP：AIDeduct + 卡型 SKU，无品牌 → isGPU，不强制 API
+	sku := "Nvidia L4 GPU running in Frankfurt"
+	gcpCard := lookupGcpGpuCardCategory(sku, gcpGpuPrefixesForTest)
+	gcpHcName := hcProductNameForGPUClass(constant.GcpAIDeductProductCode, constant.GcpAIDeductProductCode)
+	if !isGcpGPU(gcpCard, sku, gcpHcName) {
+		t.Fatalf("GCP AIDeduct with L4 sku should be isGPU=true")
+	}
+	if got := resolveGcpAPIBrandName(constant.GcpAIDeductProductCode, sku); got != "" {
+		t.Fatalf("GCP AIDeduct L4 sku must not force API brand, got %q", got)
 	}
 }
 

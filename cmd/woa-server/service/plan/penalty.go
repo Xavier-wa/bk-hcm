@@ -66,7 +66,7 @@ func (s *service) calcPenaltyBase(kt *kit.Kit, req *ptypes.CalcPenaltyBaseReq) e
 		return err
 	}
 
-	return s.planController.CalcPenaltyBase(kt, baseDay, req.BkBizIDs)
+	return s.planController.CalcPenaltyBase(kt, baseDay, req.BkBizIDs, req.SourceMode)
 }
 
 // CalcAndPushPenaltyRatio 计算并推送罚金分摊比例

@@ -193,9 +193,16 @@ func (act SyncAction) convertGcpBill(kt *kit.Kit, syncOpt *SyncOption, result *d
 
 		cityID := lookupCityID(kt, regionCityMap, region, isChina)
 		gpuCardCategory := lookupGcpGpuCardCategory(skuDescription, gcpGpuPrefixes)
-		isGPU := isGcpGPU(gpuCardCategory, skuDescription, item.HcProductName)
-		// 与 isGcpGPU 双路径对称：优先 HcProductName，命中为空兜底 SkuDescription
+		hcNameForGPU := hcProductNameForGPUClass(item.HcProductCode, item.HcProductName)
+		isGPU := isGcpGPU(gpuCardCategory, skuDescription, hcNameForGPU)
+		// 与 isGcpGPU 双路径对称：优先 HcProductName，命中为空兜底 SkuDescription；AIDeduct 走 sku 兜底
 		apiBrandName := resolveGcpAPIBrandName(item.HcProductName, skuDescription)
+		if isAIDeductBillItem(item.HcProductCode, item.HcProductName) &&
+			apiBrandName == "" && gpuCardCategory == "" {
+			logs.Warnf("ai deduct gcp obs classification fallback without brand/gpu card, "+
+				"main_account: %s, product_code: %s, sku_description: %s, rid: %s",
+				syncOpt.MainAccountID, item.HcProductCode, skuDescription, kt.Rid)
+		}
 
 		newItem := &tableobs.OBSBillItemGcp{
 			SetIndex:               setIndex,

@@ -99,7 +99,8 @@ POST /api/v1/account/bills/adjustment_items/export
 | bill_month      | int     | 账单月份                                 |
 | bill_day        | int     | 账单日期                                 |
 | type            | string  | 调账类型                                 |
-| res_class       | string  | 资源类别 cpu/gpu                         |
+| res_class       | string  | 资源类别 cpu/gpu_card/gpu_api/gpu_other  |
+| res_sub_class   | string  | 资源子类，gpu_card 下为卡型、gpu_api 下为模型厂商，其余类别为空 |
 | memo            | string  | 备注                                   |
 | operator        | string  | 操作人                                  |
 | currency        | string  | 货币                                   |
@@ -109,6 +110,13 @@ POST /api/v1/account/bills/adjustment_items/export
 
 
 接口调用者可以根据以上参数自行根据查询场景设置查询规则。
+
+### 导出列说明
+
+导出文件的列依次为：更新时间、调账ID、运营产品ID、运营产品、二级账号名称、调账类型、资源类别、**资源子类**、操作人、金额、币种、调账状态。
+
+「资源子类」列紧随「资源类别」列，直接输出存储值：`gpu_card` 的记录输出卡型、`gpu_api` 的记录输出模型厂商，
+`cpu` 与 `gpu_other` 的记录输出空单元格，不输出 `-` 等占位符。
 
 ### 调用示例
 

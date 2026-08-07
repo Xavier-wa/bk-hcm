@@ -61,20 +61,23 @@ func (cli *client) Host(kt *kit.Kit, params *SyncHostParams) (*SyncResult, error
 		return nil, err
 	}
 
-	dbHosts, err := cli.listHostFromDBByHostIDs(kt, params.HostIDs)
+	cloudHosts, err := cli.getCloudHost(kt, params.AccountID, ccHosts)
+	if err != nil {
+		logs.Errorf("get cloud host failed, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+
+	// 同时按 bk_host_id 和 cloud_id 两个维度预查 db 存量主机：当前物理机的cloud_id用的是机器的固资号，
+	// cc 主机重建会导致 bk_host_id 变化，但 cloud_id 不变，只按 bk_host_id 查会漏掉旧记录，使其在 diff 时被误判为新增，
+	// 从而触发 cloud_id + vendor 唯一键冲突
+	dbHosts, err := cli.listHostFromDBForDiff(kt, params.HostIDs, cloudHosts)
 	if err != nil {
 		logs.Errorf("list host from db failed, err: %v, hostIDs: %v, rid: %s", err, params.HostIDs, kt.Rid)
 		return nil, err
 	}
 
-	if len(ccHosts) == 0 && len(dbHosts) == 0 {
+	if len(cloudHosts) == 0 && len(dbHosts) == 0 {
 		return new(SyncResult), nil
-	}
-
-	cloudHosts, err := cli.getCloudHost(kt, params.AccountID, ccHosts)
-	if err != nil {
-		logs.Errorf("get cloud host failed, err: %v, rid: %s", err, kt.Rid)
-		return nil, err
 	}
 
 	addSlice, updateMap, delCloudIDs := common.Diff[cvm.Cvm[cvm.TCloudZiyanHostExtension],
@@ -691,6 +694,70 @@ func (cli *client) listHostFromDBByHostIDs(kt *kit.Kit, hostIDs []int64) ([]cvm.
 	}
 
 	return res, nil
+}
+
+func (cli *client) listHostFromDBByCloudIDs(kt *kit.Kit, cloudIDs []string) (
+	[]cvm.Cvm[cvm.TCloudZiyanHostExtension], error) {
+
+	res := make([]cvm.Cvm[cvm.TCloudZiyanHostExtension], 0)
+	for _, batch := range slice.Split(cloudIDs, constant.BatchOperationMaxLimit) {
+		req := &cloud.CvmListReq{
+			Filter: tools.ExpressionAnd(tools.RuleEqual("vendor", enumor.TCloudZiyan),
+				tools.RuleIn("cloud_id", batch)),
+			Page: &core.BasePage{
+				Start: 0,
+				Limit: constant.BatchOperationMaxLimit,
+				Sort:  "id",
+			},
+		}
+		hosts, err := cli.listHostFromDB(kt, req)
+		if err != nil {
+			logs.Errorf("list host from db by cloud ids failed, err: %v, req: %+v, rid: %s", err, req, kt.Rid)
+			return nil, err
+		}
+
+		res = append(res, hosts...)
+	}
+
+	return res, nil
+}
+
+func (cli *client) listHostFromDBForDiff(kt *kit.Kit, hostIDs []int64,
+	cloudHosts []cvm.Cvm[cvm.TCloudZiyanHostExtension]) ([]cvm.Cvm[cvm.TCloudZiyanHostExtension], error) {
+
+	dbHosts, err := cli.listHostFromDBByHostIDs(kt, hostIDs)
+	if err != nil {
+		logs.Errorf("list host from db by host ids failed, err: %v, hostIDs: %v, rid: %s", err, hostIDs, kt.Rid)
+		return nil, err
+	}
+
+	cloudIDs := make([]string, 0, len(cloudHosts))
+	for i := range cloudHosts {
+		cloudIDs = append(cloudIDs, cloudHosts[i].CloudID)
+	}
+	if len(cloudIDs) == 0 {
+		return dbHosts, nil
+	}
+
+	dbHostsByCloudID, err := cli.listHostFromDBByCloudIDs(kt, cloudIDs)
+	if err != nil {
+		logs.Errorf("list host from db by cloud ids failed, err: %v, cloudIDs: %v, rid: %s", err, cloudIDs, kt.Rid)
+		return nil, err
+	}
+
+	existIDs := make(map[string]struct{}, len(dbHosts))
+	for i := range dbHosts {
+		existIDs[dbHosts[i].GetID()] = struct{}{}
+	}
+	for i := range dbHostsByCloudID {
+		if _, ok := existIDs[dbHostsByCloudID[i].GetID()]; ok {
+			continue
+		}
+		existIDs[dbHostsByCloudID[i].GetID()] = struct{}{}
+		dbHosts = append(dbHosts, dbHostsByCloudID[i])
+	}
+
+	return dbHosts, nil
 }
 
 // listHostFromDB 从db中查询主机

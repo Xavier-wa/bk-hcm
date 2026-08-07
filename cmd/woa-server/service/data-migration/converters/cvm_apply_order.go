@@ -79,8 +79,8 @@ func (c *CvmApplyOrderConverter) ConvertToCreate(source interface{}) (interface{
 		ExpectTime:   ticket.ExpectTime,
 		Remark:       ticket.Remark,
 		Suborders:    ticket.Suborders,
-		CreatedAt:    types.Time(ticket.CreateAt.In(time.Local).Format(constant.TimeStdFormat)),
-		UpdatedAt:    types.Time(ticket.UpdateAt.In(time.Local).Format(constant.TimeStdFormat)),
+		CreatedAt:    types.Time(ticket.CreatedAt.In(time.Local).Format(constant.TimeStdFormat)),
+		UpdatedAt:    types.Time(ticket.UpdatedAt.In(time.Local).Format(constant.TimeStdFormat)),
 	}, nil
 }
 

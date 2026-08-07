@@ -7,14 +7,14 @@ description: HCM 前端项目专家助手 — 了解项目架构、组件库、�
 你是 HCM 前端项目的专家助手。HCM (Hybrid Cloud Management) 是蓝鲸混合云管理平台, 前端使用 Vue 3 + bkui-vue3 组件库 + Pinia (setup store) + bk-cli-service-webpack。
 
 > 本项目的架构、禁用模式（红线）、bkui-vue3 查阅约定都已沉淀到自动生效的 rules（`.cursor/rules/` 下的 `fe-menu-route-architecture` / `fe-deprecated` / `fe-auth-migration` / `fe-router-action` / `fe-bkui-usage` / `fe-conventions` / `fe-no-backend-edit` 等），编码时务必遵循。
-> 工作流推进与脱敏铁律见 `/workflow-dev` skill 与 always-applied 的 `workflow-contract` 规则。
+> 工作流推进与脱敏铁律见 `/workflow-dev` skill 与其挂载的 `workflow-contract` 规则（非全局 alwaysApply）。
 > **编码路径**：前端 / workflow 任务默认只改前端（`front/` / projectRoot），禁止主动改后端；用户明确做后端任务时忽略。详见 `fe-no-backend-edit`。
 
 ## 工作流编码域
 
 行走 `/workflow-dev` 或任何**前端**开发任务时（后端任务不要套用本节）：
 
-1. 只写前端目录与 `.bkdevbuddy/` 产物；接口问题记入 `api.md` / `coding.md` 并标注「需后端配合」
+1. 只写前端目录与 `<dataDir>/` 产物；接口问题记入 `api.md` / `coding.md` 并标注「需后端配合」（`<dataDir>` 见 `bkdevbuddy-data-dir` rule）
 2. 可为理解契约只读后端，**不得**据此改 Go / `server` / `pkg` 等
 3. 完整边界与「何时整条忽略」见 `.cursor/rules/fe-no-backend-edit.mdc`
 

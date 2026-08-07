@@ -1,7 +1,7 @@
 ---
 description: 代码质量思维规范 - 不要盲目遵循现有代码，要思考改进
 globs: ["front/**/*.vue", "front/**/*.ts", "front/**/*.tsx"]
-alwaysApply: true
+alwaysApply: false
 ---
 
 # 代码质量思维规范

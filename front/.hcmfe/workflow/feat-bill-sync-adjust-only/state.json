@@ -1,0 +1,150 @@
+{
+  "id": "feat-bill-sync-adjust-only",
+  "title": "只同步调账策略的场景 - 前端增加同步调账入口",
+  "currentStage": "done",
+  "createdAt": "2026-07-30T06:39:34.360Z",
+  "updatedAt": "2026-07-31T03:41:35.073Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-bill-sync-adjust-only/prd.md",
+        "kind": "file",
+        "addedAt": "2026-07-30T06:52:46.678Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-bill-sync-adjust-only/design.md",
+        "kind": "file",
+        "addedAt": "2026-07-30T07:26:50.873Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-bill-sync-adjust-only/api.md",
+        "kind": "file",
+        "addedAt": "2026-07-30T08:11:59.329Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-bill-sync-adjust-only/coding.md",
+        "kind": "file",
+        "addedAt": "2026-07-30T08:26:16.807Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-bill-sync-adjust-only/test.md",
+        "kind": "file",
+        "addedAt": "2026-07-30T16:11:03.512Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-07-30T07:04:02.010Z",
+      "note": "用户确认 PRD（范围收窄：仅账单同步弹窗 UI/同步范围 + sync_mode 入参，无操作记录），推进 Design"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-07-30T08:07:40.100Z",
+      "note": "用户已确认 design.md，进入 api 阶段"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-07-30T08:14:28.550Z",
+      "note": "用户已确认 api.md，进入 coding 阶段"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-07-30T16:09:45.161Z"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-07-31T03:39:23.353Z",
+      "note": "Coding 阶段完成：同步范围 Radio、调账金额展示、sync_mode 入参、Figma 样式精调（全量/调账内容区 4 行结构、背景色、圆点 Radio）"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-07-30T06:39:34.360Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-07-30T07:04:02.010Z",
+      "note": "用户确认 PRD（范围收窄：仅账单同步弹窗 UI/同步范围 + sync_mode 入参，无操作记录），推进 Design"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-07-30T08:07:40.100Z",
+      "note": "用户已确认 design.md，进入 api 阶段"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-07-30T08:14:28.550Z",
+      "note": "用户已确认 api.md，进入 coding 阶段"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-07-30T16:09:45.161Z"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-07-31T03:39:23.353Z",
+      "note": "Coding 阶段完成：同步范围 Radio、调账金额展示、sync_mode 入参、Figma 样式精调（全量/调账内容区 4 行结构、背景色、圆点 Radio）"
+    }
+  ],
+  "requirementId": "req-bill-sync-adjust-only",
+  "branch": "feat-bill-sync-adjust-only",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598135766636",
+    "parentId": "1069995598135131008"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "completed",
+      "at": "2026-07-30T06:52:48.090Z",
+      "note": "澄清已回写 TAPD description（含原需求描述闸口通过）+ 评估无需拆分 RICE40/20人时 + tapd-analyst 全量解读完成；单据已在 todo(status_10)，无需再追平"
+    },
+    "hcm-design-icon-intake": {
+      "status": "skipped",
+      "at": "2026-07-30T07:27:09.385Z",
+      "note": "本次需求仅复用现有弹窗与 bkui-vue 通用组件，无新增图标或 iconfont 变更，无需 icon intake。"
+    },
+    "hcm-design-comp-intake": {
+      "status": "skipped",
+      "at": "2026-07-30T07:27:11.827Z",
+      "note": "本次需求在现有 bcc-sync-button 组件内新增同步范围单选与调账数据展示，无新增 page/comp 层级组件或复用入口变更，无需 comp intake。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-07-31T03:41:35.073Z",
+      "note": "TAPD story 1069995598135766636 已推进到 done 状态（status_14），完成时间 2026-07-31 11:41:15"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "front/src/views/bill/bill/summary/primary/bcc-sync-button/index.tsx",
+        "front/src/views/bill/bill/summary/primary/bcc-sync-button/index.module.scss",
+        "front/src/api/bill/index.ts",
+        "front/src/typings/bill.ts",
+        "decimal.js"
+      ],
+      "contentFingerprint": "1ca934e760f50a144df59515b1320ba2a5d99bff",
+      "codeBaseline": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+      "seatedAt": "2026-07-30T08:26:16.822Z"
+    }
+  }
+}

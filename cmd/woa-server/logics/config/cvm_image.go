@@ -157,7 +157,7 @@ func (i *cvmImage) GetBizCvmImage(kt *kit.Kit, bizID int64, param *types.GetCvmI
 				continue
 			}
 			// 过滤掉其他业务的私有镜像：当 bizID > 0 时，私有镜像只能属于当前业务
-			if image.Type == string(enumor.TCloudPrivateImage) && image.BkBizID != bizID {
+			if image.Type == string(enumor.ImageTypePrivate) && image.BkBizID != bizID {
 				continue
 			}
 			imageList = append(imageList, &types.CvmImage{

@@ -1,0 +1,143 @@
+{
+  "id": "feat-aiagent-chatbot-patch1",
+  "title": "chatbot-small-optimizations",
+  "currentStage": "done",
+  "createdAt": "2026-07-16T09:28:03.650Z",
+  "updatedAt": "2026-07-23T01:39:06.540Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-chatbot-patch1/coding.md",
+        "kind": "file",
+        "addedAt": "2026-07-16T09:48:04.118Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-chatbot-patch1/test.md",
+        "kind": "file",
+        "addedAt": "2026-07-17T07:57:09.787Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-07-22T10:05:12.866Z",
+      "note": "三张新单（停止按钮闪现 / 大卡片连点防重 / 浮窗权限）编码完成，已按单据分 commit 并合入 env-devhk-frontend；coding.md 已对齐，用户确认推进 test"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-07-23T01:39:06.536Z",
+      "note": "用户自测 PASS（三张新单 P0/P1），确认推进 done"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-07-16T09:28:03.650Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-07-17T07:56:13.833Z",
+      "note": "两个小优化（默认提示词 + 停止提示）编码完成，用户验收包括正文渲染中停止场景，lint 通过，确认推进 test"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-07-17T08:04:44.932Z",
+      "note": "用户确认验收通过，文档收口完成，推进 done"
+    },
+    {
+      "from": "done",
+      "to": "coding",
+      "at": "2026-07-22T08:49:39.425Z",
+      "note": "继续处理新优化：AI对话-切换窗口时闪现停止生成按钮"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-07-22T10:05:12.866Z",
+      "note": "三张新单（停止按钮闪现 / 大卡片连点防重 / 浮窗权限）编码完成，已按单据分 commit 并合入 env-devhk-frontend；coding.md 已对齐，用户确认推进 test"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-07-23T01:39:06.536Z",
+      "note": "用户自测 PASS（三张新单 P0/P1），确认推进 done"
+    }
+  ],
+  "branch": "feat-aiagent-chatbot-patch1",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598136109206",
+    "parentId": "1069995598134643064",
+    "items": [
+      {
+        "workspaceId": "69995598",
+        "objectType": "story",
+        "itemId": "1069995598136109206",
+        "parentId": "1069995598134643064"
+      },
+      {
+        "workspaceId": "69995598",
+        "objectType": "story",
+        "itemId": "1069995598136381200"
+      },
+      {
+        "workspaceId": "69995598",
+        "objectType": "story",
+        "itemId": "1069995598136401202"
+      },
+      {
+        "workspaceId": "69995598",
+        "objectType": "story",
+        "itemId": "1069995598136402240"
+      }
+    ]
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "completed",
+      "at": "2026-07-16T09:47:27.164Z",
+      "note": "已执行澄清+评估并回写 TAPD；用户明确跳过 tapd-analyst 全量解读（Q1A/Q2A 已确认）"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-07-17T08:04:10.517Z",
+      "note": "chatbot 模块文档已更新（停止生成提示逻辑 + Error 态提示图标 + 输入框占位收敛），docs_deepen 刷新 chatbot 基线（42 文件）。use-stream.ts/chat-input-box.vue 均归属 chatbot 模块，无需扩 globs。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-07-17T08:07:34.871Z",
+      "note": "两张子单均追平到 done(status_14)：1069995598136109206 默认提示词修改 for_test(status_12)→tested(status_13)→done(status_14)；1069995598136110822 停止提示 for_test→tested→done。父需求 1069995598134643064 已处 done，rollup shouldAdvance=false，无需推进。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/hooks/chatbot/use-stream.ts",
+        "src/views/chatbot/index.vue",
+        "src/components/ai-assistant/index.vue",
+        "src/components/chatbot/chat-input-box.vue",
+        "src/views/chatbot/constants.ts",
+        "chat-input-box.vue",
+        "constants.ts",
+        "hooks/chatbot/use-stream.ts",
+        "use-stream.ts"
+      ],
+      "contentFingerprint": "83251f53e7ec670693b20a5265ccf36ba7966770",
+      "codeBaseline": "d205153f45eab954a9d2c05662a6d212b5e038ec",
+      "seatedAt": "2026-07-22T10:05:06.722Z"
+    }
+  }
+}

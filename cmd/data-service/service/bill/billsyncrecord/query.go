@@ -81,6 +81,7 @@ func convBillSyncRecord(m *tablebill.AccountBillSyncRecord) *bill.SyncRecord {
 		RMBCost:          cvt.PtrToVal(m.RMBCost).Decimal,
 		Detail:           cvt.PtrToVal(m.Detail),
 		AdjustmentFlowID: m.AdjustmentFlowID,
+		SyncMode:         m.SyncMode,
 		State:            m.State,
 		Operator:         m.Operator,
 		Revision: core.Revision{

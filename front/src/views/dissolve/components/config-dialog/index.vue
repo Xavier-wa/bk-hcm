@@ -289,7 +289,7 @@ const handleAdd = () => {
             </bk-button>
             <p class="period-tip">
               <InfoLine fill="#4D4F56" width="14" height="14" />
-              <span>可勾选多个「当前裁撤时间」，列表筛选项将默认选中这些时段。</span>
+              <span>配置裁撤时间段与关联的项目类型，用于列表筛选。</span>
             </p>
           </div>
 

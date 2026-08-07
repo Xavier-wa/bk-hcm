@@ -177,8 +177,8 @@ func (c *CvmApplySuborderConverter) buildCreateRequest(
 		TotalNum:          applyOrder.TotalNum,
 		SuccessNum:        applyOrder.SuccessNum,
 		PendingNum:        applyOrder.PendingNum,
-		CreatedAt:         types.Time(applyOrder.CreateAt.In(time.Local).Format(constant.TimeStdFormat)),
-		UpdatedAt:         types.Time(applyOrder.UpdateAt.In(time.Local).Format(constant.TimeStdFormat)),
+		CreatedAt:         types.Time(applyOrder.CreatedAt.In(time.Local).Format(constant.TimeStdFormat)),
+		UpdatedAt:         types.Time(applyOrder.UpdatedAt.In(time.Local).Format(constant.TimeStdFormat)),
 	}
 
 	if applyOrder.Spec != nil {

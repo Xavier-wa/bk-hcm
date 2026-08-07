@@ -6,7 +6,7 @@
 
 ### URL
 
-POST /api/v1/account/vendors/{vendor}/bills/adjustment_items/create
+POST /api/v1/account/bills/adjustment_items/create
 
 ### 输入参数
 
@@ -28,10 +28,25 @@ POST /api/v1/account/vendors/{vendor}/bills/adjustment_items/create
 | bill_month      | int    | 否  | 所属月份                        |
 | bill_day        | int    | 是  | 所属日期                        |
 | type            | string | 是  | 调账类型 枚举值（increase、decrease） |
-| res_class       | string | 是  | 资源类别 枚举值（cpu、gpu）           |
+| res_class       | string | 是  | 资源类别 枚举值（cpu、gpu_card、gpu_api、gpu_other） |
+| res_sub_class   | string | 否  | 资源子类，必填性随 res_class 变化，详见下方说明 |
 | currency        | string | 是  | 币种                          |
 | cost            | string | 是  | 金额                          |
 | memo            | string | 否  | 备注信息                        |
+
+### res_sub_class 说明
+
+资源子类是单列，其语义由同一条明细的 `res_class` 决定：
+
+| res_class   | res_sub_class 必填性 | res_sub_class 语义 | 取值范围                                                 |
+|-------------|------------------|------------------|------------------------------------------------------|
+| cpu         | 必须为空             | -                | 传非空值返回参数非法                                           |
+| gpu_card    | 必填               | GPU 卡型           | 由卡型枚举查询接口返回，见 `list_adjustment_gpu_card.md`          |
+| gpu_api     | 必填               | 大模型厂商            | 由模型厂商枚举查询接口返回，见 `list_adjustment_api_brand.md`       |
+| gpu_other   | 必须为空             | -                | 传非空值返回参数非法                                           |
+
+取值域为严格比对且区分大小写，服务端不做大小写归一、不改写请求值，落库值即请求值。
+华为云的两个枚举清单均为空，因此华为云的调账明细只能使用 `cpu` 与 `gpu_other`。
 
 ### 调用示例
 
@@ -49,6 +64,7 @@ POST /api/v1/account/vendors/{vendor}/bills/adjustment_items/create
       "bill_month": 6,
       "type": "increase",
       "res_class": "cpu",
+      "res_sub_class": "",
       "memo": "",
       "currency": "RMB",
       "cost": "123",

@@ -39,6 +39,7 @@ type SyncRecord struct {
 	Cost             decimal.Decimal      `json:"cost"`
 	RMBCost          decimal.Decimal      `json:"rmb_cost"`
 	AdjustmentFlowID string               `json:"adjustment_flow_id"`
+	SyncMode         enumor.BillSyncMode  `json:"sync_mode"`
 	Detail           types.JsonField      `json:"detail"`
 	Operator         string               `json:"operator"`
 	core.Revision

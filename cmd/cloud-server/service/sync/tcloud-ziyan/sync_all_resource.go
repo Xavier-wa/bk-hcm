@@ -74,11 +74,19 @@ func SyncAllResource(kt *kit.Kit, cliSet *client.ClientSet, opt *SyncAllResource
 			time.Since(start), opt, kt.Rid)
 	}()
 
+	// 提前构建同步详情，供公共资源与私有资源共用同一状态记录上下文
+	sd := &detail.SyncDetail{
+		Kt:        kt,
+		DataCli:   cliSet.DataService(),
+		AccountID: opt.AccountID,
+		Vendor:    string(enumor.TCloudZiyan),
+	}
+
 	if opt.SyncPublicResource {
 		syncOpt := &SyncPublicResourceOption{
 			AccountID: opt.AccountID,
 		}
-		if failedRes, hitErr = SyncPublicResource(kt, cliSet, syncOpt); hitErr != nil {
+		if failedRes, hitErr = SyncPublicResource(kt, cliSet, syncOpt, sd); hitErr != nil {
 			logs.Errorf("sync public resource failed, err: %v, opt: %v, rid: %s", hitErr, opt, kt.Rid)
 			return failedRes, hitErr
 		}
@@ -87,13 +95,6 @@ func SyncAllResource(kt *kit.Kit, cliSet *client.ClientSet, opt *SyncAllResource
 	regions, hitErr := ListRegion(kt, cliSet.DataService())
 	if hitErr != nil {
 		return "", hitErr
-	}
-
-	sd := &detail.SyncDetail{
-		Kt:        kt,
-		DataCli:   cliSet.DataService(),
-		AccountID: opt.AccountID,
-		Vendor:    string(enumor.TCloudZiyan),
 	}
 
 	var eg, _ = errgroup.WithContext(kt.Ctx)

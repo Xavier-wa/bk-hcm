@@ -175,7 +175,7 @@ func (svc *imageSvc) UpdateImageBizTag(cts *rest.Contexts) (interface{}, error) 
 	imageData := data.Details[0]
 
 	// 校验镜像类型必须为私有镜像
-	if imageData.Type != string(enumor.TCloudPrivateImage) {
+	if imageData.Type != string(enumor.ImageTypePrivate) {
 		return nil, errf.Newf(errf.InvalidParameter,
 			"only private image can set bk_biz_id, current image type is %s", imageData.Type)
 	}

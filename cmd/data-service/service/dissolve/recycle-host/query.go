@@ -50,3 +50,22 @@ func (svc *service) ListRecycleHost(cts *rest.Contexts) (interface{}, error) {
 
 	return &dsproto.RecycleHostListResult{Details: data.Details, Count: data.Count}, nil
 }
+
+// ListRecycleHostExpectAbolishTime 按 expect_abolish_time 去重升序返回裁撤截止时间列表。
+func (svc *service) ListRecycleHostExpectAbolishTime(cts *rest.Contexts) (interface{}, error) {
+	req := new(dsproto.ListRecycleHostExpectAbolishTimeReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, err
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	times, err := svc.dao.RecycleHost().ListExpectAbolishTime(cts.Kit, req.Filter)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dsproto.ListRecycleHostExpectAbolishTimeResult{ExpectAbolishTimes: times}, nil
+}
