@@ -8,6 +8,7 @@ import {
 import {
   MENU_BUSINESS,
   MENU_BUSINESS_CHATBOT,
+  MENU_BUSINESS_HOST_MANAGEMENT,
   MENU_SERVICE,
   MENU_PLATFORM_MANAGEMENT,
   MENU_ROLLING_SERVER_MANAGEMENT,
@@ -101,8 +102,25 @@ const toCurrentPage = (
     return;
   }
 
-  if (hasAuth) next();
-  else next({ name: '403', params: { id: currentFindAuthData?.id } });
+  if (hasAuth) {
+    next();
+    return;
+  }
+
+  // 主动授权型：业务 AI 助手不展示自助申请页，与菜单侧 checkAuth 隐藏入口约定一致
+  if (currentFindAuthData?.id === 'biz_agent_assistant') {
+    const hasBizAccess = !!authVerifyData?.permissionAction?.biz_access;
+    if (hasBizAccess) {
+      // 回退业务主机页，保留原 query（含 bizs）
+      next({ name: MENU_BUSINESS_HOST_MANAGEMENT, query: to?.query });
+    } else {
+      // 改走可自助申请的业务访问申请页
+      next({ name: '403', params: { id: 'biz_access' }, query: to?.query });
+    }
+    return;
+  }
+
+  next({ name: '403', params: { id: currentFindAuthData?.id }, query: to?.query });
 };
 
 router.beforeEach((to: RouteLocationNormalized, from: RouteLocationNormalized, next: NavigationGuardNext) => {
@@ -138,9 +156,10 @@ router.beforeEach((to: RouteLocationNormalized, from: RouteLocationNormalized, n
     );
     getAuthVerifyData(verifyAuthData).then(() => {
       const { authVerifyData } = commonStore;
-      // 业务视角 chatbot 权限：有权限默认进 chatbot 首页，否则按常规鉴权回退（资源管理主机页）
+      // 业务视角 chatbot 权限：仅默认首页入口（/、/business）有权限时进 chatbot；
+      // 直链 /business/host 不拦截，避免有权限用户无法直达主机页
       const hasBizChatbotAccess = !!authVerifyData?.permissionAction?.biz_agent_assistant;
-      if (hasBizChatbotAccess && (to.path === '/' || to.path === '/business' || to.path === '/business/host')) {
+      if (hasBizChatbotAccess && (to.path === '/' || to.path === '/business')) {
         next({ name: MENU_BUSINESS_CHATBOT, query: to.query });
         return;
       }
@@ -149,7 +168,8 @@ router.beforeEach((to: RouteLocationNormalized, from: RouteLocationNormalized, n
   } else if (['/scheme/recommendation', '/scheme/deployment/list'].includes(to.path)) {
     next();
   } else {
-    toCurrentPage(authVerifyData, currentFindAuthData as any, next);
+    // 始终传入 to，保证冷启动与站内跳转对 biz_agent_assistant 无权限去向一致，且能保留 bizs query
+    toCurrentPage(authVerifyData, currentFindAuthData as any, next, to);
   }
 });
 
