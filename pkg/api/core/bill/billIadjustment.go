@@ -39,6 +39,7 @@ type AdjustmentItem struct {
 	BillDay       int                           `json:"bill_day"`
 	Type          enumor.BillAdjustmentType     `json:"type"`
 	ResClass      enumor.BillAdjustmentResClass `json:"res_class"`
+	ResSubClass   string                        `json:"res_sub_class"`
 	Memo          string                        `json:"memo"`
 	Operator      string                        `json:"operator"`
 	Currency      enumor.CurrencyCode           `json:"currency"`

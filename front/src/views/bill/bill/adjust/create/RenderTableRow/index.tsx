@@ -1,7 +1,8 @@
 import { PropType, defineComponent, ref, watch } from 'vue';
+import { reqBillsAdjustmentApiBrands, reqBillsAdjustmentGpuCards } from '@/api/bill';
 import { InputColumn, OperationColumn, SelectColumn, TextPlainColumn } from '@blueking/ediatable';
 import AdjustTypeSelector, { AdjustTypeEnum } from './components/AdjustTypeSelector';
-import { ResClassEnum, ResClassList } from '@/constants';
+import { BILL_ADJUSTMENT_SUPPORTED_VENDORS, ResClassEnum, ResClassList } from '@/constants';
 import SubAccountSelector from '../../../components/search/sub-account-selector';
 import { VendorEnum } from '@/common/constant';
 import { useOperationProducts } from '@/hooks/useOperationProducts';
@@ -36,9 +37,10 @@ export default defineComponent({
   setup(props, { emit, expose }) {
     const { formModel, resetForm, setFormValues } = useFormModel({
       type: AdjustTypeEnum.Increase,
-      res_class: ResClassEnum.Gpu,
-      product_id: '',
-      main_account_id: '',
+      res_class: ResClassEnum.Cpu,
+      res_sub_class: undefined as string | undefined,
+      product_id: undefined as string | undefined,
+      main_account_id: undefined as string | undefined,
       cost: '',
       memo: '',
     });
@@ -47,8 +49,59 @@ export default defineComponent({
     const memoRef = ref();
     const productRef = ref();
     const mainAccountRef = ref();
+    const subClassRef = ref();
+    const subClassList = ref<{ label: string; value: string }[]>([]);
+    const subClassLoading = ref(false);
+    let subClassRequestId = 0;
 
     const { OperationProductsSelector, getAppendixList } = useOperationProducts(!props.edit);
+
+    const canLoadSubClass = () =>
+      BILL_ADJUSTMENT_SUPPORTED_VENDORS.includes(props.vendor) &&
+      [ResClassEnum.GpuCard, ResClassEnum.GpuApi].includes(formModel.res_class);
+
+    const loadSubClassList = async () => {
+      subClassRequestId += 1;
+      const requestId = subClassRequestId;
+      if (!canLoadSubClass()) {
+        subClassList.value = [];
+        subClassLoading.value = false;
+        return;
+      }
+
+      subClassLoading.value = true;
+      try {
+        const res =
+          formModel.res_class === ResClassEnum.GpuCard
+            ? await reqBillsAdjustmentGpuCards(props.vendor)
+            : await reqBillsAdjustmentApiBrands(props.vendor);
+        if (requestId === subClassRequestId) {
+          const list: string[] = res?.data?.details ?? [];
+          subClassList.value = list.map((value) => ({ label: value, value }));
+        }
+      } catch {
+        if (requestId === subClassRequestId) subClassList.value = [];
+      } finally {
+        if (requestId === subClassRequestId) subClassLoading.value = false;
+      }
+    };
+
+    const normalizeResClass = (value: unknown): ResClassEnum =>
+      ResClassList.some((item) => item.value === value) ? (value as ResClassEnum) : ResClassEnum.Cpu;
+
+    const normalizeSelectValue = (value: unknown) =>
+      value === '' || value === null || value === undefined ? undefined : value;
+
+    const handleResClassChange = (value: unknown) => {
+      formModel.res_class = normalizeResClass(value);
+      formModel.res_sub_class = undefined;
+      loadSubClassList();
+    };
+
+    const handleVendorChange = () => {
+      formModel.res_sub_class = undefined;
+      loadSubClassList();
+    };
 
     const handleAdd = () => {
       emit('add');
@@ -66,11 +119,24 @@ export default defineComponent({
       () => props.editData,
       (data) => {
         if (data.product_id) getAppendixList(data.product_id);
-        setFormValues(data);
+        setFormValues({
+          ...data,
+          res_sub_class: normalizeSelectValue(data.res_sub_class) as string | undefined,
+          product_id: normalizeSelectValue(data.product_id) as string | undefined,
+          main_account_id: normalizeSelectValue(data.main_account_id) as string | undefined,
+        });
+        loadSubClassList();
       },
       {
         deep: true,
         immediate: true,
+      },
+    );
+
+    watch(
+      () => props.vendor,
+      (vendor, oldVendor) => {
+        if (vendor !== oldVendor) handleVendorChange();
       },
     );
 
@@ -87,9 +153,16 @@ export default defineComponent({
     watch(
       () => props.rootAccountId,
       () => {
-        formModel.main_account_id = '';
+        formModel.main_account_id = undefined;
       },
     );
+
+    const resetRow = () => {
+      subClassRequestId += 1;
+      subClassList.value = [];
+      subClassLoading.value = false;
+      resetForm();
+    };
 
     expose({
       getValue: async () => {
@@ -98,11 +171,17 @@ export default defineComponent({
           memoRef.value!.getValue(),
           productRef.value!.getValue(),
           mainAccountRef.value!.getValue(),
+          ...([ResClassEnum.GpuCard, ResClassEnum.GpuApi].includes(formModel.res_class)
+            ? [subClassRef.value!.getValue()]
+            : []),
         ]).then(() => {
-          return formModel;
+          const resSubClass = [ResClassEnum.Cpu, ResClassEnum.GpuOther].includes(formModel.res_class)
+            ? ''
+            : formModel.res_sub_class || '';
+          return { ...formModel, res_sub_class: resSubClass };
         });
       },
-      reset: resetForm,
+      reset: resetRow,
       getRowValue: () => {
         return formModel;
       },
@@ -131,7 +210,27 @@ export default defineComponent({
             <TextPlainColumn>人工调账</TextPlainColumn>
           </td>
           <td>
-            <SelectColumn list={ResClassList} v-model={formModel.res_class} />
+            <SelectColumn
+              list={ResClassList}
+              v-model={formModel.res_class}
+              onUpdate:modelValue={handleResClassChange}
+            />
+          </td>
+          <td>
+            {[ResClassEnum.GpuCard, ResClassEnum.GpuApi].includes(formModel.res_class) ? (
+              <SelectColumn
+                key={`subclass-${props.vendor}-${formModel.res_class}`}
+                ref={subClassRef}
+                v-model={formModel.res_sub_class}
+                list={subClassList.value}
+                clearable
+                placeholder='请选择'
+                rules={[{ validator: (value: string) => Boolean(value), message: '资源子类不能为空' }]}
+                {...({ loading: subClassLoading.value, filterable: true } as Record<string, unknown>)}
+              />
+            ) : (
+              <TextPlainColumn>--</TextPlainColumn>
+            )}
           </td>
           <td>
             <InputColumn

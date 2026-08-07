@@ -278,7 +278,7 @@ func convertMySQLToApplyTicket(mysqlRecord *cvmapplytable.ZiyanCvmApplyOrder) (*
 		Suborders:    suborders,
 		OldSuborders: oldSuborders,
 		ProductType:  mysqlRecord.ProductType,
-		CreateAt:     createdAt,
-		UpdateAt:     updatedAt,
+		CreatedAt:    createdAt,
+		UpdatedAt:    updatedAt,
 	}, nil
 }

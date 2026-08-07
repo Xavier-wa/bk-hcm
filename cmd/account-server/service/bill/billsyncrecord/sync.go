@@ -58,6 +58,10 @@ func (b *service) CreateSyncRecord(cts *rest.Contexts) (any, error) {
 		return nil, err
 	}
 
+	syncMode := req.SyncMode
+	if len(syncMode) == 0 {
+		syncMode = enumor.BillSyncModeFull
+	}
 	dataReq := &dsbill.BatchBillSyncRecordCreateReq{
 		Items: []dsbill.BillSyncRecordCreateReq{
 			{
@@ -68,6 +72,7 @@ func (b *service) CreateSyncRecord(cts *rest.Contexts) (any, error) {
 				Currency:  currency,
 				Cost:      *cost,
 				RMBCost:   *rmbCost,
+				SyncMode:  syncMode,
 				Operator:  cts.Kit.User,
 			},
 		},

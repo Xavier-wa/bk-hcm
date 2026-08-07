@@ -148,18 +148,38 @@ type BillAdjustmentResClass string
 // Validate checks if the BillAdjustmentResClass is valid.
 func (b BillAdjustmentResClass) Validate() error {
 	switch b {
-	case BillAdjustmentResClassCPU, BillAdjustmentResClassGPU:
+	case BillAdjustmentResClassCPU, BillAdjustmentResClassGpuCard,
+		BillAdjustmentResClassGpuAPI, BillAdjustmentResClassGpuOther:
 	default:
 		return fmt.Errorf("unsupported bill adjustment res class: %s", b)
 	}
 	return nil
 }
 
+// IsGPU 判断资源类别是否属于 GPU 类支出，CPU 之外的三类均为 GPU 类。
+func (b BillAdjustmentResClass) IsGPU() bool {
+	return b != BillAdjustmentResClassCPU
+}
+
+// IsAPI 判断资源类别是否为大模型 API 调用费。
+func (b BillAdjustmentResClass) IsAPI() bool {
+	return b == BillAdjustmentResClassGpuAPI
+}
+
+// NeedResSubClass 判断该资源类别是否要求填写资源子类，仅 GPU 卡与模型 API 两类需要。
+func (b BillAdjustmentResClass) NeedResSubClass() bool {
+	return b == BillAdjustmentResClassGpuCard || b == BillAdjustmentResClassGpuAPI
+}
+
 const (
 	// BillAdjustmentResClassCPU CPU 资源类别
 	BillAdjustmentResClassCPU BillAdjustmentResClass = "cpu"
-	// BillAdjustmentResClassGPU GPU 资源类别
-	BillAdjustmentResClassGPU BillAdjustmentResClass = "gpu"
+	// BillAdjustmentResClassGpuCard GPU 卡资源类别，资源子类为卡型
+	BillAdjustmentResClassGpuCard BillAdjustmentResClass = "gpu_card"
+	// BillAdjustmentResClassGpuAPI 大模型 API 调用资源类别，资源子类为模型厂商
+	BillAdjustmentResClassGpuAPI BillAdjustmentResClass = "gpu_api"
+	// BillAdjustmentResClassGpuOther 识别不出卡型的 GPU 资源类别
+	BillAdjustmentResClassGpuOther BillAdjustmentResClass = "gpu_other"
 )
 
 // BillAdjustmentState 调账明细状态
@@ -257,6 +277,26 @@ const (
 	BillSyncRecordStateFailed BillSyncState = "failed"
 )
 
+// BillSyncMode 云账单对外（OBS）同步模式
+type BillSyncMode string
+
+const (
+	// BillSyncModeFull 全量同步：bill_item 明细全量推送后再同步调账
+	BillSyncModeFull BillSyncMode = "full"
+	// BillSyncModeAdjustmentOnly 只同步调账：跳过 bill_item 明细推送，仅计数后同步调账
+	BillSyncModeAdjustmentOnly BillSyncMode = "adjustment_only"
+)
+
+// Validate 校验同步模式取值
+func (b BillSyncMode) Validate() error {
+	switch b {
+	case BillSyncModeFull, BillSyncModeAdjustmentOnly:
+	default:
+		return fmt.Errorf("unsupported bill sync mode: %s", b)
+	}
+	return nil
+}
+
 // RootAccountMonthBillTaskState 一级账号月度账单（除去每日账单）状态
 type RootAccountMonthBillTaskState string
 
@@ -342,8 +382,10 @@ var (
 
 	// BillAdjustmentResClassNameMap is the map of bill adjustment res class name
 	BillAdjustmentResClassNameMap = map[BillAdjustmentResClass]string{
-		BillAdjustmentResClassCPU: "CPU",
-		BillAdjustmentResClassGPU: "GPU",
+		BillAdjustmentResClassCPU:      "CPU",
+		BillAdjustmentResClassGpuCard:  "GPU卡",
+		BillAdjustmentResClassGpuAPI:   "模型API",
+		BillAdjustmentResClassGpuOther: "GPU其他",
 	}
 
 	// RootAccountBillSummaryStateMap 一级账号账单汇总状态中文名
@@ -376,6 +418,32 @@ const (
 	// BillItemAIFlagLyria lyria
 	BillItemAIFlagLyria BillItemAIFlag = "lyria"
 )
+
+// ListGcpGpuCardL1 返回 GCP L1 显式卡型关键词表中的全部短卡型名，已按定义顺序去重。
+// 与 MatchGcpGpuCardByKeyword 共用 gcpGpuCardL1Keywords，往关键词表加卡型时本函数自动跟随。
+func ListGcpGpuCardL1() []string {
+	cards := make([]string, 0, len(gcpGpuCardL1Keywords))
+	seen := make(map[string]struct{}, len(gcpGpuCardL1Keywords))
+	for _, kw := range gcpGpuCardL1Keywords {
+		if _, ok := seen[kw.card]; ok {
+			continue
+		}
+		seen[kw.card] = struct{}{}
+		cards = append(cards, kw.card)
+	}
+	return cards
+}
+
+// ListBillAdjustmentAPIBrands 返回调账可选的模型厂商清单。
+// 取账单上报侧 MatchAPIBrandName 归并后的四值，不含 veo/imagen/lyria——
+// 这三者在上报侧已归并为 gemini，出现在调账下拉里会造成核算口径分裂，
+// 因此本函数不复用返回七值的 getAIBillItemAIFlag。
+func ListBillAdjustmentAPIBrands() []string {
+	return []string{
+		string(BillItemAIFlagClaude), string(BillItemAIFlagGemini),
+		string(BillItemAIFlagJina), string(BillItemAIFlagKimi),
+	}
+}
 
 func getAIBillItemAIFlag() []string {
 	return []string{

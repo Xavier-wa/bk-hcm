@@ -151,8 +151,8 @@ const (
 	// CvmCbsPlanDefaultCADesc 需求预测单据的默认CA备注
 	CvmCbsPlanDefaultCADesc = "[From IEG HCM CA]"
 
-	// DftImageID default image id of TencentOS Server 2.6 (TK4)
-	DftImageID = "img-fjxtfi0n"
+	// DftImageID default image id of TencentOS Server 3.2 (Final)
+	DftImageID = "img-9qrfy1xt"
 
 	// AdjustTypeAdjust 预测调整类型-常规修改
 	AdjustTypeAdjust = "常规修改"

@@ -76,14 +76,15 @@ func (t *TCloudImpl) ListImage(kt *kit.Kit,
 			State:        *pImage.ImageState,
 			Platform:     *pImage.Platform,
 			Architecture: changeArchitecture(pImage.Architecture),
-			Type:         *pImage.ImageType,
+			Type:         enumor.NormalizeImageType(*pImage.ImageType),
 			ImageSize:    *pImage.ImageSize,
 			ImageSource:  *pImage.ImageSource,
 			OsType:       image.GetOsTypeByPlatform(enumor.TCloud, *pImage.Platform),
 		})
 	}
 
-	return &image.TCloudImageListResult{Details: images, Count: common.Uint64Ptr(uint64(*resp.Response.TotalCount))}, nil
+	return &image.TCloudImageListResult{Details: images,
+		Count: common.Uint64Ptr(uint64(*resp.Response.TotalCount))}, nil
 }
 
 func changeArchitecture(architecture *string) string {

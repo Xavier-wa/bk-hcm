@@ -232,15 +232,16 @@ func transferDevice(kt *kit.Kit, device caiche.DeviceV2, zoneRegionMap map[strin
 	}
 
 	return define.RecycleHostTable{
-		AssetID:      cvt.ValToPtr(device.SerAssetID),
-		InnerIP:      cvt.ValToPtr(device.ServerLanIP),
-		DeviceType:   cvt.ValToPtr(device.SvrDeviceClassName),
-		Module:       cvt.ValToPtr(device.ModName),
-		AbolishPhase: cvt.ValToPtr(device.AbolishPhase),
-		ProjectName:  cvt.ValToPtr(device.ProjectName),
-		ProjectID:    cvt.ValToPtr(device.ProjectID),
-		Region:       cvt.ValToPtr(region),
-		CPUCore:      cvt.ValToPtr(device.CPULogicCoreNum),
+		AssetID:           cvt.ValToPtr(device.SerAssetID),
+		InnerIP:           cvt.ValToPtr(device.ServerLanIP),
+		DeviceType:        cvt.ValToPtr(device.SvrDeviceClassName),
+		Module:            cvt.ValToPtr(device.ModName),
+		AbolishPhase:      cvt.ValToPtr(device.AbolishPhase),
+		ProjectName:       cvt.ValToPtr(device.ProjectName),
+		ProjectID:         cvt.ValToPtr(device.ProjectID),
+		Region:            cvt.ValToPtr(region),
+		CPUCore:           cvt.ValToPtr(device.CPULogicCoreNum),
+		ExpectAbolishTime: cvt.ValToPtr(device.ExpectAbolishTime),
 	}
 }
 
@@ -575,7 +576,8 @@ func isChange(newHost, old define.RecycleHostTable) bool {
 		cvt.PtrToVal(newHost.BkBizID) != cvt.PtrToVal(old.BkBizID) ||
 		cvt.PtrToVal(newHost.GroupID) != cvt.PtrToVal(old.GroupID) ||
 		cvt.PtrToVal(newHost.CPUCore) != cvt.PtrToVal(old.CPUCore) ||
-		cvt.PtrToVal(newHost.IsIgnore) != cvt.PtrToVal(old.IsIgnore) {
+		cvt.PtrToVal(newHost.IsIgnore) != cvt.PtrToVal(old.IsIgnore) ||
+		cvt.PtrToVal(newHost.ExpectAbolishTime) != cvt.PtrToVal(old.ExpectAbolishTime) {
 		return true
 	}
 

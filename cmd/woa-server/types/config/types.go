@@ -143,15 +143,16 @@ type GetVpcListRst struct {
 
 // Subnet cvm subnet config
 type Subnet struct {
-	BkInstId   string `json:"id" bson:"id"`
-	Region     string `json:"region" bson:"region"`
-	Zone       string `json:"zone" bson:"zone"`
-	VpcId      string `json:"vpc_id" bson:"vpc_id"`
-	VpcName    string `json:"vpc_name" bson:"vpc_name"`
-	SubnetId   string `json:"subnet_id" bson:"subnet_id"`
-	SubnetName string `json:"subnet_name" bson:"subnet_name"`
-	Enable     bool   `json:"enable" bson:"enable"`
-	Comment    string `json:"comment"`
+	BkInstId         string `json:"id" bson:"id"`
+	Region           string `json:"region" bson:"region"`
+	Zone             string `json:"zone" bson:"zone"`
+	VpcId            string `json:"vpc_id" bson:"vpc_id"`
+	VpcName          string `json:"vpc_name" bson:"vpc_name"`
+	SubnetId         string `json:"subnet_id" bson:"subnet_id"`
+	SubnetName       string `json:"subnet_name" bson:"subnet_name"`
+	Enable           bool   `json:"enable" bson:"enable"`
+	Comment          string `json:"comment"`
+	AvailableIpCount uint64 `json:"available_ip_count"`
 }
 
 // GetSubnetParam get subnet list request param
@@ -386,14 +387,15 @@ type GetDeviceTypeResult struct {
 
 // DeviceTypeItem device type item
 type DeviceTypeItem struct {
-	DeviceType      string                   `json:"device_type"`       // 机型
-	DeviceTypeClass cvmapi.InstanceTypeClass `json:"device_type_class"` // 通/专用机型，SpecialType专用，CommonType通用
-	DeviceGroup     string                   `json:"device_group"`      // 机型族
-	CPUAmount       float64                  `json:"cpu_amount"`        // CPU数量
-	RamAmount       float64                  `json:"ram_amount"`        // 内存容量
-	CoreType        int                      `json:"core_type"`         // 1.2.3 分别标识，小核心，中核心，大核心
-	DeviceClass     string                   `json:"device_class"`      // 实例类型
-	TechnicalClass  string                   `json:"technical_class"`   // 技术分类
+	DeviceType      string                   `json:"device_type"`        // 机型
+	DeviceTypeClass cvmapi.InstanceTypeClass `json:"device_type_class"`  // 通/专用机型，SpecialType专用，CommonType通用
+	DeviceGroup     string                   `json:"device_group"`       // 机型族
+	CPUAmount       float64                  `json:"cpu_amount"`         // CPU数量
+	RamAmount       float64                  `json:"ram_amount"`         // 内存容量
+	CoreType        int                      `json:"core_type"`          // 1.2.3 分别标识，小核心，中核心，大核心
+	DeviceClass     string                   `json:"device_class"`       // 实例类型
+	TechnicalClass  string                   `json:"technical_class"`    // 技术分类
+	TechClassResAmt float64                  `json:"tech_class_res_amt"` // 技术分类资源量
 }
 
 // DeviceTypeInfo cvm device type info

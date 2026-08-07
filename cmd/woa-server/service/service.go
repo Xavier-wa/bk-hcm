@@ -60,9 +60,7 @@ import (
 	"hcm/cmd/woa-server/service/task"
 	"hcm/cmd/woa-server/storage/dal/mongo"
 	"hcm/cmd/woa-server/storage/dal/mongo/local"
-	"hcm/cmd/woa-server/storage/dal/redis"
 	"hcm/cmd/woa-server/storage/driver/mongodb"
-	redisCli "hcm/cmd/woa-server/storage/driver/redis"
 	"hcm/cmd/woa-server/storage/stream"
 	crontask "hcm/cmd/woa-server/task"
 	"hcm/pkg/api/core"
@@ -277,22 +275,7 @@ func initClients(apiClientSet *client.ClientSet, dis serviced.ServiceDiscover) (
 	}
 	clients.authorizer = authorizer
 
-	// init redis client
-	if err := initRedisClient(); err != nil {
-		return nil, err
-	}
-
 	return clients, nil
-}
-
-// initRedisClient 初始化Redis客户端
-func initRedisClient() error {
-	rConf := cc.WoaServer().Redis
-	redisConf, err := redis.NewConf(&rConf)
-	if err != nil {
-		return err
-	}
-	return redisCli.InitClient("redis", redisConf)
 }
 
 // logicSet 封装所有逻辑组件

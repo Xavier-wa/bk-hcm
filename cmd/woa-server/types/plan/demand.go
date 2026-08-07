@@ -691,9 +691,11 @@ func (s SyncCRPDemandReq) Validate() error {
 
 // CalcPenaltyBaseReq is request of calc penalty base.
 type CalcPenaltyBaseReq struct {
-	BkBizIDs []int64 `json:"bk_biz_ids" validate:"omitempty,max=100"`
+	BkBizIDs []int64                    `json:"bk_biz_ids" validate:"omitempty,max=100"`
 	// PenaltyBaseDay is any day of the penalty base week. Format is YYYY-MM-DD.
-	PenaltyBaseDay string `json:"penalty_base_day" validate:"required"`
+	PenaltyBaseDay string                  `json:"penalty_base_day" validate:"required"`
+	// SourceMode 数据源模式: "ticket" / "res_plan_demand"，必填
+	SourceMode enumor.CalcPenaltyBaseSourceMode `json:"source_mode" validate:"required"`
 }
 
 // Validate whether CalcPenaltyBaseReq is valid.
@@ -704,6 +706,11 @@ func (c CalcPenaltyBaseReq) Validate() error {
 
 	_, err := time.Parse(constant.DateLayout, c.PenaltyBaseDay)
 	if err != nil {
+		return err
+	}
+
+	// 校验 SourceMode 取值范围
+	if err := c.SourceMode.Validate(); err != nil {
 		return err
 	}
 

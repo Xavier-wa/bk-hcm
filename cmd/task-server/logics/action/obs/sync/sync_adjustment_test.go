@@ -29,6 +29,66 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// TestSplitAdjustmentResSubClass 校验调账资源子类按资源类别分发到 OBS 的两列。
+func TestSplitAdjustmentResSubClass(t *testing.T) {
+	tests := []struct {
+		name         string
+		resClass     enumor.BillAdjustmentResClass
+		resSubClass  string
+		wantGpuCard  string
+		wantAPIBrand string
+	}{
+		{"gpu_card 写卡型列", enumor.BillAdjustmentResClassGpuCard, "H100", "H100", ""},
+		{"gpu_api 写模型厂商列", enumor.BillAdjustmentResClassGpuAPI, "gemini", "", "gemini"},
+		{"gpu_other 两列均空", enumor.BillAdjustmentResClassGpuOther, "", "", ""},
+		{"cpu 两列均空", enumor.BillAdjustmentResClassCPU, "", "", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gpuCard, apiBrand := splitAdjustmentResSubClass(tt.resClass, tt.resSubClass)
+			if gpuCard != tt.wantGpuCard || apiBrand != tt.wantAPIBrand {
+				t.Fatalf("splitAdjustmentResSubClass() = (%s, %s), want (%s, %s)",
+					gpuCard, apiBrand, tt.wantGpuCard, tt.wantAPIBrand)
+			}
+		})
+	}
+}
+
+// TestAdjustmentOBSResClassID 校验四类调账在三个云厂商下落到的 OBS 资源分类 ID。
+func TestAdjustmentOBSResClassID(t *testing.T) {
+	tests := []struct {
+		name     string
+		vendor   enumor.Vendor
+		resClass enumor.BillAdjustmentResClass
+		want     int32
+	}{
+		{"aws gpu_api 落 6799", enumor.Aws, enumor.BillAdjustmentResClassGpuAPI,
+			int32(enumor.OBSResClassIDAwsAPI)},
+		{"aws gpu_card 落 GPU", enumor.Aws, enumor.BillAdjustmentResClassGpuCard,
+			int32(enumor.OBSResClassIDAwsGPU)},
+		{"aws cpu 落 CPU", enumor.Aws, enumor.BillAdjustmentResClassCPU,
+			int32(enumor.OBSResClassIDAwsCPU)},
+		{"gcp gpu_other 落 6312", enumor.Gcp, enumor.BillAdjustmentResClassGpuOther,
+			int32(enumor.OBSResClassIDGcpGPU)},
+		{"gcp gpu_api 落 API", enumor.Gcp, enumor.BillAdjustmentResClassGpuAPI,
+			int32(enumor.OBSResClassIDGcpAPI)},
+		{"华为云 gpu_api 回落 6315", enumor.HuaWei, enumor.BillAdjustmentResClassGpuAPI,
+			int32(enumor.OBSResClassIDHuaweiGPU)},
+		{"华为云 cpu 落 CPU", enumor.HuaWei, enumor.BillAdjustmentResClassCPU,
+			int32(enumor.OBSResClassIDHuaweiCPU)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := enumor.GetOBSResClassIDByType(tt.vendor, tt.resClass.IsGPU(), tt.resClass.IsAPI())
+			if got != tt.want {
+				t.Fatalf("GetOBSResClassIDByType(%s, %s) = %d, want %d", tt.vendor, tt.resClass, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetAdjustmentCost(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -16,7 +16,6 @@ package dal
 import (
 	"context"
 
-	"hcm/cmd/woa-server/storage/dal/redis"
 	"hcm/cmd/woa-server/storage/dal/types"
 	"hcm/pkg/tools/metadata"
 
@@ -64,7 +63,4 @@ type DB interface {
 	CommitTransaction(context.Context, *metadata.TxnCapable) error
 	// AbortTransaction 取消事务
 	AbortTransaction(context.Context, *metadata.TxnCapable) (bool, error)
-
-	// InitTxnManager TxnID management of initial transaction
-	InitTxnManager(r redis.Client) error
 }

@@ -675,8 +675,8 @@ func buildUpgradeDeviceBase(item *types.DeviceInfo, order *types.ApplyOrder, gen
 		IsManualMatched:   item.IsManualMatched,
 		CloudZone:         item.CloudZone,
 		CloudRegion:       zoneRegionMap[item.CloudZone],
-		CreateAt:          time.Now(),
-		UpdateAt:          time.Now(),
+		CreatedAt:         time.Now(),
+		UpdatedAt:         time.Now(),
 	}
 }
 

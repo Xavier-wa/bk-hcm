@@ -194,11 +194,7 @@ func (act SyncAdjustmentAction) convertHuawei(kt *kit.Kit, adjItems []*bill.Adju
 			return err
 		}
 
-		// 调账默认为GPU
-		isGPU := true
-		if adj.ResClass == enumor.BillAdjustmentResClassCPU {
-			isGPU = false
-		}
+		gpuCard, apiBrand := splitAdjustmentResSubClass(adj.ResClass, adj.ResSubClass)
 		obsItem := &tableobs.OBSBillItemHuawei{
 			SetIndex:      adjustmentSetIndex,
 			Vendor:        string(adj.Vendor),
@@ -216,10 +212,12 @@ func (act SyncAdjustmentAction) convertHuawei(kt *kit.Kit, adjItems []*bill.Adju
 			Rate:             floatRate,
 			RealCost:         &types.Decimal{Decimal: adjCost.Mul(cvt.PtrToVal(exchangeRate))},
 
-			ProductName:  adj.Memo,
-			ResourceName: adj.Memo,
-			CityId:       cityID,
-			ResClassId:   enumor.GetOBSResClassID(adj.Vendor, isGPU),
+			ProductName:     adj.Memo,
+			ResourceName:    adj.Memo,
+			CityId:          cityID,
+			ResClassId:      enumor.GetOBSResClassIDByType(adj.Vendor, adj.ResClass.IsGPU(), adj.ResClass.IsAPI()),
+			GpuCardCategory: gpuCard,
+			APIBrandName:    apiBrand,
 		}
 		obsItems[i] = obsItem
 	}
@@ -282,11 +280,7 @@ func (act SyncAdjustmentAction) convertAws(kt *kit.Kit, adjItems []*bill.Adjustm
 			return err
 		}
 
-		// 调账默认为GPU
-		isGPU := true
-		if adj.ResClass == enumor.BillAdjustmentResClassCPU {
-			isGPU = false
-		}
+		gpuCard, apiBrand := splitAdjustmentResSubClass(adj.ResClass, adj.ResSubClass)
 		obsItem := &tableobs.OBSBillItemAws{
 			SetIndex:      adjustmentSetIndex,
 			Vendor:        string(adj.Vendor),
@@ -312,7 +306,10 @@ func (act SyncAdjustmentAction) convertAws(kt *kit.Kit, adjItems []*bill.Adjustm
 			BillPayerAccountID:          rootInfo.CloudID,
 			LineItemLineItemDescription: adj.Memo,
 			CityId:                      cityID,
-			ResClassId:                  enumor.GetOBSResClassID(adj.Vendor, isGPU),
+			ResClassId: enumor.GetOBSResClassIDByType(adj.Vendor, adj.ResClass.IsGPU(),
+				adj.ResClass.IsAPI()),
+			GpuCardCategory: gpuCard,
+			APIBrandName:    apiBrand,
 		}
 		obsItems[i] = obsItem
 	}
@@ -368,11 +365,7 @@ func (act SyncAdjustmentAction) convertGcp(kt *kit.Kit, adjItems []*bill.Adjustm
 		if mainAccount.Site == enumor.MainAccountChinaSite {
 			cityID = constant.OBSDefaultCityIDChina
 		}
-		// 调账默认为GPU
-		isGPU := true
-		if adj.ResClass == enumor.BillAdjustmentResClassCPU {
-			isGPU = false
-		}
+		gpuCard, apiBrand := splitAdjustmentResSubClass(adj.ResClass, adj.ResSubClass)
 		obsItem := &tableobs.OBSBillItemGcp{
 			SetIndex:      adjustmentSetIndex,
 			Vendor:        string(adj.Vendor),
@@ -395,9 +388,11 @@ func (act SyncAdjustmentAction) convertGcp(kt *kit.Kit, adjItems []*bill.Adjustm
 			ServiceDescription: adjustmentProductName,
 			ProjectId:          mainAccount.CloudID,
 
-			SkuDescription: adj.Memo,
-			CityId:         cityID,
-			ResClassId:     enumor.GetOBSResClassID(adj.Vendor, isGPU),
+			SkuDescription:  adj.Memo,
+			CityId:          cityID,
+			ResClassId:      enumor.GetOBSResClassIDByType(adj.Vendor, adj.ResClass.IsGPU(), adj.ResClass.IsAPI()),
+			GpuCardCategory: gpuCard,
+			APIBrandName:    apiBrand,
 		}
 		obsItems[i] = obsItem
 	}
@@ -681,6 +676,21 @@ func (act SyncAdjustmentAction) getCNYExchangeRate(kt *kit.Kit, fromCurrency enu
 	}
 	act.exchangeRateMap[fromCurrency] = rate
 	return rate, err
+}
+
+// splitAdjustmentResSubClass 把调账的单列资源子类按资源类别拆分为 OBS 的卡型列与 API 厂商列。
+// gpu_card 写卡型列、gpu_api 写 API 厂商列，cpu 与 gpu_other 两列均为空串。
+func splitAdjustmentResSubClass(resClass enumor.BillAdjustmentResClass, resSubClass string) (
+	gpuCardCategory string, apiBrandName string) {
+
+	switch resClass {
+	case enumor.BillAdjustmentResClassGpuCard:
+		return resSubClass, ""
+	case enumor.BillAdjustmentResClassGpuAPI:
+		return "", resSubClass
+	default:
+		return "", ""
+	}
 }
 
 func getAdjustmentCost(kt *kit.Kit, adj *bill.AdjustmentItem, vendor enumor.Vendor) (decimal.Decimal, error) {

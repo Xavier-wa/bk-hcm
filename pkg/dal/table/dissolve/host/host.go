@@ -48,6 +48,7 @@ var RecycleHostColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "operators", NamedC: "operators", Type: enumor.Json},
 	{Column: "cpu_core", NamedC: "cpu_core", Type: enumor.Numeric},
 	{Column: "is_ignore", NamedC: "is_ignore", Type: enumor.Boolean},
+	{Column: "expect_abolish_time", NamedC: "expect_abolish_time", Type: enumor.String},
 	{Column: "creator", NamedC: "creator", Type: enumor.String},
 	{Column: "reviser", NamedC: "reviser", Type: enumor.String},
 	{Column: "created_at", NamedC: "created_at", Type: enumor.Time},
@@ -84,6 +85,8 @@ type RecycleHostTable struct {
 	CPUCore *int `db:"cpu_core" json:"cpu_core"`
 	// IsIgnore 是否忽略该主机
 	IsIgnore *bool `db:"is_ignore" json:"is_ignore"`
+	// ExpectAbolishTime 裁撤截止时间，格式 yyyy-MM-dd
+	ExpectAbolishTime *string `db:"expect_abolish_time" json:"expect_abolish_time"`
 	// Creator 创建者
 	Creator string `db:"creator" validate:"max=64" json:"creator"`
 	// Reviser 更新者

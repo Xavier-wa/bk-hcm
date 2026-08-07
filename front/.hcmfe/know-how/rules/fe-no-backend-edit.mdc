@@ -1,6 +1,12 @@
 ---
-description: "前端编码路径边界——仅在前端 / workflow-dev 任务中禁止主动改后端；用户明确做后端 / Go 任务时整条规则忽略。关键词：前端任务、工作流、越界、server、pkg、Go、monorepo、frontend-only。"
-alwaysApply: true
+description: "前端编码路径边界——仅在前端 / workflow-dev 任务中禁止主动改后端；用户明确做后端 / Go 任务时整条规则忽略。关键词：前端任务、工作流、越界、server、pkg、Go、monorepo、frontend-only、workflow-dev。"
+globs:
+  - "front/**/*.vue"
+  - "front/**/*.ts"
+  - "front/**/*.tsx"
+  - "front/**/*.js"
+  - "front/**/*.jsx"
+alwaysApply: false
 ---
 
 # 前端编码路径边界
@@ -11,7 +17,7 @@ alwaysApply: true
 
 | 当前用户任务 | 本规则 |
 | --- | --- |
-| 前端开发、`/workflow-dev`、HCM 页面/组件/前端 API 封装、`.bkdevbuddy` 工作流 | **生效**：按下述硬约束执行 |
+| 前端开发、`/workflow-dev`、HCM 页面/组件/前端 API 封装、`<dataDir>` 工作流 | **生效**：按下述硬约束执行 |
 | 用户明确在做后端 / Go / `server` / `pkg` / `cmd` / `internal` 等服务端开发或明确授权改后端 | **整条忽略**：正常改后端，不要被本文件束缚 |
 | 意图不清 | **先问一句**是前端还是后端任务；未确认前默认按前端任务处理（避免顺手改后端） |
 
@@ -26,7 +32,7 @@ bkdevbuddy / `/workflow-dev` 在本项目中只服务 **HCM 前端**。**不得*
    - `**/*.go`、`**/go.mod`、`**/go.sum`
    - `server/`、`cmd/`、`pkg/`、`internal/`（仓库内后端树）
    - 非前端服务的部署 / CI 脚本（用户未点名时）
-3. **允许只读**：为理解接口契约、排错或写 `api.md`，可以 Read / Grep 后端代码；读完只把结论写进 `.bkdevbuddy/` 产物或前端适配代码，**不得**据此改后端。
+3. **允许只读**：为理解接口契约、排错或写 `api.md`，可以 Read / Grep 后端代码；读完只把结论写进 `<dataDir>/` 产物或前端适配代码，**不得**据此改后端（`<dataDir>` 见 `bkdevbuddy-data-dir` rule）。
 4. **接口缺口处理**：发现需后端配合时，在 `api.md` / `coding.md` / 对话中标注「需后端配合」及期望契约，交给用户决定是否另开后端任务；**不要**自己开改。
 
 ## 允许写入的典型前端范围（仅规则生效时）
@@ -35,7 +41,7 @@ bkdevbuddy / `/workflow-dev` 在本项目中只服务 **HCM 前端**。**不得*
 
 - `src/`、`views/`、`components/`、`common/`、`constants/`、`router/`、`store/`、`hooks/`、`composables/`、`api/`（前端 HTTP 封装）、`types/`、`styles/` 等前端树
 - 前端侧 `package.json` / 前端 lint 配置 / 前端单测（仅当任务相关）
-- `.bkdevbuddy/workflow/**`、`.bkdevbuddy/requirements/**` 工作流产物
+- `<dataDir>/workflow/**`、`<dataDir>/requirements/**` 工作流产物（`<dataDir>` 见 `bkdevbuddy-data-dir` rule）
 
 若当前 Cursor workspace 开在仓库根且前端在 `front/`，只改 `front/**`；不要改同级后端目录。
 

@@ -93,8 +93,8 @@ func buildMongoApplyTicket(source interface{}) (interface{}, error) {
 		Remark:       row.Remark,
 		Suborders:    suborders,
 		OldSuborders: oldSuborders,
-		CreateAt:     parseTableTime(row.CreatedAt),
-		UpdateAt:     parseTableTime(row.UpdatedAt),
+		CreatedAt:    parseTableTime(row.CreatedAt),
+		UpdatedAt:    parseTableTime(row.UpdatedAt),
 		ProductType:  row.ProductType,
 	}, nil
 }
@@ -140,8 +140,8 @@ func buildMongoApplyOrder(source interface{}) (interface{}, error) {
 		ObsProject:        row.ObsProject,
 		RetryTime:         cvt.PtrToVal(row.RetryTime),
 		ModifyTime:        cvt.PtrToVal(row.ModifyTime),
-		CreateAt:          parseTableTime(row.CreatedAt),
-		UpdateAt:          parseTableTime(row.UpdatedAt),
+		CreatedAt:         parseTableTime(row.CreatedAt),
+		UpdatedAt:         parseTableTime(row.UpdatedAt),
 	}, nil
 }
 
@@ -357,8 +357,8 @@ func buildMongoDeviceInfo(source interface{}) (interface{}, error) {
 		InitTaskLink:     row.InitTaskLink,
 		IsManualMatched:  row.IsManualMatched,
 		OwnerIP:          row.OwnerIP,
-		CreateAt:         parseTableTime(row.CreatedAt),
-		UpdateAt:         parseTableTime(row.UpdatedAt),
+		CreatedAt:        parseTableTime(row.CreatedAt),
+		UpdatedAt:        parseTableTime(row.UpdatedAt),
 	}, nil
 }
 

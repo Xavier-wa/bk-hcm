@@ -268,3 +268,55 @@ func TestMatchTransferCRPDemands_NilUpdated(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "nil")
 }
+
+// TestIsShortLeaseProject verifies the isShortLeaseProject function
+func TestIsShortLeaseProject(t *testing.T) {
+	testCases := []struct {
+		name     string
+		demand   rpt.ResPlanDemand
+		want     bool
+	}{
+		{
+			name: "短租项目",
+			demand: rpt.ResPlanDemand{
+				Updated: &rpt.UpdatedRPDemandItem{
+					ObsProject: enumor.ObsProjectShortLease,
+				},
+			},
+			want: true,
+		},
+		{
+			name: "非短租项目",
+			demand: rpt.ResPlanDemand{
+				Updated: &rpt.UpdatedRPDemandItem{
+					ObsProject: enumor.ObsProjectNormal,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "Updated为nil",
+			demand: rpt.ResPlanDemand{
+				Updated: nil,
+			},
+			want: false,
+		},
+		{
+			name: "ObsProject为空",
+			demand: rpt.ResPlanDemand{
+				Updated: &rpt.UpdatedRPDemandItem{
+					ObsProject: enumor.ObsProject(""),
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isShortLeaseProject(tc.demand)
+			assert.Equal(t, tc.want, got,
+				"isShortLeaseProject() = %v, want %v", got, tc.want)
+		})
+	}
+}

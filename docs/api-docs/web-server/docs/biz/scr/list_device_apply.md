@@ -103,6 +103,8 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/findmany/apply/device
         "device_type":"S3ne.4XLARGE64",
         "zone_name":"上海-奉贤",
         "owner_ip":"x.x.x.x",
+        "created_at":"2022-04-24T02:29:32.511Z",
+        "updated_at":"2022-04-24T02:29:32.511Z",
         "create_at":"2022-04-24T02:29:32.511Z",
         "update_at":"2022-04-24T02:29:32.511Z"
       }
@@ -142,5 +144,7 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/findmany/apply/device
 | device_type  | string    | 机型           |
 | zone_name    | string    | 区域           |
 | owner_ip     | string    | 所属的母机IP    |
-| create_at    | timestamp | 记录创建时间    |
-| update_at    | timestamp | 记录更新时间    |
+| created_at    | timestamp | 记录创建时间    |
+| updated_at    | timestamp | 记录更新时间    |
+| create_at    | timestamp | 记录创建时间（已废弃，为兼容旧版本保留，建议使用 created_at）    |
+| update_at    | timestamp | 记录更新时间（已废弃，为兼容旧版本保留，建议使用 updated_at）    |

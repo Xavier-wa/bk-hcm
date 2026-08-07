@@ -84,6 +84,11 @@ export default defineComponent({
         render: ({ cell }: any) => RES_CLASS_MAP[cell] || '--',
       },
       {
+        label: t('资源子类'),
+        field: 'res_sub_class',
+        render: ({ cell }: any) => cell || '--',
+      },
+      {
         label: t('调账类型'),
         field: 'type',
         render: ({ cell }: any) => (

@@ -52,6 +52,7 @@ type BillSyncRecordCreateReq struct {
 	Detail    string               `json:"detail" validate:"omitempty"`
 	Operator  string               `json:"operator" validate:"max=64" `
 	Count     uint                 `json:"count"`
+	SyncMode  enumor.BillSyncMode  `json:"sync_mode" validate:"omitempty"`
 }
 
 // Validate ...

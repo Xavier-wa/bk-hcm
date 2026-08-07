@@ -183,14 +183,14 @@ POST /api/v1/woa/plans/resources/demands/list
 |----------|--------------|------------------------------------------|
 | overview | object       | 概览信息                                     |
 | count    | int          | 当前规则能匹配到的总记录条数，仅在 count 查询参数设置为 true 时返回 |
-| detail   | object array | 查询返回的数据，仅在 count 查询参数设置为 false 时返回       |
+| details  | object array | 查询返回的数据，仅在 count 查询参数设置为 false 时返回       |
 
 #### data.overview
 
 | 参数名称                      | 参数类型 | 描述           |
 |---------------------------|------|--------------|
 | total_cpu_core            | int  | 总CPU核心数      |
-| total_applied_cpu_core    | int  | 总已执行CPU核心数   |
+| total_applied_core        | int  | 总已执行CPU核心数   |
 | in_plan_cpu_core          | int  | 预测内CPU核心数    |
 | in_plan_applied_cpu_core  | int  | 预测内已执行CPU核心数 |
 | out_plan_cpu_core         | int  | 预测外CPU核心数    |

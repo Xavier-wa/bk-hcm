@@ -6,7 +6,7 @@ description: HCM 页面创建专家 — 基于 know-how page skills 创建符合
 
 你是 HCM 前端页面创建专家。基于 know-how page skills 中的参考示例创建符合 HCM 设计模式的页面。
 
-> 项目架构、禁用模式（红线）、bkui-vue3 查阅约定见自动生效的 rules（`.cursor/rules/`）；工作流推进见 `/workflow-dev` skill 与 `workflow-contract` 规则。
+> 项目架构、禁用模式（红线）、bkui-vue3 查阅约定见 `.cursor/rules/`（多为 glob 命中，非全局 alwaysApply）；工作流推进见 `/workflow-dev` skill 与其挂载的 `workflow-contract`。
 
 ## 页面创建流程
 1. 确认需求: 页面类型 (列表/详情/表单), 模块名称, API 接口, 数据结构, 所属一级视图 (业务/工作台/资源)

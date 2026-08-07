@@ -17,6 +17,7 @@ import (
 	"hcm/pkg/api/core"
 	corecloud "hcm/pkg/api/core/cloud"
 	"hcm/pkg/api/data-service/cloud"
+	proto "hcm/pkg/api/hc-service/subnet"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
@@ -30,6 +31,9 @@ import (
 	"hcm/pkg/tools/metadata"
 	"hcm/pkg/tools/slice"
 )
+
+// listCountIPBatchSize 是 ListCountIP 接口单次请求 IDs 的数量上限（与接口 max=100 校验保持一致）
+const listCountIPBatchSize = 100
 
 // SubnetIf provides management interface for operations of subnet config
 type SubnetIf interface {
@@ -136,6 +140,14 @@ func (s *subnet) GetSubnetList(kt *kit.Kit, input *types.GetSubnetListParam) (*t
 		return nil, err
 	}
 
+	// 批量查询子网可用IP数量
+	availIPMap, err := s.listSubnetAvailIPCount(kt, accountID, subnetList.Details)
+	if err != nil {
+		// 查询可用IP失败不影响主流程，仅记录日志
+		logs.Warnf("failed to list subnet avail ip count, err: %v, rid: %s", err, kt.Rid)
+		availIPMap = make(map[string]uint64)
+	}
+
 	subnetResult := make([]*types.Subnet, 0, len(subnetList.Details))
 	for _, subnetDetail := range subnetList.Details {
 		var enableCvm bool
@@ -147,20 +159,58 @@ func (s *subnet) GetSubnetList(kt *kit.Kit, input *types.GetSubnetListParam) (*t
 			vpcName = vpcIDNameMap[subnetDetail.CloudVpcID]
 		}
 		subnetResult = append(subnetResult, &types.Subnet{
-			BkInstId:   subnetDetail.ID,
-			Region:     subnetDetail.Region,
-			Zone:       subnetDetail.Zone,
-			VpcId:      subnetDetail.CloudVpcID,
-			VpcName:    vpcName,
-			SubnetId:   subnetDetail.CloudID,
-			SubnetName: subnetDetail.Name,
-			Enable:     enableCvm,
-			Comment:    cvt.PtrToVal(subnetDetail.Memo),
+			BkInstId:         subnetDetail.ID,
+			Region:           subnetDetail.Region,
+			Zone:             subnetDetail.Zone,
+			VpcId:            subnetDetail.CloudVpcID,
+			VpcName:          vpcName,
+			SubnetId:         subnetDetail.CloudID,
+			SubnetName:       subnetDetail.Name,
+			Enable:           enableCvm,
+			Comment:          cvt.PtrToVal(subnetDetail.Memo),
+			AvailableIpCount: availIPMap[subnetDetail.ID],
 		})
 	}
 
 	rst := &types.GetSubnetResult{Count: int64(subnetList.Count), Info: subnetResult}
 	return rst, nil
+}
+
+// listSubnetAvailIPCount 批量查询子网可用IP数量，返回 subnetID -> availableIpCount 的映射
+func (s *subnet) listSubnetAvailIPCount(kt *kit.Kit, accountID string,
+	subnets []corecloud.Subnet[corecloud.TCloudSubnetExtension]) (map[string]uint64, error) {
+
+	if len(subnets) == 0 {
+		return make(map[string]uint64), nil
+	}
+
+	// 按 region 分组，批量查询
+	regionIDsMap := make(map[string][]string)
+	for _, item := range subnets {
+		regionIDsMap[item.Region] = append(regionIDsMap[item.Region], item.ID)
+	}
+
+	result := make(map[string]uint64, len(subnets))
+	for region, ids := range regionIDsMap {
+		// ListCountIP 单次请求 IDs 数量上限为 listCountIPBatchSize，超出需分批查询
+		for _, batchIDs := range slice.Split(ids, listCountIPBatchSize) {
+			req := &proto.ListCountIPReq{
+				Region:    region,
+				AccountID: accountID,
+				IDs:       batchIDs,
+			}
+			ipCountMap, err := s.client.HCService().TCloudZiyan.Subnet.ListCountIP(kt.Ctx, kt.Header(), req)
+			if err != nil {
+				logs.Errorf("failed to list count ip for region: %s, err: %v, rid: %s", region, err, kt.Rid)
+				return nil, err
+			}
+			for id, ipResult := range ipCountMap {
+				result[id] = ipResult.AvailableIPCount
+			}
+		}
+	}
+
+	return result, nil
 }
 
 func (s *subnet) getVpcNameMap(kt *kit.Kit, accountID string,

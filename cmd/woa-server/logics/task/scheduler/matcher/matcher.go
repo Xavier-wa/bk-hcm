@@ -1096,15 +1096,15 @@ func (m *Matcher) notifyApplyDone(kt *kit.Kit, orderId uint64) error {
 	noticeFmt := m.bkchat.GetNoticeFmt()
 	bizName := m.getBizName(ticket.BkBizId)
 	requireName := ticket.RequireType.GetName()
-	createTime := ticket.CreateAt.Local().Format(constant.DateTimeLayout)
-	if ticket.CreateAt.Location() == time.UTC {
+	createTime := ticket.CreatedAt.Local().Format(constant.DateTimeLayout)
+	if ticket.CreatedAt.Location() == time.UTC {
 		location, err := time.LoadLocation("Asia/Shanghai")
 		if err != nil {
-			logs.Warnf("scheduler:logics:bkchat:notifyApplyDone:failed, orderId: %d, err: %v, createAt: %+v",
-				orderId, err, ticket.CreateAt)
+			logs.Warnf("scheduler:logics:bkchat:notifyApplyDone:failed, orderId: %d, err: %v, createAt: %+v, "+
+				"rid: %s", orderId, err, ticket.CreatedAt, kt.Rid)
 			return err
 		}
-		createTime = ticket.CreateAt.In(location).Format(constant.DateTimeLayout)
+		createTime = ticket.CreatedAt.In(location).Format(constant.DateTimeLayout)
 	}
 	resType := types.ResourceTypeCvm
 	if len(ticket.Suborders) > 0 && ticket.Suborders[0] != nil {
@@ -1117,12 +1117,13 @@ func (m *Matcher) notifyApplyDone(kt *kit.Kit, orderId uint64) error {
 	for _, user := range users {
 		resp, err := m.bkchat.SendApplyDoneMsg(nil, nil, user, content)
 		if err != nil {
-			logs.Warnf("scheduler:logics:bkchat:notifyApplyDone:failed, failed to send bkchat message, err: %v", err)
+			logs.Warnf("scheduler:logics:bkchat:notifyApplyDone:failed, failed to send bkchat message, err: %v, "+
+				"rid: %s", err, kt.Rid)
 			continue
 		}
 		if resp.Code != 0 {
 			logs.Warnf("scheduler:logics:bkchat:notifyApplyDone:failed, failed to send bkchat message, "+
-				"code: %d, msg: %s", resp.Code, resp.Msg)
+				"code: %d, msg: %s, rid: %s", resp.Code, resp.Msg, kt.Rid)
 			continue
 		}
 	}
@@ -1298,12 +1299,12 @@ func (m *Matcher) sendDeliveryWeComNotification(kt *kit.Kit, ticket *types.Apply
 // generateDeliveryWeComContent 生成交付企业微信通知内容
 func (m *Matcher) generateDeliveryWeComContent(kt *kit.Kit, ticket *types.ApplyTicket) (string, error) {
 	bizName := m.getBizName(ticket.BkBizId)
-	createTime := ticket.CreateAt.Local().Format(constant.DateTimeLayout)
+	createTime := ticket.CreatedAt.Local().Format(constant.DateTimeLayout)
 	if locName := cc.WoaServer().LocalTimezone; locName != "" {
 		if location, err := time.LoadLocation(locName); err != nil {
 			logs.Warnf("get location time zone: %s failed, err: %v, rid: %s", locName, err, kt.Rid)
 		} else {
-			createTime = ticket.CreateAt.In(location).Format(constant.DateTimeLayout)
+			createTime = ticket.CreatedAt.In(location).Format(constant.DateTimeLayout)
 		}
 	}
 	requireType := ticket.RequireType.GetName()
@@ -1326,12 +1327,12 @@ func (m *Matcher) generateDeliveryEmailContent(kt *kit.Kit, ticket *types.ApplyT
 
 	// 整体内容
 	bkHcmURL := cc.WoaServer().BkHcmURL
-	createTime := ticket.CreateAt.Local().Format(constant.DateTimeLayout)
+	createTime := ticket.CreatedAt.Local().Format(constant.DateTimeLayout)
 	if locName := cc.WoaServer().LocalTimezone; locName != "" {
 		if location, err := time.LoadLocation(locName); err != nil {
 			logs.Warnf("get location time zone: %s failed, err: %v, rid: %s", locName, err, kt.Rid)
 		} else {
-			createTime = ticket.CreateAt.In(location).Format(constant.DateTimeLayout)
+			createTime = ticket.CreatedAt.In(location).Format(constant.DateTimeLayout)
 		}
 	}
 	// 生成设备视角链接的 Base64 编码参数

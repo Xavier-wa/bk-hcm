@@ -25,9 +25,9 @@ const businessGlobalStore = useBusinessGlobalStore();
 const { handlePageChange, handlePageSizeChange } = usePage();
 const { settings } = useTableSettings(props.columns);
 
-// 本地排序状态，不通过路由触发，避免重新请求接口
-const sortField = ref<string>();
-const sortOrder = ref<'asc' | 'desc'>();
+// 本地排序状态，默认按裁撤CPU总核数降序
+const sortField = ref<string>('current_cpu_core');
+const sortOrder = ref<'asc' | 'desc'>('desc');
 
 // 本地排序处理：不修改路由，仅在组件内排序
 const handleLocalSort = ({ column, type }: { column: { field: string }; index: number; type: string }) => {

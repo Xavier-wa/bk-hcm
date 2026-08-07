@@ -138,8 +138,8 @@ POST /api/v1/woa/bizs/{bk_biz_id}/plans/resources/tickets/list
 
 | 参数名称   | 参数类型         | 描述                                       |
 |--------|--------------|------------------------------------------|
-| count  | int          | 当前规则能匹配到的总记录条数，仅在 count 查询参数设置为 true 时返回 |
-| detail | object array | 查询返回的数据，仅在 count 查询参数设置为 false 时返回       |
+| count   | int          | 当前规则能匹配到的总记录条数，仅在 count 查询参数设置为 true 时返回 |
+| details | object array | 查询返回的数据，仅在 count 查询参数设置为 false 时返回       |
 
 #### data.details[n]
 
@@ -173,6 +173,7 @@ POST /api/v1/woa/bizs/{bk_biz_id}/plans/resources/tickets/list
 | 参数名称 | 参数类型   | 描述       |
 |------|--------|----------|
 | cvm  | object | 申请的CVM信息 |
+| cbs  | object | 申请的CBS信息 |
 
 #### data.details[n].(audited_)original_info.cvm & data.details[n].(audited_)updated_info.cvm
 
@@ -180,3 +181,9 @@ POST /api/v1/woa/bizs/{bk_biz_id}/plans/resources/tickets/list
 |----------|------|----------|
 | cpu_core | int  | CPU核数（核） |
 | memory   | int  | 内存总量（G）  |
+
+#### data.details[n].(audited_)original_info.cbs & data.details[n].(audited_)updated_info.cbs
+
+| 参数名称     | 参数类型 | 描述       |
+|----------|------|----------|
+| disk_size | int | 云盘大小（G） |

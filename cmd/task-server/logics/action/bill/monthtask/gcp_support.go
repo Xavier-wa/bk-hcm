@@ -172,6 +172,10 @@ func (gcp *GcpSupportMonthTask) Split(kt *kit.Kit, opt *MonthTaskActionOption,
 	if err != nil {
 		return nil, err
 	}
+	if len(summaryMainList) == 0 {
+		logs.Warnf("no main account for gcp month task common expense, opt: %#v, rid: %s", opt, kt.Rid)
+		return nil, nil
+	}
 
 	billItems := make([]dsbill.BillItemCreateReq[json.RawMessage], 0, len(summaryMainList))
 	// 聚合本批次 账单总额，并分摊给每个主账号
@@ -193,13 +197,20 @@ func (gcp *GcpSupportMonthTask) Split(kt *kit.Kit, opt *MonthTaskActionOption,
 		}
 		batchCost = batchCost.Add(cost)
 	}
-	// 按比例分摊给各个二级账号
+	costs := make([]decimal.Decimal, len(summaryMainList))
 	summaryTotal := decimal.Zero
-	for _, summaryMain := range summaryMainList {
+	for i, summaryMain := range summaryMainList {
+		costs[i] = summaryMain.CurrentMonthCost
 		summaryTotal = summaryTotal.Add(summaryMain.CurrentMonthCost)
 	}
-	for _, summaryMain := range summaryMainList {
-		cost := batchCost.Mul(summaryMain.CurrentMonthCost).Div(summaryTotal)
+	if summaryTotal.IsZero() && batchCost.IsZero() {
+		logs.Infof("skip gcp common expense split, batchCost and summaryTotal are zero, opt: %#v, rid: %s",
+			opt, kt.Rid)
+		return nil, nil
+	}
+	shares := allocateCommonExpense(batchCost, summaryTotal, costs)
+	for i, summaryMain := range summaryMainList {
+		cost := shares[i]
 		costBillItem := dsbill.BillItemCreateReq[json.RawMessage]{
 			RootAccountID: opt.RootAccountID,
 			MainAccountID: summaryMain.MainAccountID,

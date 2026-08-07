@@ -28,7 +28,9 @@ import (
 	logicshost "hcm/cmd/woa-server/logics/dissolve/host"
 	model "hcm/cmd/woa-server/model/task"
 	"hcm/cmd/woa-server/types/dissolve"
+	taskTypes "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/api/core"
+	dsproto "hcm/pkg/api/data-service/dissolve"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/dal/dao/tools"
@@ -50,6 +52,7 @@ type Table interface {
 	ListHostDetail(kt *kit.Kit, req *dissolve.HostDetailListReq) (*dissolve.HostDetailListResult, error)
 	ListExportHostDetail(kt *kit.Kit, req *dissolve.HostDetailExportListReq) (*dissolve.HostDetailListResult, error)
 	ListBizCpuCoreSummary(kt *kit.Kit, bizIDs []int64) (map[int64]dissolve.CpuCoreSummary, error)
+	ListExpectAbolishTime(kt *kit.Kit, req *dissolve.ExpectAbolishTimeListReq) ([]string, error)
 }
 
 type logics struct {
@@ -179,6 +182,24 @@ func (l *logics) ListResDissolveTable(kt *kit.Kit, req *dissolve.ResDissolveReq)
 	return buildOverviewResult(bizMap, deliveredMap), nil
 }
 
+// ListExpectAbolishTime 查询裁撤截止时间列表：套用查询侧恒定条件，经 data-service 去重升序返回
+func (l *logics) ListExpectAbolishTime(kt *kit.Kit, req *dissolve.ExpectAbolishTimeListReq) ([]string, error) {
+	rules := convertAtomRulesToFactories(l.baseRules())
+	if req.Filter != nil {
+		rules = append(rules, req.Filter)
+	}
+	expr := &filter.Expression{Op: filter.And, Rules: rules}
+
+	resp, err := l.cliSet.DataService().TCloudZiyan.Dissolve.ListRecycleHostExpectAbolishTime(kt,
+		&dsproto.ListRecycleHostExpectAbolishTimeReq{Filter: expr})
+	if err != nil {
+		logs.Errorf("list expect abolish time failed, err: %v, req: %+v, rid: %s", err, req, kt.Rid)
+		return nil, err
+	}
+
+	return resp.ExpectAbolishTimes, nil
+}
+
 // buildOverviewFilter 构造总览查询条件，恒附 ignore=false + 排除指定项目
 func (l *logics) buildOverviewFilter(req *dissolve.ResDissolveReq) *filter.Expression {
 	rules := convertAtomRulesToFactories(l.baseRules())
@@ -196,6 +217,9 @@ func (l *logics) buildOverviewFilter(req *dissolve.ResDissolveReq) *filter.Expre
 	}
 	if len(req.Regions) != 0 {
 		rules = append(rules, tools.RuleIn("region", req.Regions))
+	}
+	if len(req.ExpectAbolishTimes) != 0 {
+		rules = append(rules, tools.RuleIn("expect_abolish_time", req.ExpectAbolishTimes))
 	}
 
 	return &filter.Expression{Op: filter.And, Rules: rules}
@@ -269,15 +293,16 @@ func (l *logics) ListExportHostDetail(kt *kit.Kit, req *dissolve.HostDetailExpor
 	*dissolve.HostDetailListResult, error) {
 
 	listReq := &dissolve.HostDetailListReq{
-		BizIDs:     req.BizIDs,
-		ProjectIDs: req.ProjectIDs,
-		GroupIDs:   req.GroupIDs,
-		Operators:  req.Operators,
-		Modules:    req.Modules,
-		InnerIPs:   req.InnerIPs,
-		AssetIDs:   req.AssetIDs,
-		Status:     req.Status,
-		Page:       req.Page,
+		BizIDs:             req.BizIDs,
+		ProjectIDs:         req.ProjectIDs,
+		GroupIDs:           req.GroupIDs,
+		Operators:          req.Operators,
+		Modules:            req.Modules,
+		InnerIPs:           req.InnerIPs,
+		AssetIDs:           req.AssetIDs,
+		Status:             req.Status,
+		ExpectAbolishTimes: req.ExpectAbolishTimes,
+		Page:               req.Page,
 	}
 
 	if req.Page.Count {
@@ -359,6 +384,9 @@ func buildDetailFilter(base []*filter.AtomRule, req *dissolve.HostDetailListReq)
 	if phases := req.Status.ToAbolishPhases(); len(phases) != 0 {
 		rules = append(rules, tools.RuleIn("abolish_phase", phases))
 	}
+	if len(req.ExpectAbolishTimes) != 0 {
+		rules = append(rules, tools.RuleIn("expect_abolish_time", req.ExpectAbolishTimes))
+	}
 
 	return &filter.Expression{Op: filter.And, Rules: rules}
 }
@@ -368,19 +396,20 @@ func toHostDetails(hosts []hostdefine.RecycleHostTable) []dissolve.HostDetail {
 	result := make([]dissolve.HostDetail, 0, len(hosts))
 	for _, h := range hosts {
 		result = append(result, dissolve.HostDetail{
-			ID:          h.ID,
-			AssetID:     cvt.PtrToVal(h.AssetID),
-			InnerIP:     cvt.PtrToVal(h.InnerIP),
-			DeviceType:  cvt.PtrToVal(h.DeviceType),
-			Module:      cvt.PtrToVal(h.Module),
-			Status:      dissolve.FromAbolishPhase(cvt.PtrToVal(h.AbolishPhase)),
-			ProjectID:   cvt.PtrToVal(h.ProjectID),
-			ProjectName: cvt.PtrToVal(h.ProjectName),
-			Region:      cvt.PtrToVal(h.Region),
-			BkBizID:     cvt.PtrToVal(h.BkBizID),
-			GroupID:     cvt.PtrToVal(h.GroupID),
-			Operators:   []string(h.Operators),
-			CPUCore:     cvt.PtrToVal(h.CPUCore),
+			ID:                h.ID,
+			AssetID:           cvt.PtrToVal(h.AssetID),
+			InnerIP:           cvt.PtrToVal(h.InnerIP),
+			DeviceType:        cvt.PtrToVal(h.DeviceType),
+			Module:            cvt.PtrToVal(h.Module),
+			Status:            dissolve.FromAbolishPhase(cvt.PtrToVal(h.AbolishPhase)),
+			ProjectID:         cvt.PtrToVal(h.ProjectID),
+			ProjectName:       cvt.PtrToVal(h.ProjectName),
+			Region:            cvt.PtrToVal(h.Region),
+			BkBizID:           cvt.PtrToVal(h.BkBizID),
+			GroupID:           cvt.PtrToVal(h.GroupID),
+			Operators:         []string(h.Operators),
+			CPUCore:           cvt.PtrToVal(h.CPUCore),
+			ExpectAbolishTime: cvt.PtrToVal(h.ExpectAbolishTime),
 		})
 	}
 
@@ -629,33 +658,27 @@ func (l *logics) listBizDeliveredCpuCore(kt *kit.Kit, bizIDs []int64) (map[int64
 	}
 
 	// 2. 查询从统计时间开始，申请的机房裁撤类型的主机
-	bizIDDeviceTypeHostCountMap := make(map[int64]map[string]int64)
-	deviceTypeMap := make(map[string]struct{})
-	page := core.NewDefaultBasePage()
 	filterExpr := tools.ExpressionAnd(
 		tools.RuleIn("bk_biz_id", bizIDs),
 		tools.RuleEqual("require_type", enumor.RequireTypeDissolve),
 		tools.RuleEqual("is_delivered", true),
 		tools.RuleGreaterThanEqual("created_at", time),
 	)
-	for {
-		hosts, err := model.Operation().DeviceInfo().FindManyDeviceInfo(kt, filterExpr, page)
-		if err != nil {
-			logs.Errorf("list device info failed, err: %v, filter: %+v, rid: %s", err, filterExpr, kt.Rid)
-			return nil, err
+	hosts, err := l.listDeliveredDeviceInfo(kt, filterExpr)
+	if err != nil {
+		logs.Errorf("list delivered device info failed, err: %v, filterExpr: %v, rid: %s", err, filterExpr, kt.Rid)
+		return nil, err
+	}
+
+	bizIDDeviceTypeHostCountMap := make(map[int64]map[string]int64)
+	deviceTypeMap := make(map[string]struct{})
+	for _, host := range hosts {
+		bizID := int64(host.BkBizId)
+		if _, ok := bizIDDeviceTypeHostCountMap[bizID]; !ok {
+			bizIDDeviceTypeHostCountMap[bizID] = make(map[string]int64)
 		}
-		for _, host := range hosts {
-			bizID := int64(host.BkBizId)
-			if _, ok := bizIDDeviceTypeHostCountMap[bizID]; !ok {
-				bizIDDeviceTypeHostCountMap[bizID] = make(map[string]int64)
-			}
-			bizIDDeviceTypeHostCountMap[bizID][host.DeviceType]++
-			deviceTypeMap[host.DeviceType] = struct{}{}
-		}
-		if len(hosts) < int(core.DefaultMaxPageLimit) {
-			break
-		}
-		page.Start += uint32(core.DefaultMaxPageLimit)
+		bizIDDeviceTypeHostCountMap[bizID][host.DeviceType]++
+		deviceTypeMap[host.DeviceType] = struct{}{}
 	}
 
 	// 3. 查询机型对应的核心数
@@ -686,4 +709,49 @@ func (l *logics) listBizDeliveredCpuCore(kt *kit.Kit, bizIDs []int64) (map[int64
 	}
 
 	return bizCpuCoreMap, nil
+}
+
+// listDeviceInfoConcurrencyLimit 并发拉取已交付裁撤主机分页的最大协程数
+const listDeviceInfoConcurrencyLimit = 10
+
+// listDeliveredDeviceInfo 先取总数，再并发分页拉取已交付的机房裁撤类型主机
+func (l *logics) listDeliveredDeviceInfo(kt *kit.Kit, filterExpr *filter.Expression) (
+	[]*taskTypes.DeviceInfo, error) {
+
+	total, err := model.Operation().DeviceInfo().CountDeviceInfo(kt, filterExpr)
+	if err != nil {
+		logs.Errorf("count device info failed, err: %v, filter: %+v, rid: %s", err, filterExpr, kt.Rid)
+		return nil, err
+	}
+	if total == 0 {
+		return make([]*taskTypes.DeviceInfo, 0), nil
+	}
+
+	limit := core.DefaultMaxPageLimit
+	starts := make([]uint32, 0)
+	for start := uint64(0); start < total; start += uint64(limit) {
+		starts = append(starts, uint32(start))
+	}
+
+	pageResult, err := concurrence.BaseExecWithResult(listDeviceInfoConcurrencyLimit, starts,
+		func(start uint32) ([]*taskTypes.DeviceInfo, error) {
+			page := &core.BasePage{Start: start, Limit: limit}
+			hosts, err := model.Operation().DeviceInfo().FindManyDeviceInfo(kt, filterExpr, page)
+			if err != nil {
+				logs.Errorf("list device info failed, err: %v, filter: %+v, rid: %s", err, filterExpr, kt.Rid)
+				return nil, err
+			}
+			return hosts, nil
+		})
+	if err != nil {
+		logs.Errorf("list delivered device info failed, err: %v, filterExpr: %v, rid: %s", err, filterExpr, kt.Rid)
+		return nil, err
+	}
+
+	result := make([]*taskTypes.DeviceInfo, 0, total)
+	for _, subResult := range pageResult {
+		result = append(result, subResult...)
+	}
+
+	return result, nil
 }

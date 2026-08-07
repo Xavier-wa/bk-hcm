@@ -105,6 +105,8 @@ POST /api/v1/woa/task/findmany/apply
         "pending_num": 5,
         "product_num": 5,
         "source": "business",
+        "created_at": "2022-01-02T15:04:05.004Z",
+        "updated_at": "2022-01-02T15:04:05.004Z",
         "create_at": "2022-01-02T15:04:05.004Z",
         "update_at": "2022-01-02T15:04:05.004Z"
       }

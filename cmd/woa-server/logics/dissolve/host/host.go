@@ -177,19 +177,20 @@ func toCreateReqs(hosts []define.RecycleHostTable) []dsproto.RecycleHostCreateRe
 	reqs := make([]dsproto.RecycleHostCreateReq, 0, len(hosts))
 	for _, h := range hosts {
 		reqs = append(reqs, dsproto.RecycleHostCreateReq{
-			AssetID:      cvt.PtrToVal(h.AssetID),
-			InnerIP:      cvt.PtrToVal(h.InnerIP),
-			DeviceType:   cvt.PtrToVal(h.DeviceType),
-			Module:       cvt.PtrToVal(h.Module),
-			AbolishPhase: cvt.PtrToVal(h.AbolishPhase),
-			ProjectName:  cvt.PtrToVal(h.ProjectName),
-			ProjectID:    cvt.PtrToVal(h.ProjectID),
-			Region:       cvt.PtrToVal(h.Region),
-			BkBizID:      cvt.PtrToVal(h.BkBizID),
-			GroupID:      cvt.PtrToVal(h.GroupID),
-			Operators:    h.Operators,
-			CPUCore:      cvt.PtrToVal(h.CPUCore),
-			IsIgnore:     cvt.PtrToVal(h.IsIgnore),
+			AssetID:           cvt.PtrToVal(h.AssetID),
+			InnerIP:           cvt.PtrToVal(h.InnerIP),
+			DeviceType:        cvt.PtrToVal(h.DeviceType),
+			Module:            cvt.PtrToVal(h.Module),
+			AbolishPhase:      cvt.PtrToVal(h.AbolishPhase),
+			ProjectName:       cvt.PtrToVal(h.ProjectName),
+			ProjectID:         cvt.PtrToVal(h.ProjectID),
+			Region:            cvt.PtrToVal(h.Region),
+			BkBizID:           cvt.PtrToVal(h.BkBizID),
+			GroupID:           cvt.PtrToVal(h.GroupID),
+			Operators:         h.Operators,
+			CPUCore:           cvt.PtrToVal(h.CPUCore),
+			IsIgnore:          cvt.PtrToVal(h.IsIgnore),
+			ExpectAbolishTime: cvt.PtrToVal(h.ExpectAbolishTime),
 		})
 	}
 
@@ -198,16 +199,17 @@ func toCreateReqs(hosts []define.RecycleHostTable) []dsproto.RecycleHostCreateRe
 
 func toUpdateData(h *define.RecycleHostTable) *dsproto.RecycleHostUpdateData {
 	return &dsproto.RecycleHostUpdateData{
-		AbolishPhase: h.AbolishPhase,
-		ProjectName:  h.ProjectName,
-		Module:       h.Module,
-		InnerIP:      h.InnerIP,
-		DeviceType:   h.DeviceType,
-		Region:       h.Region,
-		BkBizID:      h.BkBizID,
-		GroupID:      h.GroupID,
-		Operators:    h.Operators,
-		CPUCore:      h.CPUCore,
-		IsIgnore:     h.IsIgnore,
+		AbolishPhase:      h.AbolishPhase,
+		ProjectName:       h.ProjectName,
+		Module:            h.Module,
+		InnerIP:           h.InnerIP,
+		DeviceType:        h.DeviceType,
+		Region:            h.Region,
+		BkBizID:           h.BkBizID,
+		GroupID:           h.GroupID,
+		Operators:         h.Operators,
+		CPUCore:           h.CPUCore,
+		IsIgnore:          h.IsIgnore,
+		ExpectAbolishTime: h.ExpectAbolishTime,
 	}
 }

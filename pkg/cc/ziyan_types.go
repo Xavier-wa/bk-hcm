@@ -90,31 +90,6 @@ func (m MongoDB) validate() error {
 	return nil
 }
 
-// Redis config
-type Redis struct {
-	Host         string `yaml:"host"`
-	Pwd          string `yaml:"pwd"`
-	SentinelPwd  string `yaml:"sentinelPwd"`
-	Database     string `yaml:"database"`
-	MaxOpenConns int    `yaml:"maxOpenConns"`
-	MasterName   string `yaml:"masterName"`
-}
-
-// validate redis.
-func (r Redis) validate() error {
-	if len(r.Host) == 0 {
-		return errors.New("redis host is not set")
-	}
-	if len(r.Pwd) == 0 {
-		return errors.New("redis pwd is not set")
-	}
-	if len(r.Database) == 0 {
-		return errors.New("redis database is not set")
-	}
-
-	return nil
-}
-
 // ClientConfig third-party api client config set
 type ClientConfig struct {
 	CvmOpt        CVMCliConf `yaml:"cvm"`

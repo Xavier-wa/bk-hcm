@@ -20,6 +20,10 @@ export default defineComponent({
       default: 'normal',
     },
     disabled: Boolean,
+    enabledVendors: {
+      type: Array as PropType<VendorEnum[]>,
+      default: undefined,
+    },
   },
   emits: ['update:modelValue'],
   setup(props, { emit }) {
@@ -52,16 +56,19 @@ export default defineComponent({
           { [cssModule.small]: props.size === 'small', [cssModule.normal]: props.size === 'normal' },
         ]}
         v-model={vendor.value}>
-        {buttons.value.map(({ label, value, icon }) => (
-          <Button
-            class={cssModule.radio}
-            selected={vendor.value === value}
-            onClick={() => (vendor.value = value)}
-            disabled={props.disabled}>
-            <img src={icon} alt='' />
-            <span>{label}</span>
-          </Button>
-        ))}
+        {buttons.value.map(({ label, value, icon }) => {
+          const disabled = props.disabled || (props.enabledVendors && !props.enabledVendors.includes(value));
+          return (
+            <Button
+              class={cssModule.radio}
+              selected={vendor.value === value}
+              onClick={() => (vendor.value = value)}
+              disabled={disabled}>
+              <img src={icon} alt='' />
+              <span>{label}</span>
+            </Button>
+          );
+        })}
       </BkButtonGroup>
     );
   },

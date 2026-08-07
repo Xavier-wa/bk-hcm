@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, inject, type Ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { getModel } from '@/model/manager';
 import usePage from '@/hooks/use-page';
 import useSearchQs from '@/hooks/use-search-qs';
-import { useDissolveQuotaStore, type IDissolveOverview } from '@/store/dissolve/quota';
+import { useDissolveQuotaStore, type IDissolveOverview, type IDissolveProjectCycle } from '@/store/dissolve/quota';
 import routerAction from '@/router/utils/action';
 import { SearchCondition } from './search/condition';
 import { TableColumn } from './data-list/column';
@@ -15,6 +15,17 @@ defineProps<{ refreshKey?: number }>();
 
 const route = useRoute();
 const store = useDissolveQuotaStore();
+
+// 注入裁撤配置，用于展开 'all' 时获取已配置的项目列表
+const dissolveProjects = inject<Ref<IDissolveProjectCycle[]>>('dissolveProjects', ref([]));
+
+const getAllConfiguredProjectIds = () => {
+  const ids = new Set<number>();
+  dissolveProjects.value.forEach((cycle) => {
+    (cycle.projects || []).forEach((proj) => ids.add(proj.id));
+  });
+  return [...ids];
+};
 
 const conditionModel = getModel(SearchCondition);
 const conditionProperties = computed(() => conditionModel.getProperties());
@@ -49,15 +60,28 @@ const loading = ref(false);
 const searchQs = useSearchQs({ key: 'filter', properties: conditionProperties });
 
 const fetchList = async (searchCondition?: Record<string, any>) => {
-  const { time_periods, ...cond } = searchCondition ?? condition.value;
+  const cond = searchCondition ?? condition.value;
   loading.value = true;
   try {
-    // 接口直接传参，不是 filter 形式
+    // 接口直接传参
     const params: Record<string, any> = { ...cond };
+    // 将 'all' 标记展开为全部项目类型 ID
+    if (Array.isArray(params.project_ids) && params.project_ids.includes('all')) {
+      params.project_ids = getAllConfiguredProjectIds();
+    }
+    // 将 'all' 标记展开为全部裁撤截止时间
+    if (Array.isArray(params.expect_abolish_times) && params.expect_abolish_times.includes('all')) {
+      try {
+        const times = await store.getExpectAbolishTimeList();
+        params.expect_abolish_times = times;
+      } catch {
+        params.expect_abolish_times = [];
+      }
+    }
     const res = await store.getOverviewList(params);
 
-    // 数据映射：将 API 响应字段映射为前端使用的字段名
-    list.value = (res?.items || []).map((item) => {
+    // 数据映射：将 API 响应字段映射为前端使用的字段名，默认按裁撤CPU总核数降序
+    const mapped = (res?.items || []).map((item) => {
       const progressStr = String(item.progress || '0.00%');
       const progressNum = parseFloat(progressStr) || 0;
       return {
@@ -66,6 +90,12 @@ const fetchList = async (searchCondition?: Record<string, any>) => {
         progress_str: progressStr, // 保留字符串格式用于显示
       } as IDissolveOverview;
     });
+    mapped.sort((a, b) => {
+      const aVal = a.current_cpu_core ?? 0;
+      const bVal = b.current_cpu_core ?? 0;
+      return bVal - aVal;
+    });
+    list.value = mapped;
   } catch {
     list.value = [];
   } finally {

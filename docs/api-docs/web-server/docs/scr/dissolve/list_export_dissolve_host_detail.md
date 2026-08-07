@@ -20,6 +20,7 @@ POST /api/v1/woa/dissolve/host/detail/export/list
 | inner_ips   | string array | 否  | 内网IP列表                                  |
 | asset_ids   | string array | 否  | 主机固资号列表                                  |
 | status      | string       | 否  | 裁撤状态，枚举值：complete（已裁撤）/incomplete（未裁撤），不传查全部       |
+| expect_abolish_times | string array | 否  | 裁撤截止时间列表，格式 yyyy-MM-dd                     |
 | snapshot_date | string     | 否  | ES 快照日期（格式 yyyyMMdd），传入时补充扩展字段                     |
 | page        | object       | 是  | 分页设置，limit 最大 5000                                  |
 
@@ -70,6 +71,7 @@ POST /api/v1/woa/dissolve/host/detail/export/list
         "group_id": 200,
         "operators": ["zhangsan"],
         "cpu_core": 64,
+        "expect_abolish_time": "2026-12-31",
         "extension": {
           "outer_ip": "",
           "device_type": "S5.LARGE",

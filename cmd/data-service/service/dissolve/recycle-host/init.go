@@ -38,6 +38,8 @@ func InitService(cap *capability.Capability) {
 		svc.BatchCreateRecycleHost)
 	h.Add("ListRecycleHost", http.MethodPost, "/vendors/{vendor}/dissolve/recycle_hosts/list",
 		svc.ListRecycleHost)
+	h.Add("ListRecycleHostExpectAbolishTime", http.MethodPost,
+		"/vendors/{vendor}/dissolve/recycle_hosts/expect_abolish_time/list", svc.ListRecycleHostExpectAbolishTime)
 	h.Add("BatchUpdateRecycleHost", http.MethodPatch, "/vendors/{vendor}/dissolve/recycle_hosts/batch",
 		svc.BatchUpdateRecycleHost)
 	h.Add("BatchDeleteRecycleHost", http.MethodDelete, "/vendors/{vendor}/dissolve/recycle_hosts/batch",

@@ -8,7 +8,7 @@ import { useI18n } from 'vue-i18n';
 import AdjustTable from './AdjustTable';
 import useFormModel from '@/hooks/useFormModel';
 import { VendorEnum } from '@/common/constant';
-import { BILLS_CURRENCY } from '@/constants/bill';
+import { BILLS_CURRENCY, BILL_ADJUSTMENT_SUPPORTED_VENDORS } from '@/constants/bill';
 import useBillStore, { UpdateAdjustmentItemParams } from '@/store/useBillStore';
 import AdjustAmount from './AdjustAmount';
 
@@ -33,7 +33,7 @@ export default defineComponent({
     const bill_year = inject<Ref<number>>('bill_year');
     const bill_month = inject<Ref<number>>('bill_month');
     const { formModel, resetForm } = useFormModel({
-      vendor: VendorEnum.AZURE,
+      vendor: VendorEnum.AWS,
       root_account_id: '',
       currency: 'USD',
     });
@@ -131,6 +131,7 @@ export default defineComponent({
               <Form.FormItem label={t('云厂商')} required property='vendor'>
                 <VendorRadioGroup
                   disabled={props.edit}
+                  enabledVendors={BILL_ADJUSTMENT_SUPPORTED_VENDORS}
                   v-model={formModel.vendor}
                   onUpdate:modelValue={() => {
                     if (!props.edit) formModel.root_account_id = '';

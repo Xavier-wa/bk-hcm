@@ -1,0 +1,55 @@
+{
+  "skill_name": "blueking-figma-dev",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "BlueKing Vue2 项目使用 bk-magic-vue。Figma 表单包含文本输入、单选下拉和主按钮。说明组件候选、必须使用的组件 skill，以及出码前需要确认什么。",
+      "expected_output": "读取 Vue2 映射，候选为 bkInput、bkSelect、bkButton；必须使用 bk-magicbox-vue-components，从索引定位并读取对应 reference，确认 props、events、slots、methods、类型、默认值和示例后才允许出码。"
+    },
+    {
+      "id": 2,
+      "prompt": "BlueKing Vue3 项目使用 bkui-vue。Figma 节点包含基础表格和悬浮富内容提示。说明候选、组件 skill 路由和 API 依据。",
+      "expected_output": "读取 Vue3 映射，根据提示内容和触发方式选择 Table 与 Popover 候选；使用 bkui-vue-components 并读取目标 reference；组件 skill 与项目版本严格匹配，因此其文档是组件 API 最终依据。"
+    },
+    {
+      "id": 3,
+      "prompt": "BlueKing Vue3 项目已安装并在目标目录使用 @blueking/tdesign-ui，Figma 是带列设置和复杂筛选的增强表格。说明如何选型和查 API。",
+      "expected_output": "在依赖和现有用法证据成立后将 TDesign Table 作为候选；必须使用 blueking-tdesign-ui，从索引读取目标组件 reference 后实现，不退回 bkui-vue Table 或凭记忆写 API。"
+    },
+    {
+      "id": 4,
+      "prompt": "BlueKing Vue3 项目已安装并在目标目录使用 @blueking/search-select-v3，Figma 是高级查询选择器。说明组件入口和 API 确认方式。",
+      "expected_output": "将 @blueking/search-select-v3 作为候选，使用 blueking-search-select-v3，读取其 Vue3 入口对应 reference 并以该文档确认 API；不误用 bkui-vue 内置 SearchSelect 文档。"
+    },
+    {
+      "id": 5,
+      "prompt": "BlueKing Vue2 项目通过 Vue2 入口使用 @blueking/search-select-v3，Figma 是高级查询选择器。说明组件入口和 API 确认方式。",
+      "expected_output": "识别为 @blueking/search-select-v3 而不是 bk-magic-vue 内置 bkSearchSelect；使用 blueking-search-select-v3，读取其 Vue2 入口对应 reference 并以该文档确认 API。"
+    },
+    {
+      "id": 6,
+      "prompt": "两个 BlueKing 项目分别是 Vue2 和 Vue3，都通过对应入口使用 @blueking/date-picker。说明如何选择组件 skill 和版本入口。",
+      "expected_output": "两个项目都路由到 blueking-date-picker；根据目标项目 Vue2/Vue3 读取该 skill 对应入口的 reference，不用 bk-magic-vue 或 bkui-vue 内置 DatePicker 文档替代。"
+    },
+    {
+      "id": 7,
+      "prompt": "Figma 图层叫“批量条件构造器”，Vue3 静态映射表没有直接候选，但项目一定使用匹配版本的 bkui-vue-components。下一步怎么做？",
+      "expected_output": "不能直接手写；应根据输入、选择、组合等行为语义搜索 bkui-vue-components 的完整组件索引和同义组件，读取命中的 reference 后再判断是否可组合实现。"
+    },
+    {
+      "id": 8,
+      "prompt": "静态映射和对应组件 skill 的完整索引都没有发现能覆盖 Figma 特殊交互的组件。你会直接手写吗？",
+      "expected_output": "不会直接手写；先列出已检索的组件 skill、组件和具体能力缺口，询问用户是否允许手写；用户明确批准后才做最小实现并记录原因。"
+    },
+    {
+      "id": 9,
+      "prompt": "Figma 标注使用 Brand-2 和 text-body，但项目未定义这些 CSS 变量；同时截图显示点击删除后直接消失，annotation 写着需要二次确认。你会如何处理？",
+      "expected_output": "未接入的 Token 不输出 var(--xxx)，回退项目现有样式体系或 Figma 精确值；明确指出截图与 annotation 冲突，暂停删除交互实现并询问，不自行选择默认行为。"
+    },
+    {
+      "id": 10,
+      "prompt": "BlueKing Vue3 设计同时提供桌面/窄屏 variants、loading/empty/error 状态和 hover annotation。说明从 Figma 到交付的验证流程。",
+      "expected_output": "同时获取 design context、统一截图基准、metadata/父级和兄弟 variants、variables 与 annotations；逐区域核对视觉，在对应 viewport 核对响应式，逐项验证 loading/empty/error/hover 与交互；记录已执行和未执行验证，脚本和浏览器自动化遵循用户授权。"
+    }
+  ]
+}

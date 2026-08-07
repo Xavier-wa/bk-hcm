@@ -28,6 +28,14 @@
             "command": "bkdevbuddy hook run drift --ide codebuddy"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bkdevbuddy hook run docs --ide codebuddy"
+          }
+        ]
       }
     ],
     "PreToolUse": [

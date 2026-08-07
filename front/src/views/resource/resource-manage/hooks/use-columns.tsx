@@ -2486,6 +2486,13 @@ export default (type: string, isSimpleShow = false, vendor?: string, options?: a
       field: 'state',
     },
     {
+      label: '同步范围',
+      field: 'sync_mode',
+      render: ({ cell }: any) => (
+        <bk-tag>{({ full: '全量', adjustment_only: '调账' } as Record<string, string>)[cell] || '--'}</bk-tag>
+      ),
+    },
+    {
       label: '账单月份',
       field: 'bill_month',
       render: ({ data }: any) => dayjs(new Date(data.bill_year, data.bill_month - 1)).format('YYYY-MM'),
@@ -2501,15 +2508,20 @@ export default (type: string, isSimpleShow = false, vendor?: string, options?: a
       field: 'operator',
     },
     {
-      label: '人民币（元）',
+      label: '人民币+美金(￥)',
+      field: 'rmb_usd_combined',
+      render: ({ cell }: any) => `￥${formatBillCost(String(cell ?? ''))}`,
+    },
+    {
+      label: '人民币(￥)',
       field: 'rmb_cost',
-      render: ({ cell }: any) => formatBillCost(cell),
+      render: ({ cell }: any) => `￥${formatBillCost(cell)}`,
       sort: true,
     },
     {
-      label: '美金（美元）',
+      label: '美金($)',
       field: 'cost',
-      render: ({ cell }: any) => formatBillCost(cell),
+      render: ({ cell }: any) => `$${formatBillCost(cell)}`,
       sort: true,
     },
   ];

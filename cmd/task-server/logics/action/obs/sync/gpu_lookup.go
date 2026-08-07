@@ -127,9 +127,46 @@ func lookupGcpGpuCardCategory(skuDescription string, gcpGpuPrefixes map[string]s
 	return matchGcpInstancePrefix(skuDescription, gcpGpuPrefixes)
 }
 
+// isAIDeductBillItem reports whether the bill item is an AI deduct entry rewritten by month task.
+// AWS/GCP 月任务均将 HcProductCode/Name 覆盖为字面量 AIDeduct。
+func isAIDeductBillItem(hcProductCode, hcProductName string) bool {
+	return hcProductCode == constant.AwsAIDeductProductCode ||
+		hcProductName == constant.AwsAIDeductProductCode
+}
+
+// hcProductNameForGPUClass 返回用于 GPU AI 前缀判定的产品名。
+// AI 扣减源单必带 _HCM_AI_ 前缀，产品码改写后用前缀占位恢复 isGPU 的 AI 血缘分支。
+func hcProductNameForGPUClass(hcProductCode, hcProductName string) string {
+	if isAIDeductBillItem(hcProductCode, hcProductName) {
+		return constant.BillItemAIPrefix
+	}
+	return hcProductName
+}
+
+// resolveAwsAPIBrandName 解析 AWS 账单 API 厂商。
+// AI 扣减条目优先从 extension 产品名/行描述匹配（与原始账单同口径），禁止仅因 AIDeduct 一律 API。
+func resolveAwsAPIBrandName(hcProductCode, hcProductName, productProductName, lineItemDescription string) string {
+	if isAIDeductBillItem(hcProductCode, hcProductName) {
+		for _, text := range []string{productProductName, lineItemDescription, hcProductName} {
+			if brand := enumor.MatchAPIBrandName(text); brand != "" {
+				return brand
+			}
+		}
+		return ""
+	}
+	return enumor.MatchAPIBrandName(hcProductName)
+}
+
 // resolveGcpAPIBrandName 解析 GCP 账单 API 厂商：优先匹配 hcProductName，命中为空时兜底匹配 skuDescription，
 // 与 isGcpGPU 的双路径判定保持一致，避免「被判为 AI/GPU 但品牌为空」的口径不一致。
+// AI 扣减条目的 hcProductName 为 AIDeduct，无品牌语义，直接走 skuDescription 兜底。
 func resolveGcpAPIBrandName(hcProductName, skuDescription string) string {
+	if isAIDeductBillItem("", hcProductName) {
+		if brand := enumor.MatchAPIBrandName(skuDescription); brand != "" {
+			return brand
+		}
+		return ""
+	}
 	if brand := enumor.MatchAPIBrandName(hcProductName); brand != "" {
 		return brand
 	}

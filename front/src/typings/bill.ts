@@ -130,7 +130,8 @@ export interface AdjustmentItem {
   bill_month: number; // 所属月份
   bill_day: number; // 所属日期
   type: 'increase' | 'decrease'; // 调账类型 枚举值（increase、decrease）
-  res_class: ResClassEnum; // 资源类别 枚举值（cpu、gpu）
+  res_class: ResClassEnum; // 资源类别 枚举值（cpu、gpu_card、gpu_api、gpu_other）
+  res_sub_class: string; // 资源子类，含义由资源类别决定
   currency: string; // 币种
   cost: string; // 金额
   rmb_cost: string; // 对应人民币金额
@@ -143,14 +144,28 @@ export interface BillsSummarySum {
   cost_map: CostMap;
 }
 export interface CostMap {
-  USD: USD;
+  [currency: string]: CurrencyCost;
+  USD?: CurrencyCost;
+  CNY?: CurrencyCost;
 }
-interface USD {
+export interface CurrencyCost {
   Cost: string;
   RMBCost: string;
   Currency: string;
 }
+// 兼容旧命名
+export type USD = CurrencyCost;
 export type BillsSummarySumResData = IQueryResData<BillsSummarySum>;
+
+// 调账数据汇总
+export interface AdjustmentItemSumReqParams {
+  filter: FilterType;
+}
+export interface AdjustmentItemSumResult {
+  count: number;
+  cost_map: Record<'increase' | 'decrease', CostMap>;
+}
+export type AdjustmentItemSumResData = IQueryResData<AdjustmentItemSumResult>;
 
 // 账单明细-zenlayer导入预览
 export interface BillImportPreview {

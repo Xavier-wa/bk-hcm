@@ -833,20 +833,21 @@ type GetDetectStepRst struct {
 
 // GetRecycleHostReq get recycle host info request
 type GetRecycleHostReq struct {
-	OrderID    []uint64              `json:"order_id"`
-	SuborderID []string              `json:"suborder_id"`
-	BizID      []int64               `json:"bk_biz_id"`
-	BkAssetID  []string              `json:"bk_asset_id"`
-	DeviceType []string              `json:"device_type"`
-	Zone       []string              `json:"bk_zone_name"`
-	SubZone    []string              `json:"sub_zone"`
-	Stage      []table.RecycleStage  `json:"stage"`
-	Status     []table.RecycleStatus `json:"status"`
-	User       []string              `json:"bk_username"`
-	IP         []string              `json:"ip"`
-	Start      string                `json:"start"`
-	End        string                `json:"end"`
-	Page       metadata.BasePage     `json:"page"`
+	OrderID     []uint64              `json:"order_id"`
+	SuborderID  []string              `json:"suborder_id"`
+	BizID       []int64               `json:"bk_biz_id"`
+	BkAssetID   []string              `json:"bk_asset_id"`
+	DeviceType  []string              `json:"device_type"`
+	Zone        []string              `json:"bk_zone_name"`
+	SubZone     []string              `json:"sub_zone"`
+	Stage       []table.RecycleStage  `json:"stage"`
+	Status      []table.RecycleStatus `json:"status"`
+	RecycleType []table.RecycleType   `json:"recycle_type"`
+	User        []string              `json:"bk_username"`
+	IP          []string              `json:"ip"`
+	Start       string                `json:"start"`
+	End         string                `json:"end"`
+	Page        metadata.BasePage     `json:"page"`
 }
 
 // Validate whether GetRecycleHostReq is valid
@@ -888,6 +889,10 @@ func (param *GetRecycleHostReq) Validate() error {
 
 	if len(param.Status) > arrayLimit {
 		return fmt.Errorf("status exceed limit %d", arrayLimit)
+	}
+
+	if len(param.RecycleType) > arrayLimit {
+		return fmt.Errorf("recycle_type exceed limit %d", arrayLimit)
 	}
 
 	if len(param.User) > arrayLimit {
@@ -988,6 +993,12 @@ func (param *GetRecycleHostReq) GetFilter() (map[string]interface{}, error) {
 	if len(param.Status) > 0 {
 		filter["status"] = mapstr.MapStr{
 			pkg.BKDBIN: param.Status,
+		}
+	}
+
+	if len(param.RecycleType) > 0 {
+		filter["recycle_type"] = mapstr.MapStr{
+			pkg.BKDBIN: param.RecycleType,
 		}
 	}
 

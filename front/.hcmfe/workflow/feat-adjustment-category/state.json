@@ -1,0 +1,196 @@
+{
+  "id": "feat-adjustment-category",
+  "title": "三方云核算-调账类别调整-前端",
+  "currentStage": "done",
+  "createdAt": "2026-08-04T10:23:04.552Z",
+  "updatedAt": "2026-08-05T06:41:05.225Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-adjustment-category/prd.md",
+        "kind": "file",
+        "addedAt": "2026-08-05T02:32:41.817Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-adjustment-category/design.md",
+        "kind": "file",
+        "addedAt": "2026-08-05T02:45:29.104Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-adjustment-category/api.md",
+        "kind": "file",
+        "addedAt": "2026-08-05T02:51:17.569Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-adjustment-category/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-05T03:27:29.276Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-adjustment-category/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-05T03:31:03.831Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-08-05T02:41:39.024Z",
+      "note": "用户已确认修订后的PRD可作为Design阶段执行依据，新增云厂商禁用规则已纳入PRD。"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-08-05T02:48:46.747Z",
+      "note": "用户确认Design方案，进入API阶段。"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-08-05T03:15:10.629Z",
+      "note": "用户确认API契约，进入Coding阶段。按当前API文档先行实现，华为候选行为保留为联调风险。"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-05T06:40:50.310Z",
+      "note": "第3轮修复完成：资源子类下拉改用 bkui-vue Select+Option 直连候选（替换会渲染 true 的 SelectColumn），接口响应经 normalizeAdjustmentSubClassList 归一为 string[]，新增 normalizeResClass/normalizeSubClass 兜底默认值。E2E 3/3 PASS（含A100/H100 候选项可见断言）。进入Test阶段。"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-05T06:41:05.223Z",
+      "note": "第3轮修复后E2E 3/3 PASS。推进到done阶段。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-08-04T10:23:04.552Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-08-05T02:41:39.024Z",
+      "note": "用户已确认修订后的PRD可作为Design阶段执行依据，新增云厂商禁用规则已纳入PRD。"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-08-05T02:48:46.747Z",
+      "note": "用户确认Design方案，进入API阶段。"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-08-05T03:15:10.629Z",
+      "note": "用户确认API契约，进入Coding阶段。按当前API文档先行实现，华为候选行为保留为联调风险。"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-05T03:29:53.854Z",
+      "note": "Coding完成：调账云厂商白名单禁用、资源类别四值、资源子类候选接口/联动/提交归一化、列表展示均已实现；本地ESLint通过，npm run build:bcc通过。进入Test阶段。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-05T04:09:58.840Z",
+      "note": "E2E 自动化验证 2/2 PASS，手测清单已更新，TAPD 已推进到 for_test。推进到 done 阶段。"
+    },
+    {
+      "from": "done",
+      "to": "coding",
+      "at": "2026-08-05T04:19:02.139Z",
+      "note": "回退到Coding阶段修复3个问题：1) CPU/GPU其他时不应显示资源子类列；2) 资源子类默认值显示true异常；3) 资源子类的下拉中没可选内容。修复后重新测试。"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-05T04:35:09.408Z",
+      "note": "Coding迭代修复完成：CPU/GPU其他时资源子类不渲染SelectColumn展示--，添加SelectColumn key强制重建避免列表/下拉显示异常，资源类别四值映射完整。E2E 3/3 PASS。进入Test阶段。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-05T04:40:33.012Z",
+      "note": "回退修复后E2E 3/3 PASS。推进到done阶段。"
+    },
+    {
+      "from": "done",
+      "to": "coding",
+      "at": "2026-08-05T05:50:38.981Z",
+      "note": "用户反馈资源子类下拉仍显示 true 且无候选，按工作流回退 Coding，先核对 SelectColumn/bk-select 传参与接口响应结构后修复并重新完整测试。"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-05T06:40:50.310Z",
+      "note": "第3轮修复完成：资源子类下拉改用 bkui-vue Select+Option 直连候选（替换会渲染 true 的 SelectColumn），接口响应经 normalizeAdjustmentSubClassList 归一为 string[]，新增 normalizeResClass/normalizeSubClass 兜底默认值。E2E 3/3 PASS（含A100/H100 候选项可见断言）。进入Test阶段。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-05T06:41:05.223Z",
+      "note": "第3轮修复后E2E 3/3 PASS。推进到done阶段。"
+    }
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598136722866",
+    "parentId": "1069995598136512330"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "completed",
+      "at": "2026-08-05T02:28:23.398Z",
+      "note": "已完成三步：1) tapd-story-clarification 澄清2轮，需求文档回写TAPD（保留原文）；2) tapd-story-evaluation 判定无需拆分（6条用户故事强耦合、不可独立交付），完成工时预估16人时+RICE评分50（Middle）；3) tapd-analyst 全量解读正文+3张图片+2条评论+2个后端接口契约附件，未发现影响本单范围的新增需求点。"
+    },
+    "hcm-design-icon-intake": {
+      "status": "completed",
+      "at": "2026-08-05T02:44:31.750Z",
+      "note": "已完成图标项目候选回填：沿用现有 vendor-aws.svg、vendor-gcp.svg、vendor-huawei.svg、vendor-azure.svg、vendor-tcloud.svg 资源；本需求无新增操作图标。"
+    },
+    "hcm-design-comp-intake": {
+      "status": "completed",
+      "at": "2026-08-05T02:45:16.908Z",
+      "note": "已完成组件项目映射：复用现有 VendorRadioGroup、调账侧滑表单、@blueking/ediatable 可编辑行和调账列表列定义；新增逻辑限定为逐项云厂商 disabled 与资源子类字段联动，不新增通用组件。"
+    },
+    "hcm-verify-e2e": {
+      "status": "completed",
+      "at": "2026-08-05T06:40:59.774Z",
+      "note": "第3轮修复后重跑 E2E 3/3 PASS：用例3切换到GPU卡展开下拉后断言候选项 A100/H100 实际可见，确认下拉不再显示 true 且候选正常渲染。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-05T04:40:55.616Z",
+      "note": "TAPD收口完成：story 1069995598136722866 doing→for_test→tested→done (status_14)；父需求 1069995598136512330 roll-up=doing(shouldAdvance=false)，保持 status_11（后端子单仍在 doing）。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "front/src/components/vendor-radio-group/index.tsx",
+        "front/src/constants/bill.ts",
+        "front/src/api/bill/index.ts",
+        "front/src/typings/bill.ts",
+        "front/src/store/useBillStore.ts",
+        "front/src/views/bill/bill/adjust/create/index.tsx",
+        "front/src/views/bill/bill/adjust/create/AdjustTable/index.tsx",
+        "front/src/views/bill/bill/adjust/create/RenderTable/index.tsx",
+        "front/src/views/bill/bill/adjust/create/RenderTableRow/index.tsx",
+        "front/src/views/bill/bill/adjust/index.tsx"
+      ],
+      "contentFingerprint": "bc02c473f36d4903db9409f5fab9f9e833d92d6a",
+      "codeBaseline": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+      "seatedAt": "2026-08-05T06:40:37.286Z"
+    }
+  }
+}

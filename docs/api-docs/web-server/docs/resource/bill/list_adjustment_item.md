@@ -44,7 +44,8 @@ POST /api/v1/account/bills/adjustment_items/list
 | bill_month      | int    | 所属月份                           |
 | bill_day        | int    | 所属日期                           |
 | type            | string | 调账类型 increase/decrease         |
-| res_class       | string | 资源类别 cpu/gpu                   |
+| res_class       | string | 资源类别 cpu/gpu_card/gpu_api/gpu_other |
+| res_sub_class   | string | 资源子类，gpu_card 下为卡型、gpu_api 下为模型厂商，其余类别为空 |
 | memo            | string | 备注                             |
 | operator        | string | 操作人                            |
 | currency        | string | 币种 RMB/USD                     |
@@ -90,6 +91,7 @@ POST /api/v1/account/bills/adjustment_items/list
         "bill_day": 18,
         "type": "increase",
         "res_class": "cpu",
+        "res_sub_class": "",
         "memo": "",
         "operator": "admin",
         "currency": "RMB",
@@ -126,7 +128,8 @@ POST /api/v1/account/bills/adjustment_items/list
 | bill_month      | int    | 所属月份                           |
 | bill_day        | int    | 所属日期                           |
 | type            | string | 调账类型 increase/decrease         |
-| res_class       | string | 资源类别 cpu/gpu                   |
+| res_class       | string | 资源类别 cpu/gpu_card/gpu_api/gpu_other |
+| res_sub_class   | string | 资源子类，gpu_card 下为卡型、gpu_api 下为模型厂商，其余类别为空 |
 | memo            | string | 备注                             |
 | operator        | string | 操作人                            |
 | currency        | string | 币种 RMB/USD                     |

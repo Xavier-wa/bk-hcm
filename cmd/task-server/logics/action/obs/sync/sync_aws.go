@@ -182,9 +182,17 @@ func (act SyncAction) convertAwsBill(kt *kit.Kit, syncOpt *SyncOption, result *d
 		record := item.Extension
 
 		cityID := lookupCityID(kt, regionCityMap, record.ProductRegion, isChina)
-		isGPU := isAwsGPU(record.LineItemProductCode, record.ProductInstanceType, item.HcProductName, awsGpuMap)
+		hcNameForGPU := hcProductNameForGPUClass(item.HcProductCode, item.HcProductName)
+		isGPU := isAwsGPU(record.LineItemProductCode, record.ProductInstanceType, hcNameForGPU, awsGpuMap)
 		gpuCardCategory := lookupAwsGpuCardCategory(record.ProductProductName, record.ProductInstanceType, awsGpuMap)
-		apiBrandName := enumor.MatchAPIBrandName(item.HcProductName)
+		apiBrandName := resolveAwsAPIBrandName(item.HcProductCode, item.HcProductName,
+			record.ProductProductName, record.LineItemLineItemDescription)
+		if isAIDeductBillItem(item.HcProductCode, item.HcProductName) &&
+			apiBrandName == "" && gpuCardCategory == "" {
+			logs.Warnf("ai deduct aws obs classification fallback without brand/gpu card, "+
+				"main_account: %s, product_code: %s, product_name: %s, rid: %s",
+				syncOpt.MainAccountID, item.HcProductCode, record.ProductProductName, kt.Rid)
+		}
 
 		newItem := &tableobs.OBSBillItemAws{
 			SetIndex:      setIndex,

@@ -29,7 +29,6 @@ import (
 
 // SessionInfo session information for mongo distributed transactions
 type SessionInfo struct {
-	TxnNubmer int64
 	SessionID string
 }
 
@@ -52,18 +51,6 @@ func CmdbReloadSession(sess mongo.Session, info *SessionInfo) error {
 
 	clientSession.Server.SessionID = idDoc
 	clientSession.SessionID = idDoc
-	// i.didCommitAfterStart=false
-	if info.TxnNubmer > 1 {
-		// when the txnNumber is large than 1, it means that it's not the first transaction in
-		// this session, we do not need to create a new transaction with this txnNumber and mongodb does
-		// not allow this, so we need to change the session status from Starting to InProgressing.
-		// set state to InProgressing in a same session id, then we can use the same
-		// transaction number as a transaction in a single transaction session.
-		// otherwise a error like this will be occured as follows:
-		// (NoSuchTransaction) Given transaction number 2 does not match any in-progress transactions.
-		// The active transaction number is 1
-		clientSession.TransactionState = session.InProgress
-	}
 	return nil
 }
 

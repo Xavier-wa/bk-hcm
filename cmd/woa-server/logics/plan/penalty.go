@@ -38,6 +38,7 @@ import (
 	"hcm/pkg/dal/dao/tools"
 	dmtypes "hcm/pkg/dal/dao/types/meta"
 	rtypes "hcm/pkg/dal/dao/types/resource-plan"
+	rpt "hcm/pkg/dal/table/resource-plan/res-plan-demand"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/runtime/filter"
@@ -87,14 +88,10 @@ func (c *Controller) generatePenaltyBase(ctx context.Context) {
 
 		if err == nil && !exists {
 			// 补上周的罚金基数
-			thisMonday := times.GetMondayOfWeek(now)
-			ticketEnd := time.Date(thisMonday.Year(), thisMonday.Month(), thisMonday.Day(), 0, 0, 0, 0,
-				thisMonday.Location())
-
-			err := c.CreatePenaltyBaseFromTicket(kt, []int64{}, ticketEnd,
+			err := c.CreatePenaltyBaseFromResPlanDemand(kt, []int64{},
 				c.demandTime.GetDemandDateRangeInWeek(kt, days12After), yearMonthWeek12After)
 			if err != nil {
-				logs.Errorf("%s: failed to create penalty base from ticket, err: %v, year_month_week: %+v, rid: %s",
+				logs.Errorf("%s: failed to create penalty base from res_plan_demand, err: %v, year_month_week: %+v, rid: %s",
 					constant.DemandPenaltyBaseGenerateFailed, err, yearMonthWeek12After, kt.Rid)
 			}
 		}
@@ -125,10 +122,10 @@ func (c *Controller) generatePenaltyBase(ctx context.Context) {
 		}
 
 		// 计算罚金基数
-		err := c.CreatePenaltyBaseFromTicket(kt, []int64{}, nextRunTime,
+		err := c.CreatePenaltyBaseFromResPlanDemand(kt, []int64{},
 			c.demandTime.GetDemandDateRangeInWeek(kt, days12After), yearMonthWeek12After)
 		if err != nil {
-			logs.Errorf("%s: failed to create penalty base from ticket, err: %v, year_month_week: %+v, rid: %s",
+			logs.Errorf("%s: failed to create penalty base from res_plan_demand, err: %v, year_month_week: %+v, rid: %s",
 				constant.DemandPenaltyBaseGenerateFailed, err, yearMonthWeek12After, kt.Rid)
 		}
 
@@ -283,7 +280,9 @@ func (c *Controller) isPenaltyBaseExists(kt *kit.Kit, year int, penaltyWeek int)
 }
 
 // CalcPenaltyBase 计算罚金分摊基数
-func (c *Controller) CalcPenaltyBase(kt *kit.Kit, baseDay time.Time, bkBizIDs []int64) error {
+func (c *Controller) CalcPenaltyBase(kt *kit.Kit, baseDay time.Time, bkBizIDs []int64,
+	sourceMode enumor.CalcPenaltyBaseSourceMode) error {
+
 	baseDayYearMonthWeek, err := c.demandTime.GetDemandYearMonthWeek(kt, baseDay)
 	if err != nil {
 		logs.Errorf("failed to get demand year month week, err: %v, base_day: %s, rid: %s", err,
@@ -291,16 +290,25 @@ func (c *Controller) CalcPenaltyBase(kt *kit.Kit, baseDay time.Time, bkBizIDs []
 		return err
 	}
 
-	// 单据只看12周前的
-	days12Before := baseDay.AddDate(0, 0, -12*7)
-	monday12Before := times.GetMondayOfWeek(days12Before)
-
-	err = c.CreatePenaltyBaseFromTicket(kt, bkBizIDs, monday12Before,
-		c.demandTime.GetDemandDateRangeInWeek(kt, baseDay), baseDayYearMonthWeek)
-	if err != nil {
-		logs.Errorf("failed to create penalty base from ticket, err: %v, base_day: %s, rid: %s", err,
-			baseDay.String(), kt.Rid)
-		return err
+	switch sourceMode {
+	case enumor.CalcPenaltyBaseSourceModeTicket:
+		// ticketEnd 为 baseDay 所在周的周一
+		ticketEnd := times.GetMondayOfWeek(baseDay)
+		err = c.CreatePenaltyBaseFromTicket(kt, bkBizIDs, ticketEnd,
+			c.demandTime.GetDemandDateRangeInWeek(kt, baseDay), baseDayYearMonthWeek)
+		if err != nil {
+			logs.Errorf("failed to create penalty base from ticket, err: %v, base_day: %s, rid: %s", err,
+				baseDay.String(), kt.Rid)
+			return err
+		}
+	default:
+		err = c.CreatePenaltyBaseFromResPlanDemand(kt, bkBizIDs,
+			c.demandTime.GetDemandDateRangeInWeek(kt, baseDay), baseDayYearMonthWeek)
+		if err != nil {
+			logs.Errorf("failed to create penalty base from res_plan_demand, err: %v, base_day: %s, rid: %s", err,
+				baseDay.String(), kt.Rid)
+			return err
+		}
 	}
 
 	return nil
@@ -331,14 +339,13 @@ func (c *Controller) CreatePenaltyBaseFromTicket(kt *kit.Kit, bkBizIDs []int64, 
 		return err
 	}
 	// 从 woa_zone 获取大区和机型对应关系 metadata
-	zoneMap, regionAreaMap, deviceTypeMap, err := c.resFetcher.GetMetaMaps(kt)
+	_, regionAreaMap, deviceTypeMap, err := c.resFetcher.GetMetaMaps(kt)
 	if err != nil {
 		logs.Errorf("get meta maps failed, err: %v, rid: %s", err, kt.Rid)
 		return err
 	}
-	_, regionNameMap := c.resFetcher.GetMetaNameMapsFromIDMap(zoneMap, regionAreaMap)
 	// 从订单中捞取预测内的核心总数，按业务、大区、机型族合并
-	baseCoreMap, bizOrgRelMap, err := c.calcPenaltyBaseCoreByTicket(kt, allTickets, baseTimeRange, regionNameMap,
+	baseCoreMap, bizOrgRelMap, err := c.calcPenaltyBaseCoreByTicket(kt, allTickets, baseTimeRange, regionAreaMap,
 		deviceTypeMap)
 	if err != nil {
 		logs.Errorf("failed to calc penalty base core by ticket, err: %v, rid: %s", err, kt.Rid)
@@ -421,6 +428,7 @@ func (c *Controller) calcPenaltyBaseCoreByTicket(kt *kit.Kit, tickets []rtypes.R
 	timeRange times.DateRange, regionNameMap map[string]dmtypes.RegionArea,
 	deviceTypeMap map[string]dt.DistinctDeviceType) (map[ptypes.DemandPenaltyBaseKey]int64,
 	map[int64]mtypes.BizOrgRel, error) {
+
 	baseCoreMap := make(map[ptypes.DemandPenaltyBaseKey]int64)
 	bizOrgRelMap := make(map[int64]mtypes.BizOrgRel)
 	for _, ticket := range tickets {
@@ -592,7 +600,8 @@ func (c *Controller) GetBizResPlanAppliedCPUCore(kt *kit.Kit, bkBizIDs []int64, 
 }
 
 // convResConsumePoolToPenaltyMap 将 ResConsumePool 转为以 DemandPenaltyBaseKey 为 key 的 map
-// 因为 ResConsumePool 精确指定了deviceType，因此在list时无法进行模糊匹配，需要进行转化后使用
+// 因为 ResConsumePool 精确指定了deviceType，因此在list时无法进行模糊匹配，需要进行转化后使用。
+// 消耗池 key 的 DeviceType 应为原始申领机型；DeviceFamily 取自该机型，不得取自并查代表机型。
 func convResConsumePoolToPenaltyMap(kt *kit.Kit, pool ResPlanConsumePool, regionAreaMap map[string]dmtypes.RegionArea,
 	deviceTypes map[string]dt.DistinctDeviceType) (map[ptypes.DemandPenaltyBaseKey]int64, error) {
 
@@ -1061,4 +1070,164 @@ func (c *Controller) sendEmail(kt *kit.Kit, receivers, extraReceivers []string, 
 	}
 
 	return c.CmsiClient.SendMail(kt, mail)
+}
+
+// CreatePenaltyBaseFromResPlanDemand 从 res_plan_demand 表计算罚金分摊基数
+func (c *Controller) CreatePenaltyBaseFromResPlanDemand(kt *kit.Kit, bkBizIDs []int64,
+	baseTimeRange times.DateRange, baseYearWeek dtime.DemandYearMonthWeek) error {
+
+	start := time.Now()
+	logs.Infof("start create penalty base from res_plan_demand, base_year_week: %+v, "+
+		"expect_time_range: [%s ~ %s], bk_biz_ids: %v, time: %v, rid: %s",
+		baseYearWeek, baseTimeRange.Start, baseTimeRange.End, bkBizIDs, start, kt.Rid)
+
+	// 从 res_plan_demand 表查询并聚合数据
+	baseCoreMap, bizOrgRelMap, err := c.calcPenaltyBaseCoreByResPlanDemand(kt, bkBizIDs, baseTimeRange)
+	if err != nil {
+		logs.Errorf("failed to calc penalty base core by res_plan_demand, err: %v, rid: %s", err, kt.Rid)
+		return err
+	}
+
+	logs.Infof("calc penalty base core result, raw_agg_count: %d, agg_details: %+v, rid: %s",
+		len(baseCoreMap), baseCoreMap, kt.Rid)
+
+	// 本次计算为全量，为避免重复，先清理数据库中残留的数据
+	deleteReq := &dataservice.BatchDeleteReq{
+		Filter: tools.ExpressionAnd(
+			tools.RuleEqual("year", baseYearWeek.Year),
+			tools.RuleEqual("year_week", baseYearWeek.YearWeek),
+		),
+	}
+	err = c.client.DataService().Global.ResourcePlan.DeleteDemandPenaltyBase(kt, deleteReq)
+	if err != nil {
+		logs.Errorf("failed to delete old demand penalty base, err: %v, base year: %d, base week: %d, rid: %s",
+			err, baseYearWeek.Year, baseYearWeek.YearWeek, kt.Rid)
+		return err
+	}
+
+	// 插入数据
+	createIDs, err := c.createDemandPenaltyBase(kt, baseYearWeek, baseCoreMap, bizOrgRelMap)
+	if err != nil {
+		logs.Errorf("failed to create demand penalty base, err: %v, base year: %d, base week: %d, rid: %s",
+			err, baseYearWeek.Year, baseYearWeek.YearWeek, kt.Rid)
+		return err
+	}
+
+	end := time.Now()
+	logs.Infof("end create penalty base from res_plan_demand, base_year_week: %+v, created_id: %v, created_count: %d, time: %v, cost: %ds, rid: %s",
+		baseYearWeek, createIDs, len(createIDs), end, end.Sub(start).Seconds(), kt.Rid)
+	return nil
+}
+
+// calcPenaltyBaseCoreByResPlanDemand 从 res_plan_demand 表计算罚金基数核心数据
+func (c *Controller) calcPenaltyBaseCoreByResPlanDemand(kt *kit.Kit, bkBizIDs []int64,
+	timeRange times.DateRange) (map[ptypes.DemandPenaltyBaseKey]int64,
+	map[int64]mtypes.BizOrgRel, error) {
+
+	startExpTime, endExpTime, err := parseExpectTimeRange(timeRange)
+	if err != nil {
+		logs.Errorf("failed to parse expect time range, err: %v, rid: %s", err, kt.Rid)
+		return nil, nil, err
+	}
+
+	listFilter := buildDemandPenaltyBaseFilter(bkBizIDs, startExpTime, endExpTime)
+
+	pageSize := 500
+	baseCoreMap := make(map[ptypes.DemandPenaltyBaseKey]int64)
+	bizOrgRelMap := make(map[int64]mtypes.BizOrgRel)
+	var totalRawCount int
+
+	for pageStart := 0; ; pageStart += pageSize {
+		listReq := &rpproto.ResPlanDemandListReq{
+			ListReq: core.ListReq{
+				Filter: listFilter,
+				Page: &core.BasePage{
+					Start: uint32(pageStart),
+					Limit: uint(pageSize),
+				},
+			},
+		}
+
+		result, err := c.client.DataService().Global.ResourcePlan.ListResPlanDemand(kt, listReq)
+		if err != nil {
+			logs.Errorf("failed to list res plan demand, err: %v, rid: %s", err, kt.Rid)
+			return nil, nil, err
+		}
+
+		totalRawCount += len(result.Details)
+
+		err = c.processPenaltyBaseDemandPage(kt, result.Details, baseCoreMap, bizOrgRelMap)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if len(result.Details) < pageSize {
+			break
+		}
+	}
+
+	logs.Infof("calc penalty base core by res_plan_demand, expect_time_filter: [%d ~ %d], plan_type: in_plan, "+
+		"raw_matched_count: %d, agg_group_count: %d, rid: %s",
+		startExpTime, endExpTime, totalRawCount, len(baseCoreMap), kt.Rid)
+
+	return baseCoreMap, bizOrgRelMap, nil
+}
+
+// parseExpectTimeRange 解析时间范围的起止 expect_time 为整数
+func parseExpectTimeRange(timeRange times.DateRange) (int, int, error) {
+	startExpTime, err := times.ConvStrTimeToInt(timeRange.Start, constant.DateLayout)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to parse start expect_time, err: %v, range_start: %s", err, timeRange.Start)
+	}
+	endExpTime, err := times.ConvStrTimeToInt(timeRange.End, constant.DateLayout)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to parse end expect_time, err: %v, range_end: %s", err, timeRange.End)
+	}
+	return startExpTime, endExpTime, nil
+}
+
+// buildDemandPenaltyBaseFilter 构建查询 res_plan_demand 的过滤条件
+func buildDemandPenaltyBaseFilter(bkBizIDs []int64, startExpTime, endExpTime int) *filter.Expression {
+	listRules := []*filter.AtomRule{
+		tools.RuleGreaterThanEqual("expect_time", startExpTime),
+		tools.RuleLessThanEqual("expect_time", endExpTime),
+		tools.RuleEqual("plan_type", enumor.PlanTypeCodeInPlan),
+	}
+	if len(bkBizIDs) > 0 {
+		listRules = append(listRules, tools.RuleIn("bk_biz_id", bkBizIDs))
+	}
+	return tools.ExpressionAnd(listRules...)
+}
+
+// processPenaltyBaseDemandPage 处理单页查询结果：聚合 CPU 核数并补充业务组织关系
+func (c *Controller) processPenaltyBaseDemandPage(kt *kit.Kit,
+	details []rpt.ResPlanDemandTable,
+	baseCoreMap map[ptypes.DemandPenaltyBaseKey]int64,
+	bizOrgRelMap map[int64]mtypes.BizOrgRel) error {
+
+	for _, detail := range details {
+		key := ptypes.DemandPenaltyBaseKey{
+			BkBizID:      detail.BkBizID,
+			AreaName:     detail.AreaName,
+			DeviceFamily: detail.DeviceFamily,
+		}
+		cpuCore := int64(0)
+		if detail.CpuCore != nil {
+			cpuCore = *detail.CpuCore
+		}
+		baseCoreMap[key] += cpuCore
+	}
+
+	for _, detail := range details {
+		if _, exists := bizOrgRelMap[detail.BkBizID]; exists {
+			continue
+		}
+		bizOrgRel, err := c.bizLogics.GetBizOrgRel(kt, detail.BkBizID)
+		if err != nil {
+			logs.Errorf("failed to get biz org rel, err: %v, bk_biz_id: %d, rid: %s", err, detail.BkBizID, kt.Rid)
+			return err
+		}
+		bizOrgRelMap[detail.BkBizID] = *bizOrgRel
+	}
+	return nil
 }

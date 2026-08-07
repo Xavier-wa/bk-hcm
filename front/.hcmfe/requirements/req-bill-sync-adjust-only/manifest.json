@@ -1,0 +1,24 @@
+{
+  "id": "req-bill-sync-adjust-only",
+  "title": "只同步调账策略的场景 - 前端增加同步调账入口",
+  "createdAt": "2026-07-30T04:14:23.112Z",
+  "updatedAt": "2026-07-30T06:39:34.715Z",
+  "external": {
+    "tapd": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598135766636",
+    "tapdParent": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598135131008"
+  },
+  "iterations": [
+    {
+      "wfId": "feat-bill-sync-adjust-only",
+      "status": "prd",
+      "branch": "feat-bill-sync-adjust-only",
+      "title": "只同步调账策略的场景 - 前端增加同步调账入口",
+      "createdAt": "2026-07-30T04:14:30.470Z"
+    }
+  ],
+  "aggregatedArtifacts": {},
+  "codeScope": {
+    "globs": [],
+    "autoLearned": true
+  }
+}

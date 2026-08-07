@@ -91,7 +91,7 @@ func (g *Gcp) ListImage(kt *kit.Kit,
 			Platform:     platform,
 			Architecture: pImage.Architecture,
 			State:        pImage.Status,
-			Type:         "public",
+			Type:         string(enumor.ImageTypePublic),
 			OsType:       image.GetOsTypeByPlatform(enumor.Gcp, platform),
 		})
 	}

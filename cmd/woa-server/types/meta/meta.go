@@ -18,6 +18,8 @@ import (
 
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
+
+	"github.com/shopspring/decimal"
 )
 
 // DiskTypeItem defines disk type item.
@@ -63,13 +65,15 @@ func (r *ListDeviceTypeReq) Validate() error {
 
 // ListDeviceTypeRst defines list device type result.
 type ListDeviceTypeRst struct {
-	DeviceType   string  `json:"device_type"`
-	CoreType     string  `json:"core_type"`
-	CpuCore      int64   `json:"cpu_core"`
-	Memory       int64   `json:"memory"`
-	GpuAmount    float64 `json:"gpu_amount"`
-	DeviceClass  string  `json:"device_class"`
-	DeviceFamily string  `json:"device_family"`
+	DeviceType      string          `json:"device_type"`
+	CoreType        string          `json:"core_type"`
+	CpuCore         int64           `json:"cpu_core"`
+	Memory          int64           `json:"memory"`
+	GpuAmount       float64         `json:"gpu_amount"`
+	DeviceClass     string          `json:"device_class"`
+	DeviceFamily    string          `json:"device_family"`
+	TechnicalClass  string          `json:"technical_class"`
+	TechClassResAmt decimal.Decimal `json:"tech_class_res_amt"`
 }
 
 // ListBizsByOpProdReq defines list bizs by op product request.

@@ -15,6 +15,9 @@
     "stop": [
       {
         "command": "bkdevbuddy hook run drift --ide cursor"
+      },
+      {
+        "command": "bkdevbuddy hook run docs --ide cursor"
       }
     ]
   }

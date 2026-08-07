@@ -226,7 +226,7 @@ func (sc *SyncController) advanceSyncItems(kt *kit.Kit, syncRecord *billcore.Syn
 			continue
 		}
 		beforeState := item.State
-		afterItem, err := sc.handleSyncRecordDetailItem(kt, item)
+		afterItem, err := sc.handleSyncRecordDetailItem(kt, item, syncRecord.SyncMode)
 		if err != nil {
 			return false, err
 		}
@@ -394,12 +394,20 @@ func (sc *SyncController) getItemListFromDetail(
 	return itemList, nil
 }
 
-func (sc *SyncController) handleSyncRecordDetailItem(kt *kit.Kit, syncRecordItem *SyncRecordDetailItem) (
-	*SyncRecordDetailItem, error) {
+func (sc *SyncController) handleSyncRecordDetailItem(kt *kit.Kit, syncRecordItem *SyncRecordDetailItem,
+	syncMode enumor.BillSyncMode) (*SyncRecordDetailItem, error) {
 
 	switch syncRecordItem.State {
 	case stateNew:
-		return sc.setTotal(kt, syncRecordItem)
+		item, err := sc.setTotal(kt, syncRecordItem)
+		if err != nil {
+			return nil, err
+		}
+		// adjustment_only 模式仅需计数，跳过明细推送 Flow，直接置为 synced
+		if syncMode == enumor.BillSyncModeAdjustmentOnly {
+			item.State = stateSynced
+		}
+		return item, nil
 	case stateSyncing:
 		return sc.doSubSyncTask(kt, syncRecordItem)
 	case stateSynced:

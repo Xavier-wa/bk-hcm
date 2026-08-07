@@ -1525,8 +1525,8 @@ func (g *Generator) buildSingleDeviceInfo(kt *kit.Kit, item *types.DeviceInfo, o
 		Deliverer:         item.Deliverer,
 		IsManualMatched:   item.IsManualMatched,
 		CloudZone:         item.CloudZone,
-		CreateAt:          now,
-		UpdateAt:          now,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	// add device detail info from cc
 	g.enrichDeviceInfoFromCC(kt, device, item.AssetId, order.SubOrderId, mapAssetIDToHost)

@@ -240,13 +240,15 @@ func (s *service) ListDeviceType(cts *rest.Contexts) (interface{}, error) {
 		}
 		for _, detail := range result.Details {
 			deviceDetails = append(deviceDetails, mtypes.ListDeviceTypeRst{
-				DeviceType:   detail.DeviceType,
-				CoreType:     string(detail.CoreType),
-				CpuCore:      detail.CpuCore,
-				Memory:       detail.Memory,
-				GpuAmount:    detail.GpuAmount,
-				DeviceClass:  detail.DeviceClass,
-				DeviceFamily: detail.DeviceFamily,
+				DeviceType:      detail.DeviceType,
+				CoreType:        string(detail.CoreType),
+				CpuCore:         detail.CpuCore,
+				Memory:          detail.Memory,
+				GpuAmount:       detail.GpuAmount,
+				DeviceClass:     detail.DeviceClass,
+				DeviceFamily:    detail.DeviceFamily,
+				TechnicalClass:  detail.TechnicalClass,
+				TechClassResAmt: detail.TechClassResAmt,
 			})
 		}
 		if len(result.Details) < int(listReq.Page.Limit) {

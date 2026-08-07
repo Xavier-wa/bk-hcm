@@ -48,6 +48,7 @@ type BillAdjustmentTable struct {
 	MainAccountName string `header:"二级账号名称"`
 	AdjustType      string `header:"调账类型"`
 	ResClass        string `header:"资源类别"`
+	ResSubClass     string `header:"资源子类"`
 	Operator        string `header:"操作人"`
 	Cost            string `header:"金额"`
 	Currency        string `header:"币种"`

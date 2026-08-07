@@ -158,7 +158,10 @@ func (act FlowSlaveOperateWatchAction) processResFlow(kt run.ExecuteKit, opt *Fl
 			return false, err
 		}
 		if len(resFlowLockList) == 0 {
-			return true, nil
+			// 调用方可能先创建 watch 再加锁，此时应继续等待，避免 watch 提前成功退出导致锁无法释放
+			logs.Warnf("res flow lock not found while flow is init, keep watching, flowID: %s, resID: %s, "+
+				"resType: %s, rid: %s", opt.FlowID, opt.ResID, opt.ResType, kt.Kit().Rid)
+			return false, nil
 		}
 
 		// 如已锁定资源，则需要更新Flow状态为Pending

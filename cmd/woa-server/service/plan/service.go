@@ -219,6 +219,8 @@ func (s *service) initBizPlanService(h *rest.Handler) {
 	// gpu demand
 	h.Add("ListBizResPlanDemandGpuSubOrder", http.MethodPost,
 		"/plans/resources/gpu/demands/suborders/list", s.ListBizResPlanDemandGpuSubOrder)
+	h.Add("ListBizResPlanDemandGpuSubOrderSummary", http.MethodPost,
+		"/plans/resources/gpu/demands/suborders/summary", s.ListBizResPlanDemandGpuSubOrderSummary)
 	h.Add("BatchUpdateBizResPlanDemandGpuSubOrder", http.MethodPost,
 		"/plans/resources/gpu/demands/suborders/batch", s.BatchUpdateBizResPlanDemandGpuSubOrder)
 	h.Add("BatchTerminateBizResPlanDemandGpuSubOrder", http.MethodPost,

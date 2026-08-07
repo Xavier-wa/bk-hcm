@@ -114,11 +114,20 @@ func (s *SubTicketSplitter) prepareAddSubTickets(kt *kit.Kit, ticketID string, v
 		}
 		// 2.1. 对每个变更需求，匹配可转移的CRP预测，匹配不完的拆分为另一个子单
 		for _, demand := range cvmDemands {
+			// 使用局部变量副本，避免循环复用同一个地址导致引用同一个元素
+			demand := demand
+			addKey := enumor.RPTicketTypeAdd
+
+			// 短租项目跳过中转池，直接放入追加组
+			if isShortLeaseProject(demand) {
+				s.adjSplitGroupDemands[addKey] = append(s.adjSplitGroupDemands[addKey], &demand)
+				continue
+			}
+
 			// 专用机型跳过转移匹配，直接放入追加组
 			deviceType := demand.Updated.Cvm.DeviceType
 			if dtInfo, ok := deviceTypeMap[deviceType]; ok && dtInfo.DeviceTypeClass == cvmapi.SpecialType {
-				s.adjSplitGroupDemands[enumor.RPTicketTypeAdd] = append(
-					s.adjSplitGroupDemands[enumor.RPTicketTypeAdd], &demand)
+				s.adjSplitGroupDemands[addKey] = append(s.adjSplitGroupDemands[addKey], &demand)
 				continue
 			}
 
@@ -341,4 +350,12 @@ func (s *SubTicketSplitter) splitDemandInAddScenarios(kt *kit.Kit, ticketID stri
 			nonTransferDemand)
 	}
 	return nil
+}
+
+// isShortLeaseProject 判断是否为短租项目
+func isShortLeaseProject(demand rpt.ResPlanDemand) bool {
+	if demand.Updated == nil {
+		return false
+	}
+	return demand.Updated.ObsProject == enumor.ObsProjectShortLease
 }

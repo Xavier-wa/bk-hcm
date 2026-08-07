@@ -325,13 +325,12 @@ func (dao Dao) CountCVMRelatedResGroupByBiz(kt *kit.Kit, sgID string) ([]types.C
 		return nil, err
 	}
 
-	sql := fmt.Sprintf(`SELECT bk_biz_id as group_field, COUNT(*) as count FROM %s AS rel
-                                                   LEFT JOIN %s AS t ON rel.res_id = t.id %s GROUP BY bk_biz_id`,
-		table.SecurityGroupCommonRelTable, table.CvmTable, whereExpr)
+	sql := buildCountRelatedResGroupByBizSQL(table.CvmTable, whereExpr)
 
 	counts := make([]types.CountResult, 0)
 	err = dao.Orm.Do().Select(kt.Ctx, &counts, sql, whereValue)
 	if err != nil {
+		logs.Errorf("count cvm related res group by biz failed, err: %v, sgID: %s, rid: %s", err, sgID, kt.Rid)
 		return nil, err
 	}
 	return counts, nil
@@ -349,14 +348,20 @@ func (dao Dao) CountLoadBalancerRelatedResGroupByBiz(kt *kit.Kit, sgID string) (
 		return nil, err
 	}
 
-	sql := fmt.Sprintf(`SELECT bk_biz_id as group_field, COUNT(*) as count FROM %s AS rel
-                                                   LEFT JOIN %s AS t ON rel.res_id = t.id %s GROUP BY bk_biz_id`,
-		table.SecurityGroupCommonRelTable, table.LoadBalancerTable, whereExpr)
+	sql := buildCountRelatedResGroupByBizSQL(table.LoadBalancerTable, whereExpr)
 
 	counts := make([]types.CountResult, 0)
 	err = dao.Orm.Do().Select(kt.Ctx, &counts, sql, whereValue)
 	if err != nil {
+		logs.Errorf("count load balancer related res group by biz failed, err: %v, sgID: %s, rid: %s", err, sgID, kt.Rid)
 		return nil, err
 	}
 	return counts, nil
+}
+
+// buildCountRelatedResGroupByBizSQL builds the sql that counts security group related resources group by biz.
+func buildCountRelatedResGroupByBizSQL(resTable table.Name, whereExpr string) string {
+	return fmt.Sprintf(`SELECT bk_biz_id as group_field, COUNT(*) as count FROM %s AS rel
+                                                   INNER JOIN %s AS t ON rel.res_id = t.id %s GROUP BY bk_biz_id`,
+		table.SecurityGroupCommonRelTable, resTable, whereExpr)
 }
