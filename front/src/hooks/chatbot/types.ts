@@ -69,6 +69,19 @@ export const HOST_APPLY_CONFIRM_EVENT = 'after_tool_hitl.recommend_suborder_conf
 // CUSTOM 事件 name：中断 resume 转发回执。历史回放时据此恢复 A 卡选中方案 / B 卡确认（含修改）的内容。
 export const HOST_APPLY_RESUME_FORWARDED_EVENT = 'after_tool_hitl.resume_forwarded';
 
+// CUSTOM 事件 name：同会话内场景切换（更新 session_tag / 侧栏文件夹 / 全屏 chip）
+export const SCENE_SWITCHED_EVENT = 'scene.switched';
+
+// scene.switched 的 value 逻辑结构（线格式可能是 JSON 字符串或已解析对象）
+export interface SceneSwitchedValue {
+  nodeId?: string;
+  payload?: {
+    from?: string;
+    to?: string;
+  };
+  timestamp?: string;
+}
+
 // 磁盘规格（系统盘 / 数据盘统一结构）
 export interface HostApplyDisk {
   disk_type: string; // 磁盘类型编码，如 CLOUD_PREMIUM

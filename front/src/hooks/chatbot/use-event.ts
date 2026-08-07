@@ -5,15 +5,37 @@ import {
   HOST_APPLY_CONFIRM_EVENT,
   HOST_APPLY_RECOMMEND_EVENT,
   HOST_APPLY_SUBMIT_EVENT,
+  SCENE_SWITCHED_EVENT,
   type AccountSelectInterruptValue,
   type HitlInterruptValue,
   type HostApplyPreorderValue,
   type HostApplyRecommendValue,
   type HostApplySubmitValue,
+  type SceneSwitchedValue,
 } from './types';
 import { genId, type MessageModule } from './use-message';
 
-export function useEventHandler(msg: MessageModule) {
+// scene.switched 回调：由 useChatbot 在 session 模块就绪后注入（event 早于 session 创建）
+export interface EventHandlerDeps {
+  onSceneSwitched?: (to: string) => void;
+}
+
+// 解析 scene.switched 的 value（兼容 JSON 字符串与已解析对象）
+const parseSceneSwitchedPayload = (value: unknown): { to?: string; from?: string } | null => {
+  try {
+    const root = (typeof value === 'string' ? JSON.parse(value) : value) as SceneSwitchedValue | null;
+    if (!root || typeof root !== 'object') return null;
+    const { payload } = root;
+    if (!payload || typeof payload !== 'object') return null;
+    const to = String(payload.to ?? '').trim();
+    const from = String(payload.from ?? '').trim();
+    return { to: to || undefined, from: from || undefined };
+  } catch {
+    return null;
+  }
+};
+
+export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {}) {
   const getToolCallMessage = (toolCallId: string) =>
     msg.messages.value.find(
       (m) =>
@@ -233,6 +255,16 @@ export function useEventHandler(msg: MessageModule) {
             status: MessageStatus.Complete,
             __type: 'host_apply.submit',
           } as Message);
+        } else if (name === SCENE_SWITCHED_EVENT) {
+          // 同会话场景切换：更新本地 sessionTag；不推消息气泡、不打断流式
+          const parsed = parseSceneSwitchedPayload(event.value);
+          if (!parsed?.to) {
+            if (parsed === null) {
+              console.warn('[Event] scene.switched value parse failed, ignored');
+            }
+            break;
+          }
+          deps.onSceneSwitched?.(parsed.to);
         }
         // 其余约定外的 CUSTOM 事件名不处理，保持原生（伴随的 TEXT_MESSAGE 文本气泡）输出
         break;

@@ -41,7 +41,9 @@ export function useChatbot(options: UseChatbotOptions = {}) {
   const { sceneTag = '' } = options;
   const { getBizsId } = useWhereAmI();
   const messageModule = useMessage();
-  const eventModule = useEventHandler(messageModule);
+  // event 早于 session 创建：用可变 deps 注入 scene.switched 回调
+  const eventDeps: { onSceneSwitched?: (to: string) => void } = {};
+  const eventModule = useEventHandler(messageModule, eventDeps);
   const streamModule = useStream(messageModule, eventModule);
   const sessionModule = useSession({
     messages: messageModule.messages,
@@ -52,6 +54,11 @@ export function useChatbot(options: UseChatbotOptions = {}) {
     isChatting: streamModule.isChatting,
     sceneTag,
   });
+  eventDeps.onSceneSwitched = (to: string) => {
+    const code = sessionModule.currentSessionCode.value;
+    if (!code) return;
+    sessionModule.updateSessionTag(code, to);
+  };
   const accountSelectModule = useAccountSelect(messageModule.messages);
 
   // F-004 in-flight 窗口锁定：记录「他处正在操作中」的会话码集合。

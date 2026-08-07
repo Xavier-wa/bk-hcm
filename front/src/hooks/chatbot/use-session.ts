@@ -230,6 +230,13 @@ export function useSession(deps: SessionDeps) {
     }
   };
 
+  // 更新本地会话场景标签（SSE scene.switched）；chip / 侧栏文件夹由 sessionTag 派生刷新
+  const updateSessionTag = (sessionCode: string, tag: string) => {
+    const session = sessions.value.find((s) => s.sessionCode === sessionCode);
+    if (!session) return;
+    session.sessionTag = tag.trim() || undefined;
+  };
+
   const renameSession = async (code: string, title: string) => {
     const bkBizId = resolveBkBizId();
     if (!bkBizId) return;
@@ -292,6 +299,7 @@ export function useSession(deps: SessionDeps) {
     deleteSession,
     renameSession,
     moveSessionToTop,
+    updateSessionTag,
     goHome,
     initSessions,
     reloadSessions,
