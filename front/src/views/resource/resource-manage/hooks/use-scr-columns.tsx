@@ -1093,6 +1093,10 @@ export default (type: string, isSimpleShow = false) => {
       field: 'module_name',
     },
     {
+      label: '项目类型',
+      field: 'recycle_type',
+    },
+    {
       label: '标记',
       field: 'return_tag',
     },

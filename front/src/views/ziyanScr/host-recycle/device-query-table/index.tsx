@@ -15,6 +15,7 @@ import { isEmpty } from '@/common/util';
 import useSelection from '@/views/resource/resource-manage/hooks/use-selection';
 import rollRequest from '@blueking/roll-request';
 import http from '@/http';
+import ObsProjectSelector from '@/views/business/resource-plan/children/obs-project-selector.vue';
 
 const { FormItem } = Form;
 export default defineComponent({
@@ -35,6 +36,7 @@ export default defineComponent({
       bk_zone_name: [] as any[],
       sub_zone: [] as any[],
       stage: [] as any[],
+      recycle_type: [] as string[],
       bk_username: [] as any[],
       bk_asset_id: [] as any[],
     });
@@ -224,6 +226,9 @@ export default defineComponent({
                   return <Select.Option key={stage} name={description} id={stage} />;
                 })}
               </Select>
+            </FormItem>
+            <FormItem label='项目类型'>
+              <ObsProjectSelector v-model={deviceForm.value.recycle_type} multiple />
             </FormItem>
             <FormItem label='回收IP'>
               <FloatInput v-model={deviceForm.value.ip} placeholder='请输入IP，多个换行分割' />
