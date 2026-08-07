@@ -12,6 +12,7 @@ import {
 import '@blueking/chat-x/dist/index.css';
 
 import { useChatbotContext, useChatbotMode } from '@/hooks/chatbot/provide';
+import { touchCardActionProtect } from '@/hooks/chatbot/card-action-protect';
 import { useHitl } from '@/hooks/chatbot/use-hitl';
 import { useAccountSelect } from '@/hooks/chatbot/use-account-select';
 import { useHostApply } from '@/hooks/chatbot/use-host-apply';
@@ -87,6 +88,7 @@ const handleAccountConfirm = (message: Message, accountId: string) => {
   const content = getAccountSelectContent(message);
   const option = content?.value.options.find((opt) => opt.account_id === accountId);
   (message as AccountSelectInterruptMessage).__selectedAccountId = accountId;
+  touchCardActionProtect();
   const text = option ? `我选择云账号：${option.account_name}` : accountId;
   sendMessage(text, undefined, accountId);
 };
@@ -95,6 +97,7 @@ const handleAccountConfirm = (message: Message, accountId: string) => {
 // agent 随后返回预提单（模板 B）。
 const handleSelectPlan = (message: Message, index: number) => {
   (message as HostApplyRecommendMessage).__selectedIndex = index;
+  touchCardActionProtect();
   const suborder = getRecommendContent(message)?.value.recommendations[index]?.suborder;
   const resumeValue = suborder ? JSON.stringify(suborder) : undefined;
   sendMessage('我选择该申领方案', undefined, resumeValue);
@@ -104,6 +107,7 @@ const handleSelectPlan = (message: Message, index: number) => {
 // 【假设】resume 承载形式待后端确认，见 api.md §6。
 const handleConfirmPreorder = (message: Message, suborders: HostApplySuborder[], edited: boolean) => {
   (message as HostApplyPreorderMessage).__confirmedSuborders = suborders;
+  touchCardActionProtect();
   sendMessage(edited ? '确认申领配置（已调整）' : '确认申领配置', undefined, JSON.stringify(suborders));
 };
 
@@ -139,6 +143,7 @@ const handleAddToList = (payload: HostApplySuborder | HostApplySuborder[]) => {
 // 【假设】resume 承载形式待后端确认，见 api.md §6。
 const handleSubmitConfirm = (message: Message) => {
   (message as HostApplySubmitMessage).__submitted = true;
+  touchCardActionProtect();
   const data = getSubmitContent(message)?.value.data;
   sendMessage('确认提交', undefined, data ? JSON.stringify(data) : undefined);
 };

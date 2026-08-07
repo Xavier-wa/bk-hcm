@@ -2,7 +2,12 @@ import { ref } from 'vue';
 import { MessageRole, MessageStatus, type Message } from '@blueking/chat-x';
 
 import * as agentApi from '@/store/chatbot/agent';
-import { findRecommendIndexBySuborder, isSubmitResumePayload } from './card-client-meta';
+import {
+  findRecommendIndexBySuborder,
+  isSubmitResumePayload,
+  restoreCardClientMeta,
+  type CardClientMeta,
+} from './card-client-meta';
 import {
   EventType,
   HOST_APPLY_CONFIRM_EVENT,
@@ -509,7 +514,12 @@ export function useStream(msg: MessageModule, event: EventModule) {
   //
   // isChatting 仅在 SNAPSHOT 之后出现续传实时事件时才置 true：
   // 纯历史加载不是「生成中」，否则切回对话页 / 拉历史时会闪现「停止生成」按钮。
-  const fetchHistory = async (code: string, onSnapshotLoaded?: () => void): Promise<void> => {
+  // opts.clientMeta：在一次性赋值前还原卡片运行态，避免 messages=[] 中间帧闪回可点旧卡。
+  const fetchHistory = async (
+    code: string,
+    onSnapshotLoaded?: () => void,
+    opts?: { clientMeta?: Map<string, CardClientMeta> },
+  ): Promise<void> => {
     const controller = new AbortController();
     abortController = controller;
     let snapshotDone = false;
@@ -524,8 +534,8 @@ export function useStream(msg: MessageModule, event: EventModule) {
       await readSSE(reader, (e) => {
         if (e.type === EventType.MessagesSnapshot) {
           const items = (e.messages as Record<string, unknown>[]) || [];
-          // 快照到达即以服务端全量为准替换本地列表：支撑「刷新当前会话」无闪烁（切换会话路径已提前清空，此处再清空为幂等无副作用）
-          msg.messages.value = [];
+          // 离屏构建完整列表后再一次赋值：禁止 messages=[] 的可见中间态（获焦闪卡根因）
+          const next: Message[] = [];
           // 边遍历边记录最近一张方案推荐卡 / 预提单卡，遇到 resume_forwarded 回执即回填选择/确认内容；
           // 内部 activity（ACTIVITY_DELTA、resume_forwarded 等）不渲染为气泡。
           let lastRecommend: HostApplyRecommendMessage | undefined;
@@ -539,7 +549,7 @@ export function useStream(msg: MessageModule, event: EventModule) {
             if (isInternalActivity(raw)) continue;
 
             const message = toHistoryMessage(raw);
-            msg.messages.value.push(message);
+            next.push(message);
             if ((message as HostApplyRecommendMessage).__type === 'host_apply.recommend') {
               lastRecommend = message as HostApplyRecommendMessage;
             } else if ((message as HostApplyPreorderMessage).__type === 'host_apply.preorder') {
@@ -548,8 +558,12 @@ export function useStream(msg: MessageModule, event: EventModule) {
               lastSubmit = message as HostApplySubmitMessage;
             }
           }
-          // SNAPSHOT 内连续 user 消息（上次被中断 / 连续停止）每条都补占位
+          // 同步帧内完成：赋值 → 补占位 → 还原本地卡片态（Vue 不会在中途刷 DOM）
+          msg.messages.value = next;
           fillSnapshotUserGaps('未响应或被停止');
+          if (opts?.clientMeta?.size) {
+            restoreCardClientMeta(msg.messages.value, opts.clientMeta);
+          }
           snapshotDone = true;
           onSnapshotLoaded?.();
           return;

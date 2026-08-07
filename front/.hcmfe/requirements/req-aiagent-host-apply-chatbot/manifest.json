@@ -2,7 +2,7 @@
   "id": "req-aiagent-host-apply-chatbot",
   "title": "aiagent - 主机申领场景 chatbot",
   "createdAt": "2026-06-21T10:16:37.530Z",
-  "updatedAt": "2026-07-13T09:50:54.678Z",
+  "updatedAt": "2026-08-06T12:31:12.955Z",
   "external": {
     "tapd": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598134649532"
   },
@@ -21,6 +21,13 @@
       "title": "agent产品化-推荐卡片展示机型族、CPU、内存",
       "createdAt": "2026-07-10T12:25:15.385Z",
       "mergedCommit": "ae1a53b46271e0ac29400b58e62b8f718f66a220"
+    },
+    {
+      "wfId": "fix-chatbot-history-focus-flash",
+      "status": "coding",
+      "branch": "fix-chatbot-history-focus-flash",
+      "title": "aiagent chatbot - 页面获焦拉 history 覆盖卡片操作态闪烁",
+      "createdAt": "2026-08-06T12:31:12.896Z"
     }
   ],
   "aggregatedArtifacts": {

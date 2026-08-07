@@ -9,6 +9,7 @@ import { useEventHandler } from './use-event';
 import { useStream } from './use-stream';
 import { useSession } from './use-session';
 import { useAccountSelect } from './use-account-select';
+import { touchCardActionProtect } from './card-action-protect';
 import {
   applyPendingResumeMeta,
   cardMetaRecordToMap,
@@ -19,6 +20,7 @@ import {
 import { type HostApplyRecommendMessage, type HostApplySuborder } from './types';
 
 export type { ChatSession } from './types';
+export { touchCardActionProtect } from './card-action-protect';
 
 export const extractText = (content: unknown): string => {
   if (typeof content === 'string') return content;
@@ -108,7 +110,8 @@ export function useChatbot(options: UseChatbotOptions = {}) {
         if (data.sessionCode !== sessionModule.currentSessionCode.value) return;
         const remoteMeta = cardMetaRecordToMap(data.cardMeta);
         void (async () => {
-          await sessionModule.refreshCurrentSession();
+          // 被动刷新：受卡片操作保护窗口约束，且 SNAPSHOT 内原子合并本地 meta
+          await sessionModule.refreshCurrentSession({ reason: 'passive' });
           restoreCardClientMeta(messageModule.messages.value, remoteMeta);
           sessionModule.saveCurrentSession();
         })();
@@ -141,7 +144,8 @@ export function useChatbot(options: UseChatbotOptions = {}) {
     // 仅作读一致性的轻量校验：刷新后照常提交，若他处已推进导致 409 仍走现有错误渲染路径，不做专门冲突处理。
     // 普通首轮发送不刷新，避免徒增一次 /history 往返。
     if (resumeValue && sessionModule.currentSession.value) {
-      await sessionModule.refreshCurrentSession();
+      // active：续跑前一致性校验，不因保护窗口跳过；clientMeta 仍原子合并
+      await sessionModule.refreshCurrentSession({ reason: 'active' });
       // F-002 刷新会替换 messages 对象，续跑前用 resumeValue 回填方案卡选中下标（与 card-client-meta 捕获互补）
       applyPendingResumeMeta(messageModule.messages.value, resumeValue);
     }
@@ -256,6 +260,7 @@ export function useChatbot(options: UseChatbotOptions = {}) {
     createSession: sessionModule.createSession,
     switchSession: sessionModule.switchSession,
     refreshCurrentSession: sessionModule.refreshCurrentSession,
+    touchCardActionProtect,
     deleteSession: sessionModule.deleteSession,
     renameSession: sessionModule.renameSession,
     goHome: sessionModule.goHome,

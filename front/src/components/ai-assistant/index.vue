@@ -93,8 +93,8 @@ const show = () => {
   if (!hasBizChatbotAccess.value) return;
   panelVisible.value = true;
   ensureSessions();
-  // 面板重新可见时刷新当前会话，保证与他处（另一标签页/全屏）已推进的内容一致
-  refreshCurrentSession();
+  // 用户显式打开面板：active 刷新（不受卡片操作保护窗口 skip），SNAPSHOT 仍原子合并本地 meta
+  refreshCurrentSession({ reason: 'active' });
 };
 
 const hide = () => {
@@ -150,7 +150,7 @@ const handleKeydown = (event: KeyboardEvent) => {
 const handleVisibilityRefresh = debounce(() => {
   if (document.visibilityState !== 'visible') return;
   if (!panelVisible.value) return;
-  refreshCurrentSession();
+  refreshCurrentSession({ reason: 'passive' });
 }, 300);
 
 onMounted(() => {

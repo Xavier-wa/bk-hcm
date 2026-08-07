@@ -486,7 +486,7 @@ watch(
 // 标签页重新可见 / 窗口重新聚焦时刷新当前会话，保证与他处（浮窗/另一标签页）已推进的内容一致。
 // ~300ms 去抖，避免高频 alt-tab 触发重复请求；刷新本身另有 isChatting/空会话守卫。
 const handleVisibilityRefresh = debounce(() => {
-  if (document.visibilityState === 'visible') refreshCurrentSession();
+  if (document.visibilityState === 'visible') refreshCurrentSession({ reason: 'passive' });
 }, 300);
 
 onBeforeUnmount(() => {
