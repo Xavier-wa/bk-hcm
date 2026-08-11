@@ -1,0 +1,136 @@
+apiVersion: {{ template "common.capabilities.statefulset.apiVersion" . }}
+kind: StatefulSet
+metadata:
+  name: {{ template "bk-hcm.fullname" . }}-agentserver
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "common.labels.standard" . | nindent 4 }}
+spec:
+  serviceName: {{ template "bk-hcm.fullname" . }}-agentserver
+  # sqlite 本地文件存储依赖 RWO PVC，当前需要单副本； TODO 多副本（高可用）需后续评估共享存储方案。
+  replicas: {{ .Values.agentserver.replicas }}
+  selector:
+    matchLabels:
+      {{- include "common.labels.matchLabels" . | nindent 6 }}
+      {{- if not .Values.compatibility.noComponentInMatchLabels }}
+      component: agentserver
+      {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "common.labels.standard" . | nindent 8 }}
+        component: agentserver
+      annotations:
+        checksum/configmap: {{ include (print $.Template.BasePath "/agentserver/configmap.yaml") . | sha256sum }}
+      {{- if .Values.agentserver.podAnnotations }}
+        {{- toYaml .Values.agentserver.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ template "bk-hcm.serviceAccountName" . }}
+      {{- with .Values.agentserver.nodeSelector }}
+      nodeSelector:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agentserver.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agentserver.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+          {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        # data-service：session / access_token 等硬依赖
+        {{- include "bk-hcm.wait-for-pod-init-container" (list . (printf "%s-dataservice" (include "bk-hcm.fullname" .)) "-lcomponent=dataservice") | nindent 8 }}
+        {{- include "bk-hcm.wait-for-pod-init-container" (list . (printf "%s-authserver" (include "bk-hcm.fullname" .)) "-lcomponent=authserver") | nindent 8 }}
+        # cloud-server：申领、查询场景依赖
+        {{- include "bk-hcm.wait-for-pod-init-container" (list . (printf "%s-cloudserver" (include "bk-hcm.fullname" .)) "-lcomponent=cloudserver") | nindent 8 }}
+        # woa-server：申领场景依赖
+        {{- include "bk-hcm.wait-for-pod-init-container" (list . (printf "%s-woaserver" (include "bk-hcm.fullname" .)) "-lcomponent=woaserver") | nindent 8 }}
+        # api-server：MCP internal 直连依赖
+        {{- include "bk-hcm.wait-for-pod-init-container" (list . (printf "%s-apiserver" (include "bk-hcm.fullname" .)) "-lcomponent=apiserver") | nindent 8 }}
+      containers:
+        - name: agentserver
+          image: {{ default .Values.global.imageRegistry .Values.image.registry }}/{{ .Values.agentserver.image.repository }}:v{{ default .Values.image.tag .Values.agentserver.image.tag }}
+          imagePullPolicy: {{ default .Values.global.imagePullPolicy .Values.image.pullPolicy | quote }}
+          command:
+            - /data/hcm/bk-hcm-agentserver
+            - --bind-ip=$(POD_IP)
+            - --config-file=/data/hcm/etc/config.yaml
+          livenessProbe:
+            httpGet:
+              path: /alivez
+              port: {{ .Values.agentserver.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.agentserver.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          {{- if .Values.agentserver.resources }}
+          resources: {{ toYaml .Values.agentserver.resources | nindent 12 }}
+          {{- end }}
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          {{- if .Values.agentserver.env }}
+            {{- toYaml .Values.agentserver.env | nindent 12 }}
+          {{- end }}
+          ports:
+            - containerPort: {{ .Values.agentserver.port }}
+          volumeMounts:
+            - mountPath: /data/hcm/etc
+              name: config
+            - mountPath: {{ .Values.agentserver.persistence.mountPath }}
+              name: data
+            {{- if not .Values.etcd.enabled }}
+            {{- if .Values.externalEtcd.tls.enabled }}
+            - mountPath: /data/hcm/etc/certs
+              name: etcd-certs
+            {{- end }}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ template "bk-hcm.fullname" . }}-agentserver-config
+        {{- if not .Values.agentserver.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+      {{- if not .Values.etcd.enabled }}
+      {{- if .Values.externalEtcd.tls.enabled }}
+        - name: etcd-certs
+          secret:
+            secretName: {{ template "bk-hcm.etcdSecretName" . }}
+      {{- end }}
+      {{- end }}
+  {{- if .Values.agentserver.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "common.labels.standard" . | nindent 10 }}
+          component: agentserver
+      spec:
+        accessModes:
+          {{- toYaml .Values.agentserver.persistence.accessModes | nindent 10 }}
+        resources:
+          requests:
+            storage: {{ .Values.agentserver.persistence.size | quote }}
+        {{- $storageClass := .Values.agentserver.persistence.storageClass | default .Values.global.storageClass }}
+        {{- if $storageClass }}
+        {{- if (eq "-" $storageClass) }}
+        storageClassName: ""
+        {{- else }}
+        storageClassName: {{ $storageClass | quote }}
+        {{- end }}
+        {{- end }}
+  {{- end }}

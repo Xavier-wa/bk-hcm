@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "bk-hcm.fullname" . }}-agentserver-config
+  labels: {{- include "common.labels.standard" . | nindent 4 }}
+data:
+  config.yaml: |-
+    network:
+      bindIP:
+      port: {{ .Values.agentserver.port }}
+      tls:
+        insecureSkipVerify:
+        certFile:
+        keyFile:
+        caFile:
+        password:
+    service:
+      etcd:
+        {{- include "common.tplvalues.render" (dict "value" (include "bk-hcm.etcdConfig" .) "context" $) | nindent 8 }}
+    log:
+      {{- toYaml .Values.agentserver.log | nindent 6 }}
+    storage:
+      session:
+        {{- if .Values.agentserver.storage.session.dsn }}
+        dsn: {{ .Values.agentserver.storage.session.dsn | quote }}
+        {{- else }}
+        dsn: "{{ include "bk-hcm.database.user" . }}:{{ include "bk-hcm.database.password" . }}@tcp({{ include "bk-hcm.database.host" . }}:{{ include "bk-hcm.database.port" . }})/{{ include "bk-hcm.database.database" . }}?charset=utf8mb4&parseTime=true"
+        {{- end }}
+        tablePrefix: {{ .Values.agentserver.storage.session.tablePrefix | quote }}
+        {{- if hasKey .Values.agentserver.storage.session "skipDBInit" }}
+        skipDBInit: {{ .Values.agentserver.storage.session.skipDBInit }}
+        {{- end }}
+        summary:
+          {{- toYaml .Values.agentserver.storage.session.summary | nindent 10 }}
+      memory:
+        {{- toYaml .Values.agentserver.storage.memory | nindent 8 }}
+      checkpoint:
+        {{- toYaml .Values.agentserver.storage.checkpoint | nindent 8 }}
+    providers:
+      {{- toYaml .Values.agentserver.providers | nindent 6 }}
+    agui:
+      {{- toYaml .Values.agentserver.agui | nindent 6 }}
+    tools:
+      {{- /* values.tools 支持 tpl，可用于解析 api-server Service DNS（helper: bk-hcm.apiserver） */}}
+      {{- include "common.tplvalues.render" (dict "value" .Values.agentserver.tools "context" $) | nindent 6 }}
+    a2a:
+      {{- toYaml .Values.agentserver.a2a | nindent 6 }}
+    skills:
+      {{- toYaml .Values.agentserver.skills | nindent 6 }}
+    prompt:
+      {{- toYaml .Values.agentserver.prompt | nindent 6 }}
+    intent:
+      {{- toYaml .Values.agentserver.intent | nindent 6 }}
+    bkaidevSyncApiGateway:
+      {{- toYaml .Values.agentserver.bkaidevSyncApiGateway | nindent 6 }}
