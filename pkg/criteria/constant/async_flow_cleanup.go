@@ -17,20 +17,14 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package enumor
+package constant
 
-// CronTask 定时任务
-type CronTask string
-
+// 异步任务（async_flow / async_flow_task）历史数据清理的默认值与边界值。
 const (
-	// CronTaskSyncDeviceCapacity 同步主机库存
-	CronTaskSyncDeviceCapacity CronTask = "sync_device_capacity"
-	// CronTaskRollingMonthlyTerminateNotice 滚服申领单跨月终止通知
-	CronTaskRollingMonthlyTerminateNotice CronTask = "rolling_monthly_terminate_notice"
-	// CronTaskSyncDeviceTypePhysicalRel 同步 CVM 机型与物理机机型族映射
-	CronTaskSyncDeviceTypePhysicalRel CronTask = "sync_device_type_physical_rel"
-	// CronTaskApplyRecommendOffline 申领机型推荐离线统计
-	CronTaskApplyRecommendOffline CronTask = "apply_recommend_offline"
-	// CronTaskAsyncFlowAndTaskCleanup 异步任务历史数据清理
-	CronTaskAsyncFlowAndTaskCleanup CronTask = "async_flow_and_task_cleanup"
+	// DefaultAsyncFlowCleanupIntervalMin 清理任务默认执行周期，单位：分钟。
+	DefaultAsyncFlowCleanupIntervalMin = 60
+	// DefaultAsyncFlowCleanupRetentionDays 默认保留天数，updated_at 早于该天数的记录视为超期。
+	DefaultAsyncFlowCleanupRetentionDays = 180
+	// DefaultAsyncFlowCleanupBatchIntervalMs 默认批间隔，单位：毫秒。
+	DefaultAsyncFlowCleanupBatchIntervalMs = 100
 )

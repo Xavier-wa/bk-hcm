@@ -518,6 +518,9 @@ type TaskServerSetting struct {
 	Async    Async        `yaml:"async"`
 	Tenant   TenantConfig `yaml:"tenant"`
 
+	// AsyncFlowAndTaskCleanup 异步任务历史数据定时清理配置
+	AsyncFlowAndTaskCleanup AsyncFlowAndTaskCleanup `yaml:"asyncFlowAndTaskCleanup"`
+
 	UseLabel LabelSwitch `yaml:"useLabel"`
 }
 
@@ -533,6 +536,7 @@ func (s *TaskServerSetting) trySetDefault() {
 	s.Database.trySetDefault()
 	s.Log.trySetDefault()
 	s.Async.trySetDefault()
+	s.AsyncFlowAndTaskCleanup.trySetDefault()
 
 	if s.OBSDatabase != nil {
 		s.OBSDatabase.trySetDefault()
@@ -576,6 +580,10 @@ func (s TaskServerSetting) Validate() error {
 
 	if err := s.Cmdb.validate(); err != nil {
 		return fmt.Errorf("cmdb validate error: %w", err)
+	}
+
+	if err := s.AsyncFlowAndTaskCleanup.validate(); err != nil {
+		return err
 	}
 
 	return nil
