@@ -65,7 +65,7 @@ POST /api/v1/cloud/cos/buckets/create
 |---------|--------|------|
 | code    | int32  | 状态码  |
 | message | string | 请求信息 |
-| data	  | object array | 响应数据 |
+| data	  | object | 响应数据 |
 
 #### data
 
