@@ -120,6 +120,10 @@ suite: pre
 	@cp -rf  ${PRO_DIR}/test/suite/suite-test ${OUTPUT_DIR}/
 	@rm -rf  ${PRO_DIR}/test/suite/suite-test
 
+# 集成测试（需 Docker，见 test/integration/Makefile）
+integration:
+	@make -C ${PRO_DIR}/test/integration integration
+
 mockgen:
 	make -C ${PRO_DIR}/pkg/adaptor/mock mockgen
 

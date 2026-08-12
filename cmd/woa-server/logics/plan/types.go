@@ -44,10 +44,18 @@ type CreateResPlanTicketReq struct {
 	// CreateDemands is API create demand requests for add ticket; built into Demands in CreateResPlanTicket.
 	CreateDemands []ptypes.CreateResPlanDemandReq `json:"create_demands" validate:"omitempty"`
 	Remark        string                          `json:"remark" validate:"omitempty"`
+	// Applicant 提单人。为空时回退 kt.User。仅覆盖追加接口会设置该字段，
+	// 用于以真实提单人（而非调用账号，可能为 admin）身份贯穿主单及后续 CRP 提单。
+	Applicant string `json:"applicant" validate:"omitempty"`
 }
 
 // Validate whether CreateResPlanTicketReq is valid.
 func (r *CreateResPlanTicketReq) Validate() error {
+	// budget_declare 仅允许通过 overwrite_append 创建，普通创建入口显式拒绝。
+	if r.TicketType == enumor.RPTicketTypeBudgetDeclare {
+		return fmt.Errorf("unsupported resource plan ticket type: %s", r.TicketType)
+	}
+
 	if err := validator.Validate.Struct(r); err != nil {
 		return err
 	}

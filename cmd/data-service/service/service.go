@@ -65,8 +65,8 @@ import (
 	loadbalancer "hcm/cmd/data-service/service/cloud/load-balancer"
 	networkinterface "hcm/cmd/data-service/service/cloud/network-interface"
 	networkcvmrel "hcm/cmd/data-service/service/cloud/network-interface-cvm-rel"
-	"hcm/cmd/data-service/service/cloud/permission-template"
 	"hcm/cmd/data-service/service/cloud/permission-policy-library"
+	"hcm/cmd/data-service/service/cloud/permission-template"
 	"hcm/cmd/data-service/service/cloud/region"
 	resusagebizrel "hcm/cmd/data-service/service/cloud/res-usage-biz-rel"
 	resourcegroup "hcm/cmd/data-service/service/cloud/resource-group"
@@ -97,6 +97,7 @@ import (
 	recyclerecord "hcm/cmd/data-service/service/recycle-record"
 	resourceplan "hcm/cmd/data-service/service/resource-plan"
 	woadevicetype "hcm/cmd/data-service/service/resource-plan/woa-device-type"
+	returnplan "hcm/cmd/data-service/service/return-plan"
 	rollingserver "hcm/cmd/data-service/service/rolling-server"
 	"hcm/cmd/data-service/service/rolling-server/rolling-applied"
 	rollingbill "hcm/cmd/data-service/service/rolling-server/rolling-bill"
@@ -318,6 +319,7 @@ func (s *Service) apiSet() *restful.Container {
 	globalconfig.InitService(capability)
 
 	resourceplan.InitService(capability)
+	returnplan.InitService(capability)
 	rollingserver.InitService(capability)
 	meta.InitService(capability)
 

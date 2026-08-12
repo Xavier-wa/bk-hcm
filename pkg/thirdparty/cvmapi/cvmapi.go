@@ -86,6 +86,18 @@ type CVMClientInterface interface {
 
 	// QueryReturnPlan query return plan
 	QueryReturnPlan(ctx context.Context, header http.Header, req *QueryReturnPlanReq) (*QueryReturnPlanResp, error)
+	// SubmitAppendReturnOrder 提交退回计划新增(追加)单
+	SubmitAppendReturnOrder(ctx context.Context, header http.Header, req *SubmitAppendReturnOrderReq) (
+		*SubmitAppendReturnOrderResp, error)
+	// SubmitAdjustReturnOrderForApi 提交退回计划调整&删除单
+	SubmitAdjustReturnOrderForApi(ctx context.Context, header http.Header, req *SubmitAdjustReturnOrderReq) (
+		*SubmitAdjustReturnOrderResp, error)
+	// QueryReturnOrderDetail 按 orderId 查询退回计划订单详情
+	QueryReturnOrderDetail(ctx context.Context, header http.Header, req *QueryReturnOrderDetailReq) (
+		*QueryReturnOrderDetailResp, error)
+	// GetReasonClassByObsProject 按 OBS 项目类型查询退回原因大类
+	GetReasonClassByObsProject(ctx context.Context, header http.Header, req *GetReasonClassByObsProjectReq) (
+		*GetReasonClassByObsProjectResp, error)
 	// QueryOrderList 根据销毁单据查询预测返还信息
 	QueryOrderList(ctx context.Context, header http.Header, req *QueryOrderListReq) (
 		*QueryOrderListResp, error)
@@ -447,7 +459,129 @@ func (c *cvmApi) QueryReturnPlan(ctx context.Context, header http.Header, req *Q
 		Do().
 		Into(resp)
 
-	return resp, err
+	if err != nil {
+		return nil, err
+	}
+	if resp.Error.Code != 0 {
+		logs.Errorf("query return plan code error, subPath: %s, code: %d, msg: %s, crpTraceID: %s, req: %+v",
+			subPath, resp.Error.Code, resp.Error.Message, resp.TraceId, req)
+		return nil, fmt.Errorf("query return plan code error, code: %d, msg: %s, crpTraceID: %s",
+			resp.Error.Code, resp.Error.Message, resp.TraceId)
+	}
+
+	return resp, nil
+}
+
+// SubmitAppendReturnOrder 提交退回计划新增(追加)单。
+func (c *cvmApi) SubmitAppendReturnOrder(ctx context.Context, header http.Header, req *SubmitAppendReturnOrderReq) (
+	*SubmitAppendReturnOrderResp, error) {
+
+	subPath := "/yunti-return/webapi/cvm"
+	resp := new(SubmitAppendReturnOrderResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(req).
+		SubResourcef(subPath).
+		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+
+	if err != nil {
+		return nil, err
+	}
+	if resp.Error.Code != 0 {
+		logs.Errorf("submit append return order code error, subPath: %s, code: %d, msg: %s, crpTraceID: %s, req: %+v",
+			subPath, resp.Error.Code, resp.Error.Message, resp.TraceId, req)
+		return nil, fmt.Errorf("submit append return order code error, code: %d, msg: %s, crpTraceID: %s",
+			resp.Error.Code, resp.Error.Message, resp.TraceId)
+	}
+
+	return resp, nil
+}
+
+// SubmitAdjustReturnOrderForApi 提交退回计划调整&删除单（删除模式 src=[{id}]、update=[]）。
+func (c *cvmApi) SubmitAdjustReturnOrderForApi(ctx context.Context, header http.Header,
+	req *SubmitAdjustReturnOrderReq) (*SubmitAdjustReturnOrderResp, error) {
+
+	subPath := "/yunti-return/webapi/cvm"
+	resp := new(SubmitAdjustReturnOrderResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(req).
+		SubResourcef(subPath).
+		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+
+	if err != nil {
+		return nil, err
+	}
+	if resp.Error.Code != 0 {
+		logs.Errorf("submit adjust return order code error, subPath: %s, code: %d, msg: %s, crpTraceID: %s, req: %+v",
+			subPath, resp.Error.Code, resp.Error.Message, resp.TraceId, req)
+		return nil, fmt.Errorf("submit adjust return order code error, code: %d, msg: %s, crpTraceID: %s",
+			resp.Error.Code, resp.Error.Message, resp.TraceId)
+	}
+
+	return resp, nil
+}
+
+// QueryReturnOrderDetail 按 orderId 查询退回计划订单详情，供调度器轮询推进子单状态机。
+func (c *cvmApi) QueryReturnOrderDetail(ctx context.Context, header http.Header, req *QueryReturnOrderDetailReq) (
+	*QueryReturnOrderDetailResp, error) {
+
+	subPath := "/yunti-return/webapi/cvm"
+	resp := new(QueryReturnOrderDetailResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(req).
+		SubResourcef(subPath).
+		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+
+	if err != nil {
+		return nil, err
+	}
+	if resp.Error.Code != 0 {
+		logs.Errorf("query return order detail code error, subPath: %s, code: %d, msg: %s, crpTraceID: %s, req: %+v",
+			subPath, resp.Error.Code, resp.Error.Message, resp.TraceId, req)
+		return nil, fmt.Errorf("query return order detail code error, code: %d, msg: %s, crpTraceID: %s",
+			resp.Error.Code, resp.Error.Message, resp.TraceId)
+	}
+
+	return resp, nil
+}
+
+// GetReasonClassByObsProject 按 OBS 项目类型查询退回原因大类（注意：走 order 子路径）。
+func (c *cvmApi) GetReasonClassByObsProject(ctx context.Context, header http.Header,
+	req *GetReasonClassByObsProjectReq) (*GetReasonClassByObsProjectResp, error) {
+
+	subPath := "/yunti-return/webapi/order"
+	resp := new(GetReasonClassByObsProjectResp)
+	err := c.client.Post().
+		WithContext(ctx).
+		Body(req).
+		SubResourcef(subPath).
+		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+
+	if err != nil {
+		return nil, err
+	}
+	if resp.Error.Code != 0 {
+		logs.Errorf("get reason class by obs project code error, subPath: %s, code: %d, msg: %s, crpTraceID: %s, req: %+v",
+			subPath, resp.Error.Code, resp.Error.Message, resp.TraceId, req)
+		return nil, fmt.Errorf("get reason class by obs project code error, code: %d, msg: %s, crpTraceID: %s",
+			resp.Error.Code, resp.Error.Message, resp.TraceId)
+	}
+
+	return resp, nil
 }
 
 // CreateCvmReturnOrder creates cvm return order

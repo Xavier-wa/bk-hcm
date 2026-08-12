@@ -95,6 +95,7 @@ func genResManagementActionGroups() []client.ActionGroup {
 					NameEn: "Biz Resource Plan",
 					Actions: []client.ActionWithID{
 						{ID: BizResPlanOperate},
+						{ID: BizReturnPlanOperate},
 					},
 				},
 				{

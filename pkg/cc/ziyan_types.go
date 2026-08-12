@@ -805,6 +805,54 @@ type ResPlanConfirmNotice struct {
 	CcReceivers []string `yaml:"ccReceivers"`
 }
 
+// ReturnPlan 退回计划相关配置
+type ReturnPlan struct {
+	// Dispatcher 退回计划调度器配置
+	Dispatcher ReturnPlanDispatcher `yaml:"dispatcher"`
+}
+
+func (r *ReturnPlan) trySetDefault() {
+	r.Dispatcher.trySetDefault()
+}
+
+// ReturnPlanDispatcher 退回计划调度器配置：控制主单/子单 watcher 拉取间隔与 handler 并发。
+type ReturnPlanDispatcher struct {
+	// TicketWatchInterval 主单 watcher 拉取待处理主单的间隔
+	TicketWatchInterval time.Duration `yaml:"ticketWatchInterval"`
+	// TicketWorkerNum 主单 handler 并发 goroutine 数
+	TicketWorkerNum int `yaml:"ticketWorkerNum"`
+	// TicketDealInterval 主单 handler 处理间隔
+	TicketDealInterval time.Duration `yaml:"ticketDealInterval"`
+	// SubTicketWatchInterval 子单 watcher 拉取待处理子单的间隔
+	SubTicketWatchInterval time.Duration `yaml:"subTicketWatchInterval"`
+	// SubTicketWorkerNum 子单 handler 并发 goroutine 数
+	SubTicketWorkerNum int `yaml:"subTicketWorkerNum"`
+	// SubTicketDealInterval 子单 handler 处理间隔
+	SubTicketDealInterval time.Duration `yaml:"subTicketDealInterval"`
+}
+
+// trySetDefault 未配置时设置退回计划调度器默认值（与历史硬编码保持一致）。
+func (c *ReturnPlanDispatcher) trySetDefault() {
+	if c.TicketWatchInterval == 0 {
+		c.TicketWatchInterval = 20 * time.Second
+	}
+	if c.TicketWorkerNum == 0 {
+		c.TicketWorkerNum = 10
+	}
+	if c.TicketDealInterval == 0 {
+		c.TicketDealInterval = 5 * time.Second
+	}
+	if c.SubTicketWatchInterval == 0 {
+		c.SubTicketWatchInterval = 20 * time.Second
+	}
+	if c.SubTicketWorkerNum == 0 {
+		c.SubTicketWorkerNum = 10
+	}
+	if c.SubTicketDealInterval == 0 {
+		c.SubTicketDealInterval = 2 * time.Second
+	}
+}
+
 // MOA 太湖/MOA api配置
 type MOA struct {
 	PaasID          string      `yaml:"paasID"`

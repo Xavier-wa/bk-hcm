@@ -215,6 +215,10 @@ const (
 	ResPlanSubTicketTable = "res_plan_sub_ticket"
 	// ResPlanDemandGpuTemplateTable is res_plan_demand_gpu_template table's name.
 	ResPlanDemandGpuTemplateTable = "res_plan_demand_gpu_template"
+	// ReturnPlanTicketTable is return_plan_ticket table's name.
+	ReturnPlanTicketTable = "return_plan_ticket"
+	// ReturnPlanSubTicketTable is return_plan_sub_ticket table's name.
+	ReturnPlanSubTicketTable = "return_plan_sub_ticket"
 	// ShortRentalReturnedRecordTable is short_rental_returned_record table's name.
 	ShortRentalReturnedRecordTable = "short_rental_returned_record"
 
@@ -456,6 +460,8 @@ var TableMap = map[Name]TableConfig{
 	ResPlanTransferAppliedRecordTable: {},
 	ResPlanSubTicketTable:             {},
 	ResPlanDemandGpuTemplateTable:     {},
+	ReturnPlanTicketTable:             {},
+	ReturnPlanSubTicketTable:          {},
 	ShortRentalReturnedRecordTable:    {},
 
 	MainAccountTable: {EnableTenant: true},

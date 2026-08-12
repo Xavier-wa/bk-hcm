@@ -446,6 +446,22 @@ func (m *mockCRPClient) QueryReturnPlan(_ context.Context, _ http.Header,
 	_ *cvmapi.QueryReturnPlanReq) (*cvmapi.QueryReturnPlanResp, error) {
 	panic("unexpected")
 }
+func (m *mockCRPClient) SubmitAppendReturnOrder(_ context.Context, _ http.Header,
+	_ *cvmapi.SubmitAppendReturnOrderReq) (*cvmapi.SubmitAppendReturnOrderResp, error) {
+	panic("unexpected")
+}
+func (m *mockCRPClient) SubmitAdjustReturnOrderForApi(_ context.Context, _ http.Header,
+	_ *cvmapi.SubmitAdjustReturnOrderReq) (*cvmapi.SubmitAdjustReturnOrderResp, error) {
+	panic("unexpected")
+}
+func (m *mockCRPClient) QueryReturnOrderDetail(_ context.Context, _ http.Header,
+	_ *cvmapi.QueryReturnOrderDetailReq) (*cvmapi.QueryReturnOrderDetailResp, error) {
+	panic("unexpected")
+}
+func (m *mockCRPClient) GetReasonClassByObsProject(_ context.Context, _ http.Header,
+	_ *cvmapi.GetReasonClassByObsProjectReq) (*cvmapi.GetReasonClassByObsProjectResp, error) {
+	panic("unexpected")
+}
 func (m *mockCRPClient) QueryOrderList(_ context.Context, _ http.Header,
 	_ *cvmapi.QueryOrderListReq) (*cvmapi.QueryOrderListResp, error) {
 	panic("unexpected")

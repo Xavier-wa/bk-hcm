@@ -171,14 +171,15 @@ func (c *Controller) extendResPlanListReq(kt *kit.Kit, req *ptypes.ListResPlanDe
 	}
 
 	return &ptypes.ListResPlanDemandReq{
-		BkBizIDs:       req.BkBizIDs,
-		DemandClasses:  req.DemandClasses,
-		OpProductIDs:   req.OpProductIDs,
-		PlanProductIDs: req.PlanProductIDs,
-		CoreTypes:      req.CoreTypes,
-		DeviceFamilies: req.DeviceFamilies,
-		ObsProjects:    req.ObsProjects,
-		RegionIDs:      req.RegionIDs,
+		BkBizIDs:         req.BkBizIDs,
+		DemandClasses:    req.DemandClasses,
+		OpProductIDs:     req.OpProductIDs,
+		PlanProductIDs:   req.PlanProductIDs,
+		CoreTypes:        req.CoreTypes,
+		DeviceFamilies:   req.DeviceFamilies,
+		TechnicalClasses: req.TechnicalClasses,
+		ObsProjects:      req.ObsProjects,
+		RegionIDs:        req.RegionIDs,
 		ExpectTimeRange: &times.DateRange{
 			Start: startDemandTimeRange.Start,
 			End:   endDemandTimeRange.End,
@@ -560,6 +561,9 @@ func (c *Controller) convAllResPlanDemandListOpt(kt *kit.Kit, req *ptypes.ListRe
 	}
 	if len(req.DeviceTypes) > 0 {
 		listRules = append(listRules, tools.RuleIn("device_type", req.DeviceTypes))
+	}
+	if len(req.TechnicalClasses) > 0 {
+		listRules = append(listRules, tools.RuleIn("technical_class", req.TechnicalClasses))
 	}
 	if len(req.RegionIDs) > 0 {
 		listRules = append(listRules, tools.RuleIn("region_id", req.RegionIDs))

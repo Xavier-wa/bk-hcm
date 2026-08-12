@@ -1651,6 +1651,106 @@ paths:
           userVerifiedRequired: true
         disabledStages: []
         descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/plans/resources/tickets/overwrite_append:
+    post:
+      operationId: overwrite_append_biz_resource_plan_ticket
+      description: 业务视角覆盖追加资源预测
+      tags:
+        - SCR
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: true
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/plans/resources/tickets/overwrite_append
+          matchSubpath: false
+          timeout: 30
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          userVerifiedRequired: true
+        disabledStages: []
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/plans/returns/tickets/overwrite_append:
+    post:
+      operationId: overwrite_append_biz_return_plan_ticket
+      description: 业务视角覆盖追加退回计划
+      tags:
+        - SCR
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: true
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/plans/returns/tickets/overwrite_append
+          matchSubpath: false
+          timeout: 30
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          userVerifiedRequired: true
+        disabledStages: []
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/plans/returns/tickets/{id}:
+    get:
+      operationId: get_biz_return_plan_ticket
+      description: 查询业务视角退回计划单据详情
+      tags:
+        - SCR
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: true
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/woa/bizs/{bk_biz_id}/plans/returns/tickets/{id}
+          matchSubpath: false
+          timeout: 30
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          userVerifiedRequired: true
+        disabledStages: []
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/plans/resources/tickets/{ticket_id}/terminate:
+    post:
+      operationId: terminate_biz_resource_plan_ticket
+      description: 业务视角终止资源预测单据
+      tags:
+        - SCR
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: true
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/plans/resources/tickets/{ticket_id}/terminate
+          matchSubpath: false
+          timeout: 30
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          userVerifiedRequired: true
+        disabledStages: []
+        descriptionEn:
   /api/v1/woa/task/apply/ticket/audit/info/list:
     post:
       operationId: list_apply_audit_info

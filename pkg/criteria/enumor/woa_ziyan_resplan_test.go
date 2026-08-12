@@ -21,7 +21,58 @@ package enumor
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
+
+// TestValidateRootTicketType 覆盖主单类型校验：add/adjust/delete/budget_declare 合法，其余非法。
+func TestValidateRootTicketType(t *testing.T) {
+	tests := []struct {
+		name    string
+		typ     RPTicketType
+		wantErr bool
+	}{
+		{"add ok", RPTicketTypeAdd, false},
+		{"adjust ok", RPTicketTypeAdjust, false},
+		{"delete ok", RPTicketTypeDelete, false},
+		{"budget_declare ok", RPTicketTypeBudgetDeclare, false},
+		{"delay not root", RPTicketTypeDelay, true},
+		{"transfer not root", RPTicketTypeTransfer, true},
+		{"empty invalid", RPTicketType(""), true},
+		{"unknown invalid", RPTicketType("unknown"), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.typ.ValidateRootTicketType()
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
+// TestRPTicketTypeBudgetDeclareName 验证预算申报展示名。
+func TestRPTicketTypeBudgetDeclareName(t *testing.T) {
+	assert.Equal(t, "预算申报", RPTicketTypeBudgetDeclare.Name())
+}
+
+// TestGetRPTicketTypeMembersContainsBudgetDeclare 验证 meta/列表主单类型成员含 budget_declare。
+func TestGetRPTicketTypeMembersContainsBudgetDeclare(t *testing.T) {
+	members := GetRPTicketTypeMembers()
+	assert.Contains(t, members, RPTicketTypeBudgetDeclare)
+	assert.Contains(t, members, RPTicketTypeAdd)
+	assert.Contains(t, members, RPTicketTypeAdjust)
+	assert.Contains(t, members, RPTicketTypeDelete)
+}
+
+// TestValidateAndSubTicketMembersExcludeBudgetDeclare 子单 Validate/成员集合不含 budget_declare。
+func TestValidateAndSubTicketMembersExcludeBudgetDeclare(t *testing.T) {
+	assert.Error(t, RPTicketTypeBudgetDeclare.Validate())
+	assert.NotContains(t, GetPRSubTicketTypeMembers(), RPTicketTypeBudgetDeclare)
+}
 
 // TestResPlanReviewStatusValidate 验证评审状态的合法性校验，中长期预测为合法状态。
 func TestResPlanReviewStatusValidate(t *testing.T) {

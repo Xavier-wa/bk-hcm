@@ -110,7 +110,6 @@ func TestListResPlanDemandWithDeviceTypesReqValidate(t *testing.T) {
 				req.Memories = []int64{64, 128}
 				req.DeviceTypes = []string{"SA3.8XLARGE128"}
 				req.RegionIDs = []string{"gz"}
-				req.ZoneIDs = []string{"gz-1"}
 				req.PlanTypes = []enumor.PlanType{enumor.PlanTypeHcmInPlan}
 				req.Statuses = []enumor.DemandStatus{enumor.DemandStatusCanApply}
 			},

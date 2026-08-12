@@ -479,3 +479,73 @@ AWS 每个账号可以独立禁用region，因此获取AWS的region信息需要�
 | reviser     | string | 更新者                            |
 | created_at  | string | 创建时间，标准格式：2006-01-02T15:04:05Z |
 | updated_at  | string | 更新时间，标准格式：2006-01-02T15:04:05Z |
+
+#### TCloudZiyan
+
+##### TCloudZiyan 请求示例
+
+```json 
+{
+  "filter": {
+    "op": "and",
+    "rules": [
+      {
+        "field": "vendor",
+        "op": "eq",
+        "value": "tcloud_ziyan"
+      }
+    ]
+  },
+  "page": {
+    "count": false,
+    "start": 0,
+    "limit": 500
+  }
+}
+```
+
+##### TCloudZiyan 响应示例
+
+```json 
+{
+  "code": 0,
+  "message": "",
+  "data": {
+    "details": [
+      {
+        "id": "00000024",
+        "vendor": "tcloud_ziyan",
+        "region_id": "ap-guangzhou",
+        "region_name": "华南地区(广州)",
+        "area_name": "华南地区",
+        "city_name": "广州",
+        "source": "manually",
+        "status": "AVAILABLE",
+        "creator": "sync-timing-admin",
+        "reviser": "sync-timing-admin",
+        "created_at": "2023-02-25T18:01:57Z",
+        "updated_at": "2023-02-25T18:01:57Z"
+      }
+    ]
+  }
+}
+```
+
+###### TCloudZiyan 响应参数说明
+
+###### data.detail[n]
+
+| 参数名称        | 参数类型   | 描述                             |
+|-------------|--------|--------------------------------|
+| id          | string | 地域的数据库ID                       |
+| vendor      | string | 云厂商（tcloud_ziyan）              |
+| region_id   | string | 地域ID（唯一标识）如ap-guangzhou        |
+| region_name | string | 地域描述，例如，华南地区(广州)               |
+| area_name   | string | 地域所在大区名称，例如，华南地区               |
+| city_name   | string | 地域所在城市名称，例如，广州                 |
+| source      | string | 数据来源（枚举值：sync 同步、manually 手动录入） |
+| status      | string | 状态（AVAILABLE）                  |
+| creator     | string | 创建者                            |
+| reviser     | string | 更新者                            |
+| created_at  | string | 创建时间，标准格式：2006-01-02T15:04:05Z |
+| updated_at  | string | 更新时间，标准格式：2006-01-02T15:04:05Z |

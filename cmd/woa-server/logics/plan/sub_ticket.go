@@ -118,7 +118,8 @@ func (c *Controller) retrySplitResPlanTickets(kt *kit.Kit, ticketID string, tick
 			ticket.PlanProductName, ticket.OpProductName)
 	case enumor.RPTicketTypeAdd:
 		splitErr = splitHelper.SplitAddTicket(kt, ticket.ID, ticket.VirtualDeptID, failedDemands)
-	case enumor.RPTicketTypeAdjust:
+	case enumor.RPTicketTypeAdjust, enumor.RPTicketTypeBudgetDeclare:
+		// budget_declare 重试拆单与 dispatcher 一致，一律走 SplitAdjustTicket。
 		splitErr = splitHelper.SplitAdjustTicket(kt, ticket.ID, ticket.VirtualDeptID, failedDemands,
 			ticket.PlanProductName, ticket.OpProductName)
 	default:

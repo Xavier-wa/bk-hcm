@@ -93,6 +93,7 @@ var genResourceFuncMap = map[meta.ResourceType]genResourceFunc{
 	meta.GlobalConfig:             genGlobalConfigResource,
 	meta.PermissionPolicyLibrary:  genPermissionPolicyLibraryResource,
 	meta.ResPlan:                  genResPlanResource,
+	meta.ReturnPlan:               genReturnPlanResource,
 	// 自研云资源的操作-业务粒度
 	meta.ZiYanResource:          genZiYanResource,
 	meta.ZiYanResPlan:           genZiYanResPlanResource,

@@ -365,6 +365,22 @@ func genResPlanResource(a *meta.ResourceAttribute) (client.ActionID, []client.Re
 	}
 }
 
+// genReturnPlanResource generate return plan related iam resource.
+func genReturnPlanResource(a *meta.ResourceAttribute) (client.ActionID, []client.Resource, error) {
+	res := client.Resource{
+		System: sys.SystemIDCMDB,
+		Type:   sys.Biz,
+		ID:     strconv.FormatInt(a.BizID, 10),
+	}
+
+	switch a.Basic.Action {
+	case meta.Create, meta.Update, meta.Delete:
+		return sys.BizReturnPlanOperate, []client.Resource{res}, nil
+	default:
+		return "", nil, errf.Newf(errf.InvalidParameter, "unsupported hcm action: %s", a.Basic.Action)
+	}
+}
+
 func genCvmResource(a *meta.ResourceAttribute) (client.ActionID, []client.Resource, error) {
 	res := client.Resource{
 		System: sys.SystemIDHCM,

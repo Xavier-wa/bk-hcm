@@ -380,6 +380,23 @@ resPlan:
   adminAuditor: []
   crpOverLimitContact: ["demo"]
 
+# 退回计划配置
+returnPlan:
+  # 调度器配置（不配置时使用默认值）
+  dispatcher:
+    # 主单 watcher 拉取间隔
+    ticketWatchInterval: 20s
+    # 主单 handler 并发数
+    ticketWorkerNum: 10
+    # 主单 handler 处理间隔
+    ticketDealInterval: 5s
+    # 子单 watcher 拉取间隔
+    subTicketWatchInterval: 20s
+    # 子单 handler 并发数
+    subTicketWorkerNum: 10
+    # 子单 handler 处理间隔
+    subTicketDealInterval: 2s
+
 # 申领机型推荐配置
 applyRecommend:
   # 任务执行间隔，单位:分钟

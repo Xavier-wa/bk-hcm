@@ -177,6 +177,8 @@ func (s *service) initBizPlanService(h *rest.Handler) {
 		s.CreateBizResPlanTicket)
 	h.Add("CreateBizResPlanTicketSimple", http.MethodPost, "/plans/resources/tickets/create_simple",
 		s.CreateBizResPlanTicketSimple)
+	h.Add("OverwriteAppendResPlanTicket", http.MethodPost, "/plans/resources/tickets/overwrite_append",
+		s.OverwriteAppendResPlanTicket)
 	h.Add("GetBizResPlanTicket", http.MethodGet, "/plans/resources/tickets/{id}", s.GetBizResPlanTicket)
 	h.Add("GetBizResPlanTicketAudit", http.MethodGet, "/plans/resources/tickets/{ticket_id}/audit",
 		s.GetBizResPlanTicketAudit)

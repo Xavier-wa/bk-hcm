@@ -602,7 +602,8 @@ func (d *Dispatcher) createSubTicket(kt *kit.Kit, ticket *ptypes.TicketInfo) err
 			ticket.PlanProductName, ticket.OpProductName)
 	case enumor.RPTicketTypeAdd:
 		return splitHelper.SplitAddTicket(kt, ticket.ID, ticket.VirtualDeptID, ticket.Demands)
-	case enumor.RPTicketTypeAdjust:
+	case enumor.RPTicketTypeAdjust, enumor.RPTicketTypeBudgetDeclare:
+		// budget_declare 拆单一律走 adjust 路径，覆盖/追加由明细在 SplitAdjustTicket 内处理。
 		return splitHelper.SplitAdjustTicket(kt, ticket.ID, ticket.VirtualDeptID, ticket.Demands,
 			ticket.PlanProductName, ticket.OpProductName)
 	default:

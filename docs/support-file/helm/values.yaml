@@ -1224,6 +1224,16 @@ resPlan:
   nearExpiredTransfer:
     enable: false
 
+# 退回计划配置
+returnPlan:
+  dispatcher:
+    ticketWatchInterval: 20s
+    ticketWorkerNum: 10
+    ticketDealInterval: 5s
+    subTicketWatchInterval: 20s
+    subTicketWorkerNum: 10
+    subTicketDealInterval: 2s
+
 # Alarm告警平台的配置
 alarm:
   host: http://12345678.com

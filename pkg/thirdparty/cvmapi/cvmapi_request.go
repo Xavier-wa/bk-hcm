@@ -458,7 +458,108 @@ type QueryReturnPlanParam struct {
 	ProjectName      []enumor.ObsProject `json:"projectName"`
 	CityName         []string            `json:"cityName"`
 	DeviceFamilyName []string            `json:"deviceFamilyName"`
-	Page             *Page               `json:"page,omitempty"`
+	// TechnicalClass 技术分类列表，为空时不传该参数，匹配全部技术分类。
+	// 字段名依 CRP 实际契约（联调确认），CRP 文档未列但实际支持。
+	TechnicalClass []string `json:"technicalClass,omitempty"`
+	Page           *Page    `json:"page,omitempty"`
+}
+
+// SubmitAppendReturnOrderReq 退回计划新增(追加)提单请求
+// docs: iwiki/p/4015475872#退回计划新增API
+type SubmitAppendReturnOrderReq struct {
+	ReqMeta `json:",inline"`
+	Params  *SubmitAppendReturnOrderParam `json:"params"`
+}
+
+// SubmitAppendReturnOrderParam 退回计划新增(追加)提单参数
+// 同一次提交须为同一 部门+规划产品+项目类型+资源池 范围。
+type SubmitAppendReturnOrderParam struct {
+	UserName          string                     `json:"userName"`          // 【必填】操作人
+	DeptName          string                     `json:"deptName"`          // 【必填】部门名称
+	PlanProductName   string                     `json:"planProductName"`   // 【必填】规划产品名称
+	ProjectName       enumor.ObsProject          `json:"projectName"`       // 【必填】项目类型
+	ReturnReasonClass string                     `json:"returnReasonClass"` // 【必填】退回原因大类
+	Desc              string                     `json:"desc,omitempty"`    // 【选填】订单描述
+	Details           []*SubmitReturnOrderDetail `json:"details"`           // 【必填】明细，至少一条
+}
+
+// SubmitReturnOrderDetail 退回计划提单明细
+// 实例规格与核心类型二选一：明确规格填 instanceModel+cvmAmount；否则填 instanceType+coreTypeName+coreAmount。
+type SubmitReturnOrderDetail struct {
+	ProductName      string `json:"productName"`        // 运营产品名称
+	PlanTime         string `json:"planTime"`           // 【必填】计划退回日期，YYYY-MM-DD，须 >= now+35天
+	ResourcePoolName string `json:"resourcePoolName"`   // 【必填】资源池（自研池/公有池）
+	CityName         string `json:"cityName"`           // 【必填】城市
+	ZoneName         string `json:"zoneName,omitempty"` // 【选填】可用区
+	InstanceModel    string `json:"instanceModel,omitempty"`
+	CvmAmount        int64  `json:"cvmAmount,omitempty"` // 计划退回实例数（对应 instanceModel）
+	CoreTypeName     string `json:"coreTypeName"`        // 【必填】核心类型（大核心/小核心）
+	InstanceType     string `json:"instanceType,omitempty"`
+	CoreAmount       int64  `json:"coreAmount,omitempty"` // 计划退回核心数（对应 instanceType）
+	Desc             string `json:"desc,omitempty"`
+}
+
+// SubmitAdjustReturnOrderReq 退回计划调整&删除提单请求
+// docs: iwiki/p/4015475872#退回计划调整&删除API
+type SubmitAdjustReturnOrderReq struct {
+	ReqMeta `json:",inline"`
+	Params  *SubmitAdjustReturnOrderParam `json:"params"`
+}
+
+// SubmitAdjustReturnOrderParam 退回计划调整&删除提单参数
+// 删除模式：src=[{id}]、update=[]（空数组，非 nil）；调整模式：src 与 update 的 id 一一对应。
+type SubmitAdjustReturnOrderParam struct {
+	UserName          string                     `json:"userName"`          // 【必填】操作人
+	ReturnReasonClass string                     `json:"returnReasonClass"` // 【必填】退回原因大类
+	Desc              string                     `json:"desc,omitempty"`    // 【选填】订单备注
+	Src               []*AdjustReturnOrderSrc    `json:"src"`               // 【必填】原始退回计划 id 列表
+	Update            []*AdjustReturnOrderUpdate `json:"update"`            // 删除模式为空数组
+}
+
+// AdjustReturnOrderSrc 调整/删除的原始退回计划标识
+type AdjustReturnOrderSrc struct {
+	ID int64 `json:"id"` // 退回计划 id（来自 queryReturnPlanItem）
+}
+
+// AdjustReturnOrderUpdate 调整后的退回计划明细（与 src 的 id 一一对应）
+type AdjustReturnOrderUpdate struct {
+	ID               int64  `json:"id"`
+	ProductName      string `json:"productName"`
+	PlanTime         string `json:"planTime"`
+	CityName         string `json:"cityName"`
+	ZoneName         string `json:"zoneName,omitempty"`
+	ResourcePoolName string `json:"resourcePoolName"`
+	InstanceModel    string `json:"instanceModel,omitempty"`
+	CvmAmount        int64  `json:"cvmAmount,omitempty"`
+	CoreTypeName     string `json:"coreTypeName"`
+	CoreAmount       int64  `json:"coreAmount,omitempty"`
+	InstanceType     string `json:"instanceType,omitempty"`
+	Desc             string `json:"desc,omitempty"`
+}
+
+// QueryReturnOrderDetailReq 退回计划订单详情查询请求
+// docs: iwiki/p/4015475872#退回计订单详情查询API
+type QueryReturnOrderDetailReq struct {
+	ReqMeta `json:",inline"`
+	Params  *QueryReturnOrderDetailParam `json:"params"`
+}
+
+// QueryReturnOrderDetailParam 退回计划订单详情查询参数
+type QueryReturnOrderDetailParam struct {
+	UserName string `json:"userName"` // 【必填】操作人
+	OrderId  string `json:"orderId"`  // 【必填】CRP 单号
+}
+
+// GetReasonClassByObsProjectReq 按OBS项目类型查询退回原因大类请求
+// docs: iwiki/p/4015475872#查询退回原因大类
+type GetReasonClassByObsProjectReq struct {
+	ReqMeta `json:",inline"`
+	Params  *GetReasonClassByObsProjectParam `json:"params"`
+}
+
+// GetReasonClassByObsProjectParam 按OBS项目类型查询退回原因大类参数（该接口无 userName）
+type GetReasonClassByObsProjectParam struct {
+	ObsProject enumor.ObsProject `json:"obsProject"` // 【必填】OBS项目类型
 }
 
 /* CapacityReq request example

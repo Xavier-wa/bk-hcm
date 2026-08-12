@@ -118,7 +118,7 @@ func (r *ListResPlanTicketReq) Validate() error {
 	}
 
 	for _, ticketType := range r.TicketTypes {
-		if err := ticketType.Validate(); err != nil {
+		if err := ticketType.ValidateRootTicketType(); err != nil {
 			return err
 		}
 	}
@@ -230,7 +230,7 @@ func (r *ListBizResPlanTicketReq) Validate() error {
 	}
 
 	for _, ticketType := range r.TicketTypes {
-		if err := ticketType.Validate(); err != nil {
+		if err := ticketType.ValidateRootTicketType(); err != nil {
 			return err
 		}
 	}

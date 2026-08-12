@@ -164,12 +164,15 @@ func constructSubTicketCreateReq(ticket *rpt.ResPlanTicketTable, auditQuota int6
 		SubUpdatedDiskSize:  cvt.ValToPtr(updatedDiskSize),
 		SubmittedAt:         time.Now().Format(constant.DateTimeLayout),
 	}
-	// 非本年度预测，不能跳过管理员审批
+	// 非本年度预测，不能跳过管理员审批（预算申报除外）。
 	hasNonCurrentYear := demandtime.ContainsNonCurrentYearDemandPtrs(demands)
 
-	// 调减单、自动延期单、非转移单跳过管理员审批
-	if ticket.Type == enumor.RPTicketTypeDelete || ticket.Type == enumor.RPTicketTypeAutomaticTransfer ||
+	// 预算申报主单：子单 HCM 管理员一律 skip（含跨年明细）。
+	if ticket.Type == enumor.RPTicketTypeBudgetDeclare {
+		subTicket.AdminAuditStatus = enumor.RPAdminAuditStatusSkip
+	} else if ticket.Type == enumor.RPTicketTypeDelete || ticket.Type == enumor.RPTicketTypeAutomaticTransfer ||
 		subTicket.SubType != enumor.RPTicketTypeTransfer {
+		// 调减单、自动延期单、非转移单跳过管理员审批
 		if !hasNonCurrentYear {
 			subTicket.AdminAuditStatus = enumor.RPAdminAuditStatusSkip
 		}

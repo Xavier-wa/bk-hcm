@@ -39,23 +39,24 @@ import (
 
 // ListResPlanDemandReq is list resource plan demand request.
 type ListResPlanDemandReq struct {
-	BkBizIDs        []int64               `json:"bk_biz_ids" validate:"omitempty,max=100"`
-	OpProductIDs    []int64               `json:"op_product_ids" validate:"omitempty,max=100"`
-	PlanProductIDs  []int64               `json:"plan_product_ids" validate:"omitempty,max=100"`
-	DemandIDs       []string              `json:"demand_ids" validate:"omitempty,max=100"`
-	ObsProjects     []enumor.ObsProject   `json:"obs_projects" validate:"omitempty,max=100"`
-	DemandClasses   []enumor.DemandClass  `json:"demand_classes" validate:"omitempty,max=100"`
-	CoreTypes       []enumor.CoreType     `json:"core_types" validate:"omitempty,max=100"`
-	DeviceFamilies  []string              `json:"device_families" validate:"omitempty,max=100"`
-	DeviceClasses   []string              `json:"device_classes" validate:"omitempty,max=100"`
-	DeviceTypes     []string              `json:"device_types" validate:"omitempty,max=100"`
-	RegionIDs       []string              `json:"region_ids" validate:"omitempty,max=100"`
-	ZoneIDs         []string              `json:"zone_ids" validate:"omitempty,max=100"`
-	PlanTypes       []enumor.PlanType     `json:"plan_types" validate:"omitempty,max=100"`
-	ExpiringOnly    bool                  `json:"expiring_only" validate:"omitempty"`
-	ExpectTimeRange *times.DateRange      `json:"expect_time_range" validate:"required"`
-	Statuses        []enumor.DemandStatus `json:"statuses" validate:"omitempty,max=5"`
-	Page            *core.BasePage        `json:"page" validate:"required"`
+	BkBizIDs         []int64               `json:"bk_biz_ids" validate:"omitempty,max=100"`
+	OpProductIDs     []int64               `json:"op_product_ids" validate:"omitempty,max=100"`
+	PlanProductIDs   []int64               `json:"plan_product_ids" validate:"omitempty,max=100"`
+	DemandIDs        []string              `json:"demand_ids" validate:"omitempty,max=100"`
+	ObsProjects      []enumor.ObsProject   `json:"obs_projects" validate:"omitempty,max=100"`
+	DemandClasses    []enumor.DemandClass  `json:"demand_classes" validate:"omitempty,max=100"`
+	CoreTypes        []enumor.CoreType     `json:"core_types" validate:"omitempty,max=100"`
+	DeviceFamilies   []string              `json:"device_families" validate:"omitempty,max=100"`
+	DeviceClasses    []string              `json:"device_classes" validate:"omitempty,max=100"`
+	DeviceTypes      []string              `json:"device_types" validate:"omitempty,max=100"`
+	TechnicalClasses []string              `json:"technical_classes" validate:"omitempty,max=100"`
+	RegionIDs        []string              `json:"region_ids" validate:"omitempty,max=100"`
+	ZoneIDs          []string              `json:"zone_ids" validate:"omitempty,max=100"`
+	PlanTypes        []enumor.PlanType     `json:"plan_types" validate:"omitempty,max=100"`
+	ExpiringOnly     bool                  `json:"expiring_only" validate:"omitempty"`
+	ExpectTimeRange  *times.DateRange      `json:"expect_time_range" validate:"required"`
+	Statuses         []enumor.DemandStatus `json:"statuses" validate:"omitempty,max=5"`
+	Page             *core.BasePage        `json:"page" validate:"required"`
 }
 
 // Validate whether ListResPlanDemandReq is valid.

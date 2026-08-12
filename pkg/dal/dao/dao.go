@@ -72,6 +72,7 @@ import (
 	"hcm/pkg/dal/dao/orm"
 	recyclerecord "hcm/pkg/dal/dao/recycle-record"
 	resplan "hcm/pkg/dal/dao/resource-plan"
+	returnplan "hcm/pkg/dal/dao/return-plan"
 	rollingserver "hcm/pkg/dal/dao/rolling-server"
 	shortrental "hcm/pkg/dal/dao/short-rental"
 	"hcm/pkg/dal/dao/task"
@@ -184,6 +185,8 @@ type Set interface {
 	WoaDeviceTypePhysicalRel() resplan.WoaDeviceTypePhysicalRelInterface
 	ResPlanTransferAppliedRecord() resplan.TransferAppliedRecordInterface
 	ResPlanDemandGpuTemplate() resplan.DemandGpuTemplateInterface
+	ReturnPlanTicket() returnplan.ReturnPlanTicketInterface
+	ReturnPlanSubTicket() returnplan.ReturnPlanSubTicketInterface
 	ShortRentalReturnedRecord() shortrental.ShortRentalReturnedRecordInterface
 
 	RecycleHost() host.RecycleHost
@@ -965,6 +968,24 @@ func (s *set) ResPlanTicket() resplan.ResPlanTicketInterface {
 // ResPlanSubTicket resource plan sub ticket dao.
 func (s *set) ResPlanSubTicket() resplan.ResPlanSubTicketInterface {
 	return &resplan.ResPlanSubTicketDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+		Audit: s.audit,
+	}
+}
+
+// ReturnPlanTicket return plan ticket dao.
+func (s *set) ReturnPlanTicket() returnplan.ReturnPlanTicketInterface {
+	return &returnplan.ReturnPlanTicketDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+		Audit: s.audit,
+	}
+}
+
+// ReturnPlanSubTicket return plan sub ticket dao.
+func (s *set) ReturnPlanSubTicket() returnplan.ReturnPlanSubTicketInterface {
+	return &returnplan.ReturnPlanSubTicketDao{
 		Orm:   s.orm,
 		IDGen: s.idGen,
 		Audit: s.audit,

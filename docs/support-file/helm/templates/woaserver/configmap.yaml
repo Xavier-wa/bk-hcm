@@ -113,6 +113,8 @@ data:
     localTimezone: {{ .Values.localTimezone }}
     resPlan:
       {{- toYaml .Values.resPlan | nindent 6 }}
+    returnPlan:
+      {{- toYaml .Values.returnPlan | nindent 6 }}
     resourceSync:
       {{- toYaml .Values.resourceSync | nindent 6 }}
     tenant:

@@ -212,6 +212,58 @@ func (s *service) createBizResPlanTicketCore(cts *rest.Contexts, bkBizID int64, 
 	return map[string]interface{}{"id": ticketID}, nil
 }
 
+// OverwriteAppendResPlanTicket overwrite-append biz resource plan ticket.
+func (s *service) OverwriteAppendResPlanTicket(cts *rest.Contexts) (interface{}, error) {
+	bkBizID, err := cts.PathParameter("bk_biz_id").Int64()
+	if err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	req := new(ptypes.OverwriteAppendResPlanTicketReq)
+	if err = cts.DecodeInto(req); err != nil {
+		logs.Errorf("failed to decode overwrite-append resource plan ticket request, err: %v, rid: %s",
+			err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err = req.Validate(); err != nil {
+		logs.Errorf("failed to validate overwrite-append resource plan ticket parameter, err: %v, rid: %s",
+			err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	// 未传 demand_class 时默认 CVM
+	if req.DemandClass == "" {
+		req.DemandClass = enumor.DemandClassCVM
+	}
+
+	// authorize biz resource plan operation.
+	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.ResPlan, Action: meta.Create}, BizID: bkBizID}
+	if err = s.authorizer.AuthorizeWithPerm(cts.Kit, authRes); err != nil {
+		return nil, err
+	}
+
+	// validate biz resource plan demands (滚服项目仅限指定业务等).
+	if err = s.validateResPlanTicket(&ptypes.CreateResPlanTicketReq{Demands: req.Demands}, bkBizID); err != nil {
+		return nil, err
+	}
+
+	// get biz org relation.
+	bizOrgRel, err := s.bizLogics.GetBizOrgRel(cts.Kit, bkBizID)
+	if err != nil {
+		logs.Errorf("failed to get biz org rel, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.Aborted, err)
+	}
+
+	ticketID, err := s.planController.OverwriteAppendResPlanTicket(cts.Kit, bizOrgRel, req)
+	if err != nil {
+		logs.Errorf("failed to overwrite-append resource plan ticket, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return map[string]interface{}{"id": ticketID}, nil
+}
+
 func (s *service) validateResPlanTicket(req *ptypes.CreateResPlanTicketReq, bkBizID int64) error {
 	for _, item := range req.Demands {
 		// 只允许931业务，提报滚服项目的预测

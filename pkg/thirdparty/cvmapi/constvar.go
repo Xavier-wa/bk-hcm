@@ -64,6 +64,8 @@ const (
 	CvmOrderLinkPrefix = "https://yunti.woa.com/orders/cvm/"
 	// CvmReturnLinkPrefix CVM退回单据详情链接前缀
 	CvmReturnLinkPrefix = "https://yunti.woa.com/orders/cvmreturn/"
+	// CvmReturnPlanLinkPrefix CVM退回计划单据详情链接前缀
+	CvmReturnPlanLinkPrefix = "https://yunti.woa.com/orders/cvmreturnplan/"
 	// CvmPlanLinkPrefix CVM&CBS需求单据详情链接前缀
 	CvmPlanLinkPrefix = "https://yunti.woa.com/orders/iaasplan/"
 	// CvmUpgradeLinkPrefix CVM升降配单据详情链接前缀
@@ -194,6 +196,18 @@ const (
 	QueryCvmTypeListMethod = "queryCvmTypeList"
 )
 
+// 退回计划相关方法
+const (
+	// CvmReturnPlanSubmitAppendMethod 退回计划新增(追加)提单方法
+	CvmReturnPlanSubmitAppendMethod = "submitAppendOrder"
+	// CvmReturnPlanSubmitAdjustMethod 退回计划调整&删除提单方法
+	CvmReturnPlanSubmitAdjustMethod = "submitAdjustOrderForApi"
+	// CvmReturnPlanQueryOrderDetailMethod 退回计划订单详情查询方法
+	CvmReturnPlanQueryOrderDetailMethod = "queryOrderDetail"
+	// CvmReturnPlanReasonClassMethod 按OBS项目类型查询退回原因大类方法
+	CvmReturnPlanReasonClassMethod = "getReasonClassByObsProject"
+)
+
 // CVMCli yunti client options
 type CVMCli struct {
 	// CvmApiAddr yunti api address
@@ -268,6 +282,54 @@ func NewQueryReturnPlanReq(params *QueryReturnPlanParam) *QueryReturnPlanReq {
 			Id:      CvmId,
 			JsonRpc: CvmJsonRpc,
 			Method:  CvmReturnPlanMethod,
+		},
+		Params: params,
+	}
+}
+
+// NewSubmitAppendReturnOrderReq 退回计划新增(追加)提单请求元数据
+func NewSubmitAppendReturnOrderReq(params *SubmitAppendReturnOrderParam) *SubmitAppendReturnOrderReq {
+	return &SubmitAppendReturnOrderReq{
+		ReqMeta: ReqMeta{
+			Id:      CvmId,
+			JsonRpc: CvmJsonRpc,
+			Method:  CvmReturnPlanSubmitAppendMethod,
+		},
+		Params: params,
+	}
+}
+
+// NewSubmitAdjustReturnOrderReq 退回计划调整&删除提单请求元数据
+func NewSubmitAdjustReturnOrderReq(params *SubmitAdjustReturnOrderParam) *SubmitAdjustReturnOrderReq {
+	return &SubmitAdjustReturnOrderReq{
+		ReqMeta: ReqMeta{
+			Id:      CvmId,
+			JsonRpc: CvmJsonRpc,
+			Method:  CvmReturnPlanSubmitAdjustMethod,
+		},
+		Params: params,
+	}
+}
+
+// NewQueryReturnOrderDetailReq 退回计划订单详情查询请求元数据
+func NewQueryReturnOrderDetailReq(params *QueryReturnOrderDetailParam) *QueryReturnOrderDetailReq {
+	return &QueryReturnOrderDetailReq{
+		ReqMeta: ReqMeta{
+			Id:      CvmId,
+			JsonRpc: CvmJsonRpc,
+			Method:  CvmReturnPlanQueryOrderDetailMethod,
+		},
+		Params: params,
+	}
+}
+
+// NewGetReasonClassByObsProjectReq 按OBS项目类型查询退回原因大类请求元数据
+func NewGetReasonClassByObsProjectReq(params *GetReasonClassByObsProjectParam) *GetReasonClassByObsProjectReq {
+	return &GetReasonClassByObsProjectReq{
+		ReqMeta: ReqMeta{
+			Id:      CvmId,
+			JsonRpc: CvmJsonRpc,
+			Method:  CvmReturnPlanReasonClassMethod,
 		},
 		Params: params,
 	}

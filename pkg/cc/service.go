@@ -608,6 +608,7 @@ type WoaServerSetting struct {
 	LocalTimezone     string            `yaml:"localTimezone"`
 	RollingServer     RollingServer     `yaml:"rollingServer"`
 	ResPlan           ResPlan           `yaml:"resPlan"`
+	ReturnPlan        ReturnPlan        `yaml:"returnPlan"`
 	ResourceSync      ResourceSync      `yaml:"resourceSync"`
 	ApplyRecommend    ApplyRecommend    `yaml:"applyRecommend"`
 	Cmsi              CMSI              `yaml:"cmsi"`
@@ -631,6 +632,7 @@ func (s *WoaServerSetting) trySetDefault() {
 	s.StuckCheck.trySetDefault()
 	s.ResourceSync.SyncDeviceTypePhysicalRel.trySetDefault()
 	s.ApplyRecommend.trySetDefault()
+	s.ReturnPlan.trySetDefault()
 
 	return
 }

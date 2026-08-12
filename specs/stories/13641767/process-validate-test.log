@@ -1,0 +1,2 @@
+===== [stage=process-validate-test attempt=1 round=1 ts=2026-07-24T09:54:05+0800] =====
+verdict=LGTM findings=3xMEDIUM+3xLOW unit=passed integration=stub_accepted produced=validate-test-report.md

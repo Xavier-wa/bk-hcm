@@ -61,6 +61,8 @@ const (
 	RecycleBin ResourceType = "recycle_bin"
 	// ResPlan defines resource plan's hcm auth resource type
 	ResPlan ResourceType = "resource_plan"
+	// ReturnPlan defines return plan's hcm auth resource type
+	ReturnPlan ResourceType = "return_plan"
 	// NetworkInterface defines eip hcm network_interface resource type
 	NetworkInterface ResourceType = "network_interface"
 	// Audit defines audit log's hcm auth resource type

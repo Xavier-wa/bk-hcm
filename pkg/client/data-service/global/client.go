@@ -68,6 +68,7 @@ type Client struct {
 	TaskManagement *TaskManagementClient
 	Tenant         *TenantClient
 	ResourcePlan   *ResourcePlanClient
+	ReturnPlan     *ReturnPlanClient
 
 	AccountSecret *AccountSecretClient
 
@@ -131,17 +132,18 @@ func NewClient(client rest.ClientInterface) *Client {
 		Cos:            NewCosClient(client),
 		RollingServer:  NewRollingServerClient(client),
 
-		TaskDetail:     NewTaskDetailClient(client),
-		TaskManagement: NewTaskManagementClient(client),
-		Tenant:         NewTenantClient(client),
-		AccountSecret: NewAccountSecretClient(client),
-		GlobalConfig:       NewGlobalConfigClient(client),
-		ResUsageBizRel:     NewResUsageBizRelRelClient(client),
-		PermissionTemplate: NewPermissionTemplateClient(client),
+		TaskDetail:              NewTaskDetailClient(client),
+		TaskManagement:          NewTaskManagementClient(client),
+		Tenant:                  NewTenantClient(client),
+		AccountSecret:           NewAccountSecretClient(client),
+		GlobalConfig:            NewGlobalConfigClient(client),
+		ResUsageBizRel:          NewResUsageBizRelRelClient(client),
+		PermissionTemplate:      NewPermissionTemplateClient(client),
 		PermissionPolicyLibrary: NewPermissionPolicyLibraryClient(client),
 
 		ApplyOrderStatisticsConfig: NewApplyOrderStatisticsConfigClient(client),
 		ResourcePlan:               NewResourcePlanClient(client),
+		ReturnPlan:                 NewReturnPlanClient(client),
 		OrgTopo:                    NewOrgTopoClient(client),
 		Meta:                       NewMetaClient(client),
 		DeviceCapacity:             NewDeviceCapacityClient(client),

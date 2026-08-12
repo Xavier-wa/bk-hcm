@@ -32,24 +32,26 @@ import (
 // ==================== Task 6.2: OS 数计算逻辑测试 ====================
 
 func TestBuildDeviceTypeItem_OSCalculation(t *testing.T) {
-	demandItem := &ptypes.ListResPlanDemandItem{
-		DemandID:       "demand-001",
-		BkBizID:        100,
-		BkBizName:      "测试业务",
-		DeviceType:     "SA3",
-		TotalCpuCore:   120,
-		AppliedCpuCore: 80,
-		RemainedCpuCore: 40,
-		RegionID:       "region-1",
-		ZoneID:         "zone-1",
+	demandItem := &ptypes.ListResPlanDemandWithDeviceTypesItem{
+		ListResPlanDemandItemBase: ptypes.ListResPlanDemandItemBase{
+			TotalCpuCore:    120,
+			AppliedCpuCore:  80,
+			RemainedCpuCore: 40,
+		},
+		DemandIDs:  []string{"demand-001"},
+		BkBizID:    100,
+		BkBizName:  "测试业务",
+		DeviceType: "SA3",
+		RegionID:   "region-1",
+		ZoneID:     "zone-1",
 	}
 
 	tests := []struct {
-		name           string
-		deviceInfo     dt.DistinctDeviceType
-		isOriginal     bool
-		expectTotalOS  int64
-		expectAppliedOS int64
+		name             string
+		deviceInfo       dt.DistinctDeviceType
+		isOriginal       bool
+		expectTotalOS    int64
+		expectAppliedOS  int64
 		expectRemainedOS int64
 	}{
 		{
@@ -61,10 +63,10 @@ func TestBuildDeviceTypeItem_OSCalculation(t *testing.T) {
 				DeviceClass:  "compute",
 				DeviceFamily: "SA3",
 			},
-			isOriginal:      true,
-			expectTotalOS:   2,   // 120 / 60
-			expectAppliedOS: 1,   // 80 / 60
-			expectRemainedOS: 0,  // 40 / 60
+			isOriginal:       true,
+			expectTotalOS:    2, // 120 / 60
+			expectAppliedOS:  1, // 80 / 60
+			expectRemainedOS: 0, // 40 / 60
 		},
 		{
 			name: "整除场景-40核机型",
@@ -75,10 +77,10 @@ func TestBuildDeviceTypeItem_OSCalculation(t *testing.T) {
 				DeviceClass:  "compute",
 				DeviceFamily: "SA3",
 			},
-			isOriginal:      false,
-			expectTotalOS:   3,   // 120 / 40
-			expectAppliedOS: 2,   // 80 / 40
-			expectRemainedOS: 1,  // 40 / 40
+			isOriginal:       false,
+			expectTotalOS:    3, // 120 / 40
+			expectAppliedOS:  2, // 80 / 40
+			expectRemainedOS: 1, // 40 / 40
 		},
 		{
 			name: "非整除场景-7核机型",
@@ -89,9 +91,9 @@ func TestBuildDeviceTypeItem_OSCalculation(t *testing.T) {
 				DeviceClass:  "compute",
 				DeviceFamily: "IT5",
 			},
-			isOriginal:      false,
-			expectTotalOS:   17,  // 120 / 7 = 17 (整数除法)
-			expectAppliedOS: 11,  // 80 / 7 = 11
+			isOriginal:       false,
+			expectTotalOS:    17, // 120 / 7 = 17 (整数除法)
+			expectAppliedOS:  11, // 80 / 7 = 11
 			expectRemainedOS: 5,  // 40 / 7 = 5
 		},
 		{
@@ -103,9 +105,9 @@ func TestBuildDeviceTypeItem_OSCalculation(t *testing.T) {
 				DeviceClass:  "compute",
 				DeviceFamily: "S5",
 			},
-			isOriginal:      false,
-			expectTotalOS:   40,  // 120 / 3
-			expectAppliedOS: 26,  // 80 / 3
+			isOriginal:       false,
+			expectTotalOS:    40, // 120 / 3
+			expectAppliedOS:  26, // 80 / 3
 			expectRemainedOS: 13, // 40 / 3
 		},
 		{
@@ -117,9 +119,9 @@ func TestBuildDeviceTypeItem_OSCalculation(t *testing.T) {
 				DeviceClass:  "compute",
 				DeviceFamily: "ZERO",
 			},
-			isOriginal:      true,
-			expectTotalOS:   0,
-			expectAppliedOS: 0,
+			isOriginal:       true,
+			expectTotalOS:    0,
+			expectAppliedOS:  0,
 			expectRemainedOS: 0,
 		},
 	}
@@ -128,14 +130,14 @@ func TestBuildDeviceTypeItem_OSCalculation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := buildDeviceTypeItem(demandItem, tt.deviceInfo.DeviceType, tt.isOriginal, tt.deviceInfo)
 
-			if result.TotalOS != tt.expectTotalOS {
-				t.Errorf("TotalOS = %d, want %d", result.TotalOS, tt.expectTotalOS)
+			if result.DetailTotalOS.IntPart() != tt.expectTotalOS {
+				t.Errorf("TotalOS = %s, want %d", result.DetailTotalOS, tt.expectTotalOS)
 			}
-			if result.AppliedOS != tt.expectAppliedOS {
-				t.Errorf("AppliedOS = %d, want %d", result.AppliedOS, tt.expectAppliedOS)
+			if result.DetailAppliedOS.IntPart() != tt.expectAppliedOS {
+				t.Errorf("AppliedOS = %s, want %d", result.DetailAppliedOS, tt.expectAppliedOS)
 			}
-			if result.RemainedOS != tt.expectRemainedOS {
-				t.Errorf("RemainedOS = %d, want %d", result.RemainedOS, tt.expectRemainedOS)
+			if result.DetailRemainedOS.IntPart() != tt.expectRemainedOS {
+				t.Errorf("RemainedOS = %s, want %d", result.DetailRemainedOS, tt.expectRemainedOS)
 			}
 			if result.IsOriginal != tt.isOriginal {
 				t.Errorf("IsOriginal = %v, want %v", result.IsOriginal, tt.isOriginal)
@@ -155,49 +157,51 @@ func TestBuildDeviceTypeItem_OSCalculation(t *testing.T) {
 
 func TestBuildDeviceTypeItem_FieldMapping(t *testing.T) {
 	returnPlanTime := "2026-07-01"
-	demandItem := &ptypes.ListResPlanDemandItem{
-		DemandID:        "demand-002",
-		BkBizID:         200,
-		BkBizName:       "映射测试业务",
-		Status:          enumor.DemandStatusCanApply,
-		StatusName:      "可申领",
-		DemandClass:     enumor.DemandClassCVM,
-		DemandResType:   enumor.DemandResTypeCVM,
-		ExpectTime:      "2026-06-01",
-		CanApplyTime:    "2026-05-25",
-		ExpiredTime:     "2026-07-01",
-		ReturnPlanTime:  &returnPlanTime,
-		TotalCpuCore:    240,
-		AppliedCpuCore:  160,
-		RemainedCpuCore: 80,
-		RegionID:        "gz",
-		RegionName:      "广州",
-		ZoneID:          "gz-1",
-		ZoneName:        "广州一区",
-		PlanType:        enumor.PlanTypeHcmInPlan,
-		ObsProject:      enumor.ObsProjectNormal,
-		TechnicalClass:  "计算型",
-		DeviceFamily:    "SA3",
-		CoreType:        enumor.CoreTypeBig,
-		DiskType:        enumor.DiskSSD,
-		DiskTypeName:    "SSD云盘",
-		DiskIO:          5000,
-		DeviceType:      "SA3.8XLARGE128",
+	demandItem := &ptypes.ListResPlanDemandWithDeviceTypesItem{
+		ListResPlanDemandItemBase: ptypes.ListResPlanDemandItemBase{
+			DemandClass:     enumor.DemandClassCVM,
+			Status:          enumor.DemandStatusCanApply,
+			StatusName:      "可申领",
+			ExpectTime:      "2026-06-01",
+			CanApplyTime:    "2026-05-25",
+			ExpiredTime:     "2026-07-01",
+			ReturnPlanTime:  &returnPlanTime,
+			TotalCpuCore:    240,
+			AppliedCpuCore:  160,
+			RemainedCpuCore: 80,
+		},
+		DemandIDs:      []string{"demand-002"},
+		BkBizID:        200,
+		BkBizName:      "映射测试业务",
+		DemandResType:  enumor.DemandResTypeCVM,
+		RegionID:       "gz",
+		RegionName:     "广州",
+		ZoneID:         "gz-1",
+		ZoneName:       "广州一区",
+		PlanType:       enumor.PlanTypeHcmInPlan,
+		ObsProject:     enumor.ObsProjectNormal,
+		TechnicalClass: "计算型",
+		DeviceFamily:   "SA3",
+		CoreType:       enumor.CoreTypeBig,
+		DiskType:       enumor.DiskSSD,
+		DiskTypeName:   "SSD云盘",
+		DiskIO:         5000,
+		DeviceType:     "SA3.8XLARGE128",
 	}
 
 	deviceInfo := dt.DistinctDeviceType{
-		DeviceType:   "SA3.8XLARGE128",
-		CpuCore:      120,
-		Memory:       128,
-		DeviceClass:  "compute",
-		DeviceFamily: "SA3",
+		DeviceType:      "SA3.8XLARGE128",
+		CpuCore:         120,
+		Memory:          128,
+		DeviceTypeClass: "compute",
+		DeviceClass:     "SA3",
 	}
 
 	result := buildDeviceTypeItem(demandItem, "SA3.8XLARGE128", true, deviceInfo)
 
 	// 验证预测主数据字段映射
-	if result.DemandID != demandItem.DemandID {
-		t.Errorf("DemandID = %s, want %s", result.DemandID, demandItem.DemandID)
+	if result.DemandIDs[0] != demandItem.DemandIDs[0] {
+		t.Errorf("DemandID = %s, want %s", result.DemandIDs[0], demandItem.DemandIDs[0])
 	}
 	if result.BkBizID != demandItem.BkBizID {
 		t.Errorf("BkBizID = %d, want %d", result.BkBizID, demandItem.BkBizID)
@@ -219,22 +223,22 @@ func TestBuildDeviceTypeItem_FieldMapping(t *testing.T) {
 	}
 
 	// 验证机型明细字段映射
-	if result.DeviceTypeClass != deviceInfo.DeviceClass {
-		t.Errorf("DeviceTypeClass = %s, want %s", result.DeviceTypeClass, deviceInfo.DeviceClass)
+	if result.DeviceTypeClass != string(deviceInfo.DeviceTypeClass) {
+		t.Errorf("DeviceTypeClass = %s, want %s", result.DeviceTypeClass, deviceInfo.DeviceTypeClass)
 	}
-	if result.DeviceClass != deviceInfo.DeviceFamily {
-		t.Errorf("DeviceClass = %s, want %s", result.DeviceClass, deviceInfo.DeviceFamily)
+	if result.DeviceClass != deviceInfo.DeviceClass {
+		t.Errorf("DeviceClass = %s, want %s", result.DeviceClass, deviceInfo.DeviceClass)
 	}
 
 	// 验证 OS 计算：240/120=2, 160/120=1, 80/120=0
-	if result.TotalOS != 2 {
-		t.Errorf("TotalOS = %d, want 2", result.TotalOS)
+	if result.DetailTotalOS.IntPart() != 2 {
+		t.Errorf("TotalOS = %s, want 2", result.DetailTotalOS)
 	}
-	if result.AppliedOS != 1 {
-		t.Errorf("AppliedOS = %d, want 1", result.AppliedOS)
+	if result.DetailAppliedOS.IntPart() != 1 {
+		t.Errorf("AppliedOS = %s, want 1", result.DetailAppliedOS)
 	}
-	if result.RemainedOS != 0 {
-		t.Errorf("RemainedOS = %d, want 0", result.RemainedOS)
+	if result.DetailRemainedOS.IntPart() != 0 {
+		t.Errorf("RemainedOS = %s, want 0", result.DetailRemainedOS)
 	}
 }
 
@@ -242,11 +246,11 @@ func TestBuildDeviceTypeItem_FieldMapping(t *testing.T) {
 
 func TestSortExpandedItems(t *testing.T) {
 	items := []*ptypes.ListResPlanDemandWithDeviceTypesItem{
-		{DemandID: "d1", DeviceType: "IT5.4XLARGE32", IsOriginal: false, CpuCore: 16},
-		{DemandID: "d1", DeviceType: "SA3.8XLARGE128", IsOriginal: true, CpuCore: 120},
-		{DemandID: "d1", DeviceType: "SA3.4XLARGE64", IsOriginal: false, CpuCore: 60},
-		{DemandID: "d2", DeviceType: "S5.2XLARGE16", IsOriginal: false, CpuCore: 8},
-		{DemandID: "d2", DeviceType: "S5.4XLARGE32", IsOriginal: true, CpuCore: 16},
+		{DemandIDs: []string{"d1"}, DeviceType: "IT5.4XLARGE32", IsOriginal: false, CpuCore: 16},
+		{DemandIDs: []string{"d1"}, DeviceType: "SA3.8XLARGE128", IsOriginal: true, CpuCore: 120},
+		{DemandIDs: []string{"d1"}, DeviceType: "SA3.4XLARGE64", IsOriginal: false, CpuCore: 60},
+		{DemandIDs: []string{"d2"}, DeviceType: "S5.2XLARGE16", IsOriginal: false, CpuCore: 8},
+		{DemandIDs: []string{"d2"}, DeviceType: "S5.4XLARGE32", IsOriginal: true, CpuCore: 16},
 	}
 
 	// 使用与主逻辑相同的排序规则
@@ -276,8 +280,8 @@ func TestSortExpandedItems(t *testing.T) {
 
 func TestSortExpandedItems_AllOriginal(t *testing.T) {
 	items := []*ptypes.ListResPlanDemandWithDeviceTypesItem{
-		{DemandID: "d2", DeviceType: "S5.4XLARGE32", IsOriginal: true},
-		{DemandID: "d1", DeviceType: "SA3.8XLARGE128", IsOriginal: true},
+		{DemandIDs: []string{"d2"}, DeviceType: "S5.4XLARGE32", IsOriginal: true},
+		{DemandIDs: []string{"d1"}, DeviceType: "SA3.8XLARGE128", IsOriginal: true},
 	}
 
 	sortExpandedItems(items)
@@ -292,9 +296,9 @@ func TestSortExpandedItems_AllOriginal(t *testing.T) {
 
 func TestSortExpandedItems_AllWildcard(t *testing.T) {
 	items := []*ptypes.ListResPlanDemandWithDeviceTypesItem{
-		{DemandID: "d1", DeviceType: "IT5.4XLARGE32", IsOriginal: false},
-		{DemandID: "d1", DeviceType: "SA3.4XLARGE64", IsOriginal: false},
-		{DemandID: "d1", DeviceType: "S5.2XLARGE16", IsOriginal: false},
+		{DemandIDs: []string{"d1"}, DeviceType: "IT5.4XLARGE32", IsOriginal: false},
+		{DemandIDs: []string{"d1"}, DeviceType: "SA3.4XLARGE64", IsOriginal: false},
+		{DemandIDs: []string{"d1"}, DeviceType: "S5.2XLARGE16", IsOriginal: false},
 	}
 
 	sortExpandedItems(items)
@@ -320,7 +324,7 @@ func TestSortExpandedItems_Empty(t *testing.T) {
 
 func TestSortExpandedItems_SingleItem(t *testing.T) {
 	items := []*ptypes.ListResPlanDemandWithDeviceTypesItem{
-		{DemandID: "d1", DeviceType: "SA3.8XLARGE128", IsOriginal: true},
+		{DemandIDs: []string{"d1"}, DeviceType: "SA3.8XLARGE128", IsOriginal: true},
 	}
 	sortExpandedItems(items) // 不应 panic
 	if len(items) != 1 {
@@ -347,9 +351,9 @@ func TestMatchCpuMemFilter(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		req     *ptypes.ListResPlanDemandWithDeviceTypesReq
-		expect  bool
+		name   string
+		req    *ptypes.ListResPlanDemandWithDeviceTypesReq
+		expect bool
 	}{
 		{
 			name:   "无筛选条件-通过",
@@ -448,34 +452,34 @@ func TestMatchCpuMemFilter_DifferentDevices(t *testing.T) {
 		expect     bool
 	}{
 		{
-			name: "60核64G-匹配",
+			name:       "60核64G-匹配",
 			deviceInfo: dt.DistinctDeviceType{CpuCore: 60, Memory: 64},
-			expect: true,
+			expect:     true,
 		},
 		{
-			name: "120核128G-匹配",
+			name:       "120核128G-匹配",
 			deviceInfo: dt.DistinctDeviceType{CpuCore: 120, Memory: 128},
-			expect: true,
+			expect:     true,
 		},
 		{
-			name: "60核128G-匹配(cpu匹配+memory匹配)",
+			name:       "60核128G-匹配(cpu匹配+memory匹配)",
 			deviceInfo: dt.DistinctDeviceType{CpuCore: 60, Memory: 128},
-			expect: true,
+			expect:     true,
 		},
 		{
-			name: "30核64G-不匹配(cpu不匹配)",
+			name:       "30核64G-不匹配(cpu不匹配)",
 			deviceInfo: dt.DistinctDeviceType{CpuCore: 30, Memory: 64},
-			expect: false,
+			expect:     false,
 		},
 		{
-			name: "60核32G-不匹配(memory不匹配)",
+			name:       "60核32G-不匹配(memory不匹配)",
 			deviceInfo: dt.DistinctDeviceType{CpuCore: 60, Memory: 32},
-			expect: false,
+			expect:     false,
 		},
 		{
-			name: "30核32G-不匹配(都不匹配)",
+			name:       "30核32G-不匹配(都不匹配)",
 			deviceInfo: dt.DistinctDeviceType{CpuCore: 30, Memory: 32},
-			expect: false,
+			expect:     false,
 		},
 	}
 
@@ -496,51 +500,51 @@ func TestPageDeviceTypeDemands(t *testing.T) {
 	items := make([]*ptypes.ListResPlanDemandWithDeviceTypesItem, 5)
 	for i := range items {
 		items[i] = &ptypes.ListResPlanDemandWithDeviceTypesItem{
-			DemandID:   "demand-00" + string(rune('1'+i)),
+			DemandIDs:  []string{"demand-00" + string(rune('1'+i))},
 			DeviceType: "type-" + string(rune('1'+i)),
 		}
 	}
 
 	tests := []struct {
-		name       string
-		page       *core.BasePage
-		totalItems int
-		expectLen  int
+		name        string
+		page        *core.BasePage
+		totalItems  int
+		expectLen   int
 		expectFirst string
 	}{
 		{
-			name: "第一页",
-			page: &core.BasePage{Start: 0, Limit: 2},
-			expectLen: 2,
+			name:        "第一页",
+			page:        &core.BasePage{Start: 0, Limit: 2},
+			expectLen:   2,
 			expectFirst: "demand-001",
 		},
 		{
-			name: "第二页",
-			page: &core.BasePage{Start: 2, Limit: 2},
-			expectLen: 2,
+			name:        "第二页",
+			page:        &core.BasePage{Start: 2, Limit: 2},
+			expectLen:   2,
 			expectFirst: "demand-003",
 		},
 		{
-			name: "最后一页不满",
-			page: &core.BasePage{Start: 4, Limit: 2},
-			expectLen: 1,
+			name:        "最后一页不满",
+			page:        &core.BasePage{Start: 4, Limit: 2},
+			expectLen:   1,
 			expectFirst: "demand-005",
 		},
 		{
-			name: "start超出范围",
-			page: &core.BasePage{Start: 10, Limit: 2},
+			name:      "start超出范围",
+			page:      &core.BasePage{Start: 10, Limit: 2},
 			expectLen: 0,
 		},
 		{
-			name: "limit大于剩余数量",
-			page: &core.BasePage{Start: 3, Limit: 10},
-			expectLen: 2,
+			name:        "limit大于剩余数量",
+			page:        &core.BasePage{Start: 3, Limit: 10},
+			expectLen:   2,
 			expectFirst: "demand-004",
 		},
 		{
-			name: "获取全部",
-			page: &core.BasePage{Start: 0, Limit: 10},
-			expectLen: 5,
+			name:        "获取全部",
+			page:        &core.BasePage{Start: 0, Limit: 10},
+			expectLen:   5,
 			expectFirst: "demand-001",
 		},
 	}
@@ -552,8 +556,8 @@ func TestPageDeviceTypeDemands(t *testing.T) {
 				t.Errorf("pageDeviceTypeDemands() 返回 %d 条, want %d", len(result), tt.expectLen)
 				return
 			}
-			if tt.expectLen > 0 && result[0].DemandID != tt.expectFirst {
-				t.Errorf("pageDeviceTypeDemands() 首条 DemandID = %s, want %s", result[0].DemandID, tt.expectFirst)
+			if tt.expectLen > 0 && result[0].DemandIDs[0] != tt.expectFirst {
+				t.Errorf("pageDeviceTypeDemands() 首条 DemandID = %s, want %s", result[0].DemandIDs[0], tt.expectFirst)
 			}
 		})
 	}
@@ -573,7 +577,7 @@ func TestPageDeviceTypeDemands_StartAtBoundary(t *testing.T) {
 	items := make([]*ptypes.ListResPlanDemandWithDeviceTypesItem, 3)
 	for i := range items {
 		items[i] = &ptypes.ListResPlanDemandWithDeviceTypesItem{
-			DemandID: "d" + string(rune('1'+i)),
+			DemandIDs: []string{"d" + string(rune('1'+i))},
 		}
 	}
 
@@ -589,14 +593,16 @@ func TestPageDeviceTypeDemands_StartAtBoundary(t *testing.T) {
 
 func TestExpandDemandToDeviceTypes_NoWildcard(t *testing.T) {
 	// 无通配机型时，仅返回原始机型
-	demandItem := &ptypes.ListResPlanDemandItem{
-		DemandID:       "d1",
-		DeviceType:     "SA3.8XLARGE128",
-		TotalCpuCore:   120,
-		AppliedCpuCore: 80,
-		RemainedCpuCore: 40,
-		RegionID:       "gz",
-		ZoneID:         "gz-1",
+	demandItem := &ptypes.ListResPlanDemandWithDeviceTypesItem{
+		ListResPlanDemandItemBase: ptypes.ListResPlanDemandItemBase{
+			TotalCpuCore:    120,
+			AppliedCpuCore:  80,
+			RemainedCpuCore: 40,
+		},
+		DemandIDs:  []string{"d1"},
+		DeviceType: "SA3.8XLARGE128",
+		RegionID:   "gz",
+		ZoneID:     "gz-1",
 	}
 
 	deviceTypeMap := map[string]dt.DistinctDeviceType{
@@ -617,19 +623,21 @@ func TestExpandDemandToDeviceTypes_NoWildcard(t *testing.T) {
 	if item.DeviceType != "SA3.8XLARGE128" {
 		t.Errorf("DeviceType = %s, want SA3.8XLARGE128", item.DeviceType)
 	}
-	if item.TotalOS != 1 { // 120 / 120
-		t.Errorf("TotalOS = %d, want 1", item.TotalOS)
+	if item.DetailTotalOS.IntPart() != 1 { // 120 / 120
+		t.Errorf("TotalOS = %s, want 1", item.DetailTotalOS)
 	}
 }
 
 func TestExpandDemandToDeviceTypes_DeviceNotInCache(t *testing.T) {
 	// 原始机型不在缓存中，仅返回原始机型（零值设备信息）
-	demandItem := &ptypes.ListResPlanDemandItem{
-		DemandID:       "d1",
-		DeviceType:     "UNKNOWN_TYPE",
-		TotalCpuCore:   120,
-		AppliedCpuCore: 80,
-		RemainedCpuCore: 40,
+	demandItem := &ptypes.ListResPlanDemandWithDeviceTypesItem{
+		ListResPlanDemandItemBase: ptypes.ListResPlanDemandItemBase{
+			TotalCpuCore:    120,
+			AppliedCpuCore:  80,
+			RemainedCpuCore: 40,
+		},
+		DemandIDs:  []string{"d1"},
+		DeviceType: "UNKNOWN_TYPE",
 	}
 
 	deviceTypeMap := map[string]dt.DistinctDeviceType{}
@@ -646,9 +654,10 @@ func TestExpandDemandToDeviceTypes_DeviceNotInCache(t *testing.T) {
 	if item.CpuCore != 0 {
 		t.Errorf("未知机型的 CpuCore 应为 0")
 	}
-	if item.TotalOS != 0 || item.AppliedOS != 0 || item.RemainedOS != 0 {
-		t.Errorf("未知机型的 OS 数应为 0, got total=%d applied=%d remained=%d",
-			item.TotalOS, item.AppliedOS, item.RemainedOS)
+	if item.DetailTotalOS.IntPart() != 0 || item.DetailAppliedOS.IntPart() != 0 ||
+		item.DetailRemainedOS.IntPart() != 0 {
+		t.Errorf("未知机型的 OS 数应为 0, got total=%s applied=%s remained=%s",
+			item.DetailTotalOS, item.DetailAppliedOS, item.DetailRemainedOS)
 	}
 }
 
@@ -656,10 +665,10 @@ func TestExpandDemandToDeviceTypes_MultipleWildcardWithFilter(t *testing.T) {
 	// 测试多个通配机型 + cpu_cores 筛选的组合逻辑
 	// 验证 matchCpuMemFilter 的间接效果
 	devices := map[string]dt.DistinctDeviceType{
-		"SA3.8XLARGE128":  {DeviceType: "SA3.8XLARGE128", CpuCore: 120, Memory: 128, DeviceClass: "compute", DeviceFamily: "SA3"},
-		"SA3.4XLARGE64":   {DeviceType: "SA3.4XLARGE64", CpuCore: 60, Memory: 64, DeviceClass: "compute", DeviceFamily: "SA3"},
-		"SA3.2XLARGE32":   {DeviceType: "SA3.2XLARGE32", CpuCore: 30, Memory: 32, DeviceClass: "compute", DeviceFamily: "SA3"},
-		"IT5.4XLARGE64":   {DeviceType: "IT5.4XLARGE64", CpuCore: 16, Memory: 64, DeviceClass: "compute", DeviceFamily: "IT5"},
+		"SA3.8XLARGE128": {DeviceType: "SA3.8XLARGE128", CpuCore: 120, Memory: 128, DeviceClass: "compute", DeviceFamily: "SA3"},
+		"SA3.4XLARGE64":  {DeviceType: "SA3.4XLARGE64", CpuCore: 60, Memory: 64, DeviceClass: "compute", DeviceFamily: "SA3"},
+		"SA3.2XLARGE32":  {DeviceType: "SA3.2XLARGE32", CpuCore: 30, Memory: 32, DeviceClass: "compute", DeviceFamily: "SA3"},
+		"IT5.4XLARGE64":  {DeviceType: "IT5.4XLARGE64", CpuCore: 16, Memory: 64, DeviceClass: "compute", DeviceFamily: "IT5"},
 	}
 
 	// 筛选 cpu_core=60 或 30 的机型

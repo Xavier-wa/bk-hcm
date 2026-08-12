@@ -44,6 +44,9 @@ const (
 	RPTicketTypeAdjust RPTicketType = "adjust"
 	// RPTicketTypeDelete is resource plan ticket status delete.
 	RPTicketTypeDelete RPTicketType = "delete"
+	// RPTicketTypeBudgetDeclare is resource plan root ticket type for budget declare.
+	// Only used on root tickets created via overwrite_append; not a sub_ticket type.
+	RPTicketTypeBudgetDeclare RPTicketType = "budget_declare"
 	// RPTicketTypeDelay is resource plan ticket status delay. Only used in sub_ticket.
 	// will be modified to RPTicketTypeAdjust when return to frontend.
 	// 该类型不返回给前端展示，仅用于内部逻辑，汇总不影响预算，可以直接发起调整的需求
@@ -80,12 +83,24 @@ func (t RPTicketType) Validate() error {
 	return nil
 }
 
+// ValidateRootTicketType validates RPTicketType allowed on root resource plan tickets.
+func (t RPTicketType) ValidateRootTicketType() error {
+	switch t {
+	case RPTicketTypeAdd, RPTicketTypeAdjust, RPTicketTypeDelete, RPTicketTypeBudgetDeclare:
+	default:
+		return fmt.Errorf("unsupported resource plan root ticket type: %s", t)
+	}
+
+	return nil
+}
+
 // rdTicketTypeNameMap records RPTicketType's name.
 var rdTicketTypeNameMap = map[RPTicketType]string{
 	RPTicketTypeAdd:               "新增",
 	RPTicketTypeAdjust:            "调整",
 	RPTicketTypeDelay:             "延期",
 	RPTicketTypeDelete:            "取消",
+	RPTicketTypeBudgetDeclare:     "预算申报",
 	RPTicketTypeTransfer:          "转移",
 	RPTicketTypeAutomaticTransfer: "过期自动转移",
 	RPTicketTypeTransferExempt:    "免审转移",
@@ -107,6 +122,7 @@ func GetRPTicketTypeMembers() []RPTicketType {
 		RPTicketTypeAdd,
 		RPTicketTypeAdjust,
 		RPTicketTypeDelete,
+		RPTicketTypeBudgetDeclare,
 	}
 }
 
@@ -176,8 +192,9 @@ func (s RPTicketStatus) IsUnfinished() bool {
 	return true
 }
 
-// IsNonFinalState return true if RPTicketStatus is Non-final state (can be terminated).
-func (s RPTicketStatus) IsNonFinalState() bool {
+// CanTerminate returns true if the ticket is in a failed/rejected state that can be terminated.
+// Auditing/init are unfinished states and cannot be terminated.
+func (s RPTicketStatus) CanTerminate() bool {
 	switch s {
 	case RPTicketStatusRejected:
 	case RPTicketStatusPartialRejected:

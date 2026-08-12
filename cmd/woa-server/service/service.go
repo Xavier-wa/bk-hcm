@@ -36,6 +36,7 @@ import (
 	gclogics "hcm/cmd/woa-server/logics/green-channel"
 	planctrl "hcm/cmd/woa-server/logics/plan"
 	ressynclogics "hcm/cmd/woa-server/logics/res-sync"
+	returnplanctrl "hcm/cmd/woa-server/logics/return-plan"
 	rslogics "hcm/cmd/woa-server/logics/rolling-server"
 	srlogics "hcm/cmd/woa-server/logics/short-rental"
 	taskLogics "hcm/cmd/woa-server/logics/task"
@@ -56,6 +57,7 @@ import (
 	"hcm/cmd/woa-server/service/plan"
 	"hcm/cmd/woa-server/service/pool"
 	ressync "hcm/cmd/woa-server/service/res-sync"
+	returnplanservice "hcm/cmd/woa-server/service/return-plan"
 	rollingserver "hcm/cmd/woa-server/service/rolling-server"
 	"hcm/cmd/woa-server/service/task"
 	"hcm/cmd/woa-server/storage/dal/mongo"
@@ -99,6 +101,7 @@ type Service struct {
 	dao            dao.Set
 	mongodb        *local.Mongo
 	planController planctrl.Logics
+	returnPlanCtrl *returnplanctrl.Controller
 	cmdbCli        cmdb.Client
 	itsmCli        itsm.Client
 	finOpsCli      finops.Client
@@ -286,6 +289,7 @@ type logicSet struct {
 	rsLogics       rslogics.Logics
 	srLogics       srlogics.Logics
 	planCtrl       planctrl.Logics
+	returnPlanCtrl *returnplanctrl.Controller
 	esCli          *es.EsCli
 	dissolveLogics disLogics.Logics
 }
@@ -338,6 +342,14 @@ func initLogics(sd serviced.State, apiClientSet *client.ClientSet, clients *clie
 		return nil, err
 	}
 	logics.planCtrl = planCtrl
+
+	// new return plan controller
+	returnPlanCtrl, err := returnplanctrl.New(sd, apiClientSet, clients.thirdCli.CVM, bizLogic)
+	if err != nil {
+		logs.Errorf("new return plan controller failed, err: %v", err)
+		return nil, err
+	}
+	logics.returnPlanCtrl = returnPlanCtrl
 
 	// new dissolve logic
 	logics.dissolveLogics = disLogics.New(clients.cmdbCli, clients.esCli, clients.thirdCli,
@@ -411,6 +423,7 @@ func assembleService(apiClientSet *client.ClientSet, clients *clientSet, logics 
 		srLogic:        logics.srLogics,
 		gcLogic:        logics.gcLogics,
 		planController: logics.planCtrl,
+		returnPlanCtrl: logics.returnPlanCtrl,
 		bizLogic:       logics.bizLogic,
 		dissolveLogic:  logics.dissolveLogics,
 		configLogics:   logics.configLogics,
@@ -589,32 +602,33 @@ func (s *Service) apiSet() *restful.Container {
 	ws.Produces(restful.MIME_JSON)
 
 	c := &capability.Capability{
-		Dao:            s.dao,
-		MongoDB:        s.mongodb,
-		WebService:     ws,
-		Authorizer:     s.authorizer,
-		PlanController: s.planController,
-		CmdbCli:        s.cmdbCli,
-		FinOpsCli:      s.finOpsCli,
-		ThirdCli:       s.thirdCli,
-		CmsiCli:        s.cmsiCli,
-		Conf:           s.clientConf,
-		SchedulerIf:    s.schedulerIf,
-		InformerIf:     s.informerIf,
-		RecyclerIf:     s.recyclerIf,
-		OperationIf:    s.operationIf,
-		EsCli:          s.esCli,
-		RsLogic:        s.rsLogic,
-		Client:         s.client,
-		GcLogic:        s.gcLogic,
-		BizLogic:       s.bizLogic,
-		DissolveLogic:  s.dissolveLogic,
-		ResSyncLogic:   s.resSyncLogic,
-		ConfigLogics:   s.configLogics,
-		TaskLogic:      s.taskLogic,
-		TaskStatistics: s.taskStatistics,
-		CvmLogic:       s.cvmLogic,
-		Tasks:          s.tasks,
+		Dao:                  s.dao,
+		MongoDB:              s.mongodb,
+		WebService:           ws,
+		Authorizer:           s.authorizer,
+		PlanController:       s.planController,
+		ReturnPlanController: s.returnPlanCtrl,
+		CmdbCli:              s.cmdbCli,
+		FinOpsCli:            s.finOpsCli,
+		ThirdCli:             s.thirdCli,
+		CmsiCli:              s.cmsiCli,
+		Conf:                 s.clientConf,
+		SchedulerIf:          s.schedulerIf,
+		InformerIf:           s.informerIf,
+		RecyclerIf:           s.recyclerIf,
+		OperationIf:          s.operationIf,
+		EsCli:                s.esCli,
+		RsLogic:              s.rsLogic,
+		Client:               s.client,
+		GcLogic:              s.gcLogic,
+		BizLogic:             s.bizLogic,
+		DissolveLogic:        s.dissolveLogic,
+		ResSyncLogic:         s.resSyncLogic,
+		ConfigLogics:         s.configLogics,
+		TaskLogic:            s.taskLogic,
+		TaskStatistics:       s.taskStatistics,
+		CvmLogic:             s.cvmLogic,
+		Tasks:                s.tasks,
 	}
 
 	config.InitService(c)
@@ -623,6 +637,7 @@ func (s *Service) apiSet() *restful.Container {
 	task.InitService(c)
 	meta.InitService(c)
 	plan.InitService(c)
+	returnplanservice.InitService(c)
 	dissolve.InitService(c)
 	rollingserver.InitService(c)
 	greenchannel.InitService(c)

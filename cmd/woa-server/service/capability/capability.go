@@ -28,6 +28,7 @@ import (
 	gclogics "hcm/cmd/woa-server/logics/green-channel"
 	"hcm/cmd/woa-server/logics/plan"
 	ressync "hcm/cmd/woa-server/logics/res-sync"
+	returnplan "hcm/cmd/woa-server/logics/return-plan"
 	rslogic "hcm/cmd/woa-server/logics/rolling-server"
 	taskLogics "hcm/cmd/woa-server/logics/task"
 	"hcm/cmd/woa-server/logics/task/informer"
@@ -53,30 +54,31 @@ import (
 
 // Capability defines the service's capability
 type Capability struct {
-	Client         *client.ClientSet
-	Dao            dao.Set
-	MongoDB        dal.DB
-	WebService     *restful.WebService
-	PlanController plan.Logics
-	CmdbCli        cmdb.Client
-	ThirdCli       *thirdparty.Client
-	FinOpsCli      finops.Client
-	CmsiCli        cmsi.Client
-	Authorizer     auth.Authorizer
-	Conf           cc.WoaServerSetting
-	SchedulerIf    scheduler.Interface
-	InformerIf     informer.Interface
-	RecyclerIf     recycler.Interface
-	OperationIf    operation.Interface
-	EsCli          *es.EsCli
-	RsLogic        rslogic.Logics
-	GcLogic        gclogics.Logics
-	BizLogic       biz.Logics
-	DissolveLogic  dissolve.Logics
-	ResSyncLogic   ressync.Logics
-	ConfigLogics   config.Logics
-	TaskLogic      taskLogics.Logics
-	TaskStatistics taskStatistics.Interface
-	CvmLogic       cvmlogic.Logics
-	Tasks          map[enumor.CronTask]core.Task
+	Client               *client.ClientSet
+	Dao                  dao.Set
+	MongoDB              dal.DB
+	WebService           *restful.WebService
+	PlanController       plan.Logics
+	ReturnPlanController returnplan.Logics
+	CmdbCli              cmdb.Client
+	ThirdCli             *thirdparty.Client
+	FinOpsCli            finops.Client
+	CmsiCli              cmsi.Client
+	Authorizer           auth.Authorizer
+	Conf                 cc.WoaServerSetting
+	SchedulerIf          scheduler.Interface
+	InformerIf           informer.Interface
+	RecyclerIf           recycler.Interface
+	OperationIf          operation.Interface
+	EsCli                *es.EsCli
+	RsLogic              rslogic.Logics
+	GcLogic              gclogics.Logics
+	BizLogic             biz.Logics
+	DissolveLogic        dissolve.Logics
+	ResSyncLogic         ressync.Logics
+	ConfigLogics         config.Logics
+	TaskLogic            taskLogics.Logics
+	TaskStatistics       taskStatistics.Interface
+	CvmLogic             cvmlogic.Logics
+	Tasks                map[enumor.CronTask]core.Task
 }

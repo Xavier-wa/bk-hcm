@@ -130,6 +130,9 @@ type Logics interface {
 	CreateAuditFlow(kt *kit.Kit, ticketID string) error
 	// CreateResPlanTicket create resource plan ticket.
 	CreateResPlanTicket(kt *kit.Kit, req *CreateResPlanTicketReq) (string, error)
+	// OverwriteAppendResPlanTicket overwrite-append resource plan ticket.
+	OverwriteAppendResPlanTicket(kt *kit.Kit, bizOrgRel *mtypes.BizOrgRel,
+		req *ptypes.OverwriteAppendResPlanTicketReq) (string, error)
 	// GetResPlanTicketStatusInfo get res plan ticket status info.
 	GetResPlanTicketStatusInfo(kt *kit.Kit, ticketID string) (*ptypes.GetRPTicketStatusInfo, error)
 	// GetResPlanTicketAudit get res plan ticket audit.

@@ -69,8 +69,25 @@ func (c *Controller) CreateResPlanTicket(kt *kit.Kit, req *CreateResPlanTicketRe
 		req.Demands = demands
 	}
 
+	return c.persistResPlanTicket(kt, req, true)
+}
+
+// persistResPlanTicket construct and persist resource plan ticket with status=init.
+// It does NOT run the strict per-type demand validation of CreateResPlanTicketReq.Validate,
+// so it can be reused by the overwrite-append flow whose merged ticket mixes cancel-only
+// and add-only demands.
+// checkReportDeadline 控制是否校验非本年度预测提报截止时间；overwrite-append 流程不校验。
+func (c *Controller) persistResPlanTicket(kt *kit.Kit, req *CreateResPlanTicketReq,
+	checkReportDeadline bool) (string, error) {
+
+	// applicant 优先使用请求体指定的提单人，为空时回退调用账号。
+	applicant := kt.User
+	if req.Applicant != "" {
+		applicant = req.Applicant
+	}
+
 	// construct resource plan ticket.
-	ticket, err := c.constructResPlanTicket(kt, req, kt.User)
+	ticket, err := c.constructResPlanTicket(kt, req, applicant, checkReportDeadline)
 	if err != nil {
 		logs.Errorf("failed to construct resource plan ticket, err: %v, rid: %s", err, kt.Rid)
 		return "", err
@@ -119,10 +136,11 @@ func (c *Controller) CreateResPlanTicket(kt *kit.Kit, req *CreateResPlanTicketRe
 }
 
 // constructResPlanTicket construct resource plan ticket.
-func (c *Controller) constructResPlanTicket(kt *kit.Kit, req *CreateResPlanTicketReq, applicant string) (
-	*rpt.ResPlanTicketTable, error) {
+// checkReportDeadline 控制是否校验非本年度预测提报截止时间；overwrite-append 流程不校验。
+func (c *Controller) constructResPlanTicket(kt *kit.Kit, req *CreateResPlanTicketReq, applicant string,
+	checkReportDeadline bool) (*rpt.ResPlanTicketTable, error) {
 
-	summary, err := c.validateAndSummarizeDemands(kt, req.Demands, true)
+	summary, err := c.validateAndSummarizeDemands(kt, req.Demands, checkReportDeadline)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +289,8 @@ func (c *Controller) appendFieldToListResPlanTickets(kt *kit.Kit, details []rpda
 			item.OriginalInfo = ptypes.NewNullResourceInfo()
 			item.UpdatedInfo = ptypes.NewResourceInfo(detail.UpdatedCpuCore, detail.UpdatedMemory,
 				detail.UpdatedDiskSize)
-		case enumor.RPTicketTypeAdjust:
+		case enumor.RPTicketTypeAdjust, enumor.RPTicketTypeBudgetDeclare:
+			// budget_declare 与 adjust 一样可同时含 cancel/add，展示原始与更新两侧资源量。
 			item.OriginalInfo = ptypes.NewResourceInfo(detail.OriginalCpuCore, detail.OriginalMemory,
 				detail.OriginalDiskSize)
 			item.UpdatedInfo = ptypes.NewResourceInfo(detail.UpdatedCpuCore, detail.UpdatedMemory,
@@ -816,7 +835,7 @@ func (c *Controller) TerminateResPlanFailedTicket(kt *kit.Kit, ticketID string) 
 	}
 
 	// 2. 仅失败、部分失败、审批驳回、部分审批驳回的单据可以终止
-	if !ticket.Status.IsNonFinalState() {
+	if !ticket.Status.CanTerminate() {
 		logs.Errorf("ticket status is %s, can't terminate, ticket id: %s, rid: %s", ticket.Status, ticketID,
 			kt.Rid)
 		return fmt.Errorf("ticket status is %s, can't terminate", ticket.Status)

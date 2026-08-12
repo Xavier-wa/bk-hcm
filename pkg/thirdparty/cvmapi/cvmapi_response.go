@@ -521,6 +521,117 @@ type ReturnPlanItem struct {
 	CoreAmount         decimal.Decimal   `json:"coreAmount"` // 退回计划可能有小数核心
 }
 
+// SubmitAppendReturnOrderResp 退回计划新增(追加)提单响应
+// 同批次若同时选择公有池与自研池，result 会返回两个订单号。
+type SubmitAppendReturnOrderResp struct {
+	RespMeta `json:",inline"`
+	Result   []*SubmitReturnOrderRstItem `json:"result"`
+}
+
+// SubmitReturnOrderRstItem 退回计划新增提单结果项（按资源池返回）
+type SubmitReturnOrderRstItem struct {
+	Type    string `json:"type"`    // 资源池类型（公有池/自研池）
+	OrderId string `json:"orderId"` // CRP 单号，对应资源池无数据时为空
+}
+
+// SubmitAdjustReturnOrderResp 退回计划调整&删除提单响应
+type SubmitAdjustReturnOrderResp struct {
+	RespMeta `json:",inline"`
+	Result   *SubmitAdjustReturnOrderRst `json:"result"`
+}
+
+// SubmitAdjustReturnOrderRst 退回计划调整&删除提单结果
+type SubmitAdjustReturnOrderRst struct {
+	OrderId string `json:"orderId"` // CRP 单号
+}
+
+// QueryReturnOrderDetailResp 退回计划订单详情查询响应
+type QueryReturnOrderDetailResp struct {
+	RespMeta `json:",inline"`
+	Result   *QueryReturnOrderDetailRst `json:"result"`
+}
+
+// QueryReturnOrderDetailRst 退回计划订单详情
+// details（新增单明细）与 adjust（调整单明细）在同一订单只有其一存在，可用 sourceTypeName 区分。
+type QueryReturnOrderDetailRst struct {
+	// Status CRP 退回计划订单状态，enumeration values such as: 0(待提交)/1(资源团队审批)/2(部门管理员审批)/3(审批结束)/4(审批驳回)
+	Status            enumor.ReturnPlanOrderStatus `json:"status"`
+	StatusMsg         string                       `json:"statusMsg"`        // 订单状态描述
+	StatusDesc        string                       `json:"statusDesc"`       // 状态详细描述
+	ResourcePoolType  int                          `json:"resourcePoolType"` // 资源池类型（0自研池 1公有池）
+	OrderId           string                       `json:"orderId"`
+	SourceTypeName    string                       `json:"sourceTypeName"` // 订单来源类型（追加计划订单/调整计划订单）
+	DeptID            int64                        `json:"deptId"`
+	PlanProductID     int64                        `json:"planProductId"`
+	DeptName          string                       `json:"deptName"`
+	PlanProductName   string                       `json:"planProductName"`
+	Operator          string                       `json:"operator"`
+	IsCsig            bool                         `json:"isCsig"`
+	ProjectName       enumor.ObsProject            `json:"projectName"`
+	CreateTime        string                       `json:"createTime"`
+	Desc              string                       `json:"desc"`
+	CurrentProcessor  string                       `json:"currentProcessor"`
+	ReturnReasonClass string                       `json:"returnReasonClass"`
+	Details           []*ReturnOrderPlanItem       `json:"details"`       // 新增单明细
+	ApproveAdjust     []interface{}                `json:"approveAdjust"` // 审批调整记录
+	Adjust            []*ReturnOrderAdjustItem     `json:"adjust"`        // 调整单明细
+}
+
+// ReturnOrderAdjustItem 退回计划调整明细项
+type ReturnOrderAdjustItem struct {
+	Type   string               `json:"type"`   // 调整类型（delete/update）
+	Src    *ReturnOrderPlanItem `json:"src"`    // 原始明细
+	Update *ReturnOrderPlanItem `json:"update"` // 更新后明细（delete 类型为 null）
+}
+
+// ReturnOrderPlanItem 退回计划订单明细项（details 与 adjust.src/update 复用）
+type ReturnOrderPlanItem struct {
+	ID                 int64           `json:"id"`
+	OriginPlanTime     *string         `json:"originPlanTime"`
+	ProductID          int64           `json:"productId"`
+	ProductName        string          `json:"productName"`
+	PlanTime           string          `json:"planTime"`
+	DeviceFamilyName   string          `json:"deviceFamilyName"`
+	GenerationType     int64           `json:"generationType"`
+	GenerationTypeName string          `json:"generationTypeName"`
+	InstanceModel      string          `json:"instanceModel"`
+	InstanceType       string          `json:"instanceType"`
+	CPUAmount          int64           `json:"cpuAmount"`
+	CoreTypeName       string          `json:"coreTypeName"`
+	ResourcePoolName   string          `json:"resourcePoolName"`
+	CityID             int64           `json:"cityId"`
+	CityName           string          `json:"cityName"`
+	ZoneID             int64           `json:"zoneId"`
+	ZoneName           string          `json:"zoneName"`
+	CountryName        string          `json:"countryName"`
+	CountryCode        string          `json:"countryCode"`
+	RegionName         string          `json:"regionName"`
+	RegionID           int64           `json:"regionId"`
+	CvmAmount          float64         `json:"cvmAmount"`
+	CoreAmount         decimal.Decimal `json:"coreAmount"`
+	Desc               string          `json:"desc"`
+}
+
+// GetReasonClassByObsProjectResp 按OBS项目类型查询退回原因大类响应
+type GetReasonClassByObsProjectResp struct {
+	RespMeta `json:",inline"`
+	Result   *GetReasonClassByObsProjectRst `json:"result"`
+}
+
+// GetReasonClassByObsProjectRst 退回原因大类查询结果
+type GetReasonClassByObsProjectRst struct {
+	Total int                      `json:"total"`
+	Data  []*ReturnReasonClassItem `json:"data"`
+}
+
+// ReturnReasonClassItem 退回原因大类项
+type ReturnReasonClassItem struct {
+	ID                int64             `json:"id"`
+	ObsProject        enumor.ObsProject `json:"obsProject"`
+	ReturnReasonClass string            `json:"returnReasonClass"`
+	EnableFlag        int               `json:"enableFlag"` // 1启用
+}
+
 // CapacityResp cvm apply capacity query response
 type CapacityResp struct {
 	RespMeta `json:",inline"`

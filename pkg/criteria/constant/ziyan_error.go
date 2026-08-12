@@ -25,6 +25,8 @@ const (
 
 	// ResPlanTicketWatchFailed res plan ticket watch failed.
 	ResPlanTicketWatchFailed WarnSign = "res_plan_ticket_watch_failed"
+	// ReturnPlanTicketWatchFailed return plan ticket watch failed.
+	ReturnPlanTicketWatchFailed WarnSign = "return_plan_ticket_watch_failed"
 	// DemandPenaltyBaseGenerateFailed res plan demand penalty base generate failed.
 	DemandPenaltyBaseGenerateFailed WarnSign = "demand_penalty_base_generate_failed"
 	// DemandPenaltyRatioReportFailed res plan demand penalty ratio report failed.
