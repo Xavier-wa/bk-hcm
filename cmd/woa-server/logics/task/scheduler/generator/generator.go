@@ -28,12 +28,12 @@ import (
 	poolLogics "hcm/cmd/woa-server/logics/pool"
 	rollingserver "hcm/cmd/woa-server/logics/rolling-server"
 	"hcm/cmd/woa-server/logics/task/scheduler/algorithm"
+	"hcm/cmd/woa-server/logics/task/scheduler/matcher"
 	"hcm/cmd/woa-server/model/task"
 	cfgtypes "hcm/cmd/woa-server/types/config"
 	poolTypes "hcm/cmd/woa-server/types/pool"
 	types "hcm/cmd/woa-server/types/task"
 	"hcm/pkg"
-	"hcm/pkg/api/core"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
@@ -63,6 +63,11 @@ import (
 var errAllDevicesDuplicate = errors.New("all devices already exist, skip duplicate creation")
 
 // Generator generates vm devices
+// applyFinalizer 只声明子单收尾入口，收敛 generator 对 matcher 的依赖，便于单测注入。
+type applyFinalizer interface {
+	FinalApplyStep(kt *kit.Kit, genRecord *types.GenerateRecord, order *types.ApplyOrder) error
+}
+
 type Generator struct {
 	cvm          cvmapi.CVMClientInterface
 	dvm          dvmapi.DVMClientInterface
@@ -72,9 +77,15 @@ type Generator struct {
 	poolLogics   poolLogics.Logics
 	rsLogics     rollingserver.Logics
 	clientConf   cc.ClientConfig
+	matcher      applyFinalizer
 
 	predicateFuncs map[string]algorithm.FitPredicate
 	priorityFuncs  []algorithm.PriorityConfig
+}
+
+// SetMatcher set matcher for order finalize.
+func (g *Generator) SetMatcher(matcher *matcher.Matcher) {
+	g.matcher = matcher
 }
 
 // New creates a generator
@@ -136,7 +147,7 @@ func (g *Generator) GenerateCVM(kt *kit.Kit, order *types.ApplyOrder) error {
 		logs.Infof("apply order %s has been scheduled %d cvm (existing: %d, generatingCount: %d), rid: %s",
 			order.SubOrderId, scheduledCount, len(existDevices), generatingCount, kt.Rid)
 		// check if need retry match task
-		if err = g.retryMatchDevice(existDevices); err != nil {
+		if err = g.retryMatchDevice(kt, order, existDevices, generatingCount); err != nil {
 			logs.Warnf("failed to retry match device, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		}
 		return nil
@@ -219,17 +230,31 @@ func (g *Generator) getApplyOrderMultiZones(kt *kit.Kit, order *types.ApplyOrder
 }
 
 // retryMatchDevice retry to match generated devices
-func (g *Generator) retryMatchDevice(devices []*types.DeviceInfo) error {
+func (g *Generator) retryMatchDevice(kt *kit.Kit, order *types.ApplyOrder, devices []*types.DeviceInfo,
+	generatingCount uint) error {
+
 	genIDs := make([]string, 0)
+	// deliveredCnt 口径与 matcher 的收尾判定保持一致，均按设备 IsDelivered 计数
+	deliveredCnt := uint(0)
 	for _, device := range devices {
 		if !device.IsDelivered {
 			genIDs = append(genIDs, device.GenerateId)
+			continue
 		}
+		deliveredCnt++
 	}
 
 	genIDs = utils.StrArrayUnique(genIDs)
+
+	// 无未交付设备时进入收尾分支：已交付数量已达子单需求且无在途生产批次，说明子单只差一次收尾。
+	// 收尾直接调用 matcher.FinalApplyStep，而不是再重置一条生产记录去唤醒 informer，
+	// 因为后者会把初始化/磁盘检查/交付整条链路重跑一遍，而其中磁盘检查对已交付设备并不幂等。
+	// 已交付数量不足时不介入，收尾由在途批次完成后触发。
+	if len(genIDs) == 0 && deliveredCnt >= order.TotalNum && generatingCount == 0 {
+		return g.finalizeDeliveredOrder(kt, order)
+	}
+
 	// update generate record to unmatched
-	kt := core.NewBackendKit()
 	for _, generateID := range genIDs {
 		filter := tools.ExpressionAnd(tools.RuleEqual("generate_id", generateID))
 		update := &cvmapplyproto.ZiyanCvmGenerateRecordUpdateReq{
@@ -244,6 +269,41 @@ func (g *Generator) retryMatchDevice(devices []*types.DeviceInfo) error {
 	}
 
 	return nil
+}
+
+// finalizeDeliveredOrder 子单设备已足额交付但仍停在 MATCHING 时补一次收尾。
+// 收尾作用于整张子单，与传入哪条生产记录无关，任取一条成功记录满足 FinalApplyStep 入参即可。
+func (g *Generator) finalizeDeliveredOrder(kt *kit.Kit, order *types.ApplyOrder) error {
+	records, err := g.getOrderGenRecords(kt, order.SubOrderId)
+	if err != nil {
+		logs.Errorf("failed to get generate records, subOrderID: %s, err: %v, rid: %s",
+			order.SubOrderId, err, kt.Rid)
+		return err
+	}
+
+	var genRecord *types.GenerateRecord
+	for _, item := range records {
+		// 还有批次在途，跑完自然触发收尾，此处不重复执行
+		if item.Status == types.GenerateStatusInit || item.Status == types.GenerateStatusHandling {
+			return nil
+		}
+		// informer 下一轮会捞到这条未匹配记录并收尾，此处再执行会并发
+		if item.Status == types.GenerateStatusSuccess && !item.IsMatched {
+			return nil
+		}
+		if item.Status == types.GenerateStatusSuccess && genRecord == nil {
+			genRecord = item
+		}
+	}
+
+	if genRecord == nil {
+		logs.Warnf("no success generate record to finalize, subOrderID: %s, rid: %s", order.SubOrderId, kt.Rid)
+		return nil
+	}
+
+	logs.Infof("finalize delivered suborder directly, subOrderID: %s, generateID: %s, rid: %s",
+		order.SubOrderId, genRecord.GenerateId, kt.Rid)
+	return g.matcher.FinalApplyStep(kt, genRecord, order)
 }
 
 // getGeneratingCount 获取生产中的主机数量
@@ -1818,7 +1878,7 @@ func (g *Generator) MatchPM(kt *kit.Kit, order *types.ApplyOrder) error {
 		logs.Infof("apply pm order %s has been scheduled %d pm (existing: %d, generatingCount: %d), rid: %s",
 			order.SubOrderId, scheduledCount, len(existDevices), generatingCount, kt.Rid)
 		// check if need retry match task
-		if err = g.retryMatchDevice(existDevices); err != nil {
+		if err = g.retryMatchDevice(kt, order, existDevices, generatingCount); err != nil {
 			logs.Warnf("failed to retry match device, order id: %s, err: %v, rid: %s", order.SubOrderId, err, kt.Rid)
 		}
 		return nil

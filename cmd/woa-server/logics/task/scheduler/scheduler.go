@@ -225,6 +225,7 @@ func New(ctx context.Context, rsLogics rollingserver.Logics, srLogics shortrenta
 	if err != nil {
 		return nil, err
 	}
+	generate.SetMatcher(match)
 
 	// new dispatcher
 	dispatch, err := dispatcher.New(ctx, informerIf)

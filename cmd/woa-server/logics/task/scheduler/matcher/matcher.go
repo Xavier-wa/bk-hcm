@@ -322,6 +322,7 @@ func (m *Matcher) UpdateApplyOrderStatus(kt *kit.Kit, order *types.ApplyOrder) e
 	hasGenRecordMatching := false
 	isSuspend := false
 	suspendCnt := 0
+	suspendGenIDs := make([]string, 0)
 
 	for _, recordItem := range genRecords {
 		if recordItem.Status == types.GenerateStatusInit || recordItem.Status == types.GenerateStatusHandling ||
@@ -332,6 +333,7 @@ func (m *Matcher) UpdateApplyOrderStatus(kt *kit.Kit, order *types.ApplyOrder) e
 		if recordItem.Status == types.GenerateStatusSuspend {
 			isSuspend = true
 			suspendCnt += int(recordItem.TotalNum)
+			suspendGenIDs = append(suspendGenIDs, recordItem.GenerateId)
 			logs.Infof("generate failed, unknown if generate interface was called, task_id not obtained, "+
 				"check machines, rid: %s", kt.Rid)
 			if err = m.updateGenerateFailed(kt, recordItem.GenerateId); err != nil {
@@ -344,12 +346,20 @@ func (m *Matcher) UpdateApplyOrderStatus(kt *kit.Kit, order *types.ApplyOrder) e
 	pendingCnt, status, stage := m.calcApplyOrderStatus(order.ResourceType, matchedCnt, order.TotalNum,
 		hasGenRecordMatching)
 
-	if isSuspend && suspendCnt+matchedCnt >= int(order.TotalNum) {
-		status = types.ApplyStatusTerminate
-		stage = types.TicketStageSuspend
-		if err = m.updateSuspendSteps(kt, order); err != nil {
-			logs.Errorf("failed to update suspend steps, suborderId: %s, err: %v, rid: %s",
-				order.SubOrderId, err, kt.Rid)
+	if isSuspend {
+		// 已交付满额的子单终态本就应为 DONE，不能被挂起记录覆盖成 TERMINATE/SUSPEND；
+		// 但挂起记录意味着云梯可能存在未纳管的多余机器，跳过覆盖后单据即关闭，必须告警而非静默跳过
+		if matchedCnt >= int(order.TotalNum) {
+			logs.Warnf("skip suspend override for delivered enough suborder, check YunTi for extra machines, "+
+				"suborderId: %s, suspendGenerateIDs: %v, matchedCnt: %d, totalNum: %d, rid: %s",
+				order.SubOrderId, suspendGenIDs, matchedCnt, order.TotalNum, kt.Rid)
+		} else if suspendCnt+matchedCnt >= int(order.TotalNum) {
+			status = types.ApplyStatusTerminate
+			stage = types.TicketStageSuspend
+			if err = m.updateSuspendSteps(kt, order); err != nil {
+				logs.Errorf("failed to update suspend steps, suborderId: %s, err: %v, rid: %s",
+					order.SubOrderId, err, kt.Rid)
+			}
 		}
 	}
 

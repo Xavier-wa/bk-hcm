@@ -100,7 +100,7 @@ func (g *Generator) UpgradeCVM(kt *kit.Kit, order *types.ApplyOrder) error {
 		logs.Infof("apply upgrade order %s has been scheduled %d cvm (existing: %d, generatingCount: %d), rid: %s",
 			order.SubOrderId, scheduledCount, len(existDevices), generatingCount, kt.Rid)
 		// check if need retry match task
-		if err = g.retryMatchDevice(existDevices); err != nil {
+		if err = g.retryMatchDevice(kt, order, existDevices, generatingCount); err != nil {
 			logs.Warnf("failed to retry match device, subOrderID: %s, err: %v, rid: %s", order.SubOrderId, err,
 				kt.Rid)
 		}
