@@ -349,12 +349,16 @@ func (c *cvm) createFlowTask(kt *kit.Kit, flowTasks []ts.CustomFlowTask, taskTyp
 			},
 		}},
 	}
-	_, err = c.client.TaskServer().CreateTemplateFlow(kt, flowWatchReq)
+	watchResult, err := c.client.TaskServer().CreateTemplateFlow(kt, flowWatchReq)
 	if err != nil {
 		logs.Errorf("call taskserver to create res flow status watch task failed, err: %v, flowID: %s, rid: %s",
 			err, flowID, kt.Rid)
 		return "", err
 	}
+
+	logs.Infof("create res flow status watch flow success, watchFlowID: %s, mainFlowID: %s, resID: %s, "+
+		"resType: %s, taskType: %s, rid: %s", watchResult.ID, flowID, uniqueID,
+		enumor.CvmCloudResType, taskType, kt.Rid)
 
 	return flowID, nil
 }
