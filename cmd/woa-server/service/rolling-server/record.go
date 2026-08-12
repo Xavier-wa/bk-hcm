@@ -39,6 +39,7 @@ import (
 	"hcm/pkg/runtime/filter"
 	cvt "hcm/pkg/tools/converter"
 	"hcm/pkg/tools/hooks/handler"
+	"hcm/pkg/tools/slice"
 )
 
 // ListAppliedRecords list applied records.
@@ -290,8 +291,9 @@ func (s *service) updateAppliedRecordExemptedCore(cts *rest.Contexts) (any, erro
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
+	ids := slice.Unique(req.IDs)
 	listReq := rsproto.RollingAppliedRecordListReq{
-		Filter: tools.ContainersExpression("id", req.IDs),
+		Filter: tools.ContainersExpression("id", ids),
 		Page:   core.NewDefaultBasePage(),
 	}
 	listResult, err := s.client.DataService().Global.RollingServer.ListAppliedRecord(cts.Kit, &listReq)
@@ -299,7 +301,8 @@ func (s *service) updateAppliedRecordExemptedCore(cts *rest.Contexts) (any, erro
 		logs.Errorf("failed to list applied records, err: %v, req: %+v, rid: %s", err, listReq, cts.Kit.Rid)
 		return nil, err
 	}
-	if listResult.Count != uint64(len(req.IDs)) {
+	// Non-count list returns Count=0; compare Details length for existence check.
+	if len(listResult.Details) != len(ids) {
 		return nil, errf.NewFromErr(errf.InvalidParameter, errors.New("some applied records not found"))
 	}
 
@@ -309,8 +312,8 @@ func (s *service) updateAppliedRecordExemptedCore(cts *rest.Contexts) (any, erro
 	}
 
 	// add audit
-	updateLogs := make([]protoaudit.CloudResourceUpdateInfo, 0, len(req.IDs))
-	for _, id := range req.IDs {
+	updateLogs := make([]protoaudit.CloudResourceUpdateInfo, 0, len(ids))
+	for _, id := range ids {
 		updateFields := map[string]interface{}{
 			"exempted_returned_core": req.ExemptedReturnedCore,
 		}
@@ -327,8 +330,8 @@ func (s *service) updateAppliedRecordExemptedCore(cts *rest.Contexts) (any, erro
 		return nil, err
 	}
 
-	appliedRecords := make([]rsproto.RollingAppliedRecordUpdateReq, 0)
-	for _, id := range req.IDs {
+	appliedRecords := make([]rsproto.RollingAppliedRecordUpdateReq, 0, len(ids))
+	for _, id := range ids {
 		appliedRecords = append(appliedRecords, rsproto.RollingAppliedRecordUpdateReq{
 			ID:                   id,
 			ExemptedReturnedCore: cvt.ValToPtr(req.ExemptedReturnedCore),
@@ -391,24 +394,21 @@ func (s *service) validateRecordConstraints(cts *rest.Contexts, listResult *rspr
 		// 已退还核心数
 		var returnedCore int64
 		for _, returned := range returnedByAppliedID[record.ID] {
-			if returned.MatchAppliedCore != nil {
-				returnedCore += *returned.MatchAppliedCore
-			}
+			returnedCore += cvt.PtrToVal(returned.MatchAppliedCore)
 		}
 
+		deliveredCore := cvt.PtrToVal(record.DeliveredCore)
 		// 执行率<100%:已退还<已交付
-		if *record.DeliveredCore > 0 && returnedCore >= *record.DeliveredCore {
+		if deliveredCore > 0 && returnedCore >= deliveredCore {
 			return errf.NewFromErr(errf.InvalidParameter, errors.New("applied record execution rate must be"+
 				" less than 100%"))
 		}
 
 		// 减免核心数 <= 已交付-已退还
-		if *record.DeliveredCore >= 0 {
-			unreturnedCore := *record.DeliveredCore - returnedCore
-			if req.ExemptedReturnedCore > unreturnedCore {
-				return errf.Newf(errf.InvalidParameter, "exempted_returned_core must be <= delivered_core"+
-					" - returned_core")
-			}
+		unreturnedCore := max(deliveredCore-returnedCore, 0)
+		if req.ExemptedReturnedCore > unreturnedCore {
+			return errf.Newf(errf.InvalidParameter, "exempted_returned_core must be <= delivered_core"+
+				" - returned_core")
 		}
 	}
 	return nil

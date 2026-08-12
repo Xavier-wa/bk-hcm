@@ -379,7 +379,16 @@ func (l *logics) calculateBill(kt *kit.Kit, req *rollingserver.RollingBillSyncRe
 		return errors.New("search biz belonging, but resp is empty or len resp != 1")
 	}
 	bizBelong := converter.PtrToVal(resp)[0]
-	notReturnedCore := deliveredCore - returnedCore - exemptedReturnedCore
+	usedCore := returnedCore + exemptedReturnedCore
+	var notReturnedCore uint64
+	if deliveredCore >= usedCore {
+		notReturnedCore = deliveredCore - usedCore
+	} else {
+		logs.Warnf("not returned core underflow, delivered: %d, returned: %d, exempted: %d, bizID: %d, "+
+			"year: %d, month: %d, day: %d, rid: %s", deliveredCore, returnedCore, exemptedReturnedCore,
+			req.BkBizID, req.Year, req.Month, req.Day, kt.Rid)
+		notReturnedCore = 0
+	}
 
 	bill := rsproto.RollingBillCreateReq{
 		BkBizID:              req.BkBizID,
