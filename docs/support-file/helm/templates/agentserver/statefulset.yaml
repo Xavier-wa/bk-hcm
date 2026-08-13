@@ -117,7 +117,7 @@ spec:
     - metadata:
         name: data
         labels:
-          {{- include "common.labels.standard" . | nindent 10 }}
+          {{- include "common.labels.matchLabels" . | nindent 10 }}
           component: agentserver
       spec:
         accessModes:

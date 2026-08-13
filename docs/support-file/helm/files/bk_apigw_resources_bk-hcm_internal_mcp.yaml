@@ -875,7 +875,7 @@ paths:
   /api/v1/task/get_biz_recycle_order:
     post:
       operationId: get_biz_recycle_order
-      description: 查询业务的资源回收历史单据信息
+      description: 查询业务的资源回收历史单据信息（已废弃，请使用 get_recycle_biz_order）
       tags:
       - SCR
       - Recycle
@@ -887,8 +887,7 @@ paths:
                 type: object
                 properties:
                   code:
-                    type: integer
-                    example: 0
+                    type: number
                     description: 错误编码。0表示success，>0表示失败错误
                   data:
                     type: object
@@ -900,78 +899,55 @@ paths:
                           properties:
                             stage:
                               type: string
-                              example: DONE
                             remark:
                               type: string
-                              example: ''
                             status:
                               type: string
-                              example: DONE
                             handler:
                               type: string
-                              example: AUTO
                             message:
                               type: string
-                              example: ''
                             order_id:
-                              type: integer
-                              example: 1
+                              type: number
                             bk_biz_id:
-                              type: integer
-                              example: 2
+                              type: number
                             create_at:
                               type: string
-                              example: '2023-03-15T09:39:56.763Z'
                             pool_type:
-                              type: integer
-                              example: 0
+                              type: number
                             total_num:
-                              type: integer
-                              example: 1
+                              type: number
                             update_at:
                               type: string
-                              example: '2023-03-15T09:40:41.931Z'
                             failed_num:
-                              type: integer
-                              example: 0
+                              type: number
                             bk_biz_name:
                               type: string
-                              example: xx
                             bk_username:
                               type: string
-                              example: xx
                             pending_num:
-                              type: integer
-                              example: 0
+                              type: number
                             return_plan:
                               type: string
-                              example: IMMEDIATE
                             suborder_id:
                               type: string
-                              example: 1-1
                             success_num:
-                              type: integer
-                              example: 1
+                              type: number
                             recycle_type:
                               type: string
-                              example: 常规项目
                             resource_type:
                               type: string
-                              example: IDCPM
                             cost_concerned:
                               type: boolean
-                              example: true
                       count:
-                        type: integer
-                        example: 1
+                        type: number
                   result:
                     type: boolean
-                    example: true
                     description: 请求成功与否。true:请求成功；false请求失败
                   message:
                     type: string
-                    example: success
                     description: 请求失败返回的错误信息
+                description: 成功响应
           description: 成功响应
       requestBody:
         content:
@@ -979,28 +955,27 @@ paths:
             schema:
               type: object
               required:
-              - bk_biz_id
               - page
+              - bk_biz_id
               properties:
                 end:
                   type: string
-                  example: '2022-01-07'
+                  default: ''
                   description: 单据创建时间过滤条件终点日期，格式如"2022-05-01"
                 page:
                   type: object
-                  example:
-                    limit: 10
-                    start: 0
+                  default: ''
                   description: 分页信息
                 start:
                   type: string
-                  example: '2022-01-01'
+                  default: ''
                   description: 单据创建时间过滤条件起点日期，格式如"2022-05-01"
                 bk_biz_id:
-                  type: integer
-                  example: 2
+                  type: number
+                  default: ''
                   description: 业务ID
         required: true
+        description: ''
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: true
@@ -1023,7 +998,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
-        descriptionEn: None
+        descriptionEn:
   /api/v1/task/get_biz_apply_order:
     post:
       operationId: get_resource_biz_apply_order
@@ -3059,22 +3034,26 @@ paths:
               properties:
                 remark:
                   type: string
+                  default: ''
                   description: 备注
                 follower:
                   type: string
+                  default: ''
                   description: 关注人，如果有多人，以","分隔，如："name1,name2"
                 suborders:
                   type: array
                   items:
                     type: object
+                    default: ''
                     required:
                     - replicas
                     - resource_type
                     properties:
                       spec:
                         type: object
+                        default: ''
                         required:
-                        - zone
+                        - zones
                         - region
                         - image_id
                         - system_disk
@@ -3083,26 +3062,29 @@ paths:
                         properties:
                           vpc:
                             type: string
+                            default: ''
                             description: 私有网络，默认为空
-                          zone:
-                            type: string
-                            description: 可用区（跟zones参数，需要传其中一个，该参数即将废弃）
                           zones:
                             type: array
+                            default: ''
                             description: 多可用区(选“全部”时传all)
                           region:
                             type: string
+                            default: ''
                             description: 地域
                           subnet:
                             type: string
+                            default: ''
                             description: 私有子网，默认为空
                           image_id:
                             type: string
+                            default: ''
                             description: 镜像ID
                           data_disk:
                             type: array
                             items:
                               type: object
+                              default: ''
                               required:
                               - disk_num
                               - disk_size
@@ -3110,28 +3092,37 @@ paths:
                               properties:
                                 disk_num:
                                   type: number
+                                  default: ''
                                   description: 磁盘数量，所有磁盘数量之和不能超过20块
                                 disk_size:
                                   type: number
+                                  default: ''
                                   description: 磁盘大小，单位G
                                 disk_type:
                                   type: string
+                                  default: ''
                                   description: '磁盘类型，"CLOUD_SSD": SSD云硬盘, "CLOUD_PREMIUM": 高性能云盘'
+                            default: ''
                             description: 数据盘，支持多块硬盘，磁盘大小：20G-32000G且为10的倍数，数据盘数量总和不能超过20块
                           model_type:
                             type: string
+                            default: ''
                             description: 配置类型。当resource_mode为1时必填
                           res_assign:
                             type: number
+                            default: ''
                             description: 资源分配方式(1表示“有资源区域优先”、2表示“分Campus生产”)
                           charge_type:
                             type: string
+                            default: ''
                             description: 计费模式 (PREPAID:包年包月，POSTPAID_BY_HOUR:按量计费)，默认:包年包月
                           device_type:
                             type: string
+                            default: ''
                             description: 机型。当resource_mode为0时必填
                           system_disk:
                             type: object
+                            default: ''
                             required:
                             - disk_num
                             - disk_size
@@ -3139,60 +3130,79 @@ paths:
                             properties:
                               disk_num:
                                 type: number
+                                default: ''
                                 description: 磁盘数量，所有磁盘数量之和不能超过20块
                               disk_size:
                                 type: number
+                                default: ''
                                 description: 磁盘大小，单位G
                               disk_type:
                                 type: string
+                                default: ''
                                 description: '磁盘类型，"CLOUD_SSD": SSD云硬盘, "CLOUD_PREMIUM": 高性能云盘'
                             description: 系统盘，磁盘大小：50G-1000G且为50的倍数（IT类型默认本地盘、50G；其他类型默认高性能云盘、100G）
                           device_group:
                             type: string
+                            default: ''
                             description: 机型族。当resource_mode为1时必填
                           network_type:
                             type: string
+                            default: ''
                             description: '网络类型。"ONETHOUSAND": 千兆, "TENTHOUSAND": 万兆'
                           charge_months:
                             type: number
+                            default: ''
                             description: 计费时长，单位：月(计费模式为包年包月时，该字段必传)
                           resource_mode:
                             type: number
+                            default: ''
                             description: '1: 按机型族申领, 0: 按机型申领'
                           cpu_thread_switch:
                             type: number
+                            default: ''
                             description: CPU超线程(默认不传，1:关闭 2:开启)
                           inherit_instance_id:
                             type: string
+                            default: ''
                             description: 被继承云主机实例ID（同一批次只支持一台），如果是滚服项目，该字段必传
                         description: 资源需求声明
                       remark:
                         type: string
+                        default: ''
                         description: 备注
                       replicas:
                         type: number
+                        default: ''
                         description: 需求资源数量
                       resource_type:
                         type: string
+                        default: ''
                         description: '需求资源类型。"QCLOUDCVM": 腾讯云虚拟机, "IDCPM": IDC物理机, "QCLOUDDVM": Qcloud富容器, "IDCDVM": IDC富容器。MCP下仅支持"QCLOUDCVM"类型'
                       enable_disk_check:
                         type: string
+                        default: ''
                         description: 交付前是否执行本地盘压测，默认值为false
                       anti_affinity_level:
                         type: string
+                        default: ''
                         description: '反亲和策略，默认值为"ANTI_NONE"。 "ANTI_NONE": 无要求, "ANTI_CAMPUS": 分Campus, "ANTI_MODULE": 分Module, "ANTI_RACK": 分机架'
+                  default: ''
                   description: 资源申请子需求单信息
                 bk_username:
                   type: string
+                  default: ''
                   description: 资源申请提单人
                 expect_time:
                   type: string
+                  default: ''
                   description: 期望交付时间
                 require_type:
                   type: number
+                  default: ''
                   description: '需求类型。1: 常规项目; 2: 春节保障; 3: 机房裁撤; 6: 滚服项目; 7: 小额绿通'
                 enable_notice:
                   type: boolean
+                  default: ''
                   description: 是否通知用户单据完成，默认为false
         required: true
         description: ''
@@ -3430,62 +3440,97 @@ paths:
                 type: object
                 properties:
                   code:
-                    type: integer
-                    description: 状态码
+                    type: number
                   data:
                     type: object
-                    description: 响应数据
-                    additionalProperties: true
+                    properties:
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: load_balancer的HCM ID
+                            isp:
+                              type: string
+                              description: 运营商类型（枚举值：BGP、CMCC、CUCC、CTCC）
+                            memo:
+                              type: string
+                            name:
+                              type: string
+                            zones:
+                              type: array
+                              description: 主可用区
+                            domain:
+                              type: string
+                            region:
+                              type: string
+                            status:
+                              type: string
+                            vendor:
+                              type: string
+                              description: 云厂商
+                            vpc_id:
+                              type: string
+                              description: VPC的HCM ID
+                            creator:
+                              type: string
+                            lb_type:
+                              type: string
+                              description: 负载均衡网络类型
+                            reviser:
+                              type: string
+                            cloud_id:
+                              type: string
+                              description: load_balancer的云上 ID
+                            bk_biz_id:
+                              type: number
+                              description: 业务ID，-1表示没有分配到业务
+                            sync_time:
+                              type: string
+                              description: 数据同步时间，标准格式：2006-01-02T15:04:05Z
+                            account_id:
+                              type: string
+                              description: 云账号的HCM ID
+                            band_width:
+                              type: number
+                              description: 带宽，单位Mbps
+                            created_at:
+                              type: string
+                            ip_version:
+                              type: string
+                              description: 负载均衡网络版本
+                            updated_at:
+                              type: string
+                            backup_zones:
+                              type: array
+                            cloud_vpc_id:
+                              type: string
+                              description: VPC的云上 ID
+                            cloud_status_time:
+                              type: string
+                            cloud_created_time:
+                              type: string
+                            cloud_expired_time:
+                              type: string
+                            public_ipv4_addresses:
+                              type: array
+                            public_ipv6_addresses:
+                              type: array
+                            private_ipv4_addresses:
+                              type: array
+                            private_ipv6_addresses:
+                              type: array
                   message:
                     type: string
-                    description: 请求信息
-              example:
-                code: 0
-                data:
-                  details:
-                  - id: '00000001'
-                    isp: BGP
-                    memo: lb test
-                    name: lb-test
-                    zones:
-                    - ap-hk-1
-                    domain: ''
-                    region: ap-hk
-                    status: init
-                    vendor: tcloud
-                    vpc_id: '00000002'
-                    creator: Jim
-                    lb_type: OPEN
-                    reviser: Jim
-                    cloud_id: lb-123
-                    bk_biz_id: -1
-                    sync_time: '2025-06-30T09:03:06Z'
-                    account_id: '0000001'
-                    band_width: 10
-                    created_at: '2023-02-12T14:47:39Z'
-                    ip_version: ipv4
-                    updated_at: '2023-02-12T14:55:40Z'
-                    backup_zones:
-                    - ap-hk-2
-                    - ap-hk-3
-                    cloud_vpc_id: vpc-123
-                    cloud_status_time: '2023-02-12T14:47:39Z'
-                    cloud_created_time: '2023-02-12T14:47:39Z'
-                    cloud_expired_time: '2023-02-12T14:47:39Z'
-                    public_ipv4_addresses:
-                    - 127.0.0.2
-                    public_ipv6_addresses: []
-                    private_ipv4_addresses:
-                    - 127.0.0.1
-                    private_ipv6_addresses: []
-                message: ''
+                description: 成功
           description: 成功
       parameters:
       - in: path
         name: bk_biz_id
         schema:
-          type: integer
-        example: 100
+          type: number
         required: true
         description: 业务ID
       requestBody:
@@ -3494,118 +3539,74 @@ paths:
             schema:
               type: object
               required:
-              - bk_biz_id
               - page
+              - filter
               properties:
                 page:
                   type: object
-                  example:
-                    sort: created_at
-                    count: false
-                    limit: 10
-                    order: DESC
-                    start: 0
+                  default: ''
                   required:
                   - count
                   properties:
                     sort:
                       type: string
-                      example: created_at
+                      default: ''
                       description: 排序字段，返回数据将按该字段进行排序
                     count:
                       type: boolean
-                      example: false
+                      default: ''
                       description: 是否返回总记录条数。如果为true，查询结果返回总记录条数count，但查询结果详情数据details为空数组，此时start和limit参数将无效，且必需设置为0。如果为false，则根据start和limit参数，返回查询结果详情数据，但总记录条数count为0
                     limit:
-                      type: integer
-                      format: uint32
-                      example: 10
+                      type: number
+                      default: ''
                       description: 每页限制条数，最大500，不能为0
                     order:
-                      enum:
-                      - ASC
-                      - DESC
                       type: string
-                      example: DESC
+                      default: ''
                       description: 排序顺序
                     start:
-                      type: integer
-                      format: uint32
-                      example: 0
+                      type: number
+                      default: ''
                       description: 记录开始位置，start起始值为0
                   description: 分页设置
                 filter:
                   type: object
-                  example:
-                    op: and
-                    rules:
-                    - op: eq
-                      field: name
-                      value: test
-                    - op: in
-                      field: id
-                      value:
-                      - sg-001
-                      - sg-002
+                  default: ''
                   required:
                   - op
                   - rules
                   properties:
                     op:
-                      enum:
-                      - and
-                      - or
                       type: string
-                      example: and
+                      default: ''
                       description: 操作符。如果是and，则表示多个rule之间是且的关系；如果是or，则表示多个rule之间是或的关系
                     rules:
                       type: array
                       items:
                         type: object
+                        default: ''
                         required:
-                        - field
                         - op
+                        - field
                         - value
                         properties:
                           op:
-                            enum:
-                            - eq
-                            - neq
-                            - gt
-                            - gte
-                            - lt
-                            - lte
-                            - in
-                            - nin
-                            - cs
-                            - cis
                             type: string
-                            example: eq
-                            description: 操作符
+                            default: ''
+                            description: 操作符（枚举值：eq（等于，不能为空字符串）、neq（不等于，不能为空字符串）、gt、gte、le、lte、in（在给定的数组范围中）、nin（不在给定的数组范围中）、cs（模糊查询，区分大小写）、cis（模糊查询，不区分大小写））
                           field:
                             type: string
-                            example: name
-                            description: 查询条件Field名称
+                            default: ''
+                            description: 查询条件Field名称。可选条件：id(负载均衡的HCM ID)、cloud_id(负载均衡的云上ID)、name(负载均衡名)、vendor(云厂商（枚举值：tcloud、aws、azure、gcp、huawei）)、account_id(云账号的HCM ID)、region(地域)、main_zones(主可用区)、backup_zones(备可用区)、cloud_vpc_id(vpc的云上ID)、vpc_id(vpc的HCM ID)、network_type(网络类型)、band_width(带宽，单位Mbps)、isp(运营商类型（枚举值：BGP、CMCC、CUCC、CTCC）)、status(状态)、domain(域名)、cloud_created_time(lb在云上创建时间，标准格式：2006-01-02T15:04:05Z)、cloud_status_time(lb状态变更时间)、cloud_expired_time(lb过期时间)、sync_time(数据同步时间)、creator(创建者)、reviser(修改者)、created_at(创建时间，标准格式：2006-01-02T15:04:05Z)、updated_at(修改时间)
                           value:
-                            oneOf:
-                            - type: string
-                            - type: number
-                            - type: boolean
-                            - type: array
-                              items:
-                                oneOf:
-                                - type: string
-                                - type: number
-                                - type: boolean
-                            example: test
+                            type: string
+                            default: ''
                             description: 查询条件Value值，类型根据field和op的不同而不同
-                      maxItems: 5
+                      default: ''
                       description: 过滤规则，最多设置5个rules。如果rules为空数组，op（操作符）将没有作用，代表查询全部数据
                   description: 查询过滤条件
-                bk_biz_id:
-                  type: string
-                  description: 业务ID
         required: true
+        description: ''
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: true
@@ -3622,8 +3623,7 @@ paths:
           userVerifiedRequired: false
           appVerifiedRequired: true
           resourcePermissionRequired: true
-        descriptionEn: None
-        noneSchema: true
+        descriptionEn:
   /api/v1/cloud/bizs/{bk_biz_id}/listeners/with/targets/list:
     post:
       operationId: list_biz_listeners_with_targets
@@ -3648,128 +3648,6 @@ paths:
           resourcePermissionRequired: true
         descriptionEn:
         noneSchema: true
-  /api/v1/woa/config/findmany/config/cvm/device/detail:
-    post:
-      operationId: list_config_cvm_device_detail
-      description: 获取可用的CVM机型
-      tags:
-      - SCR
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  code:
-                    type: integer
-                    example: 0
-                    description: 错误编码。0表示success，>0表示失败错误
-                  data:
-                    type: object
-                    properties:
-                      info:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            cpu:
-                              type: integer
-                              example: 4
-                            mem:
-                              type: integer
-                              example: 8
-                            disk:
-                              type: integer
-                              example: 100
-                            zone:
-                              type: string
-                              example: ap-shanghai-2
-                            label:
-                              type: object
-                              properties:
-                                device_group:
-                                  type: string
-                                  example: 标准型
-                            region:
-                              type: string
-                              example: ap-shanghai
-                            device_type:
-                              type: string
-                              example: S3ne.LARGE8
-                            require_type:
-                              type: integer
-                              example: 1
-                            capacity_flag:
-                              type: integer
-                              example: 2
-                      count:
-                        type: integer
-                        example: 1
-                  result:
-                    type: boolean
-                    example: true
-                    description: 请求成功与否。true:请求成功；false请求失败
-                  message:
-                    type: string
-                    example: success
-                    description: 请求失败返回的错误信息
-          description: 成功响应
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - filter
-              - page
-              properties:
-                page:
-                  type: object
-                  example:
-                    sort: region
-                    limit: 100
-                    start: 0
-                  description: 分页设置
-                filter:
-                  type: object
-                  example:
-                    rules:
-                    - field: require_type
-                      value: 1
-                      operator: equal
-                    - field: region
-                      value: ap-shanghai
-                      operator: equal
-                    - field: zone
-                      value: ap-shanghai-2
-                      operator: equal
-                    - field: device_type
-                      value: S3ne.LARGE8
-                      operator: equal
-                    - field: label.device_group
-                      value: 标准型
-                      operator: equal
-                    condition: AND
-                  description: 查询过滤条件
-        required: true
-      x-bk-apigateway-resource:
-        isPublic: true
-        allowApplyPermission: true
-        matchSubpath: false
-        enableWebsocket: false
-        backend:
-          name: default
-          method: post
-          path: /api/v1/woa/config/findmany/config/cvm/device/detail
-          matchSubpath: false
-          timeout: 0
-        pluginConfigs: []
-        authConfig:
-          userVerifiedRequired: false
-          appVerifiedRequired: true
-          resourcePermissionRequired: true
-        descriptionEn: None
   /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/load_balancers/operations/{operation_type}/submit:
     post:
       operationId: operate_biz_load_balancer_submit
@@ -3919,7 +3797,7 @@ paths:
       tags:
       - Account
       x-bk-apigateway-resource:
-        isPublic: false
+        isPublic: true
         allowApplyPermission: false
         matchSubpath: false
         enableWebsocket: false
@@ -3940,7 +3818,8 @@ paths:
           userVerifiedRequired: false
           appVerifiedRequired: true
           resourcePermissionRequired: true
-        descriptionEn: None
+        descriptionEn:
+        noneSchema: true
   /api/v1/account/bills/exchange_rates/list:
     post:
       operationId: list_exchange_rate
@@ -8499,7 +8378,7 @@ paths:
   /api/v1/cloud/bizs/{bk_biz_id}/security_groups/list:
     post:
       operationId: list_security_group
-      description: 查询安全组列表
+      description: 查询业务下的安全组列表
       tags:
       - SecurityGroup
       responses:
@@ -8525,6 +8404,7 @@ paths:
                           properties:
                             id:
                               type: string
+                              description: 安全组的HCM ID
                             memo:
                               type: string
                             name:
@@ -8533,20 +8413,26 @@ paths:
                               type: string
                             vendor:
                               type: string
+                              description: 云厂商
                             creator:
                               type: string
                             manager:
                               type: string
+                              description: 负责人
                             reviser:
                               type: string
                             cloud_id:
                               type: string
+                              description: 安全组的云上 ID
                             bk_biz_id:
                               type: number
+                              description: 业务ID，-1表示没有分配到业务
                             mgmt_type:
                               type: string
+                              description: 管理类型，枚举值：biz（业务管理）、platform（平台管理）。该字段可能为空，表示未确定管理类型
                             account_id:
                               type: string
+                              description: 云账号的HCM ID
                             created_at:
                               type: string
                             updated_at:
@@ -8555,6 +8441,7 @@ paths:
                               type: string
                             mgmt_biz_id:
                               type: number
+                              description: 管理业务ID
                             usage_biz_ids:
                               type: array
                               items:
@@ -8562,6 +8449,7 @@ paths:
                                 properties:
                                   usage_biz_id:
                                     type: number
+                              description: 使用业务ID列表，-1代表全部业务可使用
                             cloud_update_time:
                               type: string
                             cloud_created_time:
@@ -8576,7 +8464,7 @@ paths:
       - in: path
         name: bk_biz_id
         schema:
-          type: integer
+          type: number
         required: true
         description: 业务ID
       requestBody:
@@ -8643,7 +8531,7 @@ paths:
                           field:
                             type: string
                             default: ''
-                            description: 查询条件Field名称。可选条件：id(安全组ID)、vendor(云厂商)、cloud_id(安全组云ID)、bk_biz_id(业务ID,-1代表未分配业务)、region(地域)、name(安全组名称)、memo(备注)、account_id(账号ID)、mgmt_type(管理类型，枚举值：biz（业务管理）、platform（平台管理）)、mgmt_biz_id(管理业务ID)、manager(负责人)、bak_manager(备份负责人)、usage_biz_id(使用业务ID列表，-1代表全部业务可使用)、creator(创建者)、reviser(最后一次修改的修改者)、created_at(创建时间，标准格式：2006-01-02T15:04:05Z)、updated_at(最后一次修改时间，标准格式：2006-01-02T15:04:05Z)
+                            description: 查询条件Field名称。可选条件：id(安全组的HCM ID)、vendor(云厂商)、cloud_id(安全组的云上ID)、bk_biz_id(业务ID,-1代表未分配业务)、region(地域)、name(安全组名称)、account_id(云账号的HCM ID)、mgmt_type(管理类型，枚举值：biz（业务管理）、platform（平台管理）)、mgmt_biz_id(管理业务ID)、manager(负责人)、bak_manager(备份负责人)、usage_biz_id(使用业务ID列表，-1代表全部业务可使用)、creator(创建者)、reviser(最后一次修改的修改者)、created_at(创建时间，标准格式：2006-01-02T15:04:05Z)、updated_at(最后一次修改时间，标准格式：2006-01-02T15:04:05Z)
                           value:
                             type: string
                             default: ''
@@ -9346,7 +9234,7 @@ paths:
   /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/security_groups/{security_group_id}/rules/list:
     post:
       operationId: list_security_group_rule
-      description: 安全组规则列表
+      description: 查询业务下安全组的规则列表
       tags:
       - SecurityGroup
       responses:
@@ -9357,192 +9245,173 @@ paths:
                 type: object
                 properties:
                   code:
-                    type: integer
-                    description: 状态码
+                    type: number
                   data:
                     type: object
-                    description: 响应数据
-                    additionalProperties: true
+                    properties:
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                              description: 安全组规则的HCM ID
+                            memo:
+                              type: string
+                            port:
+                              type: string
+                              description: 端口(all, 离散port, range)。 说明：如果Protocol设置为ALL，则Port也需要设置为all
+                            type:
+                              type: string
+                              description: 规则类型。（枚举值：egress、ingress）
+                            action:
+                              type: string
+                              description: ACCEPT 或 DROP
+                            creator:
+                              type: string
+                            reviser:
+                              type: string
+                            version:
+                              type: string
+                              description: 安全组规则当前版本。用户每次更新安全规则版本会自动加1
+                            protocol:
+                              type: string
+                              description: '协议, 取值: TCP,UDP,ICMP,ICMPv6,ALL'
+                            ipv4_cidr:
+                              type: string
+                              description: IPv4网段或IP(互斥)
+                            ipv6_cidr:
+                              type: string
+                              description: IPv4网段或IPv6(互斥)
+                            account_id:
+                              type: string
+                              description: 云账号的HCM ID
+                            created_at:
+                              type: string
+                            updated_at:
+                              type: string
+                            cloud_address_id:
+                              type: string
+                              description: IP地址的云上ID，例如：ipm-2uw6ujo6
+                            cloud_service_id:
+                              type: string
+                              description: 协议端口的云上ID，例如：ppm-f5n1f8da
+                            security_group_id:
+                              type: string
+                              description: 规则所属安全组的HCM ID
+                            cloud_policy_index:
+                              type: number
+                              description: 安全组规则云索引号，值会随着安全组规则的变更动态变化
+                            cloud_address_group_id:
+                              type: string
+                              description: IP地址组的云上ID，例如：ipm-2uw6ujo6
+                            cloud_service_group_id:
+                              type: string
+                              description: 协议端口组的云上ID，例如：ppm-f5n1f8da
+                            cloud_security_group_id:
+                              type: string
+                              description: 规则所属安全组的云上ID
+                            cloud_target_security_group_id:
+                              type: string
+                              description: 下一跳安全组实例的云上ID，例如：sg-ohuuioma
                   message:
                     type: string
-                    description: 请求信息
-              example:
-                code: 0
-                data:
-                  details:
-                  - id: 1
-                    etag: W/"ab62e9a371b494c"
-                    memo: security_group_rule
-                    name: HTTP
-                    type: egress
-                    access: Allow
-                    creator: tom
-                    reviser: tom
-                    cloud_id: /subscriptions/eaa/resourceGroups/xxx/providers/Microsoft.Network/networkSecurityGroups/nsg/securityRules/HTTP
-                    priority: 100
-                    protocol: TCP
-                    account_id: '1'
-                    created_at: '2019-07-29 11:57:20'
-                    updated_at: '2019-07-29 11:57:20'
-                    security_group_id: '1'
-                    source_port_range: '*'
-                    provisioning_state: Succeeded
-                    source_port_ranges: []
-                    source_address_prefix: '*'
-                    destination_port_range: '80'
-                    cloud_security_group_id: sg-xxxxxx
-                    destination_port_ranges: []
-                    source_address_prefixes: []
-                    destination_address_prefix: '*'
-                    destination_address_prefixes: []
-                    cloud_source_app_security_group_ids: []
-                    cloud_destination_app_security_group_ids: []
-                message: ok
+                description: 成功
           description: 成功
       parameters:
       - in: path
         name: bk_biz_id
         schema:
-          type: integer
-        example: 100
+          type: number
         required: true
         description: 业务ID
       - in: path
         name: vendor
         schema:
           type: string
-        example: tcloud
         required: true
-        description: 云厂商（枚举值：tcloud、aws、azure、gcp、huawei）
+        description: 云厂商（枚举值：tcloud、aws、azure、gcp、huawei、tcloud-ziyan）
       - in: path
         name: security_group_id
         schema:
           type: string
-        example: sg-xxxxxx
         required: true
-        description: 安全组ID
+        description: 安全组的HCM ID
       requestBody:
         content:
           application/json:
             schema:
               type: object
               required:
-              - bk_biz_id
-              - security_group_id
               - page
+              - filter
               properties:
                 page:
                   type: object
-                  example:
-                    sort: created_at
-                    count: false
-                    limit: 10
-                    order: DESC
-                    start: 0
+                  default: ''
                   required:
                   - count
                   properties:
                     sort:
                       type: string
-                      example: created_at
+                      default: ''
                       description: 排序字段，返回数据将按该字段进行排序
                     count:
                       type: boolean
-                      example: false
+                      default: ''
                       description: 是否返回总记录条数。如果为true，查询结果返回总记录条数count，但查询结果详情数据details为空数组，此时start和limit参数将无效，且必需设置为0。如果为false，则根据start和limit参数，返回查询结果详情数据，但总记录条数count为0
                     limit:
-                      type: integer
-                      format: uint32
-                      example: 10
+                      type: number
+                      default: ''
                       description: 每页限制条数，最大500，不能为0
                     order:
-                      enum:
-                      - ASC
-                      - DESC
                       type: string
-                      example: DESC
+                      default: ''
                       description: 排序顺序
                     start:
-                      type: integer
-                      format: uint32
-                      example: 0
+                      type: number
+                      default: ''
                       description: 记录开始位置，start起始值为0
                   description: 分页设置
                 filter:
                   type: object
-                  example:
-                    op: and
-                    rules:
-                    - op: eq
-                      field: name
-                      value: test
-                    - op: in
-                      field: id
-                      value:
-                      - sg-001
-                      - sg-002
+                  default: ''
                   required:
                   - op
                   - rules
                   properties:
                     op:
-                      enum:
-                      - and
-                      - or
                       type: string
-                      example: and
+                      default: ''
                       description: 操作符。如果是and，则表示多个rule之间是且的关系；如果是or，则表示多个rule之间是或的关系
                     rules:
                       type: array
                       items:
                         type: object
+                        default: ''
                         required:
-                        - field
                         - op
+                        - field
                         - value
                         properties:
                           op:
-                            enum:
-                            - eq
-                            - neq
-                            - gt
-                            - gte
-                            - lt
-                            - lte
-                            - in
-                            - nin
-                            - cs
-                            - cis
                             type: string
-                            example: eq
-                            description: 操作符
+                            default: ''
+                            description: 操作符（枚举值：eq（等于，不能为空字符串）、neq（不等于，不能为空字符串）、gt、gte、le、lte、in（在给定的数组范围中）、nin（不在给定的数组范围中）、cs（模糊查询，区分大小写）、cis（模糊查询，不区分大小写））
                           field:
                             type: string
-                            example: name
-                            description: 查询条件Field名称
+                            default: ''
+                            description: 查询条件Field名称。可选条件：type(规则类型。（枚举值：egress、ingress）)
                           value:
-                            oneOf:
-                            - type: string
-                            - type: number
-                            - type: boolean
-                            - type: array
-                              items:
-                                oneOf:
-                                - type: string
-                                - type: number
-                                - type: boolean
-                            example: test
+                            type: string
+                            default: ''
                             description: 查询条件Value值，类型根据field和op的不同而不同
-                      maxItems: 5
+                      default: ''
                       description: 过滤规则，最多设置5个rules。如果rules为空数组，op（操作符）将没有作用，代表查询全部数据
                   description: 查询过滤条件
-                bk_biz_id:
-                  type: string
-                  description: 业务ID
-                security_group_id:
-                  type: string
-                  description: 安全组ID
         required: true
+        description: ''
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: true
@@ -9559,18 +9428,132 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
-        descriptionEn: None
+        descriptionEn:
   /api/v1/cloud/bizs/{bk_biz_id}/listeners/list_by_cond:
     post:
       operationId: list_biz_listeners_by_cond
-      description: 查询业务下符合指定条件的监听器列表
+      description: 查询业务下符合指定条件的负载均衡监听器列表
       tags:
       - LoadBalancer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            port:
+                              type: number
+                              description: 监听器端口
+                            clb_id:
+                              type: string
+                              description: 负载均衡的 HCM ID
+                            lbl_id:
+                              type: string
+                              description: 监听器的 HCM ID
+                            region:
+                              type: string
+                            vendor:
+                              type: string
+                              description: 云厂商
+                            protocol:
+                              type: string
+                              description: 监听器协议（枚举值：HTTP / HTTPS / TCP / UDP / TCP_SSL / QUIC）
+                            bk_biz_id:
+                              type: number
+                              description: 业务ID，-1表示没有分配到业务
+                            cloud_lb_id:
+                              type: string
+                              description: 负载均衡的云上 ID
+                            cloud_lbl_id:
+                              type: string
+                              description: 监听器的云上 ID
+                            clb_vip_domain:
+                              type: string
+                              description: 负载均衡的VIP或域名
+                  message:
+                    type: string
+          description: ''
       parameters:
       - in: path
         name: bk_biz_id
         schema:
           type: string
+        required: true
+        description: 业务ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - rule_query_list
+              properties:
+                vendor:
+                  type: string
+                  default: ''
+                  description: 云厂商（枚举值：tcloud）
+                account_id:
+                  type: string
+                  default: ''
+                  description: 云账号的HCM ID
+                rule_query_list:
+                  type: array
+                  items:
+                    type: object
+                    default: ''
+                    required:
+                    - protocol
+                    - region
+                    - clb_vip_domains
+                    - cloud_lb_ids
+                    properties:
+                      ports:
+                        type: array
+                        items:
+                          type: number
+                          default: ''
+                        default: ''
+                        description: 监听器端口，最大支持500个
+                      region:
+                        type: string
+                        default: ''
+                        description: 地域ID（例如：ap-nanjing）
+                      rs_ips:
+                        type: array
+                        default: ''
+                        description: RS IP数组，最大支持500个
+                      protocol:
+                        type: string
+                        default: ''
+                        description: 监听器协议（可选：HTTP / HTTPS / TCP / UDP / TCP_SSL / QUIC）
+                      rs_ports:
+                        type: array
+                        items:
+                          type: number
+                          default: ''
+                        default: ''
+                        description: RS端口，最大支持500个
+                      cloud_lb_ids:
+                        type: array
+                        default: ''
+                        description: 监听器所属负载均衡的云上ID，最大支持50个
+                      clb_vip_domains:
+                        type: array
+                        default: ''
+                        description: 监听器所属负载均衡的VIP或域名，最大支持50个
+                  default: ''
+                  description: 规则查询条件数组，最大支持50个
         required: true
         description: ''
       x-bk-apigateway-resource:
@@ -9593,14 +9576,143 @@ paths:
   /api/v1/cloud/bizs/{bk_biz_id}/task_managements/list_by_cond:
     post:
       operationId: list_biz_task_management_by_cond
-      description: 查询指定条件的任务管理列表(内部接口，只给特定业务使用)
+      description: 指定条件查询异步任务执行状态(内部接口，只给特定业务使用)
       tags:
       - TaskManage
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: number
+                        description: 当前规则能匹配到的总记录条数，仅当 page.count 为 true 时返回
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            state:
+                              type: string
+                              description: 任务状态，枚举值：为running（运行中）、failed（失败）、success（成功）、deliver_partial（部分成功）、cancel（取消）
+                            source:
+                              type: string
+                              description: 任务来源，如：标准运维插件(sops)、excel导入(excel)、API调用(api)、页面操作(web)
+                            creator:
+                              type: string
+                            reviser:
+                              type: string
+                            vendors:
+                              type: array
+                              description: 云厂商（枚举值：tcloud、aws、azure、gcp、huawei）
+                            flow_ids:
+                              type: array
+                              description: 关联的后台异步任务flow id
+                            resource:
+                              type: string
+                              description: '资源类型，如: clb、cvm'
+                            bk_biz_id:
+                              type: number
+                              description: 业务ID
+                            extension:
+                              type: object
+                              description: 扩展字段
+                            created_at:
+                              type: string
+                            operations:
+                              type: array
+                              description: 操作（创建4层监听器：create_layer4_listener、创建7层监听器：create_layer7_listener、绑定4层RS：binding_layer4_rs、绑定7层RS：binding_layer7_rs、创建URL规则：create_layer7_rule、解绑4层RS：listener_layer4_unbind_rs、解绑7层RS：listener_layer7_unbind_rs、调整4层权重：listener_layer4_rs_weight、调整7层权重：listener_layer7_rs_weight、删除监听器：listener_delete、开机：start_cvm、关机：stop_cvm、重启：reboot_cvm、重装：cvm_reset_system）
+                            updated_at:
+                              type: string
+                            account_ids:
+                              type: array
+                              description: 云账号的HCM ID
+                  message:
+                    type: string
+          description: ''
       parameters:
       - in: path
         name: bk_biz_id
         schema:
-          type: string
+          type: number
+        required: true
+        description: 业务ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - resource
+              - start_time
+              - end_time
+              - page
+              properties:
+                page:
+                  type: object
+                  default: ''
+                  required:
+                  - count
+                  properties:
+                    count:
+                      type: boolean
+                      default: ''
+                      description: '是否返回总记录条数。 如果为true，查询结果返回总记录条数 count，但查询结果详情数据 details 为空数组，此时 start 和 limit 参数将无效，且必需设置为0。如果为false，则根据 start 和 limit 参数，返回查询结果详情数据，但总记录条数 count 为0 '
+                    limit:
+                      type: number
+                      default: ''
+                      description: 每页限制条数，最大500，不能为0
+                    start:
+                      type: number
+                      default: ''
+                      description: 记录开始位置，start 起始值为0
+                  description: 分页设置
+                state:
+                  type: string
+                  default: ''
+                  description: 任务状态，如：为running（运行中）、failed（失败）、success（成功）、deliver_partial（部分成功）、cancel（取消）
+                source:
+                  type: string
+                  default: ''
+                  description: 任务来源，如：标准运维插件(sops)、excel导入(excel)、API调用(api)、页面操作(web)
+                creator:
+                  type: string
+                  default: ''
+                end_time:
+                  type: string
+                  default: ''
+                  description: 任务最晚开始时间，格式：2025-01-01 23:59:59，任务时间跨度最大支持1个月
+                resource:
+                  type: string
+                  default: ''
+                  description: '资源类型，如: 负载均衡：clb、主机：cvm'
+                operations:
+                  type: array
+                  items:
+                    type: string
+                    default: ''
+                  default: ''
+                  description: 任务操作类型，最大查询数量10个（创建4层监听器：create_layer4_listener、创建7层监听器：create_layer7_listener、绑定4层RS：binding_layer4_rs、绑定7层RS：binding_layer7_rs、创建URL规则：create_layer7_rule、解绑4层RS：listener_layer4_unbind_rs、解绑7层RS：listener_layer7_unbind_rs、调整4层权重：listener_layer4_rs_weight、调整7层权重：listener_layer7_rs_weight、删除监听器：listener_delete、开机：start_cvm、关机：stop_cvm、重启：reboot_cvm、重装：cvm_reset_system）
+                start_time:
+                  type: string
+                  default: ''
+                  description: 任务最早开始时间，格式：2025-01-01 00:00:00
+                account_ids:
+                  type: array
+                  items:
+                    type: string
+                    default: ''
+                  default: ''
+                  description: 云账号的HCM ID，最大查询数量10个
         required: true
         description: ''
       x-bk-apigateway-resource:
@@ -9623,14 +9735,94 @@ paths:
   /api/v1/cloud/bizs/{bk_biz_id}/task_details/list_by_cond:
     post:
       operationId: list_biz_task_detail_by_cond
-      description: 查询指定条件的任务详情(内部接口，只给特定业务使用)
+      description: 指定条件查询异步任务执行明细(内部接口，只给特定业务使用)
       tags:
       - TaskManage
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            param:
+                              type: object
+                              properties:
+                                '':
+                                  type: string
+                              description: 异步任务的执行参数，根据 operation 不同会有所不同
+                            state:
+                              type: string
+                              description: 任务状态，如：init（待执行）、running（运行）、failed（失败）、success（成功）、cancel（取消）
+                            reason:
+                              type: string
+                              description: 失败原因
+                            result:
+                              type: object
+                              description: 异步任务的执行结果，根据 operation 不同会有所不同
+                            creator:
+                              type: string
+                            flow_id:
+                              type: string
+                              description: 该执行明细对应的异步任务 flow ID
+                            reviser:
+                              type: string
+                            bk_biz_id:
+                              type: number
+                              description: 业务ID
+                            extension:
+                              type: object
+                              description: 扩展字段
+                            operation:
+                              type: string
+                              description: 操作（创建4层监听器：create_layer4_listener、创建7层监听器：create_layer7_listener、绑定4层RS：binding_layer4_rs、绑定7层RS：binding_layer7_rs、创建URL规则：create_layer7_rule、解绑4层RS：listener_layer4_unbind_rs、解绑7层RS：listener_layer7_unbind_rs、调整4层权重：listener_layer4_rs_weight、调整7层权重：listener_layer7_rs_weight、删除监听器：listener_delete、开机：start_cvm、关机：stop_cvm、重启：reboot_cvm、重装：cvm_reset_system）
+                            created_at:
+                              type: string
+                            updated_at:
+                              type: string
+                            task_action_ids:
+                              type: array
+                              description: 该执行明细对应的异步任务 task action ID
+                            task_management_id:
+                              type: string
+                              description: 所属异步任务的ID
+                  message:
+                    type: string
+          description: ''
       parameters:
       - in: path
         name: bk_biz_id
         schema:
           type: string
+        required: true
+        description: 业务ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - task_management_ids
+              properties:
+                task_management_ids:
+                  type: array
+                  items:
+                    type: string
+                    default: ''
+                  default: ''
+                  description: 异步任务ID，最大100个
         required: true
         description: ''
       x-bk-apigateway-resource:
@@ -10997,7 +11189,7 @@ paths:
   /api/v1/cloud/bizs/{bk_biz_id}/certs/list:
     post:
       operationId: list_cert
-      description: 查询证书列表
+      description: 查询业务下的证书列表
       tags:
       - Cert
       responses:
@@ -11008,43 +11200,60 @@ paths:
                 type: object
                 properties:
                   code:
-                    type: integer
-                    description: 状态码
+                    type: number
                   data:
                     type: object
-                    description: 响应数据
-                    additionalProperties: true
+                    properties:
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: 证书的HCM ID
+                            memo:
+                              type: string
+                            name:
+                              type: string
+                            domain:
+                              type: array
+                              description: 证书域名
+                            vendor:
+                              type: string
+                              description: 云厂商
+                            creator:
+                              type: string
+                            reviser:
+                              type: string
+                            cloud_id:
+                              type: string
+                              description: 证书的云上 ID
+                            cert_type:
+                              type: string
+                              description: 证书类型（CA:客户端证书，SVR:服务器证书）
+                            account_id:
+                              type: string
+                              description: 云账号的HCM ID
+                            created_at:
+                              type: string
+                            updated_at:
+                              type: string
+                            cert_status:
+                              type: string
+                            cloud_created_time:
+                              type: string
+                            cloud_expired_time:
+                              type: string
                   message:
                     type: string
-                    description: 请求信息
-              example:
-                code: 0
-                data:
-                  details:
-                  - id: '00000001'
-                    memo: xxxx
-                    name: cert-test
-                    domain:
-                    - xxxx.com
-                    vendor: tcloud
-                    creator: Jim
-                    reviser: Jim
-                    cloud_id: cert-123
-                    cert_type: CA
-                    account_id: '0000001'
-                    created_at: '2023-02-12T14:47:39Z'
-                    updated_at: '2023-02-12T14:55:40Z'
-                    cert_status: '1'
-                    cloud_created_time: '2023-02-12 14:47:39'
-                    cloud_expired_time: '2022-02-22 14:47:39'
-                message: ''
+                description: 成功
           description: 成功
       parameters:
       - in: path
         name: bk_biz_id
         schema:
-          type: integer
-        example: 100
+          type: number
         required: true
         description: 业务ID
       requestBody:
@@ -11053,118 +11262,74 @@ paths:
             schema:
               type: object
               required:
-              - bk_biz_id
               - page
+              - filter
               properties:
                 page:
                   type: object
-                  example:
-                    sort: created_at
-                    count: false
-                    limit: 10
-                    order: DESC
-                    start: 0
+                  default: ''
                   required:
                   - count
                   properties:
                     sort:
                       type: string
-                      example: created_at
+                      default: ''
                       description: 排序字段，返回数据将按该字段进行排序
                     count:
                       type: boolean
-                      example: false
+                      default: ''
                       description: 是否返回总记录条数。如果为true，查询结果返回总记录条数count，但查询结果详情数据details为空数组，此时start和limit参数将无效，且必需设置为0。如果为false，则根据start和limit参数，返回查询结果详情数据，但总记录条数count为0
                     limit:
-                      type: integer
-                      format: uint32
-                      example: 10
+                      type: number
+                      default: ''
                       description: 每页限制条数，最大500，不能为0
                     order:
-                      enum:
-                      - ASC
-                      - DESC
                       type: string
-                      example: DESC
+                      default: ''
                       description: 排序顺序
                     start:
-                      type: integer
-                      format: uint32
-                      example: 0
+                      type: number
+                      default: ''
                       description: 记录开始位置，start起始值为0
                   description: 分页设置
                 filter:
                   type: object
-                  example:
-                    op: and
-                    rules:
-                    - op: eq
-                      field: name
-                      value: test
-                    - op: in
-                      field: id
-                      value:
-                      - sg-001
-                      - sg-002
+                  default: ''
                   required:
                   - op
                   - rules
                   properties:
                     op:
-                      enum:
-                      - and
-                      - or
                       type: string
-                      example: and
+                      default: ''
                       description: 操作符。如果是and，则表示多个rule之间是且的关系；如果是or，则表示多个rule之间是或的关系
                     rules:
                       type: array
                       items:
                         type: object
+                        default: ''
                         required:
-                        - field
                         - op
+                        - field
                         - value
                         properties:
                           op:
-                            enum:
-                            - eq
-                            - neq
-                            - gt
-                            - gte
-                            - lt
-                            - lte
-                            - in
-                            - nin
-                            - cs
-                            - cis
                             type: string
-                            example: eq
-                            description: 操作符
+                            default: ''
+                            description: 操作符（枚举值：eq（等于，不能为空字符串）、neq（不等于，不能为空字符串）、gt、gte、le、lte、in（在给定的数组范围中）、nin（不在给定的数组范围中）、cs（模糊查询，区分大小写）、cis（模糊查询，不区分大小写））
                           field:
                             type: string
-                            example: name
-                            description: 查询条件Field名称
+                            default: ''
+                            description: '查询条件Field名称。可选条件：id(证书的HCM ID)、cloud_id(证书的云上 ID)、name(证书名称)、vendor(云厂商（枚举值：tcloud、aws、azure、gcp、huawei）)、account_id(云账号的HCM ID)、cert_type(证书类型（CA:客户端证书，SVR:服务器证书）)、cert_status(证书状态。腾讯云: 0：审核中，1：已通过，2：审核失败，3：已过期，4：验证方式为 DNS_AUTO 类型的证书， 已添加DNS记录，5：企业证书，待提交，6：订单取消中，7：已取消，8：已提交资料， 待上传确认函，9：证书吊销中，10：已吊销，11：重颁发中，12：待上传吊销确认函，13：免费证书待提交资料状态，14：已退款)、cloud_created_time(上传时间，标准格式：2006-01-02T15:04:05Z)、cloud_expired_time(过期时间，标准格式：2006-01-02T15:04:05Z)'
                           value:
-                            oneOf:
-                            - type: string
-                            - type: number
-                            - type: boolean
-                            - type: array
-                              items:
-                                oneOf:
-                                - type: string
-                                - type: number
-                                - type: boolean
-                            example: test
+                            type: string
+                            default: ''
                             description: 查询条件Value值，类型根据field和op的不同而不同
-                      maxItems: 5
+                      default: ''
                       description: 过滤规则，最多设置5个rules。如果rules为空数组，op（操作符）将没有作用，代表查询全部数据
                   description: 查询过滤条件
-                bk_biz_id:
-                  type: integer
-                  description: 业务ID
         required: true
+        description: ''
       x-bk-apigateway-resource:
         isPublic: true
         allowApplyPermission: true
@@ -11181,8 +11346,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
-        descriptionEn: None
-        noneSchema: true
+        descriptionEn:
   /api/v1/cloud/bizs/{bk_biz_id}/vendors/tcloud/listeners/{lbl_id}/domains/list:
     post:
       operationId: list_tcloud_biz_listener_domains
@@ -12584,6 +12748,7 @@ paths:
               type: object
               required:
               - page
+              - bk_biz_id
               properties:
                 end:
                   type: string
@@ -12597,6 +12762,10 @@ paths:
                   type: string
                   default: ''
                   description: 单据创建时间过滤条件起点日期，格式如"2022-05-01"
+                bk_biz_id:
+                  type: number
+                  default: ''
+                  description: 业务ID
         required: true
         description: ''
       x-bk-apigateway-resource:
@@ -12619,7 +12788,7 @@ paths:
   /api/v1/woa/bizs/{bk_biz_id}/task/findmany/apply/device:
     post:
       operationId: list_device_apply
-      description: 业务下的已交付设备查询
+      description: 业务下的主机申请已交付主机信息查询, 返回主机信息以及申请单据id信息
       tags:
       - SCR
       - Apply
@@ -12643,30 +12812,43 @@ paths:
                           properties:
                             ip:
                               type: string
+                              description: 设备IP
                             asset_id:
                               type: string
+                              description: 设备固资号
                             order_id:
                               type: number
+                              description: 资源申请单号
                             owner_ip:
                               type: string
+                              description: 所属的母机IP
                             bk_biz_id:
                               type: number
+                              description: 业务ID
                             create_at:
                               type: string
+                              description: 记录创建时间
                             update_at:
                               type: string
+                              description: 记录更新时间
                             zone_name:
                               type: string
+                              description: 区域
                             bk_username:
                               type: string
+                              description: 提单人
                             device_type:
                               type: string
+                              description: 机型
                             suborder_id:
                               type: string
+                              description: 资源申请子单号
                             require_type:
                               type: number
+                              description: '需求类型。1: 常规项目; 2: 春节保障; 3: 机房裁撤; 6: 滚服项目; 7: 小额绿通'
                             resource_type:
                               type: string
+                              description: '资源类型。"QCLOUDCVM": 腾讯云虚拟机, "IDCPM": IDC物理机, "QCLOUDDVM": Qcloud富容器, "IDCDVM": IDC富容器'
                       count:
                         type: number
                   result:
@@ -12715,19 +12897,27 @@ paths:
                   type: object
                   default: ''
                   required:
-                  - rule
-                  - condition
+                  - rules
+                  - op
                   properties:
-                    rule:
+                    op:
+                      type: string
+                      default: ''
+                      description: 操作符（枚举值：and、or）。如果是and，则表示多个rule之间是且的关系；如果是or，则表示多个rule之间是或的关系。
+                    rules:
                       type: array
                       items:
                         type: object
                         default: ''
                         required:
+                        - op
                         - field
                         - value
-                        - operator
                         properties:
+                          op:
+                            type: string
+                            default: ''
+                            description: 操作符，枚举值：eq、neq、gt、gte、lt、lte、in、nin、contains
                           field:
                             type: string
                             default: ''
@@ -12735,15 +12925,7 @@ paths:
                           value:
                             type: string
                             default: ''
-                          operator:
-                            type: string
-                            default: ''
-                            description: 操作符（枚举值：eq、neq、gt、gte、le、lte、in、nin、cs、cis）
                       default: ''
-                    condition:
-                      type: string
-                      default: ''
-                      description: 操作符（枚举值：and、or）。如果是and，则表示多个rule之间是且的关系；如果是or，则表示多个rule之间是或的关系
                   description: 查询过滤条件
         required: true
         description: ''
@@ -13382,6 +13564,12 @@ paths:
           type: number
         required: true
         description: 业务ID
+      - in: path
+        name: vendor
+        schema:
+          type: string
+        required: true
+        description: 云厂商类型
       requestBody:
         content:
           application/json:
@@ -14298,7 +14486,7 @@ paths:
   /api/v1/woa/bizs/{bk_biz_id}/plans/resources/demands/list_with_device_types:
     post:
       operationId: list_biz_res_plan_demand_with_device_types
-      description: 查询业务下可申领的机型及可申领数量（结合资源预测需求）
+      description: 查询业务下的资源预测需求（即可申领资源量），同一需求按照可申领的机型拆分
       tags:
       - SCR
       - ResPlan
@@ -14456,83 +14644,111 @@ paths:
               properties:
                 page:
                   type: object
+                  default: ''
                   required:
                   - count
                   properties:
                     count:
                       type: boolean
+                      default: ''
                       description: 是否返回总记录条数。如果为true，返回展开后的总条数 count，不返回详情，此时 start 和 limit 须设置为0；如果为false，则根据 start 和 limit 返回明细数据，不返回 count
                     limit:
                       type: number
+                      default: ''
                       description: 每页限制条数，最大500，不能为0
                     start:
                       type: number
+                      default: ''
                       description: 记录开始位置，start 起始值为0
                   description: 分页设置，分页作用于展开后的明细记录
                 memories:
                   type: array
                   items:
                     type: number
+                    default: ''
+                  default: ''
                   description: 内存大小筛选列表（单位GB），用于过滤可申领机型，不传时不过滤
                 statuses:
                   type: array
                   items:
                     type: string
+                    default: ''
+                  default: ''
                   description: 状态，枚举值：can_apply（可申领）、not_ready（未到申领时间）、expired（已过期）、spent_all（已耗尽）、locked（变更中），不传时查询全部
                 cpu_cores:
                   type: array
                   items:
                     type: number
+                    default: ''
+                  default: ''
                   description: CPU核心数筛选列表，用于过滤可申领机型，不传时不过滤
                 core_types:
                   type: array
                   items:
                     type: string
+                    default: ''
+                  default: ''
                   description: 核心类型列表，不传时查询全部，枚举值：大核心、小核心
                 plan_types:
                   type: array
                   items:
                     type: string
+                    default: ''
+                  default: ''
                   description: 计划类型列表，不传时查询全部，枚举值：预测内、预测外
                 region_ids:
                   type: array
                   items:
                     type: string
+                    default: ''
+                  default: ''
                   description: 地区/城市ID列表，不传时查询全部，例如：ap-nanjing、ap-guangzhou
                 device_types:
                   type: array
                   items:
                     type: string
+                    default: ''
+                  default: ''
                   description: 原始机型规格列表，不传时查询全部，例如：SA9.LARGE8、ITA5.4XLARGE64
                 obs_projects:
                   type: array
                   items:
                     type: string
+                    default: ''
+                  default: ''
                   description: OBS项目类型列表，不传时查询全部，数量最大100
                 expiring_only:
                   type: boolean
+                  default: ''
                   description: 是否只查询即将过期的需求，传true时只返回即将过期的需求，传false时查询全部，默认查询全部
                 device_classes:
                   type: array
                   items:
                     type: string
+                    default: ''
+                  default: ''
                   description: 机型分类列表，不传时查询全部，例如：标准型SA9、标准型SA5
                 device_families:
                   type: array
                   items:
                     type: string
+                    default: ''
+                  default: ''
                   description: 机型族列表，不传时查询全部，例如：标准型、高IO型
                 expect_time_range:
                   type: object
+                  default: ''
                   required:
-                  - start
                   - end
+                  - start
                   properties:
                     end:
                       type: string
+                      default: ''
                       description: 结束时间，不能早于start时间，格式为YYYY-MM-DD，例如2024-01-01
                     start:
                       type: string
+                      default: ''
                       description: 起始时间，格式为YYYY-MM-DD，例如2024-01-01
                   description: 期望交付时间范围
         required: false
@@ -15364,7 +15580,7 @@ paths:
   /api/v1/woa/config/findmany/config/cvm/device:
     post:
       operationId: list_config_cvm_device
-      description: 获取CVM机型列表
+      description: 获取CVM机型规格目录（机型字典），仅返回机型本身的规格属性（机型、机型族、机型分类、通用型/专用型、核心类型、CPU/内存/GPU、地域、可用区等），不包含任何库存/容量信息。
       tags:
       - SCR
       - Cvm
@@ -15390,30 +15606,43 @@ paths:
                           properties:
                             id:
                               type: string
+                              description: id唯一标识
                             zone:
                               type: string
+                              description: 可用区
                             memory:
                               type: number
+                              description: 内存容量，单位：GB
                             region:
                               type: string
+                              description: 地域
                             vendor:
                               type: string
+                              description: 云厂商
                             cpu_core:
                               type: number
+                              description: CPU核数
                             core_type:
                               type: string
+                              description: '核心类型，枚举值：小核心、中核心、大核心 '
                             gpu_amount:
                               type: number
+                              description: GPU卡数
                             device_type:
                               type: string
+                              description: 机型
                             device_class:
                               type: string
+                              description: 机型分类
                             device_family:
                               type: string
+                              description: 机型族
                             technical_class:
                               type: string
+                              description: 技术分类
                             device_type_class:
                               type: string
+                              description: 通/专用机型，SpecialType(专用)，CommonType(通用)
                   message:
                     type: string
           description: ''
@@ -15423,8 +15652,8 @@ paths:
             schema:
               type: object
               required:
-              - filter
               - page
+              - filter
               properties:
                 page:
                   type: object
@@ -15462,10 +15691,9 @@ paths:
                             default: 操作符（枚举值：eq、neq、gt、gte、le、lte、in、nin、cs、cis）
                           field:
                             type: string
-                            default: 查询条件字段名
+                            default: 查询条件字段名，可选值包括：id（唯一 ID，字符串）、vendor（云厂商，字符串，如 tcloud）、device_type（机型，字符串）、device_type_class（通/专用机型，字符串，SpecialType 专用、CommonType 通用）、device_class（机型分类，字符串）、device_family（机型族，字符串）、core_type（核心类型，字符串，大核心/中核心/小核心）、cpu_core（CPU 核心数，数值，单位核）、memory（内存大小，数值，单位 GB）、gpu_amount（GPU 卡数，数值）、technical_class（技术分类，字符串）、region（地域，字符串）、zone（可用区，字符串）、disable（是否不使用，布尔）、source（机型来源，字符串，sync 自动同步、manually 手动添加）、generation_type（机型代次，字符串）、creator（创建人，字符串）、reviser（修改人，字符串）、created_at（创建时间，时间）、updated_at（更新时间，时间）
                           value:
-                            type: string
-                            default: 查询条件字段值
+                            default: 查询条件字段值，该值可为任意类型
                       default: 过滤规则，最多设置5个rules。如果rules为空数组，op（操作符）将没有作用，代表查询全部数据
         required: false
         description: ''
@@ -16824,7 +17052,7 @@ paths:
                       charge_type:
                         type: string
                         default: ''
-                        description: 计费模式：PREPAID(表示包年包月) / POSTPAID_BY_HOUR(表示按量计费)
+                        description: 计费模式：`PREPAID`-包年包月（预测内 / 不校验预测类型）/ `POSTPAID_BY_HOUR`-按量计费（预测外）
                       device_type:
                         type: string
                         default: ''
@@ -16870,7 +17098,7 @@ paths:
           appVerifiedRequired: true
           resourcePermissionRequired: true
         descriptionEn:
-  /api/v1/mcp/servers/{mcp_server_name}/mcp/:
+  /api/v2/mcp-servers/{mcp_server_name}/mcp/:
     get:
       operationId: hcm_common_mcp_server_get
       description: HCM普通的MCP Server服务-GET
@@ -17252,6 +17480,2812 @@ paths:
           name: default
           method: post
           path: /api/v1/cloud/bizs/{bk_biz_id}/eips/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/cloud/bizs/{bk_biz_id}/network_interfaces/list:
+    post:
+      operationId: list_biz_network_interface
+      description: 查询业务下网络接口列表
+      tags:
+      - NetworkInterface
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      detail:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: 网络接口的HCM ID
+                            name:
+                              type: string
+                            zone:
+                              type: string
+                            region:
+                              type: string
+                            vendor:
+                              type: string
+                              description: 云厂商
+                            vpc_id:
+                              type: string
+                              description: 所属的VPC的HCM ID
+                            creator:
+                              type: string
+                            reviser:
+                              type: string
+                            bk_biz_id:
+                              type: number
+                              description: 业务ID，-1表示没有分配到业务
+                            subnet_id:
+                              type: string
+                              description: 所属的子网的HCM ID
+                            account_id:
+                              type: string
+                              description: 云账号的HCM ID
+                            created_at:
+                              type: string
+                              description: 创建时间，标准格式：2006-01-02T15:04:05Z
+                            updated_at:
+                              type: string
+                            instance_id:
+                              type: string
+                              description: 关联的实例ID
+                            public_ipv4:
+                              type: array
+                            public_ipv6:
+                              type: array
+                            cloud_vpc_id:
+                              type: string
+                              description: 所属的VPC的云上 ID
+                            private_ipv4:
+                              type: array
+                            private_ipv6:
+                              type: array
+                            cloud_subnet_id:
+                              type: string
+                              description: 所属的子网的云上 ID
+                  message:
+                    type: string
+                description: 成功响应
+          description: 成功响应
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - page
+              - filter
+              properties:
+                page:
+                  type: object
+                  default: ''
+                  required:
+                  - count
+                  properties:
+                    sort:
+                      type: string
+                      default: ''
+                      description: 排序字段，返回数据将按该字段进行排序
+                    count:
+                      type: boolean
+                      default: ''
+                      description: 是否返回总记录条数。如果为true，查询结果返回总记录条数count，但查询结果详情数据details为空数组，此时start和limit参数将无效，且必需设置为0。如果为false，则根据start和limit参数，返回查询结果详情数据，但总记录条数count为0
+                    limit:
+                      type: number
+                      default: ''
+                      description: 每页限制条数，最大500，不能为0
+                    order:
+                      type: string
+                      default: ''
+                      description: 排序顺序
+                    start:
+                      type: number
+                      default: ''
+                      description: 记录开始位置，start起始值为0
+                  description: 分页设置
+                filter:
+                  type: object
+                  default: ''
+                  required:
+                  - op
+                  - rules
+                  properties:
+                    op:
+                      type: string
+                      default: ''
+                      description: 操作符。如果是and，则表示多个rule之间是且的关系；如果是or，则表示多个rule之间是或的关系
+                    rules:
+                      type: array
+                      items:
+                        type: object
+                        default: ''
+                        required:
+                        - op
+                        - field
+                        - value
+                        properties:
+                          op:
+                            type: string
+                            default: ''
+                            description: 操作符（枚举值：eq（等于，不能为空字符串）、neq（不等于，不能为空字符串）、gt、gte、le、lte、in（在给定的数组范围中）、nin（不在给定的数组范围中）、cs（模糊查询，区分大小写）、cis（模糊查询，不区分大小写））
+                          field:
+                            type: string
+                            default: ''
+                            description: 查询条件Field名称。可选条件：id(资源的HCM ID)、vendor(云厂商（枚举值：azure、huawei、gcp）)、name(网络接口名称)、account_id(云账号的HCM ID)、region(地区ID)、zone(可用区)、vpc_id(VPC的HCM ID)、cloud_vpc_id(VPC的云上 ID)、subnet_id(子网的HCM ID)、cloud_subnet_id(子网的云上 ID)、private_ipv4(内网IPv4)、private_ipv6(内网IPv6)、public_ipv4(公网IPv4)、public_ipv6(公网IPv6)、bk_biz_id(业务ID，-1表示没有分配到业务)、instance_id(关联的实例ID)、creator(创建者)、reviser(更新者)、created_at(创建时间，标准格式：2006-01-02T15:04:05Z)、updated_at(更新时间，标准格式：2006-01-02T15:04:05Z)
+                          value:
+                            type: string
+                            default: ''
+                            description: 查询条件Value值，类型根据field和op的不同而不同
+                      default: ''
+                      description: 过滤规则，最多设置5个rules。如果rules为空数组，op（操作符）将没有作用，代表查询全部数据
+                  description: 查询过滤条件
+        required: true
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/cloud/bizs/{bk_biz_id}/network_interfaces/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/cloud/bizs/{bk_biz_id}/route_tables/list:
+    post:
+      operationId: list_biz_route_table
+      description: 查询业务下路由表列表
+      tags:
+      - RouteTable
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      detail:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: 路由表的HCM ID
+                            memo:
+                              type: string
+                            name:
+                              type: string
+                            region:
+                              type: string
+                            vendor:
+                              type: string
+                              description: 云厂商
+                            vpc_id:
+                              type: string
+                              description: VPC的HCM ID
+                            creator:
+                              type: string
+                            reviser:
+                              type: string
+                            cloud_id:
+                              type: string
+                              description: 路由表的云上 ID
+                            bk_biz_id:
+                              type: number
+                              description: 业务ID，-1表示没有分配到业务
+                            account_id:
+                              type: string
+                              description: 云账号的HCM ID
+                            created_at:
+                              type: string
+                              description: 创建时间，标准格式：2006-01-02T15:04:05Z
+                            updated_at:
+                              type: string
+                            cloud_vpc_id:
+                              type: string
+                              description: VPC的云上 ID
+                  message:
+                    type: string
+                description: 成功响应
+          description: 成功响应
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - page
+              - filter
+              properties:
+                page:
+                  type: object
+                  default: ''
+                  required:
+                  - count
+                  properties:
+                    sort:
+                      type: string
+                      default: ''
+                      description: 排序字段，返回数据将按该字段进行排序
+                    count:
+                      type: boolean
+                      default: ''
+                      description: 是否返回总记录条数。如果为true，查询结果返回总记录条数count，但查询结果详情数据details为空数组，此时start和limit参数将无效，且必需设置为0。如果为false，则根据start和limit参数，返回查询结果详情数据，但总记录条数count为0
+                    limit:
+                      type: number
+                      default: ''
+                      description: 每页限制条数，最大500，不能为0
+                    order:
+                      type: string
+                      default: ''
+                      description: 排序顺序
+                    start:
+                      type: number
+                      default: ''
+                      description: 记录开始位置，start起始值为0
+                  description: 分页设置
+                filter:
+                  type: object
+                  default: ''
+                  required:
+                  - op
+                  - rules
+                  properties:
+                    op:
+                      type: string
+                      default: ''
+                      description: 操作符。如果是and，则表示多个rule之间是且的关系；如果是or，则表示多个rule之间是或的关系
+                    rules:
+                      type: array
+                      items:
+                        type: object
+                        default: ''
+                        required:
+                        - op
+                        - field
+                        - value
+                        properties:
+                          op:
+                            type: string
+                            default: ''
+                            description: 操作符（枚举值：eq（等于，不能为空字符串）、neq（不等于，不能为空字符串）、gt、gte、le、lte、in（在给定的数组范围中）、nin（不在给定的数组范围中）、cs（模糊查询，区分大小写）、cis（模糊查询，不区分大小写））
+                          field:
+                            type: string
+                            default: ''
+                            description: 查询条件Field名称。可选条件：id(路由表的HCM ID)、vendor(云厂商)、account_id(云账号的HCM ID)、cloud_id(路由表的云上 ID)、cloud_vpc_id(VPC的云上 ID)、name(路由表名称)、region(地域)、vpc_id(VPC的HCM ID)、bk_biz_id(业务ID，-1表示没有分配到业务)、creator(创建者)、reviser(更新者)、created_at(创建时间，标准格式：2006-01-02T15:04:05Z)、updated_at(更新时间，标准格式：2006-01-02T15:04:05Z)
+                          value:
+                            type: string
+                            default: ''
+                            description: 查询条件Value值，类型根据field和op的不同而不同
+                      default: ''
+                      description: 过滤规则，最多设置5个rules。如果rules为空数组，op（操作符）将没有作用，代表查询全部数据
+                  description: 查询过滤条件
+        required: true
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/cloud/bizs/{bk_biz_id}/route_tables/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/cloud/bizs/{bk_biz_id}/security_groups/{sg_id}/related_resources/biz_resources/{res_biz_id}/cvms/list:
+    post:
+      operationId: list_security_group_rel_cvm_by_biz
+      description: 查询安全组关联的cvm列表
+      tags:
+      - SecurityGroup
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: CVM的HCM ID
+                            name:
+                              type: string
+                            zone:
+                              type: string
+                            region:
+                              type: string
+                            status:
+                              type: string
+                            vendor:
+                              type: string
+                              description: 云厂商
+                            cloud_id:
+                              type: string
+                              description: CVM的云上 ID
+                            bk_biz_id:
+                              type: number
+                              description: 业务ID，-1表示没有分配到业务
+                            account_id:
+                              type: string
+                              description: 云账号的HCM ID
+                            cloud_vpc_ids:
+                              type: array
+                              description: CVM所属VPC的云上 ID
+                            cloud_subnet_ids:
+                              type: array
+                              description: CVM所属子网的云上 ID
+                            public_ipv4_addresses:
+                              type: array
+                            public_ipv6_addresses:
+                              type: array
+                            private_ipv4_addresses:
+                              type: array
+                            private_ipv6_addresses:
+                              type: array
+                  message:
+                    type: string
+                description: 成功
+          description: 成功
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      - in: path
+        name: sg_id
+        schema:
+          type: string
+        required: true
+        description: 安全组的HCM ID
+      - in: path
+        name: res_biz_id
+        schema:
+          type: number
+        required: true
+        description: 关联资源业务ID，当前业务为安全组管理业务时，可以查询任意业务id，否则只能指定当前业务id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - page
+              - filter
+              properties:
+                page:
+                  type: object
+                  default: ''
+                  required:
+                  - count
+                  properties:
+                    sort:
+                      type: string
+                      default: ''
+                      description: 排序字段，返回数据将按该字段进行排序
+                    count:
+                      type: boolean
+                      default: ''
+                      description: 是否返回总记录条数。如果为true，查询结果返回总记录条数count，但查询结果详情数据details为空数组，此时start和limit参数将无效，且必需设置为0。如果为false，则根据start和limit参数，返回查询结果详情数据，但总记录条数count为0
+                    limit:
+                      type: number
+                      default: ''
+                      description: 每页限制条数，最大500，不能为0
+                    order:
+                      type: string
+                      default: ''
+                      description: 排序顺序
+                    start:
+                      type: number
+                      default: ''
+                      description: 记录开始位置，start起始值为0
+                  description: 分页设置
+                filter:
+                  type: object
+                  default: ''
+                  required:
+                  - op
+                  - rules
+                  properties:
+                    op:
+                      type: string
+                      default: ''
+                      description: 操作符。如果是and，则表示多个rule之间是且的关系；如果是or，则表示多个rule之间是或的关系
+                    rules:
+                      type: array
+                      items:
+                        type: object
+                        default: ''
+                        required:
+                        - op
+                        - field
+                        - value
+                        properties:
+                          op:
+                            type: string
+                            default: ''
+                            description: 操作符（枚举值：eq（等于，不能为空字符串）、neq（不等于，不能为空字符串）、gt、gte、le、lte、in（在给定的数组范围中）、nin（不在给定的数组范围中）、cs（模糊查询，区分大小写）、cis（模糊查询，不区分大小写））
+                          field:
+                            type: string
+                            default: ''
+                            description: 查询条件Field名称。可选条件：cloud_id(cvm资源的HCM ID)、name(CVM的名称)、bk_cloud_id(云区域ID)、account_id(云账号的HCM ID)、region(地域)、zone(可用区)、cloud_image_id(CVM使用镜像的云上ID)、os_name(操作系统名称)、status(状态)、cloud_created_time(Cvm在云上创建时间，标准格式：2006-01-02T15:04:05Z)、cloud_launched_time(Cvm启动时间)、cloud_expired_time(Cvm过期时间)、creator(创建者)、reviser(修改者)、created_at(创建时间，标准格式：2006-01-02T15:04:05Z)、updated_at(修改时间)
+                          value:
+                            type: string
+                            default: ''
+                            description: 查询条件Value值，类型根据field和op的不同而不同
+                      default: ''
+                      description: 过滤规则，最多设置5个rules。如果rules为空数组，op（操作符）将没有作用，代表查询全部数据
+                  description: 查询过滤条件
+        required: true
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/cloud/bizs/{bk_biz_id}/security_groups/{sg_id}/related_resources/biz_resources/{res_biz_id}/cvms/list
+          matchSubpath: false
+          timeout: 30
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/cloud/bizs/{bk_biz_id}/security_groups/{sg_id}/related_resources/biz_resources/{res_biz_id}/load_balancers/list:
+    post:
+      operationId: list_security_group_rel_load_balancer_by_biz
+      description: 查询安全组关联的负载均衡列表
+      tags:
+      - SecurityGroup
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: 负载均衡的HCM ID
+                            memo:
+                              type: string
+                            name:
+                              type: string
+                            zones:
+                              type: array
+                              description: 主可用区
+                            domain:
+                              type: string
+                            region:
+                              type: string
+                            status:
+                              type: string
+                            vendor:
+                              type: string
+                              description: 云厂商
+                            vpc_id:
+                              type: string
+                              description: 资源所属VPC的HCM ID
+                            lb_type:
+                              type: string
+                              description: 负载均衡类型
+                            cloud_id:
+                              type: string
+                              description: 负载均衡的云上 ID
+                            bk_biz_id:
+                              type: number
+                              description: 业务ID，-1表示没有分配到业务
+                            account_id:
+                              type: string
+                              description: 云账号的HCM ID
+                            ip_version:
+                              type: string
+                              description: IP版本
+                            backup_zones:
+                              type: array
+                            cloud_vpc_id:
+                              type: string
+                              description: 资源所属VPC的云上 ID
+                            public_ipv4_addresses:
+                              type: array
+                            public_ipv6_addresses:
+                              type: array
+                            private_ipv4_addresses:
+                              type: array
+                            private_ipv6_addresses:
+                              type: array
+                  message:
+                    type: string
+                description: 成功
+          description: 成功
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      - in: path
+        name: sg_id
+        schema:
+          type: string
+        required: true
+        description: 安全组的HCM ID
+      - in: path
+        name: res_biz_id
+        schema:
+          type: number
+        required: true
+        description: 关联资源业务ID，当前业务为安全组管理业务时，可以查询任意业务id，否则只能指定当前业务id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - page
+              - filter
+              properties:
+                page:
+                  type: object
+                  default: ''
+                  required:
+                  - count
+                  properties:
+                    sort:
+                      type: string
+                      default: ''
+                      description: 排序字段，返回数据将按该字段进行排序
+                    count:
+                      type: boolean
+                      default: ''
+                      description: 是否返回总记录条数。如果为true，查询结果返回总记录条数count，但查询结果详情数据details为空数组，此时start和limit参数将无效，且必需设置为0。如果为false，则根据start和limit参数，返回查询结果详情数据，但总记录条数count为0
+                    limit:
+                      type: number
+                      default: ''
+                      description: 每页限制条数，最大500，不能为0
+                    order:
+                      type: string
+                      default: ''
+                      description: 排序顺序
+                    start:
+                      type: number
+                      default: ''
+                      description: 记录开始位置，start起始值为0
+                  description: 分页设置
+                filter:
+                  type: object
+                  default: ''
+                  required:
+                  - op
+                  - rules
+                  properties:
+                    op:
+                      type: string
+                      default: ''
+                      description: 操作符。如果是and，则表示多个rule之间是且的关系；如果是or，则表示多个rule之间是或的关系
+                    rules:
+                      type: array
+                      items:
+                        type: object
+                        default: ''
+                        required:
+                        - op
+                        - field
+                        - value
+                        properties:
+                          op:
+                            type: string
+                            default: ''
+                            description: 操作符（枚举值：eq（等于，不能为空字符串）、neq（不等于，不能为空字符串）、gt、gte、le、lte、in（在给定的数组范围中）、nin（不在给定的数组范围中）、cs（模糊查询，区分大小写）、cis（模糊查询，不区分大小写））
+                          field:
+                            type: string
+                            default: ''
+                            description: 查询条件Field名称。可选条件：cloud_id(负载均衡的云上ID)、name(负载均衡名称)、region(地域)、zones(可用区)、backup_zones(备可用区)、cloud_vpc_id(vpc的云上ID)、vpc_id(vpc的HCM ID)、lb_type(负载均衡的网络类型)、status(状态)、domain(域名)、cloud_created_time(lb在云上创建时间，标准格式：2006-01-02T15:04:05Z)、cloud_status_time(lb状态变更时间)、creator(创建者)、reviser(修改者)、created_at(创建时间，标准格式：2006-01-02T15:04:05Z)、updated_at(修改时间，标准格式：2006-01-02T15:04:05Z)
+                          value:
+                            type: string
+                            default: ''
+                            description: 查询条件Value值，类型根据field和op的不同而不同
+                      default: ''
+                      description: 过滤规则，最多设置5个rules。如果rules为空数组，op（操作符）将没有作用，代表查询全部数据
+                  description: 查询过滤条件
+        required: true
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/cloud/bizs/{bk_biz_id}/security_groups/{sg_id}/related_resources/biz_resources/{res_biz_id}/load_balancers/list
+          matchSubpath: false
+          timeout: 30
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/task/get_biz_recycle_order:
+    post:
+      operationId: get_recycle_biz_order
+      description: 查询业务的资源回收历史单据信息
+      tags:
+      - SCR
+      - Recycle
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      info:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            remark:
+                              type: string
+                            status:
+                              type: string
+                              description: 单据状态。INIT：待回收，RUNNING：回收执行中，PAUSED：已暂停，DONE：完成
+                            order_id:
+                              type: number
+                            bk_biz_id:
+                              type: number
+                            create_at:
+                              type: string
+                            total_num:
+                              type: number
+                              description: 回收资源总数
+                            update_at:
+                              type: string
+                            failed_num:
+                              type: number
+                              description: 回收失败的资源数量
+                            bk_username:
+                              type: string
+                              description: 提单人
+                            pending_num:
+                              type: number
+                              description: 待回收的资源数量
+                            success_num:
+                              type: number
+                              description: 回收成功的资源数量
+                      count:
+                        type: number
+                        description: 当前规则能匹配到的总记录条数
+                  result:
+                    type: boolean
+                  message:
+                    type: string
+                description: 成功响应
+          description: 成功响应
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - page
+              properties:
+                end:
+                  type: string
+                  default: ''
+                  description: 单据创建时间过滤条件终点日期，格式如"2022-05-01"
+                page:
+                  type: object
+                  default: ''
+                  required:
+                  - limit
+                  - enable_count
+                  properties:
+                    limit:
+                      type: number
+                      default: ''
+                      description: 每页限制条数，最大200
+                    start:
+                      type: number
+                      default: ''
+                      description: 记录开始位置，start 起始值为0
+                    enable_count:
+                      type: boolean
+                      default: ''
+                      description: 本次请求是否为获取数量还是详情的标记
+                  description: 分页信息
+                stage:
+                  type: array
+                  default: ''
+                  description: 状态(枚举值:COMMIT、DETECT、AUDIT、TRANSIT、RETURN、DONE、TERMINATE)
+                start:
+                  type: string
+                  default: ''
+                  description: 单据创建时间过滤条件起点日期，格式如"2022-05-01"
+                order_id:
+                  type: array
+                  default: ''
+                  description: 资源申请单号
+                bk_username:
+                  type: string
+                  default: ''
+                  description: 提单人
+                return_plan:
+                  type: array
+                  default: ''
+                  description: '退回策略(枚举值:"IMMEDIATE": 立即销毁, "DELAY": 延迟销毁)'
+                suborder_id:
+                  type: array
+                  default: ''
+                  description: 资源申请子单号
+                recycle_type:
+                  type: array
+                  default: ''
+                  description: 回收类型(枚举值:常规项目、机房裁撤、过保裁撤、春节保障、滚服项目)
+                resource_type:
+                  type: array
+                  default: ''
+                  description: '需求资源类型(枚举值:"QCLOUDCVM": 腾讯云虚拟机, "IDCPM": IDC物理机, "OTHERS": 其他)'
+        required: true
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/task/findmany/recycle/order
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/cloud/bizs/{bk_biz_id}/security_groups/res/cvm/{res_id}:
+    get:
+      operationId: list_security_group_by_cvm_res_id
+      description: 查询CVM绑定的安全组列表
+      tags:
+      - Cvm
+      - SecurityGroup
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: 安全组的HCM ID
+                        memo:
+                          type: string
+                        name:
+                          type: string
+                          description: 安全组名称
+                        region:
+                          type: string
+                        res_id:
+                          type: string
+                          description: 资源ID
+                        vendor:
+                          type: string
+                          description: 云厂商
+                        creator:
+                          type: string
+                        reviser:
+                          type: string
+                        cloud_id:
+                          type: string
+                          description: 安全组的云上ID
+                        priority:
+                          type: number
+                          description: 安全组排序ID
+                        res_type:
+                          type: string
+                          description: 资源类型
+                        bk_biz_id:
+                          type: number
+                          description: 业务ID，-1表示没有分配到业务
+                        account_id:
+                          type: string
+                          description: 云账号的HCM ID
+                        created_at:
+                          type: string
+                        updated_at:
+                          type: string
+                        rel_creator:
+                          type: string
+                        rel_created_at:
+                          type: string
+                  message:
+                    type: string
+                description: 成功
+          description: 成功
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      - in: path
+        name: res_id
+        schema:
+          type: string
+        required: true
+        description: CVM的HCM ID
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: get
+          path: /api/v1/cloud/bizs/{bk_biz_id}/security_groups/res/cvm/{res_id}
+          matchSubpath: false
+          timeout: 30
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/cloud/bizs/{bk_biz_id}/security_groups/res/load_balancer/{res_id}:
+    get:
+      operationId: list_security_group_by_load_balancer_res_id
+      description: 查询负载均衡绑定的安全组列表
+      tags:
+      - LoadBalancer
+      - SecurityGroup
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: 安全组的HCM ID
+                        memo:
+                          type: string
+                        name:
+                          type: string
+                          description: 安全组名称
+                        region:
+                          type: string
+                        res_id:
+                          type: string
+                          description: 资源ID
+                        vendor:
+                          type: string
+                          description: 云厂商
+                        creator:
+                          type: string
+                        reviser:
+                          type: string
+                        cloud_id:
+                          type: string
+                          description: 安全组的云上ID
+                        priority:
+                          type: number
+                          description: 安全组排序ID
+                        res_type:
+                          type: string
+                          description: 资源类型
+                        bk_biz_id:
+                          type: number
+                          description: 业务ID，-1表示没有分配到业务
+                        account_id:
+                          type: string
+                          description: 云账号的HCM ID
+                        created_at:
+                          type: string
+                        updated_at:
+                          type: string
+                        rel_creator:
+                          type: string
+                        rel_created_at:
+                          type: string
+                  message:
+                    type: string
+                description: 成功
+          description: 成功
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      - in: path
+        name: res_id
+        schema:
+          type: string
+        required: true
+        description: load balancer的HCM ID
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: get
+          path: /api/v1/cloud/bizs/{bk_biz_id}/security_groups/res/load_balancer/{res_id}
+          matchSubpath: false
+          timeout: 30
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/targets/by_topo/list:
+    post:
+      operationId: list_targets_by_topo
+      description: 根据负载均衡、监听器等条件查询RS信息
+      tags:
+      - LoadBalancer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: number
+                        description: 匹配到的实例总条数
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            ip:
+                              type: string
+                            zone:
+                              type: string
+                            inst_id:
+                              type: string
+                              description: 实例的 HCM ID
+                            targets:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    description: RS ID
+                                  ip:
+                                    type: string
+                                    description: RS 绑定的 IP
+                                  memo:
+                                    type: string
+                                  port:
+                                    type: number
+                                    description: 端口
+                                  zone:
+                                    type: string
+                                  lb_id:
+                                    type: string
+                                    description: 负载均衡的 HCM ID
+                                  lbl_id:
+                                    type: string
+                                    description: 监听器的 HCM ID
+                                  weight:
+                                    type: number
+                                    description: 权重
+                                  creator:
+                                    type: string
+                                  inst_id:
+                                    type: string
+                                    description: 实例的 HCM ID
+                                  lb_vips:
+                                    type: array
+                                    description: 负载均衡的 VIP
+                                  reviser:
+                                    type: string
+                                  rule_id:
+                                    type: string
+                                    description: 七层规则的 HCM ID
+                                  lbl_name:
+                                    type: string
+                                  lbl_port:
+                                    type: number
+                                    description: 监听器的端口
+                                  rule_url:
+                                    type: string
+                                    description: 七层规则的 URL
+                                  inst_name:
+                                    type: string
+                                  inst_type:
+                                    type: string
+                                  lb_domain:
+                                    type: string
+                                    description: 负载均衡的域名
+                                  lb_region:
+                                    type: string
+                                  account_id:
+                                    type: string
+                                    description: 云账号的HCM ID
+                                  created_at:
+                                    type: string
+                                  updated_at:
+                                    type: string
+                                  cloud_lb_id:
+                                    type: string
+                                    description: 负载均衡的云上 ID
+                                  rule_domain:
+                                    type: string
+                                    description: 七层规则的域名
+                                  lbl_end_port:
+                                    type: number
+                                    description: 如果该字段不为0，代表监听器端口为端口段，该值为端口段末尾值
+                                  lbl_protocol:
+                                    type: string
+                                    description: 监听器协议，"HTTP"、"HTTPS"、"TCP"、"UDP"、"TCP_SSL"、"QUIC"
+                                  cloud_inst_id:
+                                    type: string
+                                    description: 实例的云上 ID
+                                  cloud_vpc_ids:
+                                    type: array
+                                    description: VPC的云上ID
+                                  lb_network_type:
+                                    type: string
+                                    description: 负载均衡网络类型，"OPEN"(公网)，"INTERNAL"(内网)
+                                  target_group_id:
+                                    type: string
+                                    description: 目标组的 HCM ID
+                                  public_ip_address:
+                                    type: array
+                                  target_group_name:
+                                    type: string
+                                  private_ip_address:
+                                    type: array
+                                  target_group_region:
+                                    type: string
+                                  cloud_target_group_id:
+                                    type: string
+                                    description: 目标组的云上 ID
+                              description: RS列表
+                            inst_name:
+                              type: string
+                            inst_type:
+                              type: string
+                              description: 实例类型："CVM"(云服务器)、"ENI"(弹性网卡)、"CCN"(云联网)
+                            cloud_vpc_ids:
+                              type: array
+                              description: 实例所属VPC的云上 ID
+                  message:
+                    type: string
+          description: ''
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      - in: path
+        name: vendor
+        schema:
+          type: string
+        required: true
+        description: '云厂商(枚举值：tcloud、tcloud-ziyan) '
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - account_id
+              properties:
+                lb_vips:
+                  type: array
+                  default: ''
+                  description: 所属负载均衡的VIP，长度限制500
+                lbl_ports:
+                  type: array
+                  items:
+                    type: number
+                    default: ''
+                  default: ''
+                  description: 所属监听器的端口，长度限制1000
+                rule_urls:
+                  type: array
+                  default: ''
+                  description: 所属七层规则的url列表，长度限制500
+                account_id:
+                  type: string
+                  default: ''
+                  description: 云账号的HCM ID
+                lb_domains:
+                  type: array
+                  default: ''
+                  description: 所属负载均衡的域名，长度限制500
+                lb_regions:
+                  type: array
+                  default: ''
+                  description: CLB所在地域ID（例如：ap-guangzhou），长度限制500
+                target_ips:
+                  type: array
+                  default: ''
+                  description: RS IP列表，长度限制5000
+                cloud_lb_ids:
+                  type: array
+                  default: ''
+                  description: 所属负载均衡的云上ID，长度限制500
+                rule_domains:
+                  type: array
+                  default: ''
+                  description: 所属七层规则的域名列表，长度限制500
+                target_ports:
+                  type: array
+                  items:
+                    type: number
+                    default: ''
+                  default: ''
+                  description: RS port列表，长度限制500
+                lbl_protocols:
+                  type: array
+                  default: ''
+                  description: 所属监听器的协议，"HTTP"、"HTTPS"、"TCP"、"UDP"、"TCP_SSL"、"QUIC"
+                lb_ip_versions:
+                  type: array
+                  default: ''
+                  description: 所属负载均衡的IP版本，如"ipv4"、"ipv6"、"ipv6_nat64"、"ipv6_dual_stack"
+                lb_network_types:
+                  type: array
+                  default: ''
+                  description: 所属负载均衡的网络类型，"OPEN"(公网)，"INTERNAL"(内网)
+        required: false
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/targets/by_topo/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/listeners/by_topo/list:
+    post:
+      operationId: list_listeners_by_topo
+      description: 根据负载均衡条件查询监听器信息
+      tags:
+      - LoadBalancer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: number
+                        description: 匹配到的监听器总条数
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: 监听器的 HCM ID
+                            memo:
+                              type: string
+                            name:
+                              type: string
+                            port:
+                              type: number
+                              description: 监听器端口
+                            lb_id:
+                              type: string
+                              description: 负载均衡的 HCM ID
+                            zones:
+                              type: array
+                            region:
+                              type: string
+                            vendor:
+                              type: string
+                            creator:
+                              type: string
+                            lb_vips:
+                              type: array
+                              description: 负载均衡的 VIP
+                            reviser:
+                              type: string
+                            cloud_id:
+                              type: string
+                              description: 监听器的云上 ID
+                            end_port:
+                              type: number
+                              description: 如果该字段不为0，代表监听器端口为端口段，该值为端口段末尾值
+                            protocol:
+                              type: string
+                              description: 监听器协议，"HTTP"、"HTTPS"、"TCP"、"UDP"、"TCP_SSL"、"QUIC"
+                            bk_biz_id:
+                              type: number
+                              description: 业务ID，-1表示没有分配到业务
+                            lb_domain:
+                              type: string
+                              description: 负载均衡的域名
+                            lb_region:
+                              type: string
+                            scheduler:
+                              type: string
+                              description: 均衡方式(WRR:按权重轮询 LEAST_CONN:最小连接数、IP_HASH:IP Hash)
+                            url_count:
+                              type: number
+                              description: 监听器的规则url数量
+                            account_id:
+                              type: string
+                              description: 云账号的HCM ID
+                            created_at:
+                              type: string
+                            sni_switch:
+                              type: number
+                              description: 是否开启SNI特性(0:关闭 1:开启)，当协议为HTTPS时必传
+                            updated_at:
+                              type: string
+                            cloud_lb_id:
+                              type: string
+                              description: 负载均衡的云上 ID
+                            target_count:
+                              type: number
+                              description: 监听器的RS数量
+                            default_domain:
+                              type: string
+                            lb_network_type:
+                              type: string
+                              description: 负载均衡网络类型，"OPEN"(公网)，"INTERNAL"(内网)
+                            target_group_id:
+                              type: string
+                              description: 监听器绑定的目标组的 HCM ID
+                            rule_domain_count:
+                              type: number
+                              description: 监听器的规则域名数量
+                            non_zero_weight_target_count:
+                              type: number
+                              description: 监听器的权重不为0的RS数量
+                  message:
+                    type: string
+          description: ''
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      - in: path
+        name: vendor
+        schema:
+          type: string
+        required: true
+        description: '云厂商(枚举值：tcloud、tcloud-ziyan) '
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - account_id
+              properties:
+                lb_vips:
+                  type: array
+                  default: ''
+                  description: 所属负载均衡的VIP，长度限制500
+                lbl_ports:
+                  type: array
+                  default: ''
+                  description: 所属监听器的端口，长度限制1000
+                rule_urls:
+                  type: array
+                  default: ''
+                  description: 所属七层规则的url列表，长度限制500
+                account_id:
+                  type: string
+                  default: ''
+                  description: 云账号的HCM ID
+                lb_domains:
+                  type: array
+                  default: ''
+                  description: 所属负载均衡的域名，长度限制500
+                lb_regions:
+                  type: array
+                  default: ''
+                  description: CLB所在地域ID（例如：ap-guangzhou），长度限制500
+                target_ips:
+                  type: array
+                  default: ''
+                  description: RS IP列表，长度限制5000
+                cloud_lb_ids:
+                  type: array
+                  default: ''
+                  description: 所属负载均衡的云上ID，长度限制500
+                rule_domains:
+                  type: array
+                  default: ''
+                  description: 所属七层规则的域名列表，长度限制500
+                target_ports:
+                  type: array
+                  default: ''
+                  description: RS port列表，长度限制500
+                lbl_protocols:
+                  type: array
+                  default: ''
+                  description: 所属监听器的协议，"HTTP"、"HTTPS"、"TCP"、"UDP"、"TCP_SSL"、"QUIC"
+                lb_ip_versions:
+                  type: array
+                  default: ''
+                  description: 所属负载均衡的IP版本，如"ipv4"、"ipv6"、"ipv6_nat64"、"ipv6_dual_stack"
+                lb_network_types:
+                  type: array
+                  default: ''
+                  description: 所属负载均衡的网络类型，"OPEN"(公网)，"INTERNAL"(内网)
+        required: false
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/listeners/by_topo/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/cloud/bizs/{bk_biz_id}/audits/list:
+    post:
+      operationId: list_audit
+      description: 查询操作审计日志
+      tags: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: number
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: number
+                              description: 审计操作记录的HCM ID
+                            rid:
+                              type: string
+                            action:
+                              type: string
+                            res_id:
+                              type: string
+                              description: 操作资源的HCM ID
+                            source:
+                              type: string
+                            vendor:
+                              type: string
+                            app_code:
+                              type: string
+                            operator:
+                              type: string
+                            res_name:
+                              type: string
+                            res_type:
+                              type: string
+                              description: 资源类型
+                            bk_biz_id:
+                              type: number
+                            account_id:
+                              type: string
+                            created_at:
+                              type: string
+                            cloud_res_id:
+                              type: string
+                              description: 操作资源的云上ID
+                            associated_res_id:
+                              type: string
+                            associated_res_name:
+                              type: string
+                            associated_res_type:
+                              type: string
+                            associated_cloud_res_id:
+                              type: string
+                  message:
+                    type: string
+                description: 成功
+          description: 成功
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - page
+              - filter
+              properties:
+                page:
+                  type: object
+                  default: ''
+                  required:
+                  - count
+                  properties:
+                    sort:
+                      type: string
+                      default: ''
+                      description: 排序字段，返回数据将按该字段进行排序
+                    count:
+                      type: boolean
+                      default: ''
+                      description: 是否返回总记录条数。如果为true，查询结果返回总记录条数count，但查询结果详情数据details为空数组，此时start和limit参数将无效，且必需设置为0。如果为false，则根据start和limit参数，返回查询结果详情数据，但总记录条数count为0
+                    limit:
+                      type: number
+                      default: ''
+                      description: 每页限制条数，最大500，不能为0
+                    order:
+                      type: string
+                      default: ''
+                      description: 排序顺序
+                    start:
+                      type: number
+                      default: ''
+                      description: 记录开始位置，start起始值为0
+                  description: 分页设置
+                filter:
+                  type: object
+                  default: ''
+                  required:
+                  - op
+                  - rules
+                  properties:
+                    op:
+                      type: string
+                      default: ''
+                      description: 操作符。如果是and，则表示多个rule之间是且的关系；如果是or，则表示多个rule之间是或的关系
+                    rules:
+                      type: array
+                      items:
+                        type: object
+                        default: ''
+                        required:
+                        - op
+                        - field
+                        - value
+                        properties:
+                          op:
+                            type: string
+                            default: ''
+                            description: 操作符（枚举值：eq（等于，不能为空字符串）、neq（不等于，不能为空字符串）、gt、gte、le、lte、in（在给定的数组范围中）、nin（不在给定的数组范围中）、cs（模糊查询，区分大小写）、cis（模糊查询，不区分大小写））
+                          field:
+                            type: string
+                            default: ''
+                            description: 查询条件Field名称。可选条件：res_id(资源的HCM ID)、cloud_res_id(资源的云上ID)、res_name(资源名称)、res_type(资源类型)、associated_res_id(关联的资源的HCM ID)、associated_cloud_res_id(关联的资源的云上ID)、associated_res_name(关联的资源的名称)、associated_res_type(关联资源类型)、action(动作)、bk_biz_id(业务ID)、vendor(云厂商，枚举值：tcloud、aws、azure、gcp、huawei)、account_id(云账号的HCM ID)、operator(操作者)、source(请求来源（枚举值：api_call[API调用]、web_call[页面调用]、background_sync[后台同步]、asynchronous_tasks[异步任务]）)、rid(请求ID)、app_code(蓝鲸应用标识，当操作通过API执行时会提供)、created_at（创建时间，标准格式：2006-01-02T15:04:05Z）
+                          value:
+                            type: string
+                            default: ''
+                            description: 查询条件Value值，类型根据field和op的不同而不同
+                      default: ''
+                      description: 过滤规则，最多设置5个rules。如果rules为空数组，op（操作符）将没有作用，代表查询全部数据
+                  description: 查询过滤条件
+        required: true
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/cloud/bizs/{bk_biz_id}/audits/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/plans/resources/tickets/overwrite_append:
+    post:
+      operationId: overwrite_append_biz_resource_plan_ticket
+      description: 业务视角覆盖追加资源预测
+      tags:
+      - SCR
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/plans/resources/tickets/overwrite_append
+          matchSubpath: false
+          timeout: 30
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/plans/returns/tickets/overwrite_append:
+    post:
+      operationId: overwrite_append_biz_return_plan_ticket
+      description: 业务视角覆盖追加退回计划
+      tags:
+      - SCR
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/plans/returns/tickets/overwrite_append
+          matchSubpath: false
+          timeout: 30
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/woa/config/capacity/list_with_device_info:
+    post:
+      operationId: list_with_device_info
+      description: 查询各地域/可用区主机（机器/服务器/CVM）的库存容量及对应机型信息，支持按机型、机型族、通用型/专用型（如标准型）、核心类型、CPU/内存、库存状态等条件查询某地域某可用区还有哪些机型有库存、库存是否充足
+      tags:
+      - Apply
+      - Cvm
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: number
+                        description: 当前规则能匹配到的总记录条数
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            zone:
+                              type: string
+                              description: 可用区
+                            memory:
+                              type: number
+                              description: 内存大小（单位：GB）
+                            region:
+                              type: string
+                              description: 地域
+                            capacity:
+                              type: number
+                              description: 库存容量
+                            cpu_core:
+                              type: number
+                              description: CPU核数
+                            core_type:
+                              type: string
+                              description: '核心类型(枚举值：大核心、中核心、小核心)  '
+                            device_type:
+                              type: string
+                              description: 机型
+                            require_type:
+                              type: string
+                              description: '需求类型。1: 常规项目; 2: 春节保障; 3: 机房裁撤; 6: 滚服项目; 7: 小额绿通; 8: 春保资源池; 9: 短租项目'
+                            capacity_flag:
+                              type: number
+                              description: '库存状态标识。1: 无库存（0）; 2: 库存紧张（1~10）; 3: 少量库存（11~50）; 4: 库存充足（51+）'
+                            device_family:
+                              type: string
+                              description: 机型族
+                            device_type_class:
+                              type: string
+                              description: '通/专用机型，SpecialType(专用)，CommonType(通用) '
+                  message:
+                    type: string
+                description: 成功
+          description: 成功
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - page
+              - filter
+              properties:
+                page:
+                  type: object
+                  default: ''
+                  required:
+                  - count
+                  properties:
+                    sort:
+                      type: string
+                      default: ''
+                      description: 排序字段，返回数据将按该字段进行排序
+                    count:
+                      type: boolean
+                      default: ''
+                      description: 是否返回总记录条数。如果为true，查询结果返回总记录条数count，但查询结果详情数据details为空数组，此时start和limit参数将无效，且必需设置为0。如果为false，则根据start和limit参数，返回查询结果详情数据，但总记录条数count为0
+                    limit:
+                      type: number
+                      default: ''
+                      description: 每页限制条数，最大500，不能为0
+                    order:
+                      type: string
+                      default: ''
+                      description: 排序顺序
+                    start:
+                      type: number
+                      default: ''
+                      description: 记录开始位置，start起始值为0
+                  description: 分页设置
+                filter:
+                  type: object
+                  default: ''
+                  required:
+                  - op
+                  - rules
+                  properties:
+                    op:
+                      type: string
+                      default: ''
+                      description: 操作符。如果是and，则表示多个rule之间是且的关系；如果是or，则表示多个rule之间是或的关系
+                    rules:
+                      type: array
+                      items:
+                        type: object
+                        default: ''
+                        required:
+                        - op
+                        - field
+                        - value
+                        properties:
+                          op:
+                            type: string
+                            default: ''
+                            description: 操作符（枚举值：eq（等于，不能为空字符串）、neq（不等于，不能为空字符串）、gt、gte、le、lte、in（在给定的数组范围中）、nin（不在给定的数组范围中）、cs（模糊查询，区分大小写）、cis（模糊查询，不区分大小写））
+                          field:
+                            type: string
+                            default: ''
+                            description: 查询条件Field名称。可选条件：id(负载均衡的HCM ID)、cloud_id(负载均衡的云上ID)、name(负载均衡名)、vendor(云厂商（枚举值：tcloud、aws、azure、gcp、huawei）)、account_id(云账号的HCM ID)、region(地域)、main_zones(主可用区)、backup_zones(备可用区)、cloud_vpc_id(vpc的云上ID)、vpc_id(vpc的HCM ID)、network_type(网络类型)、band_width(带宽，单位Mbps)、isp(运营商类型（枚举值：BGP、CMCC、CUCC、CTCC）)、status(状态)、domain(域名)、cloud_created_time(lb在云上创建时间，标准格式：2006-01-02T15:04:05Z)、cloud_status_time(lb状态变更时间)、cloud_expired_time(lb过期时间)、sync_time(数据同步时间)、creator(创建者)、reviser(修改者)、created_at(创建时间，标准格式：2006-01-02T15:04:05Z)、updated_at(修改时间)
+                          value:
+                            type: string
+                            default: ''
+                            description: 查询条件Value值，类型根据field和op的不同而不同
+                      default: ''
+                      description: 过滤规则，最多设置5个rules。如果rules为空数组，op（操作符）将没有作用，代表查询全部数据
+                  description: 查询过滤条件
+        required: true
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/config/capacity/list_with_device_info
+          matchSubpath: false
+          timeout: 120
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/plans/returns/tickets/{ticket_id}:
+    get:
+      operationId: get_biz_return_plan_ticket
+      description: 查询业务视角退回计划单据详情
+      tags:
+      - SCR
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      details:
+                        type: array
+                      base_info:
+                        type: object
+                        properties:
+                          type:
+                            type: string
+                          remark:
+                            type: string
+                          applicant:
+                            type: string
+                          bk_biz_id:
+                            type: number
+                          type_name:
+                            type: string
+                          bk_biz_name:
+                            type: string
+                          submitted_at:
+                            type: string
+                          op_product_id:
+                            type: number
+                          op_product_name:
+                            type: string
+                          plan_product_id:
+                            type: number
+                          virtual_dept_id:
+                            type: number
+                          plan_product_name:
+                            type: string
+                          virtual_dept_name:
+                            type: string
+                      status_info:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                          message:
+                            type: string
+                          status_name:
+                            type: string
+                  message:
+                    type: string
+          description: ''
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      - in: path
+        name: ticket_id
+        schema:
+          type: string
+        required: true
+        description: 单据 HCM iD
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: get
+          path: /api/v1/woa/bizs/{bk_biz_id}/plans/returns/tickets/{ticket_id}
+          matchSubpath: false
+          timeout: 30
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/plans/resources/tickets/{ticket_id}/terminate:
+    post:
+      operationId: terminate_biz_resource_plan_ticket
+      description: 业务视角终止资源预测单据
+      tags:
+      - SCR
+      responses:
+        default:
+          description: ''
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      - in: path
+        name: ticket_id
+        schema:
+          type: string
+        required: true
+        description: 单据 HCM ID
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/plans/resources/tickets/{ticket_id}/terminate
+          matchSubpath: false
+          timeout: 30
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/images/list:
+    post:
+      operationId: list_biz_image_ext
+      description: 获取业务可使用的镜像列表
+      tags:
+      - Cvm
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                    description: 状态码
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: number
+                        description: 当前规则能匹配到的总记录条数，仅在count查询参数设置为true时返回
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: 镜像 HCM ID
+                            name:
+                              type: string
+                              description: 镜像名称
+                            type:
+                              type: string
+                              description: 镜像类型（私有、公共或其他类型）
+                            state:
+                              type: string
+                              description: 镜像状态，CREATING-创建中，NORMAL-正常，CREATEFAILED-创建失败，USING-使用中，SYNCING-同步中，IMPORTING-导入中，IMPORTFAILED-导入失败
+                            region:
+                              type: string
+                              description: 地域
+                            vendor:
+                              type: string
+                              description: 云厂商
+                            creator:
+                              type: string
+                              description: 创建者
+                            os_type:
+                              type: string
+                              description: 操作系统类型，如Linux、Windows
+                            reviser:
+                              type: string
+                              description: 修改者
+                            cloud_id:
+                              type: string
+                              description: 镜像在云厂商上的ID
+                            platform:
+                              type: string
+                              description: 镜像平台
+                            created_at:
+                              type: string
+                              description: 创建时间，标准格式：2006-01-02T15:04:05Z
+                            updated_at:
+                              type: string
+                              description: 更新时间，标准格式：2006-01-02T15:04:05Z
+                            architecture:
+                              type: string
+                              description: 镜像架构
+                        description: 查询返回的数据，仅在count查询参数设置为false时返回
+                    description: 响应数据
+                  message:
+                    type: string
+                    description: 请求信息
+          description: ''
+      parameters:
+      - in: path
+        name: vendor
+        schema:
+          type: string
+        required: true
+        description: 云厂商（枚举值：tcloud、tcloud-ziyan、aws、gcp、huawei、azure）
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - page
+              properties:
+                name:
+                  type: string
+                  default: ''
+                  description: 镜像名称关键字，模糊匹配（不区分大小写）
+                page:
+                  type: object
+                  default: ''
+                  required:
+                  - count
+                  - limit
+                  - start
+                  properties:
+                    sort:
+                      type: string
+                      default: ''
+                      description: 用哪个字段排序
+                    count:
+                      type: boolean
+                      default: ''
+                      description: 是否返回总记录条数。为 true 时仅返回 count，不返回 details，且 start/limit 需为 0；为 false 时按 start/limit 返回 details，不返回 count
+                    limit:
+                      type: number
+                      default: ''
+                      description: 每页限制条数，最大 500，不能为 0
+                    order:
+                      type: string
+                      default: ''
+                      description: 排序顺序（枚举值：ASC、DESC）
+                    start:
+                      type: number
+                      default: ''
+                      description: 记录开始位置，起始值为 0
+                  description: 分页配置
+                type:
+                  type: string
+                  default: ''
+                  description: 归一化镜像类型。枚举值：public / private / shared
+                region:
+                  type: string
+                  default: ''
+                  description: 地域，精确匹配。如 ap-guangzhou
+                platform:
+                  type: string
+                  default: ''
+                  description: 镜像平台，精确匹配。如 CentOS、TencentOS
+        required: false
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/images/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/plans/resources/tickets/list:
+    post:
+      operationId: list_biz_res_plan_ticket
+      description: 查询业务下资源预测追加/调减的单据
+      tags:
+      - SCR
+      - ResPlan
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                    description: 错误编码。 0表示success，>0表示失败错误
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: number
+                        description: 当前规则能匹配到的总记录条数，仅在 count 查询参数设置为 true 时返回
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: 单据ID
+                            remark:
+                              type: string
+                              description: 备注
+                            status:
+                              type: string
+                              description: 单据状态（枚举值：init, auditing, rejected, partial_rejected, done, failed, partial_failed, revoked, terminated）
+                            applicant:
+                              type: string
+                              description: 提单人
+                            bk_biz_id:
+                              type: number
+                            created_at:
+                              type: string
+                            updated_at:
+                              type: string
+                            bk_biz_name:
+                              type: string
+                            status_name:
+                              type: string
+                              description: 单据状态名称
+                            ticket_type:
+                              type: string
+                              description: 单据类型（枚举值：add, adjust, cancel）
+                            completed_at:
+                              type: string
+                            demand_class:
+                              type: string
+                              description: 预测的需求类型
+                            submitted_at:
+                              type: string
+                              description: 提单时间，格式为YYYY-MM-DD HH:MM:SS，例如2024-01-01 13:59:30
+                            updated_info:
+                              type: object
+                              properties:
+                                cvm:
+                                  type: object
+                                  properties:
+                                    memory:
+                                      type: number
+                                    cpu_core:
+                                      type: number
+                              description: 调整后的需求信息 - 原始报备数
+                            op_product_id:
+                              type: number
+                              description: 运营产品ID
+                            original_info:
+                              type: object
+                              properties:
+                                cvm:
+                                  type: object
+                                  properties:
+                                    memory:
+                                      type: string
+                                    cpu_core:
+                                      type: string
+                              description: 调整前的需求信息 - 原始报备数
+                            op_product_name:
+                              type: string
+                              description: 运营产品名称
+                            plan_product_id:
+                              type: number
+                              description: 规划产品ID
+                            ticket_type_name:
+                              type: string
+                              description: 单据类型名称
+                            plan_product_name:
+                              type: string
+                              description: 规划产品名称
+                            audited_updated_info:
+                              type: object
+                              properties:
+                                cvm:
+                                  type: object
+                                  properties:
+                                    memory:
+                                      type: number
+                                    cpu_core:
+                                      type: number
+                              description: 调整后的需求信息 - 已审批数
+                            audited_original_info:
+                              type: object
+                              properties:
+                                cvm:
+                                  type: object
+                                  properties:
+                                    memory:
+                                      type: string
+                                    cpu_core:
+                                      type: string
+                              description: 调整前的需求信息 - 已审批数
+                  message:
+                    type: string
+          description: ''
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - page
+              properties:
+                page:
+                  type: object
+                  default: ''
+                  required:
+                  - count
+                  - limit
+                  - start
+                  properties:
+                    sort:
+                      type: string
+                      default: ''
+                      description: 排序字段，返回数据将按该字段进行排序，默认根据submitted_at(提单时间)倒序排序，枚举值为：original_cpu_core(原始CPU核心数)、updated_cpu_core(变更后CPU核心数)、original_memory(原始内存大小)、updated_memory(变更后内存大小)、original_disk_size(原始云盘大小)、updated_disk_size(变更后云盘大小)、submitted_at(提单时间)、created_at(创建时间)、updated_at(更新时间)
+                    count:
+                      type: boolean
+                      default: ''
+                      description: 是否返回总记录条数。 如果为true，查询结果返回总记录条数 count，但不返回查询结果详情数据，此时 start 和 limit 参数将无效，且必需设置为0。如果为false，则根据 start 和 limit 参数，返回查询结果详情数据，但不返回总记录条数 count
+                    limit:
+                      type: number
+                      default: ''
+                      description: 每页限制条数，最大500，不能为0
+                    order:
+                      type: string
+                      default: ''
+                      description: 排序顺序，枚举值：ASC(升序)、DESC(降序)
+                    start:
+                      type: number
+                      default: ''
+                      description: 记录开始位置，start 起始值为0
+                  description: 分页设置
+                statuses:
+                  type: array
+                  items:
+                    type: string
+                    default: ''
+                  default: ''
+                  description: 单据状态列表，不传时查询全部，最多传20个
+                applicants:
+                  type: array
+                  items:
+                    type: string
+                    default: ''
+                  default: ''
+                  description: 提单人，精确匹配，不传时查询全部，最多传20个
+                ticket_ids:
+                  type: array
+                  items:
+                    type: string
+                    default: ''
+                  default: ''
+                  description: 资源预测申请单据ID，精确匹配，不传时查询全部，最多传20个
+                ticket_types:
+                  type: array
+                  items:
+                    type: string
+                    default: ''
+                  default: ''
+                  description: 单据类型列表，不传时查询全部，最多传20个
+                submit_time_range:
+                  type: object
+                  default: ''
+                  required:
+                  - end
+                  - start
+                  properties:
+                    end:
+                      type: string
+                      default: ''
+                      description: 结束时间，不能早于start时间，格式为YYYY-MM-DD，例如2024-01-01
+                    start:
+                      type: string
+                      default: ''
+                      description: 起始时间，不能晚于当前时间，格式为YYYY-MM-DD，例如2024-01-01
+                  description: 提单时间范围
+        required: false
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/plans/resources/tickets/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/plans/resources/sub_tickets/list:
+    post:
+      operationId: list_biz_res_plan_sub_ticket
+      description: 查询业务下资源预测追加/调减的单据对应的子单据（子单据和CRP中的单据是一对一的）
+      tags:
+      - SCR
+      - ResPlan
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                    description: 错误编码。 0表示success，>0表示失败错误
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: number
+                        description: 当前规则能匹配到的总记录条数，仅在 count 查询参数设置为 true 时返回
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: 子单ID
+                            stage:
+                              type: string
+                              description: 单据审批阶段（枚举值：admin_audit（部门审批）、crp_audit（公司审批））
+                            crp_sn:
+                              type: string
+                              description: CRP流程单号
+                            status:
+                              type: string
+                              description: 单据状态（枚举值：init, auditing, rejected, failed, done, invalid）
+                            crp_url:
+                              type: string
+                              description: CRP流程单链接
+                            created_at:
+                              type: string
+                            updated_at:
+                              type: string
+                            status_name:
+                              type: string
+                              description: 单据状态名称（枚举值：待审批, 审批中, 审批拒绝, 失败, 成功, 已失效）
+                            submitted_at:
+                              type: string
+                            updated_info:
+                              type: object
+                              properties:
+                                cvm:
+                                  type: object
+                                  properties:
+                                    memory:
+                                      type: number
+                                    cpu_core:
+                                      type: number
+                            original_info:
+                              type: object
+                              properties:
+                                cvm:
+                                  type: object
+                                  properties:
+                                    memory:
+                                      type: string
+                                    cpu_core:
+                                      type: string
+                            sub_ticket_type:
+                              type: string
+                              description: 单据类型（枚举值：add, adjust, cancel, transfer）
+                            ticket_type_name:
+                              type: string
+                              description: 单据类型名称
+                  message:
+                    type: string
+          description: ''
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - page
+              - ticket_id
+              properties:
+                page:
+                  type: object
+                  default: ''
+                  required:
+                  - count
+                  - limit
+                  - start
+                  properties:
+                    sort:
+                      type: string
+                      default: ''
+                      description: 排序字段，返回数据将按该字段进行排序，默认根据submitted_at(提单时间)倒序排序，枚举值为：original_cpu_core(原始CPU核心数)、updated_cpu_core(变更后CPU核心数)、original_memory(原始内存大小)、updated_memory(变更后内存大小)、original_disk_size(原始云盘大小)、updated_disk_size(变更后云盘大小)、submitted_at(提单时间)、created_at(创建时间)、updated_at(更新时间)
+                    count:
+                      type: boolean
+                      default: ''
+                      description: 是否返回总记录条数。 如果为true，查询结果返回总记录条数 count，但不返回查询结果详情数据，此时 start 和 limit 参数将无效，且必需设置为0。如果为false，则根据 start 和 limit 参数，返回查询结果详情数据，但不返回总记录条数 count
+                    limit:
+                      type: number
+                      default: ''
+                      description: 每页限制条数，最大500，不能为0
+                    order:
+                      type: string
+                      default: ''
+                      description: 排序顺序，枚举值：ASC(升序)、DESC(降序)
+                    start:
+                      type: number
+                      default: ''
+                      description: 记录开始位置，start 起始值为0
+                  description: 分页设置
+                statuses:
+                  type: array
+                  items:
+                    type: string
+                    default: ''
+                  default: ''
+                  description: 子单据状态列表，不传时查询全部，最多传20个
+                ticket_id:
+                  type: string
+                  default: ''
+                  description: 资源预测申请主单据ID
+                sub_ticket_types:
+                  type: array
+                  items:
+                    type: string
+                    default: ''
+                  default: ''
+                  description: 子单据类型列表，不传时查询全部，最多传20个
+        required: false
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/plans/resources/sub_tickets/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/plans/resources/gpu/demands/orders/list:
+    post:
+      operationId: list_biz_gpu_demand_order
+      description: 查询业务下GPU需求提报的单据
+      tags:
+      - SCR
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: number
+                        description: 当前规则能匹配到的总记录条数，仅在 count 查询参数设置为 true 时返回
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              description: 单据ID
+                            remark:
+                              type: string
+                            status:
+                              type: string
+                              description: 单据状态，枚举值：INIT（待评审）、PENDING（评审中）、DONE（已评审）、REJECT（部分已驳回）、REJECT_ALL（全部已驳回）、TERMINATE（已终止）
+                            creator:
+                              type: string
+                            reviser:
+                              type: string
+                            bk_biz_id:
+                              type: number
+                            created_at:
+                              type: string
+                            updated_at:
+                              type: string
+                            template_id:
+                              type: string
+                              description: 需求excel模版 ID
+                            op_product_id:
+                              type: number
+                              description: 运营产品ID
+                            total_gpu_num:
+                              type: number
+                              description: 需求卡数，由关联子单的 gpu_num 字段汇总求和得出
+                            total_qpm_max:
+                              type: number
+                              description: QPM（月调用峰值），由关联子单的 qpm_max 字段汇总求和得出
+                            op_product_name:
+                              type: string
+                              description: 运营产品名称
+                        description: 查询返回的数据列表，仅在 count 查询参数设置为 false 时返回
+                  message:
+                    type: string
+                description: 成功
+          description: 成功
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - page
+              - filter
+              properties:
+                page:
+                  type: object
+                  default: ''
+                  required:
+                  - count
+                  properties:
+                    sort:
+                      type: string
+                      default: ''
+                      description: 排序字段，返回数据将按该字段进行排序
+                    count:
+                      type: boolean
+                      default: ''
+                      description: 是否返回总记录条数。如果为true，查询结果返回总记录条数count，但查询结果详情数据details为空数组，此时start和limit参数将无效，且必需设置为0。如果为false，则根据start和limit参数，返回查询结果详情数据，但总记录条数count为0
+                    limit:
+                      type: number
+                      default: ''
+                      description: 每页限制条数，最大500，不能为0
+                    order:
+                      type: string
+                      default: ''
+                      description: 排序顺序
+                    start:
+                      type: number
+                      default: ''
+                      description: 记录开始位置，start起始值为0
+                  description: 分页设置
+                filter:
+                  type: object
+                  default: ''
+                  required:
+                  - op
+                  - rules
+                  properties:
+                    op:
+                      type: string
+                      default: ''
+                      description: 操作符。如果是and，则表示多个rule之间是且的关系；如果是or，则表示多个rule之间是或的关系
+                    rules:
+                      type: array
+                      items:
+                        type: object
+                        default: ''
+                        required:
+                        - op
+                        - field
+                        - value
+                        properties:
+                          op:
+                            type: string
+                            default: ''
+                            description: 操作符（枚举值：eq（等于，不能为空字符串）、neq（不等于，不能为空字符串）、gt、gte、le、lte、in（在给定的数组范围中）、nin（不在给定的数组范围中）、cs（模糊查询，区分大小写）、cis（模糊查询，不区分大小写））
+                          field:
+                            type: string
+                            default: ''
+                            description: 查询条件Field名称。可选条件：id(单据ID),op_product_id(运营产品ID),op_product_name(运营产品名称),template_id(模版ID),status(主单状态，枚举值：INIT（待评审）、PENDING（评审中）、DONE（已评审）、REJECT（部分已驳回）、REJECT_ALL（全部已驳回）、TERMINATE（已终止）),creator(创建者),reviser(最后修改者),created_at(创建时间，格式为RFC3339，例如2006-01-02T15:04:05Z),updated_at(更新时间，格式为RFC3339，例如2006-01-02T15:04:05Z)
+                          value:
+                            type: string
+                            default: ''
+                            description: 查询条件Value值，类型根据field和op的不同而不同
+                      default: ''
+                      description: 过滤规则，最多设置5个rules。如果rules为空数组，op（操作符）将没有作用，代表查询全部数据
+                  description: 查询过滤条件
+        required: true
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/plans/resources/gpu/demands/orders/list
+          matchSubpath: false
+          timeout: 120
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/plans/resources/gpu/demands/suborders/summary:
+    post:
+      operationId: list_biz_gpu_demand_suborder_summary
+      description: 按 GPU 需求主单汇总子单数据（按需求分类汇总卡数 / QPM，并带按月列）
+      tags:
+      - SCR
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                  data:
+                    type: object
+                    properties:
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            months:
+                              type: object
+                              properties:
+                                2026-04:
+                                  type: number
+                              description: months 是一个字典，key为需求年月：`YYYY-MM`，value 为该月 gpu_num 与 qpm_max 之和（二者通常互斥）
+                            gpu_num:
+                              type: number
+                              description: 该类别下子单 gpu_num 之和
+                            qpm_max:
+                              type: number
+                              description: 该类别下子单 qpm_max 之和
+                            demand_type:
+                              type: string
+                      order_id:
+                        type: string
+                  message:
+                    type: string
+          description: ''
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - order_id
+              properties:
+                order_id:
+                  type: string
+                  default: ''
+                  description: 需求单据ID
+                statuses:
+                  type: array
+                  items:
+                    type: string
+                    default: ''
+                  default: ''
+                  description: 子单据状态列表，不传时查询全部，最多传20个
+                demand_type:
+                  type: string
+                  default: ''
+                  description: 需求分类（需求表格的子 sheet 名称）
+                demand_year:
+                  type: number
+                  default: ''
+                  description: 需求年份
+                demand_month:
+                  type: number
+                  default: ''
+                  description: 需求月份
+        required: false
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/plans/resources/gpu/demands/suborders/summary
           matchSubpath: false
           timeout: 0
         pluginConfigs: []
