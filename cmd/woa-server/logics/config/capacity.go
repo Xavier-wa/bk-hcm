@@ -54,7 +54,8 @@ type CapacityIf interface {
 }
 
 // NewCapacityOp creates a capacity interface
-func NewCapacityOp(client *client.ClientSet, subnet SubnetIf, vpc VpcIf, thirdCli *thirdparty.Client, cmdbCli cmdb.Client) CapacityIf {
+func NewCapacityOp(client *client.ClientSet, subnet SubnetIf, vpc VpcIf, thirdCli *thirdparty.Client,
+	cmdbCli cmdb.Client) CapacityIf {
 	return &capacity{
 		client:  client,
 		cvm:     thirdCli.OldCVM,
@@ -624,6 +625,11 @@ func (c *capacity) createCapacityReq(kt *kit.Kit, input *types.GetCapacityParam,
 		logs.Errorf("failed to get business3 id, err: %v, input: %+v, rid: %s", err, cvt.PtrToVal(input), kt.Rid)
 		return nil, err
 	}
+	deptID, err := c.getVirtualDeptID(kt, input)
+	if err != nil {
+		logs.Errorf("failed to get virtual dept id, err: %v, input: %+v, rid: %s", err, cvt.PtrToVal(input), kt.Rid)
+		return nil, err
+	}
 
 	req := &cvmapi.CapacityReq{
 		ReqMeta: cvmapi.ReqMeta{
@@ -632,7 +638,7 @@ func (c *capacity) createCapacityReq(kt *kit.Kit, input *types.GetCapacityParam,
 			Method:  cvmapi.CvmCapacityMethod,
 		},
 		Params: &cvmapi.CapacityParam{
-			DeptId:       cvmapi.CvmDeptId,
+			DeptId:       deptID,
 			Business3Id:  business3ID,
 			CloudCampus:  zone,
 			InstanceType: input.DeviceType,
@@ -681,6 +687,39 @@ func (c *capacity) getBusiness3ID(kt *kit.Kit, input *types.GetCapacityParam) (i
 	}
 
 	return business3ID, nil
+}
+
+// getVirtualDeptID 获取库存查询使用的部门ID，取业务在公司cmdb的实际虚拟部门，与提单使用的部门保持一致。
+// 以下场景无业务实际部门可用，使用默认部门(互娱资源公共平台所属部门)查询库存：
+//   - 未指定业务，如库存同步任务按机型、地域、可用区全量同步
+//   - 滚服项目、春保资源池，使用管理业务的运营产品申请主机
+func (c *capacity) getVirtualDeptID(kt *kit.Kit, input *types.GetCapacityParam) (int, error) {
+	if input == nil || input.BizID == 0 || input.RequireType.IsUseManageBizPlan() {
+		logs.Warnf("can not find input bizID or use manage biz plan, use default dept id: %d, input: %+v, rid: %s",
+			cvmapi.CvmDeptId, cvt.PtrToVal(input), kt.Rid)
+		return cvmapi.CvmDeptId, nil
+	}
+
+	req := &cmdb.SearchBizCompanyCmdbInfoParams{BizIDs: []int64{input.BizID}}
+	resp, err := c.cmdbCli.SearchBizCompanyCmdbInfo(kt, req)
+	if err != nil {
+		logs.Errorf("failed to search biz company cmdb info, err: %v, bizID: %d, rid: %s", err, input.BizID, kt.Rid)
+		return 0, err
+	}
+	if resp == nil || len(*resp) != 1 {
+		logs.Errorf("search biz company cmdb info, but resp is empty or len resp != 1, bizID: %d, rid: %s",
+			input.BizID, kt.Rid)
+		return 0, fmt.Errorf("can not find biz company cmdb info, bizID: %d", input.BizID)
+	}
+
+	virtualDeptID := (*resp)[0].VirtualDeptID
+	if virtualDeptID == 0 {
+		logs.Warnf("biz has no virtual dept, use default dept id: %d, bizID: %d, rid: %s", cvmapi.CvmDeptId,
+			input.BizID, kt.Rid)
+		return cvmapi.CvmDeptId, nil
+	}
+
+	return int(virtualDeptID), nil
 }
 
 func (c *capacity) querySubnet(kt *kit.Kit, region, zone, vpc string) ([]*cvmapi.SubnetInfo, error) {
