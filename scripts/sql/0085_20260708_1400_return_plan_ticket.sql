@@ -18,7 +18,7 @@
  */
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9
+    SQLVER=0085,HCMVER=v1.9.2.11
 
     Notes:
     1. 新增退回计划主单据表 return_plan_ticket
@@ -97,6 +97,6 @@ values ('return_plan_ticket', '0'),
        ('return_plan_sub_ticket', '0');
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.9.2.11' as `hcm_ver`, '0085' as `sql_ver`;
 
 COMMIT;
