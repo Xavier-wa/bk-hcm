@@ -40,7 +40,7 @@ import (
 )
 
 // intentMaxTokens caps the response length for the intent classification call.
-const intentMaxTokens = 16
+const intentMaxTokens = 1024
 
 // Classify recognises the user intent of the current turn with a lightweight LLM call.
 //
