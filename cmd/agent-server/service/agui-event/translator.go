@@ -80,10 +80,8 @@ func (t *customTranslator) PostRunFinalizationEvents(ctx context.Context) ([]agu
 // 事件类型取 interrupt key 的第一段（第一个 ":" 之前）。
 // 若该中断不应面向用户展示，返回 (nil, false)。
 func buildInterruptCustomEvent(ctx context.Context, evt *event.Event) (aguievents.Event, bool) {
-	rid := rest.RidFromContext(ctx)
 	meta, ok := extractPregelMeta(ctx, evt)
 	if !ok {
-		logs.Warnf("buildInterruptCustomEvent: failed to extract PregelStepMetadata, rid: %s", rid)
 		return nil, false
 	}
 	name, ok := resolveInterruptCustomEventName(meta)
@@ -114,12 +112,10 @@ func resolveInterruptCustomEventName(meta graph.PregelStepMetadata) (string, boo
 func extractPregelMeta(ctx context.Context, evt *event.Event) (graph.PregelStepMetadata, bool) {
 	rid := rest.RidFromContext(ctx)
 	if evt == nil || evt.StateDelta == nil {
-		logs.Warnf("extractPregelMeta: evt is nil or evt.StateDelta is nil, rid: %s", rid)
 		return graph.PregelStepMetadata{}, false
 	}
 	raw, ok := evt.StateDelta[graph.MetadataKeyPregel]
 	if !ok || len(raw) == 0 {
-		logs.Warnf("extractPregelMeta: evt.StateDelta[graph.MetadataKeyPregel] is nil or empty, rid: %s", rid)
 		return graph.PregelStepMetadata{}, false
 	}
 	var meta graph.PregelStepMetadata
