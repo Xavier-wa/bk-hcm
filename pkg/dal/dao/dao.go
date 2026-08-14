@@ -28,6 +28,7 @@ import (
 
 	"hcm/pkg/cc"
 	accountset "hcm/pkg/dal/dao/account-set"
+	daoaiagent "hcm/pkg/dal/dao/aiagent"
 	"hcm/pkg/dal/dao/application"
 	daoasync "hcm/pkg/dal/dao/async"
 	"hcm/pkg/dal/dao/audit"
@@ -223,6 +224,8 @@ type Set interface {
 	ZiyanCvmModifyRecord() cvmapply.ZiyanCvmModifyRecordInterface
 	ZiyanCvmApplyUserRecommend() cvmapply.ZiyanCvmApplyUserRecommendInterface
 	ZiyanCvmApplyBizRecommend() cvmapply.ZiyanCvmApplyBizRecommendInterface
+
+	AiagentSession() daoaiagent.AiagentSession
 
 	Txn() *Txn
 }
@@ -1355,4 +1358,9 @@ func (s *set) ZiyanCvmApplyBizRecommend() cvmapply.ZiyanCvmApplyBizRecommendInte
 		Orm:   s.orm,
 		IDGen: s.idGen,
 	}
+}
+
+// AiagentSession return aiagent session dao.
+func (s *set) AiagentSession() daoaiagent.AiagentSession {
+	return daoaiagent.NewAiagentSessionDao(s.orm, s.idGen, s.audit)
 }

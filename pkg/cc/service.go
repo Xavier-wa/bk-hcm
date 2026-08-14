@@ -20,10 +20,20 @@
 package cc
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+
+	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/criteria/errf"
+	"hcm/pkg/logs"
+	pkgversion "hcm/pkg/version"
 )
 
 var (
@@ -84,6 +94,12 @@ type ApiServerSetting struct {
 	Service Service      `yaml:"service"`
 	Log     LogOption    `yaml:"log"`
 	Tenant  TenantConfig `yaml:"tenant"`
+	// MCP 配置对外部提供服务的 MCP ingress、MCP↔A2A bridge、对内部提供服务的 HCM MCP server。
+	// 三段子配置默认全部关闭（Enable=false），对存量部署零影响。
+	MCP MCPServerSetting `yaml:"mcp"`
+	// A2APassthrough 配置 A2A 反向代理（A2A JSON-RPC + AgentCard 透传）。
+	// 默认关闭（Enable=false），不影响现有 proxy 链路。
+	A2APassthrough A2APassthroughSetting `yaml:"a2aPassthrough"`
 }
 
 // trySetFlagBindIP try set flag bind ip.
@@ -96,6 +112,8 @@ func (s *ApiServerSetting) trySetDefault() {
 	s.Network.trySetDefault()
 	s.Service.trySetDefault()
 	s.Log.trySetDefault()
+	s.MCP.trySetDefault()
+	s.A2APassthrough.trySetDefault()
 
 	return
 }
@@ -109,6 +127,14 @@ func (s ApiServerSetting) Validate() error {
 
 	if err := s.Service.validate(); err != nil {
 		return err
+	}
+
+	if err := s.MCP.Validate(); err != nil {
+		return fmt.Errorf("mcp: %w", err)
+	}
+
+	if err := s.A2APassthrough.Validate(); err != nil {
+		return fmt.Errorf("a2aPassthrough: %w", err)
 	}
 
 	return nil
@@ -837,4 +863,1176 @@ func (s *PurchaseToResourcePool) validate() error {
 	}
 
 	return nil
+}
+
+// AgentStorage defines persistent storage settings for the AGUI runner.
+// When session DSN is empty, chat history uses in-memory storage (lost on restart).
+// When memory DSN is empty, long-term memory is disabled.
+type AgentStorage struct {
+	Session    AgentSessionStorage    `yaml:"session"`
+	Memory     AgentMemoryStorage     `yaml:"memory"`
+	Checkpoint AgentCheckpointStorage `yaml:"checkpoint"`
+}
+
+func (s *AgentStorage) trySetDefault() {
+	s.Session.trySetDefault()
+	s.Memory.trySetDefault()
+	s.Checkpoint.trySetDefault()
+}
+
+// AgentSessionStorage defines MySQL settings for AGUI chat history (session) persistence.
+type AgentSessionStorage struct {
+	// DSN is the MySQL connection string. Leave empty to use in-memory storage.
+	// Example: "user:password@tcp(host:3306)/dbname?charset=utf8mb4&parseTime=true"
+	DSN string `yaml:"dsn"`
+	// TablePrefix is an optional prefix for all session table names (e.g. "hcm_").
+	TablePrefix string `yaml:"tablePrefix"`
+	// SkipDBInit skips automatic table creation. Set true if tables are managed externally.
+	SkipDBInit bool `yaml:"skipDBInit"`
+	// Summary configures automatic LLM-based session summarization.
+	// Requires the AGUI LLM model to be configured (aidev section).
+	Summary AgentSessionSummary `yaml:"summary"`
+}
+
+func (s *AgentSessionStorage) trySetDefault() {
+	s.Summary.trySetDefault()
+}
+
+// AgentSessionSummary configures LLM-based session summarization for the AGUI runner.
+// When enabled, the configured LLM (aidev section) compresses old conversation history
+// into a summary once the configured thresholds are met, preventing context-window overflow.
+type AgentSessionSummary struct {
+	// Enabled turns on automatic session summarization. Default: false.
+	Enabled bool `yaml:"enabled"`
+	// Policy controls how multiple thresholds combine: "any" (OR) or "all" (AND). Default: "any".
+	Policy string `yaml:"policy"`
+	// EventThreshold triggers summarization when un-summarised event count exceeds this value.
+	// 0 means this condition is not used.
+	EventThreshold int `yaml:"eventThreshold"`
+	// TokenThreshold triggers summarization when estimated token count exceeds this value.
+	// 0 means this condition is not used.
+	TokenThreshold int `yaml:"tokenThreshold"`
+	// IdleThreshold triggers summarization when the session has been idle for this long.
+	// Use Go duration format, e.g. "30m", "1h". Empty means this condition is not used.
+	IdleThreshold string `yaml:"idleThreshold"`
+	// MaxWords caps the word count of the generated summary. 0 means no cap.
+	MaxWords int `yaml:"maxWords"`
+}
+
+func (s *AgentSessionSummary) trySetDefault() {}
+
+// AgentMemoryStorage defines settings for AGUI long-term memory persistence.
+// Backend controls which storage engine to use:
+//   - "mysql"     – MySQL-backed storage, requires DSN.
+//   - "sqlitevec" – SQLite + sqlite-vec (vector search), requires DBPath and Embedding config.
+//   - ""          – (default) falls back to "mysql" when DSN is set, otherwise disabled.
+type AgentMemoryStorage struct {
+	// Backend selects the memory storage engine: "mysql" or "sqlitevec".
+	// When empty, auto-detected from other fields (DSN → mysql, DBPath → sqlitevec).
+	Backend string `yaml:"backend"`
+	// DSN is the MySQL connection string (backend=mysql). Leave empty to disable MySQL memory.
+	DSN string `yaml:"dsn"`
+	// DBPath is the SQLite database file path (backend=sqlitevec).
+	// Example: "/data/agent-server/memories.db"
+	DBPath string `yaml:"dbPath"`
+	// TableName is the table name for storing memories. Default: "memories".
+	TableName string `yaml:"tableName"`
+	// SkipDBInit skips automatic table creation. Set true if tables are managed externally.
+	SkipDBInit bool `yaml:"skipDBInit"`
+	// Limit is the maximum number of memory entries per user. Default: 100.
+	Limit int `yaml:"limit"`
+	// MaxSearchResults limits the number of results returned by vector search (Top-K).
+	// Default: 10 (framework default). 0 means use framework default.
+	MaxSearchResults int `yaml:"maxSearchResults"`
+	// PreloadLimit sets the number of most-recent memories to inject into the system
+	// prompt at the start of each conversation turn. Default: 20. 0 disables preloading.
+	PreloadLimit int `yaml:"preloadLimit"`
+	// Embedding configures the embedding model for vector-based memory (backend=sqlitevec).
+	Embedding AgentEmbeddingConfig `yaml:"embedding"`
+	// AutoExtract enables automatic LLM-based memory extraction after each Run.
+	// When true, the agent calls an LLM after every conversation turn to identify
+	// memorable facts and persist them to the memories table.
+	AutoExtract bool `yaml:"autoExtract"`
+	// AutoExtractMessages triggers extraction only when the number of new messages
+	// exceeds this value. 0 means no message-count gate (always consider extracting).
+	AutoExtractMessages int `yaml:"autoExtractMessages"`
+	// AutoExtractInterval triggers extraction only when the given duration has
+	// elapsed since the last extraction. 0 / empty means no interval gate.
+	// Accepts Go duration strings, e.g. "30m", "1h".
+	AutoExtractInterval string `yaml:"autoExtractInterval"`
+	// AutoExtractPolicy combines the above checkers: "any" (OR, default) or "all" (AND).
+	// "any"  – extract when at least one enabled checker passes.
+	// "all"  – extract only when every enabled checker passes.
+	AutoExtractPolicy string `yaml:"autoExtractPolicy"`
+	// ExtractPromptFile is the path to a custom extraction prompt file.
+	// When set, the file content replaces the framework's default extraction prompt,
+	// allowing fine-grained control over what the LLM considers memorable.
+	// Supports absolute or relative paths (relative to the process working directory).
+	ExtractPromptFile string `yaml:"extractPromptFile"`
+	// ExtractPrompt is the extract prompt content.
+	ExtractPrompt string
+}
+
+func (s *AgentMemoryStorage) trySetDefault() {
+	s.ExtractPrompt = loadPromptFile(s.ExtractPromptFile)
+}
+
+// AgentCheckpointStorage defines checkpoint storage settings for the graph agent.
+// Checkpoint is used for interrupt/resume support in graph-based workflows.
+// When backend is empty or "inmemory", checkpoints are stored in memory (lost on restart).
+// When backend is "sqlite", checkpoints are persisted to a SQLite database.
+type AgentCheckpointStorage struct {
+	// Backend selects the checkpoint storage engine: "inmemory" or "sqlite".
+	// Default: "inmemory".
+	Backend enumor.GraphCheckpointBackend `yaml:"backend"`
+	// DBPath is the SQLite database file path (backend=sqlite).
+	// Example: "/data/agent-server/checkpoint.db"
+	DBPath string `yaml:"dbPath"`
+}
+
+func (s *AgentCheckpointStorage) trySetDefault() {
+	if s.Backend == "" {
+		s.Backend = enumor.GraphCheckpointBackendInMemory
+	}
+}
+
+// Validate validates the checkpoint storage configuration.
+func (s *AgentCheckpointStorage) Validate() error {
+	if err := s.Backend.Validate(); err != nil {
+		return err
+	}
+
+	if s.Backend == enumor.GraphCheckpointBackendSQLite {
+		if s.DBPath == "" {
+			return fmt.Errorf("dbPath is required when backend is sqlite")
+		}
+	}
+	return nil
+}
+
+// ResolveMemoryBackend determines which backend to use based on explicit config or auto-detection.
+func (s *AgentMemoryStorage) ResolveMemoryBackend() string {
+	if b := strings.TrimSpace(strings.ToLower(s.Backend)); b != "" {
+		return b
+	}
+	if strings.TrimSpace(s.DBPath) != "" {
+		return "sqlitevec"
+	}
+	if strings.TrimSpace(s.DSN) != "" {
+		return "mysql"
+	}
+	return ""
+}
+
+// AgentEmbeddingConfig configures the embedding model used by vector-based memory backends.
+// The API endpoint and authentication are inherited from the aidev gateway config,
+// so only model-specific settings are needed here.
+type AgentEmbeddingConfig struct {
+	// Model is the embedding model name. Default: "text-embedding-3-small".
+	Model string `yaml:"model"`
+	// Dimensions is the embedding vector dimension. Default: 1536.
+	Dimensions int `yaml:"dimensions"`
+}
+
+// AgentMCPFilter configures MCP tool name filtering for the AGUI agent.
+type AgentMCPFilter struct {
+	// Mode is the filter mode: "include" (default) keeps only listed tools,
+	// "exclude" removes listed tools.
+	Mode enumor.MCPFilterMode `yaml:"mode"`
+	// Names lists the tool names to include or exclude.
+	Names []string `yaml:"names"`
+}
+
+// Validate validates the MCP filter config.
+func (s *AgentMCPFilter) Validate() error {
+	if err := s.Mode.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// AgentMCPReconnect configures automatic MCP session reconnection.
+type AgentMCPReconnect struct {
+	// Enabled turns on auto-reconnect when the session expires or drops.
+	Enabled bool `yaml:"enabled"`
+	// MaxAttempts is the maximum reconnect attempts per operation (1-10, default: 3).
+	MaxAttempts int `yaml:"maxAttempts"`
+}
+
+// AgentMCPToolSet defines one MCP server toolset for the AGUI agent.
+type AgentMCPToolSet struct {
+	// Name is a unique label for this toolset (used for conflict resolution).
+	Name string `yaml:"name"`
+	// Type identifies the toolset category. When set to "bkaidev", the server
+	// automatically injects an X-Bkapi-Authorization header on every MCP request
+	// using tools.bkAIDev credentials (appCode, appSecret) and the bk_ticket
+	// extracted from the incoming HTTP request Cookie.
+	Type constant.MCPToolSetType `yaml:"type"`
+	// Transport is the connection method: "stdio", "sse", or "streamable_http".
+	Transport string `yaml:"transport"`
+	// ServerURL is the MCP server base URL (required for sse / streamable_http).
+	ServerURL string `yaml:"serverUrl"`
+	// Headers are extra HTTP headers sent on every request (e.g. auth tokens).
+	Headers map[string]string `yaml:"headers"`
+	// Command is the executable to launch (required for stdio).
+	Command string `yaml:"command"`
+	// Args are the arguments passed to the stdio command.
+	Args []string `yaml:"args"`
+	// Timeout is the per-request deadline, e.g. "10s", "30s". Empty means no timeout.
+	Timeout string `yaml:"timeout"`
+	// Filter optionally restricts which tools from this MCP server are exposed.
+	Filter *AgentMCPFilter `yaml:"filter"`
+	// Reconnect configures automatic session reconnection on failure.
+	Reconnect *AgentMCPReconnect `yaml:"reconnect"`
+	// RequireConfirm when true requires the user to explicitly send "确认"
+	// before any tool in this MCP toolset is actually executed.
+	RequireConfirm bool `yaml:"requireConfirm"`
+	// Scenes lists the agent scenes this toolset applies to (e.g. "host_apply", "resource_query").
+	// An empty slice means the toolset applies to all scenes (backward-compatible default).
+	Scenes []enumor.IntentType `yaml:"scenes"`
+}
+
+// Validate validates the MCP tool set config.
+func (s *AgentMCPToolSet) Validate() error {
+	if s.Filter != nil {
+		if err := s.Filter.Validate(); err != nil {
+			return err
+		}
+	}
+	for _, scene := range s.Scenes {
+		if err := scene.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if err := s.Type.Validate(); err != nil {
+		return err
+	}
+	s.Type = s.Type.Normalize()
+
+	return nil
+}
+
+// AgentBKAIDevSyncSkillsConfig holds all skill configuration: filesystem paths
+// for the skill repository and BKAIDev-specific sync parameters.
+type AgentBKAIDevSyncSkillsConfig struct {
+	// Root is the primary skills directory (each sub-directory with a SKILL.md is a skill).
+	// Default Root is "./skills".
+	Root string `yaml:"root"`
+	// ExtraDirs lists additional skill directories scanned at lower precedence.
+	ExtraDirs []string `yaml:"extraDirs"`
+	// ArchiveDir stores downloaded skill zip files during sync (separate from Root).
+	// Default ArchiveDir is "./{ROOT}/skill-archive".
+	ArchiveDir string `yaml:"archiveDir"`
+	// StorePath overrides the default localstore file path ({root}/store.json).
+	// Default StorePath is "./{ROOT}/store.json".
+	StorePath string `yaml:"storePath"`
+	// Enabled turns on skill sync from BKAIDev. Default: false.
+	Enabled bool `yaml:"enabled"`
+	// SpaceID is the BKAIDev space identifier (list_app_v1_skills space_id).
+	SpaceID string `yaml:"spaceID"`
+	// SyncInterval is the cron sync interval, e.g. "5m". Default: "5m".
+	SyncInterval string `yaml:"syncInterval"`
+	// TagName is a map of tag filters for filtering skills after listing.
+	// Key is the first-level tag name, value is the second-level tag name (can be empty).
+	// Example: {"status": "enabled", "hcm_agent": "agent1"}
+	// Since ListSkills API does not support array tag_name filtering yet,
+	// we filter skills locally after fetching the full list.
+	TagName map[string]string `yaml:"tagName"`
+	// MaxParallel limits concurrent skill installs. Limit range: [1, 10]. Default: 5.
+	MaxParallel int `yaml:"maxParallel"`
+}
+
+// StoreFile returns the localstore file path, defaulting to {root}/store.json.
+func (c *AgentBKAIDevSyncSkillsConfig) StoreFile() string {
+	return c.StorePath
+}
+
+// trySetDefault fills in zero-value fields with sensible defaults.
+func (c *AgentBKAIDevSyncSkillsConfig) trySetDefault() {
+	if c.MaxParallel <= 0 {
+		c.MaxParallel = 5
+	}
+	if c.SyncInterval == "" {
+		c.SyncInterval = "5m"
+	}
+
+	// c.Root为空默认为当前目录下的skills
+	if strings.TrimSpace(c.Root) == "" {
+		c.Root = "./skills"
+	}
+
+	if c.ArchiveDir == "" {
+		// ArchiveDir 为空则默认为ROOT下面/skill-archive
+		c.ArchiveDir = filepath.Join(strings.TrimSpace(c.Root), "skill-archive")
+	}
+
+	if c.StorePath == "" {
+		// StorePath为空 ROOT为空 则默认为.下面/skill-version.json
+		c.StorePath = filepath.Join(strings.TrimSpace(c.Root), "skill-version.json")
+	}
+}
+
+// Validate checks skill sync settings.
+func (c *AgentBKAIDevSyncSkillsConfig) Validate() error {
+	if c.SpaceID == "" {
+		return errors.New("spaceID is not set")
+	}
+
+	if c.MaxParallel <= 0 || c.MaxParallel > 10 {
+		return errors.New("maxParallel must be between 1 and 10")
+	}
+
+	return nil
+}
+
+// AgentBKAIDevConfig holds BK application credentials used by MCP toolsets
+// of type "bkaidev" to construct the X-Bkapi-Authorization header.
+type AgentBKAIDevConfig struct {
+	// AppCode is the BK application code (bk_app_code).
+	AppCode string `yaml:"appCode"`
+	// AppSecret is the BK application secret (bk_app_secret).
+	AppSecret string `yaml:"appSecret"`
+}
+
+// AgentToolProxyConfig configures MCP tool proxy meta-tools for Graph mode.
+type AgentToolProxyConfig struct {
+	// Enabled turns on Tool Proxy (search_tools / get_tool_schema / execute_tool).
+	Enabled bool `yaml:"enabled"`
+	// InitVirtualUser selects which virtual-user key to use from global_config auth/access_token.
+	InitVirtualUser string `yaml:"initVirtualUser"`
+	// RefreshInterval controls periodic MCP tool list refresh, e.g. "30m".
+	RefreshInterval string `yaml:"refreshInterval"`
+	// Required when true, Tool Proxy build failure aborts Graph agent startup.
+	Required bool `yaml:"required"`
+	// TopN is the maximum number of tools returned by search_tools.
+	TopN int `yaml:"topN"`
+	// ScoreThreshold is a relative score cutoff (0.0–1.0). Results scoring below
+	// maxScore*ScoreThreshold are discarded before the TopN cap is applied. Default: 0.
+	ScoreThreshold float64 `yaml:"scoreThreshold"`
+	// ToolTags maps raw MCP tool names to extra search keywords (e.g. Chinese synonyms).
+	ToolTags map[string][]string `yaml:"toolTags"`
+	// Embedding holds model/dimension config for Tool Proxy semantic search.
+	Embedding AgentEmbeddingConfig `yaml:"embedding"`
+}
+
+// GetRefreshInterval returns the refresh interval.
+func (s *AgentToolProxyConfig) GetRefreshInterval() (time.Duration, error) {
+	if s.RefreshInterval == "" {
+		return 0, errors.New("refreshInterval is required")
+	}
+	interval, parseErr := time.ParseDuration(strings.TrimSpace(s.RefreshInterval))
+	if parseErr != nil || interval <= 0 {
+		return 0, fmt.Errorf("refreshInterval is invalid, interval: %s, err: %v", interval.String(), parseErr)
+	}
+	return interval, nil
+}
+
+func (s *AgentToolProxyConfig) trySetDefault() {
+	if s.TopN <= 0 {
+		s.TopN = 5
+	}
+}
+
+// Validate validates the tool proxy config.
+func (s *AgentToolProxyConfig) Validate() error {
+	if s.Enabled {
+		if s.InitVirtualUser == "" {
+			return errors.New("initVirtualUser is required")
+		}
+
+		if s.RefreshInterval == "" {
+			return errors.New("refreshInterval is required")
+		}
+		interval, parseErr := time.ParseDuration(strings.TrimSpace(s.RefreshInterval))
+		if parseErr != nil || interval <= 0 {
+			return fmt.Errorf("refreshInterval is invalid, interval: %s, err: %v", interval.String(), parseErr)
+		}
+
+		if s.Embedding.Model == "" {
+			return errors.New("embedding.model is required")
+		}
+	}
+	return nil
+}
+
+// AgentDynamicToolLoadingConfig configures BM25/keyword-based dynamic tool
+// filtering so the LLM only sees tools relevant to each user message.
+type AgentDynamicToolLoadingConfig struct {
+	// Enabled turns on dynamic tool filtering. Default: false.
+	Enabled bool `yaml:"enabled"`
+	// Strategy is the search strategy: "keyword" or "bm25". Default: "bm25".
+	Strategy string `yaml:"strategy"`
+	// TopN is the maximum number of tools returned per search. Must be > 0 when enabled.
+	TopN int `yaml:"topN"`
+	// ScoreThreshold is a relative score cutoff (0.0–1.0). Results scoring below
+	// maxScore*ScoreThreshold are discarded before the TopN cap is applied. Default: 0.
+	ScoreThreshold float64 `yaml:"scoreThreshold"`
+	// ToolTags maps raw MCP tool names to extra search keywords (e.g. Chinese synonyms).
+	ToolTags map[string][]string `yaml:"toolTags"`
+	// QueryContextWindow controls how many recent user messages are included in the
+	// search query. A sliding window of the last N user messages from the session is
+	// concatenated to form the query, so short follow-ups like "继续" still carry
+	// enough context to match relevant tools. Default: 3.
+	QueryContextWindow int `yaml:"queryContextWindow"`
+	// Embedding holds model/dimension config when Strategy is "embedding".
+	// Endpoint and auth inherit from the aidev gateway (same as memory sqlitevec).
+	Embedding AgentEmbeddingConfig `yaml:"embedding"`
+}
+
+func (s *AgentDynamicToolLoadingConfig) trySetDefault() {
+	if s == nil {
+		return
+	}
+	if s.TopN <= 0 {
+		s.TopN = 10
+	}
+
+	if s.QueryContextWindow <= 0 {
+		s.QueryContextWindow = 3
+	}
+}
+
+// AgentToolsConfig holds all tool configurations injected into the AGUI agent.
+type AgentToolsConfig struct {
+	// MCPToolSets lists MCP server toolsets to expose to the AGUI agent.
+	MCPToolSets []AgentMCPToolSet `yaml:"mcp"`
+	// BKAIDev provides BK application credentials for MCP toolsets with type "bkaidev".
+	// When an MCP toolset has type: "bkaidev", the server injects X-Bkapi-Authorization
+	// on every request using these credentials combined with the per-request bk_ticket
+	// extracted from the incoming HTTP request Cookie.
+	BKAIDev AgentBKAIDevConfig `yaml:"bkAIDev"`
+	// DynamicToolLoading configures index-based dynamic tool filtering.
+	DynamicToolLoading *AgentDynamicToolLoadingConfig `yaml:"dynamicToolLoading"`
+	// ToolProxy configures MCP tool proxy meta-tools (Graph mode MVP).
+	ToolProxy *AgentToolProxyConfig `yaml:"toolProxy"`
+	// ConfirmGate configures the engineering tool-call confirm gate (global default).
+	ConfirmGate AgentConfirmGateConfig `yaml:"confirmGate"`
+	// SceneConfirmGates holds per-scene confirm gate overrides.
+	// When a scene key is present, its config takes precedence over ConfirmGate.
+	// Enumeration values such as: host_apply/resource_query/chat.
+	SceneConfirmGates map[string]AgentConfirmGateConfig `yaml:"sceneConfirmGates"`
+}
+
+func (s *AgentToolsConfig) trySetDefault() {
+	s.DynamicToolLoading.trySetDefault()
+
+	if s.ToolProxy != nil {
+		s.ToolProxy.trySetDefault()
+	}
+
+}
+
+// Validate 校验 MCP ToolSet 配置。
+func (s *AgentToolsConfig) Validate() error {
+	for _, cfg := range s.MCPToolSets {
+		if err := cfg.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if s.ToolProxy != nil {
+		if err := s.ToolProxy.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AgentConfirmGateConfig configures the tool-call confirm gate on top of the code registry.
+// The set of gated tools is sourced from the registry (a tool is gated only if it has a
+// registered Gate implementation); this config toggles them on/off for grayscale or rollback.
+type AgentConfirmGateConfig struct {
+	// Enabled toggles the confirm gate as a whole. Set enabled: false to disable.
+	Enabled bool `yaml:"enabled"`
+	// Tools optionally restricts which registered tools are active. Empty means all
+	// registered gated tools are active.
+	Tools []string `yaml:"tools"`
+}
+
+// ConfirmGateForScene returns the per-scene confirm gate config if a scene-specific override
+// exists in SceneConfirmGates; otherwise it falls back to the global ConfirmGate.
+func (s AgentToolsConfig) ConfirmGateForScene(scene enumor.IntentType) AgentConfirmGateConfig {
+	if cfg, ok := s.SceneConfirmGates[string(scene)]; ok {
+		return cfg
+	}
+	return s.ConfirmGate
+}
+
+// NeedToRefreshToolSetsOnRun bkaidev 类型 MCP 需要用户的 token 进行鉴权，因此无法在启动时加载工具集，需要在每次运行时刷新。
+func (s AgentToolsConfig) NeedToRefreshToolSetsOnRun() bool {
+	for _, cfg := range s.MCPToolSets {
+		if cfg.Type.IsBKAIDev() {
+			return true
+		}
+	}
+	return false
+}
+
+// AgentPromptEntry configures a single BKAIDev-hosted prompt entry.
+type AgentPromptEntry struct {
+	// ID is the prompt_id on the BKAIDev platform used to retrieve content.
+	ID int `yaml:"id"`
+	// Code is the local key used to retrieve content from PromptStore.
+	// 建议BKAIDev平台的prompt_code对应
+	Code string `yaml:"code"`
+	// Required: if true, the initial sync of this prompt must succeed before the agent
+	// is marked prompt-ready. Non-required failures are logged as warnings and skipped.
+	Required bool `yaml:"required"`
+}
+
+// ScenePromptFiles configures the system+instruction prompt file paths for one scene.
+type ScenePromptFiles struct {
+	// SystemPromptFile is the path to the scene system prompt file.
+	SystemPromptFile string `yaml:"systemPromptFile"`
+	// InstructionFile is the path to the scene instruction file, appended after the system prompt.
+	InstructionFile string `yaml:"instructionFile"`
+}
+
+// ScenePromptContent holds the loaded system+instruction content for one scene.
+type ScenePromptContent struct {
+	// System is the loaded scene system prompt content.
+	System string
+	// Instruction is the loaded scene instruction content.
+	Instruction string
+}
+
+// AgentPromptConfig configures agent prompts: local file mode or BKAIDev sync mode.
+// When Enabled is true, BKAIDev sync mode is active and the file fields are ignored.
+// Gateway credentials are shared via AgentServerSetting.BKAIDevSyncAPIGateway.
+type AgentPromptConfig struct {
+	// SystemPromptFile is the path to a Markdown/text file whose content becomes the
+	// GlobalInstruction. Prepended to every LLM request.
+	SystemPromptFile string `yaml:"systemPromptFile"`
+	// InstructionFile is the path to a Markdown/text file whose content becomes the
+	// Instruction. Appended to every LLM request.
+	InstructionFile string `yaml:"instructionFile"`
+	// IntentRecognitionPromptFile is the path to the intent recognition prompt file.
+	// Required in graph mode when not using BKAIDev sync.
+	IntentRecognitionPromptFile string `yaml:"intentRecognitionPromptFile"`
+	// ScenePrompts configures per-scene system+instruction prompt files (local file mode).
+	// The map key is the scene name (an enumor.IntentType value, e.g. "resource_query").
+	// New scenes only need a yaml block here plus the prompt files, no Go code change.
+	ScenePrompts map[string]ScenePromptFiles `yaml:"scenePrompts"`
+	// SystemPrompt is the system prompt content loaded from SystemPromptFile at startup.
+	SystemPrompt string `yaml:"-"`
+	// Instruction is the instruction content loaded from InstructionFile at startup.
+	Instruction string `yaml:"-"`
+	// IntentRecognitionPrompt holds the loaded intent recognition prompt content. Not serialised to yaml.
+	IntentRecognitionPrompt string `yaml:"-"`
+	// ScenePromptContents holds the per-scene prompt content loaded from ScenePrompts at startup.
+	// Keyed by scene name, same as ScenePrompts. Not serialised to yaml.
+	ScenePromptContents map[string]ScenePromptContent `yaml:"-"`
+
+	// BKAIDev sync mode fields (ignored when Enabled=false).
+	// Enabled turns on BKAIDev prompt sync. When true, file fields above are ignored.
+	Enabled bool `yaml:"enabled"`
+	// SpaceID is the BKAIDev space identifier.
+	SpaceID string `yaml:"spaceID"`
+	// SyncInterval is the cron sync interval, e.g. "5m". Default: "5m".
+	SyncInterval string `yaml:"syncInterval"`
+	// StorePath is the local store file path that persists prompt content and MD5
+	// across restarts. Default: "prompt-store.json".
+	StorePath string `yaml:"storePath"`
+	// Entries is the list of prompts to sync from BKAIDev.
+	Entries []AgentPromptEntry `yaml:"entries"`
+}
+
+// BKAIDevSyncEnabled reports whether BKAIDev prompt sync is enabled.
+func (s *AgentPromptConfig) BKAIDevSyncEnabled() bool {
+	return s.Enabled
+}
+
+func (s *AgentPromptConfig) trySetDefault() {
+	if s.BKAIDevSyncEnabled() {
+		if s.SyncInterval == "" {
+			s.SyncInterval = "5m"
+		}
+		if s.StorePath == "" {
+			s.StorePath = "prompt-store.json"
+		}
+		// 远程模式下不加载文件，内容由 Syncer 异步填充
+		return
+	}
+	s.SystemPrompt = loadPromptFile(s.SystemPromptFile)
+	s.Instruction = loadPromptFile(s.InstructionFile)
+	s.IntentRecognitionPrompt = loadPromptFile(s.IntentRecognitionPromptFile)
+
+	if len(s.ScenePrompts) > 0 {
+		s.ScenePromptContents = make(map[string]ScenePromptContent, len(s.ScenePrompts))
+		for scene, files := range s.ScenePrompts {
+			s.ScenePromptContents[scene] = ScenePromptContent{
+				System:      loadPromptFile(files.SystemPromptFile),
+				Instruction: loadPromptFile(files.InstructionFile),
+			}
+		}
+	}
+}
+
+// Validate validates the agent prompt config.
+// mode is the AGUI agent mode; in graph mode the intent recognition prompt is also required.
+func (s AgentPromptConfig) Validate(mode enumor.AgentMode) error {
+	if !s.BKAIDevSyncEnabled() {
+		if s.SystemPrompt == "" {
+			return errors.New("SystemPrompt is required for local file mode")
+		}
+
+		if mode == enumor.AgentModeGraph && s.IntentRecognitionPrompt == "" {
+			return errors.New("intent recognition prompt is required for graph mode: " +
+				"set prompt.intentRecognitionPromptFile or enable BKAIDev sync")
+		}
+		return nil
+	}
+
+	if s.SpaceID == "" {
+		return errors.New("spaceID is not set")
+	}
+	names := make(map[string]struct{}, len(s.Entries))
+	for i, p := range s.Entries {
+		if p.ID <= 0 {
+			logs.Warnf("prompts[%d]: id must be positive, id: %d", i, p.ID)
+			if !p.Required {
+				continue
+			}
+			return errf.Newf(errf.InvalidParameter, "prompts[%d]: id must be positive", i)
+		}
+		if p.Code == "" {
+			logs.Warnf("prompts[%d]: name must not be empty, id: %d", i, p.ID)
+			if !p.Required {
+				continue
+			}
+			return errf.Newf(errf.InvalidParameter, "prompts[%d]: name must not be empty, id: %d", i, p.ID)
+		}
+		if _, dup := names[p.Code]; dup {
+			logs.Warnf("prompts[%d]: duplicate name %s skip, id: %d", i, p.Code, p.ID)
+			continue
+		}
+		names[p.Code] = struct{}{}
+	}
+	return nil
+}
+
+// loadPromptFile reads a prompt text file and returns its trimmed content.
+// Returns an empty string when path is empty or the file cannot be read.
+func loadPromptFile(path string) string {
+	if path = strings.TrimSpace(path); path == "" {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// trySetDefault 中不可以使用 logs，会导致 logfile 提前创建
+		fmt.Fprintf(os.Stderr, "failed to load prompt file %q: %v", path, err)
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// AgentModelProvider defines a named LLM provider endpoint.
+// Each provider represents an independent OpenAI-compatible API gateway
+// with its own base URL and authentication credentials.
+// Models reference a provider by name via AgentModelConfig.Provider.
+type AgentModelProvider struct {
+	ApiGateway `yaml:",inline"`
+
+	// Name uniquely identifies this provider (e.g. "aidev", "deepseek").
+	Name string `yaml:"name"`
+	// Type is the type of the provider.
+	Type enumor.AgentModelProviderType `yaml:"type"`
+	// BaseURL is the base URL of the OpenAI-compatible endpoint.
+	BaseURL string `yaml:"baseURL"`
+	// APIKey is the optional Bearer token for providers that use API-key auth.
+	APIKey string `yaml:"apiKey"`
+}
+
+// Validate validates the agent model provider.
+func (a *AgentModelProvider) Validate() error {
+	if err := a.Type.Validate(); err != nil {
+		return err
+	}
+
+	switch a.Type {
+	case enumor.AgentModelProviderTypeBKAPIGW:
+		return a.ApiGateway.validate()
+	case enumor.AgentModelProviderTypeOpenAI:
+		if a.BaseURL == "" {
+			return fmt.Errorf("baseURL should not be empty")
+		}
+		if a.APIKey == "" {
+			return fmt.Errorf("apiKey should not be empty")
+		}
+	}
+
+	return nil
+}
+
+// IsBKAPIProvider checks if the model provider is a BK API gateway provider.
+func (a *AgentModelProvider) IsBKAPIProvider() bool {
+	return a.Type == enumor.AgentModelProviderTypeBKAPIGW
+}
+
+// ConvertToBKAPIProvider converts the model provider to a BK API gateway provider.
+func (a *AgentModelProvider) ConvertToBKAPIProvider() *AgentModelProvider {
+	baseURL := a.BaseURL
+	if len(a.Endpoints) > 0 {
+		baseURL = a.Endpoints[0]
+	}
+	return &AgentModelProvider{
+		ApiGateway: a.ApiGateway,
+		Name:       a.Name,
+		Type:       enumor.AgentModelProviderTypeBKAPIGW,
+		BaseURL:    baseURL,
+	}
+}
+
+// IsOpenAIProvider checks if the model provider is an OpenAI provider.
+func (a *AgentModelProvider) IsOpenAIProvider() bool {
+	return a.Type == enumor.AgentModelProviderTypeOpenAI
+}
+
+// ConvertToOpenAIProvider converts the model provider to an OpenAI provider.
+func (a *AgentModelProvider) ConvertToOpenAIProvider() *AgentModelProvider {
+	return &AgentModelProvider{
+		Name:    a.Name,
+		Type:    enumor.AgentModelProviderTypeOpenAI,
+		BaseURL: a.BaseURL,
+		APIKey:  a.APIKey,
+	}
+}
+
+// AgentModelConfig describes one allowed AI model with its context window size.
+type AgentModelConfig struct {
+	// Name is the model identifier (e.g. "deepseek-v3").
+	Name string `yaml:"name"`
+	// Provider references an AgentModelProvider.Name to select which LLM endpoint to use.
+	// Empty means use the default provider ("aidev" section).
+	Provider string `yaml:"provider"`
+	// ContextWindow is the model's context window size in tokens.
+	// 0 means use the framework's built-in lookup table or the default (8192).
+	ContextWindow int `yaml:"contextWindow"`
+}
+
+// AgentModelGeneralConfig describes the model config for the AGUI agent.
+type AgentModelGeneralConfig struct {
+	// DefaultModel is the default LLM model identifier used by the agent.
+	// When empty, the first model in AllowedModels is used as default.
+	DefaultModel string `yaml:"defaultModel"`
+	// Stream enables token-level streaming when calling the upstream LLM.
+	// When true, each token is forwarded to the client as a separate TEXT_MESSAGE_CONTENT
+	// SSE event, producing a real-time typewriter effect.
+	// When false (default), the LLM response is returned as a single event after completion.
+	Stream bool `yaml:"stream"`
+	// DisplayReasoning enables the display of reasoning content in the response.
+	DisplayReasoning bool `yaml:"displayReasoning"`
+	// MaxTokens is the maximum number of tokens in the LLM response.
+	MaxTokens int `yaml:"maxTokens"`
+	// Temperature is the temperature of the LLM response.
+	Temperature float64 `yaml:"temperature"`
+	// Mode selects the agent implementation: "agent" (default) uses llmagent, "graph" uses graphagent.
+	Mode enumor.AgentMode `yaml:"mode"`
+}
+
+// Validate validates the agent AGUI model configuration.
+func (a *AgentModelGeneralConfig) Validate() error {
+	if a.DefaultModel == "" {
+		return fmt.Errorf("defaultModel must not be empty")
+	}
+	if err := a.Mode.Validate(); err != nil {
+		return err
+	}
+	if a.MaxTokens <= 0 {
+		return fmt.Errorf("maxTokens must be greater than 0")
+	}
+	if a.Temperature < 0 || a.Temperature > 1 {
+		return fmt.Errorf("temperature must be between 0 and 1")
+	}
+	return nil
+}
+
+func (a *AgentModelGeneralConfig) trySetDefault() {
+	if a.MaxTokens == 0 {
+		a.MaxTokens = 38000
+	}
+	if a.Temperature == 0 {
+		a.Temperature = 0.7
+	}
+	if a.Mode == "" {
+		a.Mode = enumor.AgentModeAgent
+	}
+}
+
+// AgentIntentConfig configures the intent recognition node for GraphAgent.
+type AgentIntentConfig struct {
+	// ContextWindowSize is the maximum number of recent user messages passed to the
+	// intent recognition LLM for context. Defaults to 5.
+	ContextWindowSize int `yaml:"contextWindowSize"`
+}
+
+func (c *AgentIntentConfig) trySetDefault() {
+	if c.ContextWindowSize <= 0 {
+		c.ContextWindowSize = 5
+	}
+}
+
+// AgentAGUI configures the AG-UI protocol endpoint and its optional history feature.
+type AgentAGUI struct {
+	// Enable enables the AG-UI protocol endpoint.
+	// When true, the AG-UI HTTP handler is mounted on the specified Path.
+	Enable bool `yaml:"enable"`
+	// AppName namespaces all session data in the backend storage.
+	// Recommended to set in all deployments.
+	// Example: "hcm-agent"
+	AppName string `yaml:"appName"`
+	// AllowedModels is the list of permitted AI models.
+	// When empty, the platform default list (pkg/criteria/enumor.DefaultAllowedAIModels) is used.
+	AllowedModels []AgentModelConfig `yaml:"allowedModels"`
+	// Model is the model config for the AGUI agent.
+	Model AgentModelGeneralConfig `yaml:"model"`
+}
+
+// Validate validates the agent AGUI configuration.
+func (a *AgentAGUI) Validate() error {
+	if err := a.Model.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a *AgentAGUI) trySetDefault() {
+	a.Model.trySetDefault()
+}
+
+// AllowedModelNames returns the plain model name list (for backward-compatible call sites).
+func (a AgentAGUI) AllowedModelNames() []string {
+	// if no allowed models configured, use default allowed models
+	if len(a.AllowedModels) == 0 {
+		defaults := enumor.DefaultAllowedAIModels
+		allowedModels := make([]string, len(defaults))
+		for i, m := range defaults {
+			allowedModels[i] = string(m)
+		}
+		return allowedModels
+	}
+
+	names := make([]string, len(a.AllowedModels))
+	for i, m := range a.AllowedModels {
+		names[i] = m.Name
+	}
+	return names
+}
+
+// ModelProviderMapping returns a map of model name → provider name for entries
+// that have an explicit provider configured.
+func (a AgentAGUI) ModelProviderMapping() map[string]string {
+	m := make(map[string]string)
+	for _, cfg := range a.AllowedModels {
+		if cfg.Provider != "" {
+			m[cfg.Name] = cfg.Provider
+		}
+	}
+	return m
+}
+
+// ModelContextWindows returns a map of model name → context window for entries
+// that have an explicit contextWindow > 0 configured.
+func (a AgentAGUI) ModelContextWindows() map[string]int {
+	m := make(map[string]int)
+	for _, cfg := range a.AllowedModels {
+		if cfg.ContextWindow > 0 {
+			m[cfg.Name] = cfg.ContextWindow
+		}
+	}
+	return m
+}
+
+// A2ACardSkillConfig 描述 AgentCard.skills[] 中单个 skill 的静态配置。
+// 字段含义与 A2A v0.2.2 规范 AgentSkill 一一对应。
+type A2ACardSkillConfig struct {
+	// ID 是 skill 的唯一标识，必填。
+	ID string `yaml:"id"`
+	// Name 是 skill 的可读名称，必填。
+	Name string `yaml:"name"`
+	// Description 是可选的详细描述。
+	Description string `yaml:"description"`
+	// Tags 是 skill 的分类标签，至少一个；用于客户端分组与检索。
+	Tags []string `yaml:"tags"`
+	// Examples 是可选的使用示例。
+	Examples []string `yaml:"examples"`
+	// InputModes 是支持的输入数据模式列表（例如 "text"）；为空时使用 AgentCard.defaultInputModes。
+	InputModes []string `yaml:"inputModes"`
+	// OutputModes 是支持的输出数据模式列表；为空时使用 AgentCard.defaultOutputModes。
+	OutputModes []string `yaml:"outputModes"`
+}
+
+// A2ACardConfig 是 AgentCard 的静态元数据配置。
+// 启动时一次性构建 AgentCard 后，运行期不变。
+type A2ACardConfig struct {
+	// Name 是 agent 的可读名称（AgentCard.name），未配置时使用默认值 "HCM Agent"。
+	Name string `yaml:"name"`
+	// Description 是 agent 的描述（AgentCard.description），未配置时使用默认值。
+	Description string `yaml:"description"`
+	// Version 是 agent 的版本号（AgentCard.version），未配置时使用默认值 "1.0.0"。
+	Version string `yaml:"version"`
+	// URL 是 agent 对外可访问的基础 URL，将填到 AgentCard.url。
+	URL string `yaml:"url"`
+	// Skills 声明对外暴露的 AgentSkill 列表。启用 A2A 时必须显式配置至少一项。
+	Skills []A2ACardSkillConfig `yaml:"skills"`
+}
+
+// trySetDefault 为 A2ACardConfig 补齐默认值。
+func (c *A2ACardConfig) trySetDefault() {
+	c.Name = strings.TrimSpace(c.Name)
+	if c.Name == "" {
+		c.Name = defaultA2ACardName
+	}
+
+	c.Description = strings.TrimSpace(c.Description)
+	if c.Description == "" {
+		c.Description = defaultA2ACardDescription
+	}
+
+	c.Version = strings.TrimSpace(c.Version)
+	if c.Version == "" {
+		if v := strings.TrimSpace(pkgversion.VERSION); v != "" && v != "debug" {
+			c.Version = v
+		} else {
+			c.Version = defaultA2ACardVersion
+		}
+	}
+
+}
+
+// Validate 校验 A2ACardConfig。
+func (c A2ACardConfig) Validate() error {
+	if strings.TrimSpace(c.Name) == "" {
+		return errors.New("a2a.card.name is empty")
+	}
+	if strings.TrimSpace(c.Description) == "" {
+		return errors.New("a2a.card.description is empty")
+	}
+	if strings.TrimSpace(c.Version) == "" {
+		return errors.New("a2a.card.version is empty")
+	}
+
+	if len(c.Skills) == 0 {
+		return errors.New("a2a.card.skills is empty")
+	}
+
+	for i, sk := range c.Skills {
+		if strings.TrimSpace(sk.ID) == "" {
+			return fmt.Errorf("a2a.card.skills[%d].id is empty", i)
+		}
+		if strings.TrimSpace(sk.Name) == "" {
+			return fmt.Errorf("a2a.card.skills[%d].name is empty", i)
+		}
+		// A2A v0.2.2 规范要求 tags 字段必填。
+		if len(sk.Tags) == 0 {
+			return fmt.Errorf("a2a.card.skills[%d].tags is empty (A2A v0.2.2 requires tags)", i)
+		}
+	}
+	return nil
+}
+
+const (
+	defaultA2ACardName        = "HCM Agent"
+	defaultA2ACardDescription = "BlueKing Hybrid Cloud Management AI Agent"
+	defaultA2ACardVersion     = "1.0.0"
+)
+
+// A2ASetting 描述 A2A 协议服务端的全部配置。
+//
+// 当 Enable=false（默认）时，agent-server 不挂载任何 A2A 端点；
+// 此时整个 A2A 子系统不会被初始化，对现有 AG-UI 链路零影响。
+type A2ASetting struct {
+	// Enable 控制是否挂载 A2A 端点。默认 false。
+	Enable bool `yaml:"enable"`
+	// BasePath 是所有 A2A 端点的路径前缀。
+	// 未配置时使用默认值 constant.A2ABasePathDefault（"/api/v1/agent"），与 AG-UI 端点同前缀。
+	BasePath string `yaml:"basePath"`
+	// EnforceCallerOrigin 控制是否强制校验 X-Bkhcm-Caller-Source: api-server。
+	// 默认 false：仅记录 warn 日志，不拦截，便于上线初期联调；
+	// true：缺失或不匹配时直接返回 HTTP 403。
+	EnforceCallerOrigin bool `yaml:"enforceCallerOrigin"`
+	// Card 是 AgentCard 的静态元数据。
+	Card A2ACardConfig `yaml:"card"`
+}
+
+// trySetDefault 为 A2ASetting 补齐默认值。未启用时不做强校验。
+func (a *A2ASetting) trySetDefault() {
+	if strings.TrimSpace(a.BasePath) == "" {
+		a.BasePath = constant.A2ABasePathDefault
+	}
+
+	a.Card.trySetDefault()
+}
+
+// Validate 校验 A2ASetting。仅在 Enable=true 时执行严格校验。
+func (a A2ASetting) Validate() error {
+	if !a.Enable {
+		return nil
+	}
+	if strings.TrimSpace(a.BasePath) == "" {
+		return errors.New("a2a.basePath is empty")
+	}
+	if !strings.HasPrefix(a.BasePath, "/") {
+		return fmt.Errorf("a2a.basePath must start with '/': %q", a.BasePath)
+	}
+	if err := a.Card.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// AgentLogOption 是 agent-server 的日志配置，在通用日志配置之外增加 agent 专属的日志开关。
+type AgentLogOption struct {
+	LogOption `yaml:",inline"`
+
+	// LLMRequestBodyLogLimit 限制写入日志的 LLM / MCP / Embedding 请求与响应体的最大字节数，
+	// 超出部分被截断。未配置或配置为非正数时回退到 constant.DefaultLLMRequestBodyLogLimit。
+	LLMRequestBodyLogLimit int `yaml:"llmRequestBodyLogLimit"`
+}
+
+// trySetDefault set the AgentLogOption default value if user not configured.
+func (log *AgentLogOption) trySetDefault() {
+	log.LogOption.trySetDefault()
+
+	if log.LLMRequestBodyLogLimit <= 0 {
+		log.LLMRequestBodyLogLimit = constant.DefaultLLMRequestBodyLogLimit
+	}
+}
+
+// AgentServerSetting defines agent server used setting options.
+type AgentServerSetting struct {
+	Network   Network              `yaml:"network"`
+	Service   Service              `yaml:"service"`
+	Log       AgentLogOption       `yaml:"log"`
+	Providers []AgentModelProvider `yaml:"providers"`
+	Storage   AgentStorage         `yaml:"storage"`
+	Tools     AgentToolsConfig     `yaml:"tools"`
+	AGUI      AgentAGUI            `yaml:"agui"`
+	// Intent configures the intent recognition node. Only used when AGUI.Model.Mode is "graph".
+	Intent AgentIntentConfig `yaml:"intent"`
+	// Skills holds all skill configuration: filesystem paths and BKAIDev sync parameters.
+	Skills AgentBKAIDevSyncSkillsConfig `yaml:"skills"`
+	// Prompt configures prompt files or BKAIDev-hosted prompt sync.
+	Prompt AgentPromptConfig `yaml:"prompt"`
+	// BKAIDevSyncAPIGateway holds the BKAIDev API gateway credentials shared by all
+	// sync domains (skills, prompts, etc.).
+	BKAIDevSyncAPIGateway ApiGateway `yaml:"bkaidevSyncApiGateway"`
+	// A2A 配置 A2A 协议端点；默认关闭（Enable=false），开启时与 AG-UI 并行挂载。
+	A2A A2ASetting `yaml:"a2a"`
+}
+
+// SkillSyncEnabled reports whether BKAIDev skill sync is turned on.
+func (s *AgentServerSetting) SkillSyncEnabled() bool {
+	return s.Skills.Enabled
+}
+
+// PromptSyncEnabled reports whether BKAIDev prompt sync is turned on.
+func (s *AgentServerSetting) PromptSyncEnabled() bool {
+	return s.Prompt.BKAIDevSyncEnabled()
+}
+
+// GetLLMRequestBodyLogLimit returns the byte limit of request/response bodies written to logs,
+// falling back to constant.DefaultLLMRequestBodyLogLimit when it is not configured.
+func (s AgentServerSetting) GetLLMRequestBodyLogLimit() int {
+	if s.Log.LLMRequestBodyLogLimit <= 0 {
+		return constant.DefaultLLMRequestBodyLogLimit
+	}
+	return s.Log.LLMRequestBodyLogLimit
+}
+
+// trySetFlagBindIP try set flag bind ip.
+func (s *AgentServerSetting) trySetFlagBindIP(ip net.IP) error {
+	return s.Network.trySetFlagBindIP(ip)
+}
+
+// trySetDefault set the AgentServerSetting default value if user not configured.
+func (s *AgentServerSetting) trySetDefault() {
+	s.Network.trySetDefault()
+	s.Service.trySetDefault()
+	s.Log.trySetDefault()
+	s.AGUI.trySetDefault()
+	s.Intent.trySetDefault()
+	s.Storage.trySetDefault()
+	s.Tools.trySetDefault()
+	s.A2A.trySetDefault()
+	if s.SkillSyncEnabled() {
+		s.Skills.trySetDefault()
+	}
+	s.Prompt.trySetDefault()
+}
+
+// Validate AgentServerSetting option.
+func (s AgentServerSetting) Validate() error {
+	if err := s.Network.validate(); err != nil {
+		return err
+	}
+
+	if err := s.Service.validate(); err != nil {
+		return err
+	}
+
+	if err := s.Tools.Validate(); err != nil {
+		return err
+	}
+
+	if err := s.AGUI.Validate(); err != nil {
+		return err
+	}
+
+	if err := s.A2A.Validate(); err != nil {
+		return fmt.Errorf("a2a: %w", err)
+	}
+
+	if s.SkillSyncEnabled() || s.PromptSyncEnabled() {
+		if err := s.BKAIDevSyncAPIGateway.validate(); err != nil {
+			return err
+		}
+	}
+
+	if s.SkillSyncEnabled() {
+		if err := s.Skills.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if err := s.Prompt.Validate(s.AGUI.Model.Mode); err != nil {
+		return fmt.Errorf("prompt: %w", err)
+	}
+
+	return nil
+}
+
+// TenantEnable returns false as agent-server does not support multi-tenancy.
+func (s AgentServerSetting) TenantEnable() bool {
+	return false
+}
+
+// GetProviders returns a map of provider name → provider config.
+func (s AgentServerSetting) GetProviders() map[string]*AgentModelProvider {
+	m := make(map[string]*AgentModelProvider)
+
+	// Explicit providers.
+	for _, p := range s.Providers {
+		switch p.Type {
+		case enumor.AgentModelProviderTypeOpenAI:
+			m[p.Name] = p.ConvertToOpenAIProvider()
+		default:
+			// default to BK API gateway provider
+			m[p.Name] = p.ConvertToBKAPIProvider()
+		}
+	}
+	return m
+}
+
+// GetProvider returns the provider config by name.
+func (s AgentServerSetting) GetProvider(providerName string) (*AgentModelProvider, error) {
+	if providerName == "" {
+		return nil, fmt.Errorf("provider name is empty")
+	}
+
+	if cfg, ok := s.GetProviders()[providerName]; ok {
+		return cfg, nil
+	}
+	return nil, fmt.Errorf("provider %q not found", providerName)
 }

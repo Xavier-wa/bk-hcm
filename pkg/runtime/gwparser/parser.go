@@ -72,6 +72,13 @@ func Parse(ctx context.Context, h http.Header) (*kit.Kit, error) {
 	return kt, err
 }
 
+// ParseDirect parses the header using the defaultParser (no JWT required).
+// 用于内部自调用路径（如 localBackendCaller），直接从 X-Bkapi-User-Name 等 header 读取身份，
+// 跳过蓝鲸网关 JWT 校验。
+func ParseDirect(ctx context.Context, h http.Header) (*kit.Kit, error) {
+	return new(defaultParser).Parse(ctx, h)
+}
+
 // Parser is request header parser.
 type Parser interface {
 	Parse(ctx context.Context, r http.Header) (kt *kit.Kit, err error)

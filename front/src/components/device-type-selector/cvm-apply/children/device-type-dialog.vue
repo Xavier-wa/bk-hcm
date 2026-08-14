@@ -1198,41 +1198,6 @@ provide('isInheritPackage', isInheritPackage);
       }
     }
 
-    .selected-group {
-      .group-item {
-        margin-bottom: 16px;
-
-        .group-title {
-          font-size: 12px;
-          color: #313238;
-          margin-bottom: 8px;
-        }
-
-        .group-content {
-          font-size: 12px;
-          color: #c4c6cc;
-
-          .selected-value {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 12px;
-            height: 32px;
-            padding: 0 12px;
-            margin: 4px 0;
-            background: #fff;
-            border-radius: 2px;
-            color: #313238;
-            box-shadow: 0 2px 4px 0 #1919290d;
-
-            .extra-text {
-              color: #979ba5;
-            }
-          }
-        }
-      }
-    }
-
     .selected-device-list {
       .selected-item {
         position: relative;
@@ -1281,6 +1246,41 @@ provide('isInheritPackage', isInheritPackage);
 
           .icon-remove {
             display: block;
+          }
+        }
+      }
+    }
+
+    .selected-group {
+      .group-item {
+        margin-bottom: 16px;
+
+        .group-title {
+          font-size: 12px;
+          color: #313238;
+          margin-bottom: 8px;
+        }
+
+        .group-content {
+          font-size: 12px;
+          color: #c4c6cc;
+
+          .selected-value {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            height: 32px;
+            padding: 0 12px;
+            margin: 4px 0;
+            background: #fff;
+            border-radius: 2px;
+            color: #313238;
+            box-shadow: 0 2px 4px 0 #1919290d;
+
+            .extra-text {
+              color: #979ba5;
+            }
           }
         }
       }

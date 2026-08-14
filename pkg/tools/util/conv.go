@@ -62,6 +62,11 @@ func GetIntByInterface(a interface{}) (int, error) {
 
 // GetInt64ByInterface interface to int64
 func GetInt64ByInterface(a interface{}) (int64, error) {
+	// reflect.TypeOf(nil) returns a nil Type, calling Kind() on it panics with a
+	// nil pointer dereference. Guard nil input to keep this converter panic-free.
+	if a == nil {
+		return 0, fmt.Errorf("not numeric, value is nil")
+	}
 	typeOf := reflect.TypeOf(a)
 	valueOf := reflect.ValueOf(a)
 	for typeOf.Kind() == reflect.Ptr {

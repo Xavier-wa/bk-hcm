@@ -46,6 +46,15 @@ func (c *TaskClient) StartIdleCheck(kt *kit.Kit, request *woaserver.StartIdleChe
 		"/task/start/cvms/idle_check")
 }
 
+// CheckBizApplyOrder 提单前只读校验（业务视角），与人工提单同源校验但只校验、不落库、不建单。
+// 返回 CheckApplyOrderResp{Pass, Reason}：业务不通过 Pass=false 并携带详细原因；系统异常以 error 返回。
+func (c *TaskClient) CheckBizApplyOrder(kt *kit.Kit, bizID int64, request *types.ApplyReq) (
+	*types.CheckApplyOrderResp, error) {
+
+	return common.Request[types.ApplyReq, types.CheckApplyOrderResp](c.client, rest.POST, kt, request,
+		"/bizs/%d/task/check/apply", bizID)
+}
+
 // ListDetectTask ...
 func (c *TaskClient) ListDetectTask(kt *kit.Kit, request *types.GetRecycleDetectReq) (*types.GetDetectTaskRst, error) {
 	return common.Request[types.GetRecycleDetectReq, types.GetDetectTaskRst](c.client, rest.POST, kt, request,

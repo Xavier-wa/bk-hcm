@@ -341,7 +341,7 @@ func (r *Request) tryThrottle(url string) {
 func (r *Request) Do() *Result {
 	result := new(Result)
 
-	rid := ridFromContext(r.ctx)
+	rid := RidFromContext(r.ctx)
 	if rid == "" {
 		rid = r.headers.Get(constant.RidKey)
 	}
@@ -501,8 +501,8 @@ func isConnectionReset(err error) bool {
 	return false
 }
 
-// ridFromContext get request id from context.
-func ridFromContext(ctx context.Context) string {
+// RidFromContext get request id from context.
+func RidFromContext(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}

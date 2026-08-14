@@ -1,0 +1,102 @@
+{
+  "id": "fix-chatbot-history-focus-flash",
+  "title": "aiagent chatbot - 页面获焦拉 history 覆盖卡片操作态闪烁",
+  "currentStage": "done",
+  "createdAt": "2026-08-06T12:31:12.896Z",
+  "updatedAt": "2026-08-07T03:52:21.630Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/fix-chatbot-history-focus-flash/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-07T03:37:33.746Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/fix-chatbot-history-focus-flash/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-07T03:49:04.011Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-07T03:48:39.131Z",
+      "note": "用户确认手测通过（卡片操作后切屏再点回无闪烁/不消失），lint 通过，coding freshness aligned，推进 test"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-07T03:50:47.235Z",
+      "note": "用户确认测试结论 PASS 可作为合入依据，推进 done"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-08-06T12:31:12.896Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-07T03:48:39.131Z",
+      "note": "用户确认手测通过（卡片操作后切屏再点回无闪烁/不消失），lint 通过，coding freshness aligned，推进 test"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-07T03:50:47.235Z",
+      "note": "用户确认测试结论 PASS 可作为合入依据，推进 done"
+    }
+  ],
+  "requirementId": "req-aiagent-host-apply-chatbot",
+  "branch": "fix-chatbot-history-focus-flash",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598136904671"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "completed",
+      "at": "2026-08-07T03:34:51.910Z",
+      "note": "已完成澄清（docs/reqs/卡片获焦闪烁.md，结论 1A/2C/3A/4A/5A）+ 评估（无需拆分，高级 10 人时/中级 14 人时，RICE=160）+ description 已回写且含完整原需求描述；effort=10 size=160 已更新 TAPD。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-07T03:52:21.630Z",
+      "note": "story 1069995598136904671：for_test(status_12)→tested(status_13)→done(status_14)；无 parentId；未改 owner"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/hooks/chatbot/card-action-protect.ts",
+        "src/hooks/chatbot/use-stream.ts",
+        "src/hooks/chatbot/use-session.ts",
+        "src/hooks/chatbot/use-chatbot.ts",
+        "src/components/chatbot/chat-message-list.vue",
+        "src/views/chatbot/index.vue",
+        "src/components/ai-assistant/index.vue",
+        "views/chatbot/index.vue",
+        "components/ai-assistant/index.vue",
+        "use-session.ts",
+        "use-stream.ts",
+        "card-action-protect.ts",
+        "chat-message-list.vue",
+        "ai-assistant/index.vue"
+      ],
+      "contentFingerprint": "57bb039d369fbf9c8f11af32ec5a8a47f364d8e4",
+      "codeBaseline": "935adcad9970401e890db7a14ac2a861072a499d",
+      "seatedAt": "2026-08-07T03:41:47.236Z"
+    }
+  }
+}

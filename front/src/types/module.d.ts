@@ -9,6 +9,11 @@ declare module '*.module.scss';
 declare module 'vue-virtual-scroller' {
   export const RecycleScroller: any;
 }
+declare module 'vue-draggable-resizable' {
+  import { DefineComponent } from 'vue';
+  const VueDraggableResizable: DefineComponent<Record<string, any>>;
+  export default VueDraggableResizable;
+}
 declare module 'hot-formula-parser' {
   export class Parser {
     constructor();

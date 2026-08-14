@@ -197,6 +197,7 @@ func (s *service) initSchedulerService(h *rest.Handler) {
 // bizService 业务下的接口
 func bizService(h *rest.Handler, s *service) {
 	h.Add("CreateBizApplyOrder", http.MethodPost, "/create/apply", s.CreateBizApplyOrder)
+	h.Add("CheckBizApplyOrder", http.MethodPost, "/check/apply", s.CheckBizApplyOrder)
 	h.Add("UpdateBizApplyTicket", http.MethodPost, "/update/apply/ticket", s.UpdateBizApplyTicket)
 	h.Add("StartBizApplyOrder", http.MethodPost, "/start/apply", s.StartBizApplyOrder)
 	h.Add("TerminateBizApplyOrder", http.MethodPost, "/terminate/apply", s.TerminateBizApplyOrder)

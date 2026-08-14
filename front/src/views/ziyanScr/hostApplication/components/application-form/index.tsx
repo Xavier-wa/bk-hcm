@@ -26,6 +26,7 @@ import {
   MENU_BUSINESS_HOST_MANAGEMENT,
 } from '@/constants/menu-symbol';
 import { useAccountStore, useUserStore } from '@/store';
+import { useChatbotBackfill } from './use-chatbot-backfill';
 import usePlanStore from '@/store/usePlanStore';
 import useCvmChargeType from '@/views/ziyanScr/hooks/use-cvm-charge-type';
 import useColumns from '@/views/resource/resource-manage/hooks/use-scr-columns';
@@ -503,9 +504,21 @@ export default defineComponent({
       return spec;
     };
 
+    // chatbot「添加到配置清单」回填（全页新标签 query / 浮窗同页 store 两条来源），逻辑见 use-chatbot-backfill
+    const { applyQueryBackfill } = useChatbotBackfill({
+      appendCloudRow: (row) => cloudTableData.value.push(row),
+      setRequireType: (requireType) => {
+        order.value.model.requireType = requireType;
+      },
+    });
+
     const isQueryAutoComplete = ref(false);
     const unReapply = async () => {
       isQueryAutoComplete.value = true;
+      // 来源于 chatbot「添加到配置清单」：命中 query 回填后不再走单据/一键申请分支
+      if (await applyQueryBackfill()) {
+        return;
+      }
       // 来源于单据-再次申请
       if (route?.query?.order_id) {
         const data = await apiService.getOrderDetail(+route?.query?.order_id);

@@ -84,6 +84,8 @@ const (
 	GlobalConfigTypeAccountBill GlobalConfigType = "account_bill"
 	// GlobalConfigTypeCvmImageRecommend CVM镜像推荐配置类型
 	GlobalConfigTypeCvmImageRecommend GlobalConfigType = "cvm_image_recommend"
+	// GlobalConfigTypeAuth auth related global config
+	GlobalConfigTypeAuth GlobalConfigType = "auth"
 	// GlobalConfigTypeCvmApply 自研云主机申领相关配置
 	GlobalConfigTypeCvmApply GlobalConfigType = "cvm_apply"
 	// GlobalConfigTypeRegionRecommend 地域推荐相关配置
@@ -213,6 +215,14 @@ type GlobalConfigKeyCvmRecommend string
 const (
 	// GlobalConfigKeyCvmImageRecommend CVM镜像推荐配置key
 	GlobalConfigKeyCvmImageRecommend GlobalConfigKeyCvmRecommend = "recommended_images"
+)
+
+// GlobalConfigKeyAuth auth related global config key
+type GlobalConfigKeyAuth string
+
+const (
+	// GlobalConfigKeyAccessToken virtual-user access_token map stored as JSON object, for bkapigw
+	GlobalConfigKeyAccessToken GlobalConfigKeyAuth = "access_token"
 )
 
 // GlobalConfigRegionRecommendKey 地域推荐配置key

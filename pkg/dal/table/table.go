@@ -331,6 +331,9 @@ const (
 	ZiyanCvmApplyUserRecommendTable = "ziyan_cvm_apply_user_recommend"
 	// ZiyanCvmApplyBizRecommendTable 业务维度申领机型推荐表
 	ZiyanCvmApplyBizRecommendTable = "ziyan_cvm_apply_biz_recommend"
+
+	// AiagentSessionTable is aiagent_session table's name.
+	AiagentSessionTable Name = "aiagent_session"
 )
 
 // Validate whether the table name is valid or not.
@@ -509,6 +512,8 @@ var TableMap = map[Name]TableConfig{
 	ZiyanCvmModifyRecordTable:       {},
 	ZiyanCvmApplyUserRecommendTable: {},
 	ZiyanCvmApplyBizRecommendTable:  {},
+
+	AiagentSessionTable: {},
 }
 
 // Register 注册表名

@@ -91,6 +91,60 @@ apiserver:
         nodePort:
   ## Pod对应提供服务的port 与service里的targetPort必须一致
   port: 80
+  ## MCP 子系统配置，默认全部关闭，不影响存量 proxy 链路。
+  mcp:
+    ingress:
+      enable: false
+      # basePath: /api/v1/mcp/servers
+      # serverName: HCM Agent
+      # serverVersion: 1.0.0
+      # aggregatedToolName: send_message
+      # textMaxLength: 8000
+      # progressTaskMapMaxSize: 10000
+      # progressTaskMapEntryTTL: 30m
+    # agent-server 实例通过 etcd 服务发现获取，不在 yaml 中手填 URL。
+    # 如需覆盖默认值，可配置 connectTimeout / readTimeout / maxIdleConnsPerHost。
+    bridge: {}
+    internal:
+      enable: false
+      enforceCallerSource: true
+      # 多内置 MCP server 配置。internal.enable=true 时至少配置一项。
+      # includeOperationIDs 支持精确匹配与 glob（如 list_*）；为空表示暴露该 spec 全部 operationId。
+      servers: []
+      # servers:
+      #   - name: hcm-apply-mcp
+      #     basePath: /api/v1/mcp/internal/hcm-apply/mcp
+      #     serverVersion: 1.0.0
+      #     openapiSpecPath: bk_apigw_resources_bk-hcm_internal_mcp.yaml
+      #     includeOperationIDs:
+      #       - get_apply_*
+      #       - list_apply_*
+      #       - create_apply
+      #   - name: hcm-resource-mcp
+      #     basePath: /api/v1/mcp/internal/hcm-resource/mcp
+      #     openapiSpecPath: bk_apigw_resources_bk-hcm_internal_mcp.yaml
+      #     includeOperationIDs:
+      #       - list_biz_cvm
+      #       - get_biz_cvm
+      #       - list_cvm
+  ## A2A 反向代理透传配置，默认关闭。
+  a2aPassthrough:
+    enable: false
+    # basePath: /api/v1/agent
+    # flushIntervalMS: -1
+    # idleTimeout: 600s
+  ## NetworkPolicy 默认关闭。启用前必须把 ingress-controller、网关内网出口、监控采集器等合法来源加入允许列表。
+  ## 注意：Kubernetes NetworkPolicy 不能按 HTTP path 限制访问，只能限制 Pod / namespace / port。
+  networkPolicy:
+    enabled: false
+    ingress:
+      - from:
+          - podSelector:
+              matchLabels:
+                component: agentserver
+        ports:
+          - protocol: TCP
+            port: 80
 
 authserver:
   ## 鉴权是否禁用的开关
@@ -818,6 +872,228 @@ accountserver:
         targetPort: 80
         nodePort:
   port: 80
+
+agentserver:
+  ## 镜像
+  ##
+  image:
+    repository: bk-hcm-agentserver-oa
+    tag:
+  ## 日志配置
+  ##
+  log:
+    alsoToStdErr: true
+    logDir: /data/hcm/logs
+    maxPerFileSizeMB: 1024
+    maxPerLineSizeKB: 2
+    maxFileNum: 5
+    logAppend: false
+    toStdErr: false
+    verbosity: 0
+    ## 写入日志的 LLM / MCP / Embedding 请求与响应体最大字节数，超出部分截断
+    ## 留空或非正数时使用默认值 16384（16KB）
+    llmRequestBodyLogLimit: 16384
+  ## pod 配置
+  ## sqlite 本地存储依赖 RWO PVC，默认单副本
+  ##
+  replicas: 1
+  podAnnotations: {}
+  affinity: {}
+  nodeSelector: {}
+  tolerations: []
+  resources:
+    limits:
+      cpu: 500m
+      memory: 2048Mi
+    requests:
+      memory: 512Mi
+      cpu: 200m
+  service:
+    # Headless Service（clusterIP: None）供 StatefulSet 使用
+    type: "ClusterIP"
+    ports:
+      - name: http
+        protocol: TCP
+        port: 80
+        targetPort: 80
+        nodePort:
+  port: 80
+  ## sqlite / skill / prompt store 持久化（StatefulSet volumeClaimTemplates）
+  ##
+  persistence:
+    enabled: true
+    mountPath: /data/agent-server
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+  ## AGUI session / memory / checkpoint
+  ## session.dsn 为空时自动使用 chart 内置/外部数据库拼装
+  ##
+  storage:
+    session:
+      dsn: ""
+      tablePrefix: "aiagent_"
+      summary:
+        enabled: true
+        policy: "any"
+        tokenThreshold: 4000
+        maxWords: 200
+    memory:
+      backend: "sqlitevec"
+      dbPath: "/data/agent-server/memories.db"
+      tableName: "aiagent_memories"
+      limit: 100
+      maxSearchResults: 10
+      preloadLimit: 5
+      embedding:
+        model: "hunyuan-embedding"
+        dimensions: 1536
+      autoExtract: true
+      autoExtractPolicy: "any"
+      autoExtractMessages: 10
+    checkpoint:
+      backend: "sqlite"
+      dbPath: "/data/agent-server/checkpoint.db"
+  ## LLM 提供方
+  ##
+  providers:
+    - name: bkaidev
+      type: bkapigw
+      endpoints: []
+      # - https://bkapi.example.com/api/aidev
+      appCode: ""
+      appSecret: ""
+      user:
+      bkTicket:
+      tls:
+        insecureSkipVerify:
+        certFile:
+        keyFile:
+        caFile:
+        password:
+  ## AG-UI 协议
+  ##
+  agui:
+    enable: true
+    path: "/api/v1/agent/agui"
+    appName: hcm-agent
+    model:
+      defaultModel: "gpt-4o"
+      maxTokens: 38000
+      temperature: 0.7
+      displayReasoning: true
+      stream: true
+      mode: graph
+    allowedModels: []
+  ## Agent 工具
+  ##
+  tools:
+    bkAIDev:
+      appCode: ""
+      appSecret: ""
+    # MCP toolset 列表。type=internal 时建议通过 Service 发现对接 api-server，例如：
+    # serverUrl: 'http://{{ include "bk-hcm.apiserver" . }}/api/v1/mcp/internal/<server-name>/mcp/'
+    mcp: []
+    dynamicToolLoading:
+      enabled: false
+      strategy: "embedding"
+      topN: 10
+      queryContextWindow: 5
+      scoreThreshold: 0.3
+      embedding:
+        model: "hunyuan-embedding"
+        dimensions: 1536
+    toolProxy:
+      enabled: true
+      initVirtualUser: bk-hcm
+      refreshInterval: 30m
+      required: true
+      topN: 5
+      scoreThreshold: 0.3
+      embedding:
+        model: "hunyuan-embedding"
+        dimensions: 1536
+    confirmGate:
+      enabled: true
+      tools:
+        - create_biz_apply
+    sceneConfirmGates:
+      host_apply:
+        enabled: true
+        tools:
+          - create_biz_apply
+      resource_query:
+        enabled: true
+        tools: []
+      chat:
+        enabled: false
+        tools: []
+  ## A2A 协议，默认关闭
+  ##
+  a2a:
+    enable: false
+    basePath: "/api/v1/agent"
+    enforceCallerOrigin: false
+    card:
+      name: "HCM Agent"
+      description: "BlueKing Hybrid Cloud Management AI Agent"
+      version: "1.0.0"
+      url: ""
+      skills:
+        - id: "hcm-agent"
+          name: "HCM Agent"
+          description: "HCM 海垒混合云管理智能助手"
+          tags: ["hcm", "cloud", "agent"]
+  ## skill 同步；路径落在 PVC 上
+  ##
+  skills:
+    root: "/data/agent-server/skills"
+    archiveDir: "/data/agent-server/skills-archive"
+    enabled: false
+    spaceID: ""
+    syncInterval: "5m"
+    tagName:
+      status: "enabled"
+      hcm_agent: "main_agent"
+    maxParallel: 5
+  ## prompt 默认走 BKAIDev 托管同步（本地文件模式不随镜像打包）
+  ##
+  prompt:
+    enabled: true
+    spaceID: ""
+    syncInterval: "5m"
+    storePath: "/data/agent-server/prompt-store.json"
+    entries:
+      - id: 1
+        code: system_prompt
+        required: true
+      - id: 2
+        code: instruction
+        required: true
+      - id: 3
+        code: memory_extract_prompt
+        required: false
+      - id: 4
+        code: intent_recognition_prompt
+        required: true
+      - id: 5
+        code: resource_query_system_prompt
+        required: false
+      - id: 6
+        code: resource_query_instruction_prompt
+        required: false
+  intent:
+    contextWindowSize: 5
+  ## skills / prompt 同步共用的 BKAIDev 网关凭证
+  ##
+  bkaidevSyncApiGateway:
+    endpoints: []
+    # - "https://bkapi.example.com"
+    appCode: ""
+    appSecret: ""
+    tls:
+      insecureSkipVerify: false
 
 ## appCode
 appCode: bk-hcm

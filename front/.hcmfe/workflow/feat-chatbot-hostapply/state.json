@@ -1,0 +1,78 @@
+{
+  "id": "feat-chatbot-hostapply",
+  "title": "aiagent - 主机申领场景 chatbot",
+  "currentStage": "coding",
+  "createdAt": "2026-06-21T10:17:00.579Z",
+  "updatedAt": "2026-06-21T16:53:53.497Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-chatbot-hostapply/prd.md",
+        "kind": "file",
+        "addedAt": "2026-06-21T10:24:12.138Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-chatbot-hostapply/design.md",
+        "kind": "file",
+        "addedAt": "2026-06-21T10:57:06.062Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-chatbot-hostapply/api.md",
+        "kind": "file",
+        "addedAt": "2026-06-21T11:04:29.383Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-chatbot-hostapply/coding.md",
+        "kind": "file",
+        "addedAt": "2026-06-21T16:53:53.497Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-06-21T10:53:17.788Z",
+      "note": "用户确认本迭代范围为 2 项细节优化（编码→名称展示 + C 弹窗下拉复用 CVM 选项接口），持续优化迭代，无新设计稿"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-06-21T10:58:30.710Z",
+      "note": "用户确认本迭代无设计稿，沿用现网卡片版式，design.md 豁免说明可作为 API 阶段依据"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-06-21T16:50:37.564Z",
+      "note": "用户确认：vendor=ZIYAN；仅数据/接口层复用 WOA config，不整体复用重组件；C 弹窗下拉用 hcm-form-list + :list 函数模式；展示层沿 CHColumns 映射；不新增后端接口"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-06-21T10:17:00.579Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-06-21T10:54:39.006Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-06-21T10:58:35.171Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-06-21T16:50:48.154Z"
+    }
+  ],
+  "requirementId": "req-aiagent-host-apply-chatbot",
+  "branch": "feat-chatbot-hostapply"
+}

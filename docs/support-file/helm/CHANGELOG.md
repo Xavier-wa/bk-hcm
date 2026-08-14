@@ -2,6 +2,11 @@
 
 ## 9.9.9
 
+- 新增 agent-server：Dockerfile、Helm StatefulSet/ConfigMap/Service（sqlite PVC）
+
+
+## 1.1.11
+
 - deployment.spec.selector.matchLabels 增加对应component标签
 
 

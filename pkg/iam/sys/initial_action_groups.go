@@ -112,6 +112,12 @@ func genResManagementActionGroups() []client.ActionGroup {
 						{ID: BizCosBucketFind},
 						{ID: BizCosBucketDelete},
 					},
+				}, {
+					Name:   "智能体助手",
+					NameEn: "Biz Agent Assistant",
+					Actions: []client.ActionWithID{
+						{ID: BizAgentAssistant},
+					},
 				},
 				{
 					Name:   "云账号",
@@ -329,6 +335,13 @@ func genPlatformManageActionGroups() client.ActionGroup {
 				NameEn: "Green Channel",
 				Actions: []client.ActionWithID{
 					{ID: GreenChannel},
+				},
+			},
+			{
+				Name:   "智能体助手",
+				NameEn: "Agent Assistant",
+				Actions: []client.ActionWithID{
+					{ID: AgentAssistant},
 				},
 			},
 		},

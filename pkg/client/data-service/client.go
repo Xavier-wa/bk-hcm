@@ -22,6 +22,7 @@ package dataservice
 import (
 	"fmt"
 
+	"hcm/pkg/client/data-service/aiagent"
 	"hcm/pkg/client/data-service/aws"
 	"hcm/pkg/client/data-service/azure"
 	"hcm/pkg/client/data-service/gcp"
@@ -49,12 +50,16 @@ type Client struct {
 	Kaopu       *kaopu.Client
 	Other       *other.Client
 	TCloudZiyan *ziyan.Client
+	Aiagent     *aiagent.Client
 }
 
 // NewClient create a new data-service api client.
 func NewClient(c *client.Capability, version string) *Client {
 	prefixPath := fmt.Sprintf("/api/%s/data/vendors", version)
 	return &Client{
+		Aiagent: aiagent.NewClient(
+			rest.NewClient(c, fmt.Sprintf("api/%s/data/aiagent", version)),
+		),
 		// Note: 对于Global Client，主要是用于无vendor区分即全局或跨多个云的请求
 		Global: global.NewClient(
 			rest.NewClient(c, fmt.Sprintf("api/%s/data", version)),

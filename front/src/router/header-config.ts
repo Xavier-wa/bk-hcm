@@ -6,7 +6,7 @@ export const headRouteConfig = [
   {
     id: 'business',
     name: '资源管理',
-    path: '/business/host',
+    path: '/business',
   },
   {
     id: 'service',

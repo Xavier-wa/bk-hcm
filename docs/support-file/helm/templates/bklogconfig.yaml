@@ -23,6 +23,7 @@ spec:
     - {{ .Values.taskserver.log.logDir }}/*
     - {{ .Values.accountserver.log.logDir }}/*
     - {{ .Values.woaserver.log.logDir }}/*
+    - {{ .Values.agentserver.log.logDir }}/*
 {{- end }}
 {{- if .Values.bkLogConfig.std.enabled }}
 ---

@@ -1103,6 +1103,33 @@ func genGreenChannelResource(*meta.ResourceAttribute) (client.ActionID, []client
 	return sys.GreenChannel, make([]client.Resource, 0), nil
 }
 
+func genAgentAssistantResource(a *meta.ResourceAttribute) (client.ActionID, []client.Resource, error) {
+	if a.BizID > 0 {
+		return genBizAgentAssistantResource(a)
+	}
+
+	return sys.AgentAssistant, make([]client.Resource, 0), nil
+}
+
+// genBizAgentAssistantResource generate biz agent assistant related iam resource.
+func genBizAgentAssistantResource(a *meta.ResourceAttribute) (client.ActionID, []client.Resource, error) {
+	res := client.Resource{
+		System: sys.SystemIDCMDB,
+		Type:   sys.Biz,
+	}
+
+	if a.BizID > 0 {
+		res.ID = strconv.FormatInt(a.BizID, 10)
+	}
+
+	switch a.Basic.Action {
+	case meta.Create, meta.Find, meta.Update, meta.Delete:
+		return sys.BizAgentAssistant, []client.Resource{res}, nil
+	default:
+		return "", nil, errf.Newf(errf.InvalidParameter, "unsupported hcm action: %s", a.Basic.Action)
+	}
+}
+
 func genGlobalConfigResource(a *meta.ResourceAttribute) (client.ActionID, []client.Resource, error) {
 	switch a.Basic.Action {
 	case meta.Create:
