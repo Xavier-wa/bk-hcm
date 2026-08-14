@@ -18,7 +18,7 @@
  */
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9
+    SQLVER=0087,HCMVER=v1.9.2.12
 
     Notes:
     1. aiagent_session 表新增业务 ID 字段与业务列表索引
@@ -33,6 +33,6 @@ DROP INDEX `idx_app_user` ON `aiagent_session`;
 CREATE INDEX `idx_app_user_biz` ON `aiagent_session` (`app_name`, `user`, `bk_biz_id`);
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.9.2.12' as `hcm_ver`, '0087' as `sql_ver`;
 
 COMMIT;

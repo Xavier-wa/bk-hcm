@@ -18,7 +18,7 @@
  */
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9
+    SQLVER=0086,HCMVER=v1.9.2.12
 
     Notes:
     1. 新增 aiagent_session 表
@@ -54,6 +54,6 @@ insert into id_generator(`resource`, `max_id`)
 values ('aiagent_session', '0');
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.9.2.12' as `hcm_ver`, '0086' as `sql_ver`;
 
 COMMIT;
