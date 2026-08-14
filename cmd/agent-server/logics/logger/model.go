@@ -27,7 +27,7 @@ import (
 	"net/http"
 	"strings"
 
-	"hcm/pkg/criteria/constant"
+	"hcm/pkg/cc"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 	"hcm/pkg/tools/util"
@@ -95,7 +95,7 @@ func MakeModelLoggerCallback() model.AfterModelCallbackStructured {
 // LLMRequestLogger is an OpenAI middleware that logs request details and estimates input tokens.
 func LLMRequestLogger(r *http.Request, next openaiopt.MiddlewareNext) (*http.Response, error) {
 	rid := rest.RidFromContext(r.Context())
-	logBodyLimit := constant.DefaultLLMRequestBodyLogLimit
+	logBodyLimit := cc.AgentServer().GetLLMRequestBodyLogLimit()
 	if r.Body != nil {
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err == nil {

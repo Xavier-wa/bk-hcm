@@ -880,6 +880,9 @@ agentserver:
     logAppend: false
     toStdErr: false
     verbosity: 0
+    ## 写入日志的 LLM / MCP / Embedding 请求与响应体最大字节数，超出部分截断
+    ## 留空或非正数时使用默认值 16384（16KB）
+    llmRequestBodyLogLimit: 16384
   ## pod 配置
   ## sqlite 本地存储依赖 RWO PVC，默认单副本
   ##

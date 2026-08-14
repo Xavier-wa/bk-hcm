@@ -37,6 +37,9 @@ log:
   toStdErr: false
   alsoToStdErr: true    # 同时输出到 stdout 方便开发调试
   verbosity: 0
+  # 写入日志的 LLM / MCP / Embedding 请求与响应体最大字节数，超出部分截断。
+  # 留空或配置为非正数时使用默认值 16384（16KB）。
+  llmRequestBodyLogLimit: 16384
 
 # AGUI 持久化存储配置。
 # session：聊天历史持久化到 MySQL（不配置 DSN 则使用内存存储，重启丢失）。

@@ -30,6 +30,7 @@ import (
 	"sort"
 	"strings"
 
+	"hcm/pkg/cc"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
@@ -138,8 +139,8 @@ func (h *mcpHTTPRespLoggingHandler) Handle(ctx context.Context, client *http.Cli
 	resp.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
 	preview := bodyBytes
-	if len(preview) > constant.DefaultLLMRequestBodyLogLimit {
-		preview = preview[:constant.DefaultLLMRequestBodyLogLimit]
+	if logBodyLimit := cc.AgentServer().GetLLMRequestBodyLogLimit(); len(preview) > logBodyLimit {
+		preview = preview[:logBodyLimit]
 	}
 	logs.Infof("MCP HTTP toolset=%q %s %s request_headers=%s: status=%d response_body=%s, rid: %s",
 		h.toolsetName, req.Method, safeURLStr(req), safeRequestHeadersStr(req), resp.StatusCode,
@@ -184,8 +185,8 @@ func safeRequestHeadersStr(req *http.Request) string {
 		}
 	}
 	s := b.String()
-	if len(s) > constant.DefaultLLMRequestBodyLogLimit {
-		s = s[:constant.DefaultLLMRequestBodyLogLimit] + "...(truncated)"
+	if logBodyLimit := cc.AgentServer().GetLLMRequestBodyLogLimit(); len(s) > logBodyLimit {
+		s = s[:logBodyLimit] + "...(truncated)"
 	}
 	return s
 }

@@ -86,16 +86,17 @@ func BuildEmbeddingClient(provider *cc.AgentModelProvider, embedCfg *cc.AgentEmb
 			}
 			if resp.StatusCode >= 400 {
 				bodyStr := ""
+				logBodyLimit := cc.AgentServer().GetLLMRequestBodyLogLimit()
 				if resp.Body != nil {
-					slurp, readErr := io.ReadAll(io.LimitReader(resp.Body, constant.DefaultLLMRequestBodyLogLimit))
+					slurp, readErr := io.ReadAll(io.LimitReader(resp.Body, int64(logBodyLimit)))
 					_ = resp.Body.Close()
 					resp.Body = io.NopCloser(bytes.NewReader(slurp))
 					if readErr != nil {
 						bodyStr = fmt.Sprintf("<read body: %v>", readErr)
 					} else {
 						bodyStr = string(slurp)
-						if len(bodyStr) > constant.DefaultLLMRequestBodyLogLimit {
-							bodyStr = bodyStr[:constant.DefaultLLMRequestBodyLogLimit] +
+						if len(bodyStr) > logBodyLimit {
+							bodyStr = bodyStr[:logBodyLimit] +
 								fmt.Sprintf("... (truncated, total %d bytes)", len(slurp))
 						}
 					}

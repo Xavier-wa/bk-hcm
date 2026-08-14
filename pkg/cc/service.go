@@ -1872,11 +1872,29 @@ func (a A2ASetting) Validate() error {
 	return nil
 }
 
+// AgentLogOption 是 agent-server 的日志配置，在通用日志配置之外增加 agent 专属的日志开关。
+type AgentLogOption struct {
+	LogOption `yaml:",inline"`
+
+	// LLMRequestBodyLogLimit 限制写入日志的 LLM / MCP / Embedding 请求与响应体的最大字节数，
+	// 超出部分被截断。未配置或配置为非正数时回退到 constant.DefaultLLMRequestBodyLogLimit。
+	LLMRequestBodyLogLimit int `yaml:"llmRequestBodyLogLimit"`
+}
+
+// trySetDefault set the AgentLogOption default value if user not configured.
+func (log *AgentLogOption) trySetDefault() {
+	log.LogOption.trySetDefault()
+
+	if log.LLMRequestBodyLogLimit <= 0 {
+		log.LLMRequestBodyLogLimit = constant.DefaultLLMRequestBodyLogLimit
+	}
+}
+
 // AgentServerSetting defines agent server used setting options.
 type AgentServerSetting struct {
 	Network   Network              `yaml:"network"`
 	Service   Service              `yaml:"service"`
-	Log       LogOption            `yaml:"log"`
+	Log       AgentLogOption       `yaml:"log"`
 	Providers []AgentModelProvider `yaml:"providers"`
 	Storage   AgentStorage         `yaml:"storage"`
 	Tools     AgentToolsConfig     `yaml:"tools"`
@@ -1902,6 +1920,15 @@ func (s *AgentServerSetting) SkillSyncEnabled() bool {
 // PromptSyncEnabled reports whether BKAIDev prompt sync is turned on.
 func (s *AgentServerSetting) PromptSyncEnabled() bool {
 	return s.Prompt.BKAIDevSyncEnabled()
+}
+
+// GetLLMRequestBodyLogLimit returns the byte limit of request/response bodies written to logs,
+// falling back to constant.DefaultLLMRequestBodyLogLimit when it is not configured.
+func (s AgentServerSetting) GetLLMRequestBodyLogLimit() int {
+	if s.Log.LLMRequestBodyLogLimit <= 0 {
+		return constant.DefaultLLMRequestBodyLogLimit
+	}
+	return s.Log.LLMRequestBodyLogLimit
 }
 
 // trySetFlagBindIP try set flag bind ip.

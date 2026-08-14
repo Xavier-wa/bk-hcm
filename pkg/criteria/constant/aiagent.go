@@ -193,7 +193,8 @@ const (
 	// summary is enabled; older runs are represented by the summary only.
 	DefaultMaxHistoryRuns = 10
 
-	// DefaultLLMRequestBodyLogLimit is the limit of the LLM request body log.
+	// DefaultLLMRequestBodyLogLimit is the fallback limit of the LLM request body log.
+	// agent-server 未配置 llmRequestBodyLogLimit 时使用该值。
 	DefaultLLMRequestBodyLogLimit = 16 * 1024
 )
 
