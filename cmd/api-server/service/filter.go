@@ -26,6 +26,8 @@ import (
 	"net/http"
 	"regexp"
 
+	"hcm/pkg/cc"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/logs"
 	"hcm/pkg/runtime/gwparser"
@@ -38,11 +40,18 @@ func (p *proxy) restFilter() restful.FilterFunction {
 	return func(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 		r, w := req.Request, resp.ResponseWriter
 
+		// 内部自调用（localBackendCaller）携带 X-Bkhcm-Caller-Source: api-server，
+		// 此时请求已在进程内完成身份校验，无需再走蓝鲸网关 JWT 解析，直接读取 header 身份信息。
+		var parseFunc = gwparser.Parse
+		if r.Header.Get(constant.MCPCallerSourceHeader) == string(cc.APIServerName) {
+			parseFunc = gwparser.ParseDirect
+		}
+
 		// parse request
-		kt, err := gwparser.Parse(r.Context(), r.Header)
+		kt, err := parseFunc(r.Context(), r.Header)
 		if err != nil {
 			w.WriteHeader(http.StatusForbidden)
-			fmt.Fprintf(w, errf.Error(err).Error())
+			_, _ = fmt.Fprint(w, errf.Error(err).Error())
 			return
 		}
 		req.Request.Header = kt.Header()
@@ -50,7 +59,7 @@ func (p *proxy) restFilter() restful.FilterFunction {
 		body, err := peekRequest(r)
 		if err != nil {
 			w.WriteHeader(http.StatusForbidden)
-			fmt.Fprintf(w, errf.NewFromErr(errf.Unknown, err).Error())
+			_, _ = fmt.Fprint(w, errf.NewFromErr(errf.Unknown, err).Error())
 			logs.Errorf("peek request failed, err: %v, rid: %s", err, kt.Rid)
 			return
 		}

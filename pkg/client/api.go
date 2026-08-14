@@ -23,6 +23,7 @@ package client
 import (
 	"hcm/pkg/cc"
 	accountserver "hcm/pkg/client/account-server"
+	agentserver "hcm/pkg/client/agent-server"
 	authserver "hcm/pkg/client/auth-server"
 	cloudserver "hcm/pkg/client/cloud-server"
 	dataservice "hcm/pkg/client/data-service"
@@ -138,13 +139,22 @@ func (cs *ClientSet) WoaServer() *woaserver.Client {
 	return woaserver.NewClient(c, cs.version)
 }
 
-// AccountServer get task-server client.
+// AccountServer get account-server client.
 func (cs *ClientSet) AccountServer() *accountserver.Client {
 	c := &client.Capability{
 		Client:   cs.client,
 		Discover: cs.discovery(cc.AccountServerName),
 	}
 	return accountserver.NewClient(c, cs.version)
+}
+
+// AgentServer get agent-server client.
+func (cs *ClientSet) AgentServer() *agentserver.Client {
+	c := &client.Capability{
+		Client:   cs.client,
+		Discover: cs.discovery(cc.AgentServerName),
+	}
+	return agentserver.NewClient(c, cs.version)
 }
 
 // Healthz get service health check client.

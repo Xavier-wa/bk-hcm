@@ -74,6 +74,10 @@ Returns http port for service
   {{- printf "%s-authserver" (include "bk-hcm.fullname" .) -}}
 {{- end -}}
 
+{{- define "bk-hcm.apiserver" -}}
+  {{- printf "%s-apiserver" (include "bk-hcm.fullname" .) -}}
+{{- end -}}
+
 {{/*
 Returns ingress host URL for authserver.
 */}}

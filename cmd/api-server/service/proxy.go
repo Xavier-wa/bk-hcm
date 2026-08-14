@@ -95,7 +95,7 @@ func (p *proxy) Do(req *restful.Request, resp *restful.Response) {
 	}()
 
 	if err := p.prepareRequest(req); err != nil {
-		_, _ = fmt.Fprintf(w, errf.NewFromErr(http.StatusNotFound, err).Error())
+		_, _ = fmt.Fprint(w, errf.NewFromErr(http.StatusNotFound, err).Error())
 		logs.Errorf("prepare request to proxy failed, err: %v, rid: %s", err, rid)
 		errType = metrics.ErrTypeInvalidParam
 		return
@@ -104,7 +104,7 @@ func (p *proxy) Do(req *restful.Request, resp *restful.Response) {
 	url := r.URL.Scheme + "://" + r.URL.Host + r.RequestURI
 	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, url, r.Body)
 	if err != nil {
-		_, _ = fmt.Fprintf(w, err.Error())
+		_, _ = fmt.Fprint(w, err.Error())
 		logs.Errorf("new proxy request[%s] failed, err: %v, rid: %s", url, err, rid)
 		errType = metrics.ErrTypeHCMError
 		return
@@ -118,7 +118,7 @@ func (p *proxy) Do(req *restful.Request, resp *restful.Response) {
 
 	response, err := p.cli.Do(proxyReq)
 	if err != nil {
-		_, _ = fmt.Fprintf(w, err.Error())
+		_, _ = fmt.Fprint(w, err.Error())
 		logs.Errorf("do request[%s url: %s] failed, err: %v, rid: %s", r.Method, url, err, rid)
 		errType = metrics.ClassifyError(err)
 		return
@@ -134,7 +134,7 @@ func (p *proxy) Do(req *restful.Request, resp *restful.Response) {
 	resp.ResponseWriter.WriteHeader(response.StatusCode)
 
 	if _, err := io.Copy(resp, response.Body); err != nil {
-		_, _ = fmt.Fprintf(w, err.Error())
+		_, _ = fmt.Fprint(w, err.Error())
 		logs.Errorf("response request[url: %s] failed, err: %v, rid: %s", r.RequestURI, err, rid)
 		errType = metrics.ClassifyError(err)
 		return

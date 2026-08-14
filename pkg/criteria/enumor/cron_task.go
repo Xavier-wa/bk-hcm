@@ -33,4 +33,9 @@ const (
 	CronTaskApplyRecommendOffline CronTask = "apply_recommend_offline"
 	// CronTaskAsyncFlowAndTaskCleanup 异步任务历史数据清理
 	CronTaskAsyncFlowAndTaskCleanup CronTask = "async_flow_and_task_cleanup"
+
+	// CronTaskSyncAgentSkills syncs agent-server skills from BKAIDev.
+	CronTaskSyncAgentSkills CronTask = "sync_agent_skills"
+	// CronTaskSyncAgentPrompts syncs agent-server prompts from BKAIDev.
+	CronTaskSyncAgentPrompts CronTask = "sync_agent_prompts"
 )

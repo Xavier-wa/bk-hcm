@@ -47,7 +47,7 @@ type proxy struct {
 func newProxy(dis serviced.Discover, cli *http.Client) (*proxy, error) {
 	apiDiscovery := make(map[cc.Name]*discovery.APIDiscovery)
 
-	discoverServices := []cc.Name{cc.CloudServerName, cc.WoaServerName, cc.AccountServerName}
+	discoverServices := []cc.Name{cc.CloudServerName, cc.WoaServerName, cc.AccountServerName, cc.AgentServerName}
 	for _, service := range discoverServices {
 		apiDiscovery[service] = discovery.NewAPIDiscovery(service, dis)
 	}
@@ -86,6 +86,10 @@ func (p *proxy) Do(req *restful.Request, resp *restful.Response) {
 		}
 	}
 
+	if cookie, cErr := r.Cookie("bk_ticket"); cErr == nil && cookie.Value != "" {
+		proxyReq.Header.Set("X-Bk-Ticket", cookie.Value)
+	}
+
 	response, err := p.cli.Do(proxyReq)
 	if err != nil {
 		logs.Errorf("do request[%s url: %s] failed, err: %v, rid: %s", r.Method, url, err, rid)
@@ -95,22 +99,61 @@ func (p *proxy) Do(req *restful.Request, resp *restful.Response) {
 	defer response.Body.Close()
 
 	for k, v := range response.Header {
-		if len(v) > 0 {
+		if len(v) > 0 && !isCORSHeader(k) {
 			resp.Header().Set(k, v[0])
 		}
 	}
 
 	resp.ResponseWriter.WriteHeader(response.StatusCode)
 
-	if _, err := io.Copy(resp, response.Body); err != nil {
-		logs.Errorf("response request[url: %s] failed, err: %v, rid: %s", r.RequestURI, err, rid)
-		return
+	// Use a flushing copy loop instead of io.Copy.
+	// io.Copy buffers up to 32 KB before writing, which breaks streaming responses
+	// (e.g. SSE / text/event-stream) by holding all events until EOF.
+	// Here we read in small chunks and immediately flush after each write so the
+	// client receives every event as soon as it is produced by the upstream server.
+	flusher, canFlush := w.(http.Flusher)
+	buf := make([]byte, 4096)
+	for {
+		n, readErr := response.Body.Read(buf)
+		if n > 0 {
+			if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+				logs.Errorf("write response[url: %s] failed, err: %v, rid: %s", r.RequestURI, writeErr, rid)
+				return
+			}
+			if canFlush {
+				flusher.Flush()
+			}
+		}
+		if readErr != nil {
+			if readErr != io.EOF {
+				logs.Errorf("read response body[url: %s] failed, err: %v, rid: %s", r.RequestURI, readErr, rid)
+			}
+			break
+		}
 	}
 
 	logs.V(4).Infof("cost: %dms, action: %s, status code: %d, user: %s, app code: %s, url: %s, rid: %s",
 		time.Since(start).Nanoseconds()/int64(time.Millisecond), r.Method, response.StatusCode,
 		r.Header.Get(constant.UserKey), r.Header.Get(constant.AppCodeKey), url, rid)
 	return
+}
+
+// corsResponseHeaders is the set of CORS-related response headers that must not be forwarded
+// from upstream services. web-server's CORS filter is responsible for setting these headers;
+// allowing upstream services to override them would break browser CORS validation
+// (e.g. upstream returns Access-Control-Allow-Origin: * which conflicts with CookiesAllowed: true).
+var corsResponseHeaders = map[string]bool{
+	"Access-Control-Allow-Origin":      true,
+	"Access-Control-Allow-Headers":     true,
+	"Access-Control-Allow-Methods":     true,
+	"Access-Control-Allow-Credentials": true,
+	"Access-Control-Expose-Headers":    true,
+	"Access-Control-Max-Age":           true,
+}
+
+// isCORSHeader reports whether the given header name is a CORS response header.
+func isCORSHeader(name string) bool {
+	return corsResponseHeaders[http.CanonicalHeaderKey(name)]
 }
 
 // proxyRequest get request service by url, discover service and proxy request to target server
@@ -128,6 +171,8 @@ func (p *proxy) proxyRequest(req *restful.Request, w http.ResponseWriter) {
 			service = cc.WoaServerName
 		case "account":
 			service = cc.AccountServerName
+		case "agent":
+			service = cc.AgentServerName
 		}
 	} else {
 		logs.Errorf("received url path length not conform to the regulations, path: %s", req.Request.URL.Path)

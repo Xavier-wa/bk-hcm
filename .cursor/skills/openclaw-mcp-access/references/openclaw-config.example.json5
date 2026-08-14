@@ -1,0 +1,21 @@
+{
+  // Merge this block into ~/.openclaw/openclaw.json.
+  mcp: {
+    servers: {
+      // HCM MCP through BlueKing API Gateway (devhk).
+      "hcm-mcp": {
+        url: "https://{bk_apigw_domain}/api/bk-hcm/{stage}/api/v2/mcp-servers/{mcp_server_name}/mcp/",
+        transport: "streamable-http",
+        headers: {
+          "X-Bkapi-Authorization": "{ \"access_token\": \"${BK_HCM_MCP_ACCESS_TOKEN}\" }",
+        },
+        connectionTimeoutMs: 10000,
+        requestTimeoutMs: 300000,
+        supportsParallelToolCalls: false,
+        toolFilter: {
+          include: ["send_message"],
+        },
+      },
+    },
+  },
+}

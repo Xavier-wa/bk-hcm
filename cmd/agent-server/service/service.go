@@ -1,0 +1,987 @@
+/*
+ * TencentBlueKing is pleased to support the open source community by making
+ * 蓝鲸智云 - 混合云管理平台 (BlueKing - Hybrid Cloud Management System) available.
+ * Copyright (C) 2022 THL A29 Limited,
+ * a Tencent company. All rights reserved.
+ * Licensed under the MIT License (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://opensource.org/licenses/MIT
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ *
+ * We undertake not to change the open source license (MIT license) applicable
+ *
+ * to the current version of the project delivered to anyone in the future.
+ */
+
+// Package service builds and owns the HTTP server for agent-server.
+// It mounts the AG-UI endpoint, and any Channel HTTP ingress handlers
+// onto a standard net/http ServeMux.
+package service
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"hcm/cmd/agent-server/logics"
+	cvmapply "hcm/cmd/agent-server/logics/agent/cvm_apply"
+	authlogic "hcm/cmd/agent-server/logics/auth"
+	"hcm/cmd/agent-server/logics/prompt"
+	"hcm/cmd/agent-server/logics/skill"
+	"hcm/cmd/agent-server/service/a2a"
+	aguievent "hcm/cmd/agent-server/service/agui-event"
+	"hcm/cmd/agent-server/service/capability"
+	configsvc "hcm/cmd/agent-server/service/config"
+	"hcm/cmd/agent-server/service/memory"
+	promptsvc "hcm/cmd/agent-server/service/prompt"
+	"hcm/cmd/agent-server/service/session"
+	skillsvc "hcm/cmd/agent-server/service/skill"
+	"hcm/cmd/agent-server/types/readiness"
+	dsaiagent "hcm/pkg/api/data-service/aiagent"
+	"hcm/pkg/cc"
+	"hcm/pkg/client"
+	"hcm/pkg/criteria/constant"
+	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/criteria/errf"
+	"hcm/pkg/cron"
+	"hcm/pkg/cron/core"
+	"hcm/pkg/handler"
+	"hcm/pkg/iam/auth"
+	"hcm/pkg/iam/meta"
+	"hcm/pkg/kit"
+	"hcm/pkg/logs"
+	"hcm/pkg/metrics"
+	"hcm/pkg/rest"
+	restcli "hcm/pkg/rest/client"
+	"hcm/pkg/runtime/shutdown"
+	"hcm/pkg/serviced"
+	"hcm/pkg/tools/ssl"
+	"hcm/pkg/tools/uuid"
+
+	"github.com/emicklei/go-restful/v3"
+	"trpc.group/trpc-go/trpc-agent-go/agent"
+	"trpc.group/trpc-go/trpc-agent-go/graph"
+	"trpc.group/trpc-go/trpc-agent-go/server/agui"
+	"trpc.group/trpc-go/trpc-agent-go/server/agui/adapter"
+	aguirunner "trpc.group/trpc-go/trpc-agent-go/server/agui/runner"
+	agentsession "trpc.group/trpc-go/trpc-agent-go/session"
+	"trpc.group/trpc-go/trpc-agent-go/tool"
+)
+
+// Service do all the agent server's work
+type Service struct {
+	serve      *http.Server
+	authorizer auth.Authorizer
+	clientSet  *client.ClientSet
+	resolver   *session.Resolver
+	runTime    *logics.Runtime
+	tasks      map[enumor.CronTask]core.Task
+}
+
+// NewService create a service instance.
+func NewService(sd serviced.ServiceDiscover) (*Service, error) {
+	tlsConfig, err := initTLSConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	// Create authorizer for IAM permission checks.
+	authorizer, err := auth.NewAuthorizer(sd, cc.AgentServer().Network.TLS)
+	if err != nil {
+		return nil, fmt.Errorf("create authorizer failed: %w", err)
+	}
+
+	apiClientSet, err := initAPIClient(tlsConfig, sd)
+	if err != nil {
+		return nil, err
+	}
+
+	rt, err := logics.New(apiClientSet)
+	if err != nil {
+		logs.Errorf("init runtime failed, err: %v", err)
+		return nil, fmt.Errorf("init runtime: %v", err)
+	}
+
+	svc := &Service{
+		authorizer: authorizer,
+		clientSet:  apiClientSet,
+		resolver:   session.NewResolver(apiClientSet.DataService()),
+		runTime:    rt,
+	}
+	if err = svc.initCronTasks(); err != nil {
+		return nil, err
+	}
+
+	return svc, nil
+}
+
+func (s *Service) initCronTasks() error {
+	s.tasks = make(map[enumor.CronTask]core.Task)
+
+	if err := cron.Init(context.Background(), metrics.Register()); err != nil {
+		return fmt.Errorf("init cron: %w", err)
+	}
+
+	tasks := make([]core.Task, 0)
+	skillSyncTask, err := skill.NewSyncCronTask(s.runTime.SkillSyncer())
+	if err != nil {
+		logs.Errorf("init skill sync cron task failed, err: %v", err)
+		return err
+	}
+	if skillSyncTask != nil {
+		s.tasks[enumor.CronTaskSyncAgentSkills] = skillSyncTask
+		tasks = append(tasks, skillSyncTask)
+	}
+
+	promptTask, err := prompt.NewSyncCronTask(s.runTime.PromptSyncer())
+	if err != nil {
+		logs.Errorf("init prompt sync cron task failed, err: %v", err)
+		return err
+	}
+	if promptTask != nil {
+		s.tasks[enumor.CronTaskSyncAgentPrompts] = promptTask
+		tasks = append(tasks, promptTask)
+	}
+
+	if err = cron.Register(tasks); err != nil {
+		return fmt.Errorf("register skill sync cron: %w", err)
+	}
+
+	return nil
+}
+
+// initTLSConfig 初始化TLS配置
+func initTLSConfig() (*ssl.TLSConfig, error) {
+	tls := cc.AgentServer().Network.TLS
+	if !tls.Enable() {
+		return nil, nil
+	}
+
+	return &ssl.TLSConfig{
+		InsecureSkipVerify: tls.InsecureSkipVerify,
+		CertFile:           tls.CertFile,
+		KeyFile:            tls.KeyFile,
+		CAFile:             tls.CAFile,
+		Password:           tls.Password,
+	}, nil
+}
+
+// initAPIClient 初始化API客户端
+func initAPIClient(tlsConfig *ssl.TLSConfig, dis serviced.ServiceDiscover) (*client.ClientSet, error) {
+	restCli, err := restcli.NewClient(tlsConfig)
+	if err != nil {
+		return nil, err
+	}
+	return client.NewClientSet(restCli, dis), nil
+}
+
+// ListenAndServeRest listen and serve the restful server
+func (s *Service) ListenAndServeRest() error {
+	root := http.NewServeMux()
+
+	// Mount AG-UI endpoint when enabled.
+	if err := s.mountAGUI(root); err != nil {
+		return err
+	}
+
+	// Mount A2A endpoint when enabled. A2A 与 AG-UI 完全独立：
+	// 路径前缀虽然都在 /api/v1/agent 之下，但 A2A 走自己的中间件链
+	// （mcpCallerOrigin → bkapi-context → readiness），不复用 AG-UI 的 session
+	// resolver 与 IAM 鉴权，避免对现有链路造成影响。
+	if err := s.mountA2A(root); err != nil {
+		return err
+	}
+
+	root.HandleFunc("/", s.apiSet().ServeHTTP)
+	root.HandleFunc("/healthz", s.Healthz)
+	root.HandleFunc("/alivez", s.Alivez)
+	handler.SetCommonHandler(root)
+
+	network := cc.AgentServer().Network
+	server := &http.Server{
+		Addr:    net.JoinHostPort(network.BindIP, strconv.FormatUint(uint64(network.Port), 10)),
+		Handler: root,
+	}
+
+	if network.TLS.Enable() {
+		tls := network.TLS
+		tlsC, err := ssl.ClientTLSConfVerify(tls.InsecureSkipVerify, tls.CAFile, tls.CertFile, tls.KeyFile,
+			tls.Password)
+		if err != nil {
+			return fmt.Errorf("init restful tls config failed, err: %v", err)
+		}
+
+		server.TLSConfig = tlsC
+	}
+
+	logs.Infof("listen restful server on %s with secure(%v) now.", server.Addr, network.TLS.Enable())
+
+	go func() {
+		notifier := shutdown.AddNotifier()
+		select {
+		case <-notifier.Signal:
+			defer notifier.Done()
+
+			logs.Infof("start shutdown restful server gracefully...")
+
+			ctx, cancel := context.WithTimeout(context.TODO(), 20*time.Second)
+			defer cancel()
+			if err := server.Shutdown(ctx); err != nil {
+				logs.Errorf("shutdown restful server failed, err: %v", err)
+				return
+			}
+
+			logs.Infof("shutdown restful server success...")
+		}
+	}()
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logs.Errorf("serve restful server failed, err: %v", err)
+			shutdown.SignalShutdownGracefully()
+		}
+	}()
+
+	s.serve = server
+
+	return nil
+}
+
+// mountAGUI mounts the AG-UI endpoint onto the provided mux when enabled.
+func (s *Service) mountAGUI(mux *http.ServeMux) error {
+	svcCfg := cc.AgentServer().AGUI
+	if !svcCfg.Enable {
+		return nil
+	}
+
+	//   - "/api/v1/agent/cancel" → AG-UI cancel handler (only when opt.EnableAGUI is true)
+	//   - "/api/v1/agent/history" → AG-UI history handler (only when session backend is configured)
+	//   - "/api/v1/agent/sessions/{thread_id}/context-stats" → session context stats (only when session is configured)
+	//   - "POST /api/v1/agent/memory" → add a memory entry (only when memory backend is configured)
+	//   - "GET /api/v1/agent/memory" → list / search memory entries (only when memory backend is configured)
+	//   - "DELETE /api/v1/agent/memory/{memory_id}" → delete a memory entry (only when memory backend is configured)
+	//   - "DELETE /api/v1/agent/memory" → clear all memory entries (only when memory backend is configured)
+	aguiOpts := []agui.Option{
+		agui.WithPath(constant.AGUIPath),
+		// Cancel endpoint: clients POST {threadId} to abort an in-progress run.
+		agui.WithCancelEnabled(true),
+		agui.WithCancelPath(constant.AGUICancelPath),
+		// Increase post-run finalization timeout to allow events to be persisted
+		// even when the request is canceled. This helps prevent incomplete event
+		// sequences (e.g., TEXT_MESSAGE_CONTENT without TEXT_MESSAGE_START).
+		agui.WithPostRunFinalizationTimeout(20 * time.Second),
+		// 展示思考内容
+		agui.WithReasoningContentEnabled(svcCfg.Model.DisplayReasoning),
+		// 开启 graph interrupt 事件流，使 AGUI 前端能感知中断状态
+		agui.WithGraphNodeInterruptActivityEnabled(true),
+		agui.WithAGUIRunnerOptions(
+			aguirunner.WithUserIDResolver(resolveAGUIUserID),
+			aguirunner.WithRunOptionResolver(
+				makeRunOptionResolver(s.runTime.CheckpointSaver(), s.runTime.SessionSvc(), svcCfg.AppName,
+					svcCfg.AllowedModelNames(), s.runTime.DynamicToolFilter())),
+			aguirunner.WithTranslatorFactory(aguievent.NewCustomTranslator),
+			// Auto-cancel the LLM call when the SSE connection drops (client disconnects).
+			// NOTE: When ctx ends, the request stops immediately, so recorded conversation events may be incomplete.
+			// aguirunner.WithCancelOnContextDoneEnabled(true),
+		),
+	}
+
+	if svcCfg.AppName != "" {
+		aguiOpts = append(aguiOpts, agui.WithAppName(svcCfg.AppName))
+	}
+
+	// History endpoint requires a MySQL session backend; enable it automatically
+	// when one is configured so no extra config flag is needed.
+	sessionSvc := s.runTime.SessionSvc()
+	if sessionSvc != nil {
+		aguiOpts = append(aguiOpts,
+			agui.WithSessionService(sessionSvc),
+			// 开启会话历史消息快照
+			agui.WithMessagesSnapshotEnabled(true),
+			// 开启会话消息快照续传
+			agui.WithMessagesSnapshotFollowEnabled(true),
+			agui.WithFlushInterval(50*time.Millisecond),
+			agui.WithMessagesSnapshotPath(constant.AGUIHistoryPath),
+		)
+	}
+
+	aguiServer, err := agui.New(s.runTime.AGUIRunner, aguiOpts...)
+	if err != nil {
+		return fmt.Errorf("create AG-UI server failed: %v", err)
+	}
+
+	// /agui、/cancel 和 /history 在 session-code middleware 可用时进行包装，
+	// 使得 session_code 在请求到达 AG-UI runner 前被解析为 thread_id。
+	aguiHandler := s.sessionCodeMiddleware(aguiServer.Handler())
+	// 添加权限校验中间件
+	authMW := agentAuthMiddleware(s.authorizer)
+	aguiHandler = authMW(aguiHandler)
+	// 注入 BK 用户信息到 context，供 AGUI runner 使用
+	aguiHandler = bkapiContextMiddleware(aguiHandler)
+	// block AGUI until skill/prompt initial sync completes
+	aguiHandler = readinessMiddleware(s.runTime.Readiness(), aguiHandler)
+	// cancel 和 history 路径注册在 aguiServer 内部的 ServeMux 中，
+	// 外部 mux 也必须单独挂载同一个 handler，才能将请求路由进去。
+	mux.Handle(aguiServer.Path(), aguiHandler)
+	mux.Handle(constant.AGUICancelPath, aguiHandler)
+	if sessionSvc != nil {
+		mux.Handle(constant.AGUIHistoryPath, aguiHandler)
+	}
+
+	return nil
+}
+
+// mountA2A mounts the A2A protocol endpoints onto the provided mux when enabled.
+//
+// 端点（默认 basePath="/api/v1/agent"）：
+//   - POST /api/v1/agent/a2a                                 → JSON-RPC 入口
+//   - GET  /api/v1/agent/.well-known/agent-card.json         → A2A v0.2.2 AgentCard
+//   - GET  /api/v1/agent/.well-known/agent.json              → A2A 0.1.x 兼容 AgentCard
+//
+// 中间件链（从外到内）：
+//
+//	mcpCallerOrigin → bkapiContext → readiness → a2a.Handler
+//
+// 其中 mcpCallerOrigin 校验上游 X-Bkhcm-Caller-Source；bkapiContext 注入
+// bk_username 等到 ctx，使 internal MCP toolset 能正确拼装下游请求头；
+// readiness 保证 skill/prompt 完成首轮同步后才放行。
+func (s *Service) mountA2A(mux *http.ServeMux) error {
+	cfg := cc.AgentServer().A2A
+	if !cfg.Enable {
+		return nil
+	}
+
+	srv, err := a2a.New(cfg, s.runTime.AGUIRunner, cc.AgentServer().AGUI.Model.Stream,
+		s.runTime.CheckpointSaver())
+	if err != nil {
+		return fmt.Errorf("create A2A server failed: %v", err)
+	}
+
+	h := srv.Handler()
+	h = readinessMiddleware(s.runTime.Readiness(), h)
+	h = bkapiContextMiddleware(h)
+	h = mcpCallerOriginMiddleware(cfg.EnforceCallerOrigin, h)
+
+	srv.RegisterHandlers(mux, h)
+	logs.Infof("a2a: endpoints mounted, jsonRPCPath=%s, cardPath=%s, legacyCardPath=%s, "+
+		"enforceCallerOrigin=%v",
+		srv.JSONRPCPath(), srv.AgentCardPath(), srv.AgentLegacyCardPath(),
+		cfg.EnforceCallerOrigin)
+	return nil
+}
+
+// mcpCallerOriginMiddleware 校验请求头 X-Bkhcm-Caller-Source 是否为 api-server。
+//
+// 行为：
+//   - enforce=true：缺失或不匹配时直接返回 HTTP 403；
+//   - enforce=false（默认）：仅记录 warn 日志便于联调期监控，不拦截。
+//
+// 该中间件仅作用于 A2A 入口，不会影响 AG-UI 链路。
+func mcpCallerOriginMiddleware(enforce bool, next http.Handler) http.Handler {
+	expected := string(cc.APIServerName)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get(constant.MCPCallerSourceHeader)
+		if origin != expected {
+			rid := r.Header.Get(constant.RidKey)
+			if enforce {
+				logs.Errorf("a2a: caller origin check failed, expect=%q got=%q, "+
+					"path=%s, rid: %s", expected, origin, r.URL.Path, rid)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				rest.WriteResp(w, rest.NewBaseResp(errf.PermissionDenied,
+					"caller origin is not allowed for A2A endpoint"))
+				return
+			}
+			logs.Warnf("a2a: caller origin missing or mismatched, expect=%q got=%q, "+
+				"path=%s, rid: %s (enforcement disabled)",
+				expected, origin, r.URL.Path, rid)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Service) apiSet() *restful.Container {
+	ws := new(restful.WebService)
+	ws.Path("/api/v1/agent")
+	ws.Produces(restful.MIME_JSON)
+
+	c := &capability.Capability{
+		WebService: ws,
+		ClientSet:  s.clientSet,
+		Authorizer: s.authorizer,
+		RunTime:    s.runTime,
+		Tasks:      s.tasks,
+	}
+
+	memory.InitService(c)
+	session.InitService(c, s.resolver)
+	configsvc.InitService(c)
+	skillsvc.InitService(c)
+	promptsvc.InitService(c)
+	// 提供前端判断 Agent 是否就绪的接口（走 rest.Handler 统一封装 result/code/message/data）
+	readinessH := rest.NewHandler()
+	readinessH.Add("AgentReadiness", http.MethodGet, "/readiness", s.AgentReadiness)
+	readinessH.Load(ws)
+
+	return restful.NewContainer().Add(c.WebService)
+}
+
+// Healthz check whether the service is healthy.
+func (s *Service) Healthz(w http.ResponseWriter, r *http.Request) {
+	if shutdown.IsShuttingDown() {
+		logs.Errorf("service healthz check failed, current service is shutting down")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		rest.WriteResp(w, rest.NewBaseResp(errf.UnHealthy, "current service is shutting down"))
+		return
+	}
+
+	if err := serviced.Healthz(r.Context(), cc.AgentServer().Service); err != nil {
+		logs.Errorf("etcd healthz check failed, err: %v", err)
+		rest.WriteResp(w, rest.NewBaseResp(errf.UnHealthy, "etcd healthz error, "+err.Error()))
+		return
+	}
+
+	rest.WriteResp(w, rest.NewBaseResp(errf.OK, "healthy"))
+	return
+}
+
+// Alivez simply returns OK to indicate the service is alive.
+func (s *Service) Alivez(w http.ResponseWriter, r *http.Request) {
+	if shutdown.IsShuttingDown() {
+		logs.Errorf("service %s alivez check failed, current service is shutting down", cc.ServiceName())
+		w.WriteHeader(http.StatusServiceUnavailable)
+		rest.WriteResp(w, rest.NewBaseResp(errf.UnHealthy,
+			fmt.Sprintf("service %s is shutting down", cc.ServiceName())))
+		return
+	}
+
+	rest.WriteResp(w, rest.NewBaseResp(errf.OK, "alive"))
+	return
+}
+
+// sessionCodeMiddleware intercepts /agui, /cancel and /history requests, resolves sessionCode to threadId,
+// generates a runId, rewrites the request body, and forwards to the downstream handler.
+// For /agui requests, it also asynchronously increments session_content_count after SSE ends.
+func (s *Service) sessionCodeMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "failed to read request body", http.StatusBadRequest)
+			return
+		}
+		r.Body.Close()
+
+		sessionCode, reqMap, err := extractSessionCode(body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		kt, err := kit.FromHeader(r.Context(), r.Header)
+		if err != nil {
+			logs.Errorf("sessionCodeMiddleware: build kit from header failed: %v", err)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		sessionMeta, httpStatus, err := s.resolveAndValidateSession(kt, sessionCode)
+		if err != nil {
+			http.Error(w, err.Error(), httpStatus)
+			return
+		}
+		threadID := sessionMeta.ThreadID
+
+		delete(reqMap, "sessionCode")
+		reqMap["threadId"] = threadID
+		reqMap["runId"] = uuid.UUID()
+		// 将会话场景标签通过 forwardedProps 透传，供 Graph 首轮注入 StateKeySessionTag
+		if sessionMeta.SessionTag != "" {
+			logs.Infof("session tag exist, inject into forwardedProps, session_code: %s, tag: %s, rid: %s",
+				sessionCode, sessionMeta.SessionTag, kt.Rid)
+			injectForwardedSessionTag(reqMap, sessionMeta.SessionTag)
+		}
+
+		newBody, err := json.Marshal(reqMap)
+		if err != nil {
+			http.Error(w, "failed to rewrite request body", http.StatusInternalServerError)
+			return
+		}
+
+		r.Body = io.NopCloser(bytes.NewReader(newBody))
+		r.ContentLength = int64(len(newBody))
+
+		isAGUI := strings.HasSuffix(r.URL.Path, "/agui")
+		if isAGUI {
+			go s.asyncIncrContentCount(kt, sessionCode)
+			if sessionMeta.BkBizID > 0 {
+				r = r.WithContext(authlogic.WithBkBizID(r.Context(), sessionMeta.BkBizID))
+			}
+		}
+		next.ServeHTTP(w, r)
+
+		// SSE 流结束（next.ServeHTTP 返回）后 graph 已跑完、checkpoint 已落盘，此时对账回写
+		// session_tag 才能读到本轮 scene_dispatch 提交的标签。
+		// 不能在 Run 前并发启动：那样会读到尚未提交 tag 的 checkpoint，导致需要第二条消息才回写。
+		// 常态回写已由 scene_dispatch 在判定点完成，这里只作兜底，见 reconcileSessionTag。
+		if isAGUI {
+			go s.asyncReconcileSessionTag(kt, sessionCode, threadID, sessionMeta.SessionTag)
+		}
+	})
+}
+
+// extractSessionCode parses the raw JSON body, validates and extracts the sessionCode field.
+// Returns the sessionCode string and the full request map for body rewriting.
+func extractSessionCode(body []byte) (string, map[string]interface{}, error) {
+	var reqMap map[string]interface{}
+	if err := json.Unmarshal(body, &reqMap); err != nil {
+		return "", nil, errors.New("invalid JSON body")
+	}
+
+	sessionCodeVal, ok := reqMap["sessionCode"]
+	if !ok {
+		return "", nil, errors.New(`missing field "sessionCode"`)
+	}
+
+	sessionCode, ok := sessionCodeVal.(string)
+	if !ok || strings.TrimSpace(sessionCode) == "" {
+		return "", nil, errors.New(`"sessionCode" must be a non-empty string`)
+	}
+
+	return sessionCode, reqMap, nil
+}
+
+// resolveAndValidateSession resolves sessionCode to its metadata and verifies
+// that the resolved user matches the authenticated user in kt.
+// Returns the session metadata, an HTTP status code and an error on failure.
+func (s *Service) resolveAndValidateSession(kt *kit.Kit, sessionCode string) (*session.SessionMeta, int, error) {
+	sessionMeta, err := s.resolver.ResolveMeta(kt, sessionCode)
+	if err != nil {
+		logs.Errorf("resolve session code failed, session_code: %s, err: %v, rid: %s", sessionCode, err, kt.Rid)
+		return nil, http.StatusBadRequest, errors.New("invalid session code")
+	}
+
+	if sessionMeta.User != kt.User {
+		logs.Errorf("session code user mismatch, session_code: %s, session_user: %s, user: %s, rid: %s",
+			sessionCode, sessionMeta.User, kt.User, kt.Rid)
+		return nil, http.StatusForbidden, errors.New("permission denied")
+	}
+
+	return sessionMeta, http.StatusOK, nil
+}
+
+// asyncIncrContentCount asynchronously increments the session_content_count for the given sessionCode.
+func (s *Service) asyncIncrContentCount(kt *kit.Kit, sessionCode string) {
+	ctx, cancel := context.WithTimeout(context.Background(), constant.SessionIncrContentCountTimeout)
+	defer cancel()
+
+	asyncKt := kt.NewSubKitWithCtx(ctx)
+	req := &dsaiagent.IncrContentCountReq{SessionCode: sessionCode}
+	if err := s.clientSet.DataService().Aiagent.Session.IncrContentCount(asyncKt, req); err != nil {
+		logs.Errorf("async incr content count failed, session_code: %s, err: %v, rid: %s",
+			sessionCode, err, asyncKt.Rid)
+	}
+}
+
+// asyncReconcileSessionTag reconciles the session tag after a run finishes. It must be invoked
+// after next.ServeHTTP returns so that the graph run has committed StateKeySessionTag into the
+// latest checkpoint. It runs with a fresh background context since the request context is done.
+//
+// 这是兜底路径：常态下标签已由 scene_dispatch 在判定点同步回写，本函数用 background ctx 重跑一次
+// 差异比对，覆盖节点内回写失败（含请求 ctx 被 cancel）的情形，并刷新 resolver 缓存。
+//
+// 正常完成路径无竞态：图执行器同步落盘 checkpoint，`close(eventChan)` 在同一 goroutine 的 defer 中
+// 排在其后，而 SSE 侧要读到 channel 关闭才返回，因此「ServeHTTP 返回」蕴含「本轮 checkpoint 已落盘」。
+// 客户端断连或 SSE 写失败时 ServeHTTP 会在图跑完前提前返回，本轮回写落空——不做重试等待，
+// 该差异由下一轮 Run 结束后的差异回写补齐。
+func (s *Service) asyncReconcileSessionTag(kt *kit.Kit, sessionCode, threadID string,
+	originalTag enumor.IntentType) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), constant.SessionIncrContentCountTimeout)
+	defer cancel()
+
+	asyncKt := kt.NewSubKitWithCtx(ctx)
+	s.reconcileSessionTag(asyncKt, sessionCode, threadID, originalTag)
+}
+
+// injectForwardedSessionTag merges the session tag into the request body's forwardedProps map.
+func injectForwardedSessionTag(reqMap map[string]interface{}, sessionTag enumor.IntentType) {
+	fp, _ := reqMap["forwardedProps"].(map[string]interface{})
+	if fp == nil {
+		fp = make(map[string]interface{})
+	}
+	fp[constant.ForwardedPropSessionTag] = string(sessionTag)
+	reqMap["forwardedProps"] = fp
+}
+
+// reconcileSessionTag writes back the scene tag the graph settled on during this run.
+// It reads StateKeySessionTag from the latest checkpoint and, when it differs from the tag
+// the session carried at the beginning of this request, persists it via data-service and
+// refreshes the resolver cache.
+//
+// 差异回写同时覆盖两种情形：无标签会话首次识别出受支持场景，以及已有标签的会话在轮次边界
+// 切换到新场景。必须在 Run 结束后调用（见 asyncReconcileSessionTag），否则读到的是本轮开始前
+// 的 checkpoint。该操作为尽力而为，失败仅记录 Warn 日志，不影响对话。
+//
+// 本函数是兜底：scene_dispatch 已在判定点回写过一次，且它不刷 resolver 缓存（节点内只有 threadID，
+// 拿不到 sessionCode）。originalTag 是请求进入时的缓存快照，看不到节点内那次写入，因此常态下这里
+// 会再写一次同值——两次写入幂等，为省一次调用而共享判据反而要在 ctx 上多挂请求级状态，暂不做。
+func (s *Service) reconcileSessionTag(kt *kit.Kit, sessionCode, threadID string, originalTag enumor.IntentType) {
+	saver := s.runTime.CheckpointSaver()
+	if saver == nil {
+		logs.Infof("reconcile session tag: checkpoint saver is nil, session_code: %s, rid: %s",
+			sessionCode, kt.Rid)
+		return
+	}
+
+	cm := graph.NewCheckpointManager(saver)
+	tuple, err := cm.Latest(kt.Ctx, threadID, "")
+	if err != nil {
+		logs.Warnf("reconcile session tag: get latest checkpoint failed, thread: %s, err: %v, rid: %s",
+			threadID, err, kt.Rid)
+		return
+	}
+	if tuple == nil || tuple.Checkpoint == nil {
+		return
+	}
+
+	var tag enumor.IntentType
+	switch value := tuple.Checkpoint.ChannelValues[constant.StateKeySessionTag].(type) {
+	case enumor.IntentType:
+		tag = value
+	case string:
+		tag = enumor.IntentType(value)
+	}
+	if tag == "" {
+		logs.Infof("reconcile session tag: checkpoint has no session tag, session_code: %s, rid: %s",
+			sessionCode, kt.Rid)
+		return
+	}
+	if tag == originalTag {
+		logs.Infof("reconcile session tag: tag unchanged, session_code: %s, tag: %s, rid: %s",
+			sessionCode, tag, kt.Rid)
+		return
+	}
+
+	logs.Infof("reconcile session tag: write back, session_code: %s, from: %s, to: %s, rid: %s",
+		sessionCode, originalTag, tag, kt.Rid)
+
+	updateReq := &dsaiagent.UpdateAiagentSessionReq{
+		ID:         threadID,
+		Reviser:    kt.User,
+		SessionTag: tag,
+	}
+	if err := s.clientSet.DataService().Aiagent.Session.Update(kt, updateReq); err != nil {
+		logs.Warnf("reconcile session tag: write back failed, session_code: %s, tag: %s, err: %v, rid: %s",
+			sessionCode, tag, err, kt.Rid)
+		return
+	}
+
+	s.resolver.UpdateCachedSessionTag(kt, sessionCode, tag)
+}
+
+// bkapiContextMiddleware extracts BK auth parameters from the incoming HTTP
+// request headers and injects them into the request context so that the
+// downstream LLM client middleware and MCP toolsets of type "bkaidev" can include
+// them in the X-Bkapi-Authorization header when calling the BK API gateway.
+//
+// Recognised headers:
+//   - X-Bkapi-User-Name (constant.UserKey) → logics.WithBKUsername
+//   - X-Bk-Ticket                          → logics.WithBKTicket
+func bkapiContextMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rid := r.Header.Get(constant.RidKey)
+		if rid == "" {
+			rid = uuid.UUID()
+			r.Header.Set(constant.RidKey, rid)
+		}
+
+		ctx := context.WithValue(r.Context(), constant.RidKey, rid)
+		if username := r.Header.Get(constant.UserKey); username != "" {
+			ctx = authlogic.WithBKUsername(ctx, username)
+		}
+		if ticket := r.Header.Get(constant.BKTicket); ticket != "" {
+			ctx = authlogic.WithBKTicket(ctx, ticket)
+		}
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// agentAuthMiddleware returns an HTTP middleware that verifies the caller has
+// the AgentAssistant permission via IAM before forwarding the request.
+func agentAuthMiddleware(authorizer auth.Authorizer) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			kt, err := kit.FromHeader(r.Context(), r.Header)
+			if err != nil {
+				logs.Errorf("agent auth: build kit failed, err: %v", err)
+				w.WriteHeader(http.StatusUnauthorized)
+				rest.WriteResp(w, rest.NewBaseResp(errf.DoAuthorizeFailed, "invalid request identity"))
+				return
+			}
+
+			if err := authorizer.AuthorizeWithPerm(kt, meta.ResourceAttribute{
+				Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Find},
+			}); err != nil {
+				logs.Errorf("agent auth: permission denied, user: %s, err: %v, rid: %s", kt.User, err, kt.Rid)
+				w.WriteHeader(http.StatusForbidden)
+				rest.WriteResp(w, rest.NewBaseResp(errf.PermissionDenied, "no permission to access agent assistant"))
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// resolveAGUIUserID derives the session user identifier for an AG-UI run from
+// the request context (populated by bkapiContextMiddleware from X-Bkapi-User-Name).
+// Falls back to "anonymous" only when the header is absent (e.g. unauthenticated dev calls).
+func resolveAGUIUserID(ctx context.Context, _ *adapter.RunAgentInput) (string, error) {
+	if v := authlogic.BKUsernameFromContext(ctx); v != "" {
+		return v, nil
+	}
+	return "anonymous", nil
+}
+
+// makeRunOptionResolver returns an AG-UI RunOptionResolver that handles model
+// selection, dynamic tool filtering, and automatic checkpoint resume.
+//
+// Model selection: reads "modelName" from forwardedProps and translates it into
+// agent.WithModelName. Rejects unknown models with an error.
+//
+// Tool filtering: when toolFilter is non-nil, injects agent.WithToolFilter so
+// that each Run performs index-based tool retrieval.
+func makeRunOptionResolver(saver graph.CheckpointSaver, sessionSvc agentsession.Service, appName string,
+	allowedModels []string, toolFilter tool.FilterFunc) aguirunner.RunOptionResolver {
+
+	allowed := make(map[string]struct{}, len(allowedModels))
+	for _, m := range allowedModels {
+		allowed[m] = struct{}{}
+	}
+	return func(ctx context.Context, input *adapter.RunAgentInput) ([]agent.RunOption, error) {
+		var opts []agent.RunOption
+
+		// Bind lineageID to threadID so checkpoints can be queried by thread.
+		runtimeState := map[string]any{
+			graph.CfgKeyLineageID: input.ThreadID,
+		}
+
+		// 注入 rid：子图 input/output mapper 只有 graph.State、无 ctx，
+		// 靠此 key 给 [hcm graph trace] 日志带上 rid；非业务持久化字段。
+		runtimeState[constant.SessionRidStateKey] = rest.RidFromContext(ctx)
+
+		// Inject bk_biz_id from session context when the session belongs to a business.
+		bkBizID := authlogic.BkBizIDFromContext(ctx)
+		if bkBizID > 0 {
+			runtimeState[constant.SessionBkBizIDStateKey] = bkBizID
+		}
+
+		// 每轮 run 起点从 session 后端回填已选账号，写入 RuntimeState[account_id]，
+		// 使 instruction prompt 从首次渲染起即带账号；与 account_select 写入侧 key 一致。
+		if sessionSvc != nil {
+			if accountID := loadSelectedAccountID(ctx, sessionSvc, input, appName); accountID != "" {
+				runtimeState[constant.SessionAccountIDTempKey] = accountID
+			}
+		}
+
+		// Auto-detect interrupted checkpoint and prepare resume (HITL / fallback interrupt).
+		// resume command 承载用户输入文本；forwardedProps 的结构化值写入独立 runtime-state key。
+		var forwardedProps map[string]any
+		if props, ok := input.ForwardedProps.(map[string]any); ok {
+			forwardedProps = props
+		}
+		runtimeState = tryPrepareAutoResume(saver, ctx, input, runtimeState, forwardedProps)
+
+		// ForwardedProps: model selection.
+		if modelName, _ := forwardedProps["modelName"].(string); modelName != "" {
+			modelName = strings.TrimSpace(modelName)
+			if _, ok := allowed[modelName]; !ok {
+				return nil, fmt.Errorf("model %q is not in the allowed models list", modelName)
+			}
+			opts = append(opts, agent.WithModelName(modelName))
+		}
+
+		// 注入会话场景标签：非空时写入 StateKeySessionTag，供 scene_dispatch 首轮直达
+		if sessionTag, _ := forwardedProps[constant.ForwardedPropSessionTag].(string); sessionTag != "" {
+			tag := enumor.IntentType(sessionTag)
+			if tag.Validate() != nil {
+				return nil, fmt.Errorf("session tag %q is not valid", sessionTag)
+			}
+			logs.Infof("session tag is exist in forwarded, tag is %s, type is %T, rid: %s", tag, tag,
+				rest.RidFromContext(ctx))
+			runtimeState[constant.StateKeySessionTag] = tag
+		}
+
+		opts = append(opts, agent.WithRuntimeState(runtimeState))
+
+		// WithGraphEmitFinalModelResponses(true)：让 Graph 流式 LLM 的最终完整回复进入 session。
+		//
+		// 问题：UI 已展示 Agent 收口文案（如带序号的候选机型表），但下一轮模型上下文里没有；
+		// 用户回「第 N 个」时无法锚定。不止机型选号——凡依赖「上一轮 Agent 文本」做多轮锚定的场景都会卡住或者重拉数据。
+		//
+		// 原因：框架默认 GraphEmitFinalModelResponses=false，只 emit 流式 partial chunk（Done=false）。
+		// chunk 走 SSE/track 拼给前端；runner 落库要求非 partial + 有效 content，最终 Done=true
+		// 的完整回复若不 emit，则进不了 aiagent_session_events，下一轮 seed 看不见。
+		// （历史 tool 结果还会被裁成 placeholder）
+		//
+		// 方案：打开本开关，流结束后 emit Done=true 完整 model response，经 shouldPersistEvent
+		// 写入 session_events，下一轮与 fallback/子图从 session seed 时才能拿到收口文案。
+		//
+		// 附带影响：
+		// 1) 每轮可能多持久化 1 条最终 response 事件，session_events 体积略增；
+		// 2) AG-UI 对同 response.ID 应收束为 TEXT_MESSAGE_END，一般不双刷气泡——若出现双气泡需排查翻译层；
+		// 3) 不新增 LLM 往返，仅多 emit/落库一次已生成的完整文本。
+		opts = append(opts, agent.WithGraphEmitFinalModelResponses(true))
+
+		// Dynamic tool filtering.
+		if toolFilter != nil {
+			opts = append(opts, agent.WithToolFilter(toolFilter))
+		}
+
+		return opts, nil
+	}
+}
+
+// loadSelectedAccountID 从 session 后端读取 account_select 持久化的 account_id。
+// 供 makeRunOptionResolver 在 run 起点回填 RuntimeState；读失败或不存在时返回空串，不阻断流程。
+// session key 须与 cvm_apply 写入侧一致（BuildAGUISessionKey）。
+func loadSelectedAccountID(ctx context.Context, sessionSvc agentsession.Service, input *adapter.RunAgentInput,
+	appName string) string {
+
+	rid := rest.RidFromContext(ctx)
+	key := cvmapply.BuildAGUISessionKey(ctx, appName, input.ThreadID)
+	sess, err := sessionSvc.GetSession(ctx, key)
+	if err != nil || sess == nil {
+		// 读后端失败（含会话不存在）不阻断：走正常账号选择分支。
+		if err != nil {
+			logs.Warnf("load selected account: GetSession failed, key=%+v err=%v, rid: %s", key, err, rid)
+		}
+		return ""
+	}
+	raw, ok := sess.GetState(constant.SessionSelectedAccountIDStateKey)
+	if !ok || len(raw) == 0 {
+		return ""
+	}
+	return string(raw)
+}
+
+// tryPrepareAutoResume checks if the thread has an interrupted checkpoint and, if
+// so, injects the checkpointID and resume value into runtimeState so the graph
+// continues from the interrupt point.
+//
+// 恢复来源区分（command=自由输入 / forwarded=结构化协议）：
+//   - StateKeyForwardedResumeValue 经 inv.RunOptions.RuntimeState（请求级、每 Run 重建）服务
+//     account_select / hitl / after_tool_hitl 各中断节点读取前端结构化协议；该 key 不再经子图
+//     持久化 state（由 makeSubgraphInputMapper 在子图入口剥键），每次恢复读到的都是当轮值，
+//     不会因旧 checkpoint 残留而产生脏读；
+//   - resume command 经 graph.Interrupt 返回给中断节点，按请求注入，对应当前用户自由文本输入
+//     （如 human_confirm 回复、after_tool_hitl 的自由文本回退）。
+//
+// NOTE: mergeInitialStateNonInternal skips keys starting with "_", so
+// StateKeyCommand (processed by processResumeCommand) must be used instead of
+// writing ResumeChannel directly.
+func tryPrepareAutoResume(saver graph.CheckpointSaver, ctx context.Context, input *adapter.RunAgentInput,
+	runtimeState map[string]any, forwardedProps map[string]any) map[string]any {
+
+	rid := rest.RidFromContext(ctx)
+	if saver == nil {
+		return runtimeState
+	}
+	cm := graph.NewCheckpointManager(saver)
+	tuple, err := cm.Latest(ctx, input.ThreadID, "")
+	if err != nil {
+		logs.Warnf("auto-resume: failed to get latest checkpoint for thread=%s: %v, rid: %s", input.ThreadID, err, rid)
+		return runtimeState
+	}
+
+	if tuple == nil || tuple.Checkpoint == nil || !tuple.Checkpoint.IsInterrupted() {
+		return runtimeState
+	}
+
+	runtimeState[graph.CfgKeyCheckpointID] = tuple.Checkpoint.ID
+
+	// forwardedProps.resumeValue 写入两处，服务不同消费场景：
+	//
+	// 1. StateKeyForwardedResumeValue — 经 inv.RunOptions.RuntimeState（请求级、每 Run 重建）
+	//    服务各中断节点读取前端结构化协议（account_select 解析 account_id、hitl 提单确认、
+	//    after_tool_hitl 方案选择等）。该 key 不进入子图持久化 state（子图入口剥键），
+	//    故每次恢复读到的都是当轮值，不会脏读；
+	// 2. resume command — 经 graph.Interrupt 返回给中断节点，按请求注入，代表本轮操作，
+	//    适用于子图内同轮多次中断恢复（after_tool_hitl、hitl 提单确认等）。
+	forwardedResumeVal, hasForwarded := forwardedProps[constant.ForwardedPropResumeValue]
+	if hasForwarded && forwardedResumeVal != nil {
+		runtimeState[constant.StateKeyForwardedResumeValue] = forwardedResumeVal
+		if fwdStr, ok := forwardedResumeVal.(string); ok && fwdStr != "" {
+			// 结构化 forwarded 值同时作为 resume command，使 graph.Interrupt 能原样返回给中断节点。
+			// NOTE: mergeInitialStateNonInternal skips keys starting with "_",
+			// so we must use StateKeyCommand (processed by processResumeCommand)
+			// instead of writing ResumeChannel directly.
+			runtimeState[graph.StateKeyCommand] = graph.NewResumeCommand().WithResume(fwdStr)
+			logs.Infof("auto-resume: set resume command from forwarded value (len=%d), rid: %s",
+				len(fwdStr), rid)
+			return runtimeState
+		}
+		logs.Infof("auto-resume: stored non-string forwardedProps resume value type=%T, rid: %s",
+			forwardedResumeVal, rid)
+	}
+
+	// 无 forwarded 结构化值时，用用户消息文本驱动 resume（如 human_confirm 自由文本回复）。
+	var userInput string
+	if len(input.Messages) > 0 {
+		lastMsg := input.Messages[len(input.Messages)-1]
+		if lastMsg.Role == "user" {
+			userInput, _ = lastMsg.Content.(string)
+		}
+	}
+	if userInput != "" {
+		runtimeState[graph.StateKeyCommand] = graph.NewResumeCommand().WithResume(userInput)
+		logs.Infof("auto-resume: set resume command from user input: %q, rid: %s", userInput, rid)
+	}
+
+	return runtimeState
+}
+
+// AgentReadiness handles GET /api/v1/agent/readiness.
+// Unlike /healthz (which checks etcd), this reports skill/prompt initial sync status.
+// Envelope is built by rest.Handler (respEntity / respErrorWithEntity), same as other APIs.
+func (s *Service) AgentReadiness(cts *rest.Contexts) (interface{}, error) {
+	rd := s.runTime.Readiness()
+	data := readiness.AgentReadinessResp{
+		SkillReady:  rd.SkillReady(),
+		PromptReady: rd.PromptReady(),
+		Ready:       rd.IsReady(),
+	}
+	if !data.Ready {
+		return data, errf.New(errf.UnHealthy, "agent not ready: skill or prompt initial sync has not completed")
+	}
+	return data, nil
+}
+
+// readinessMiddleware wraps an http.Handler and returns 503 with a clear error
+// message until readiness.IsReady() becomes true. The /healthz endpoint is
+// intentionally NOT wrapped by this middleware (it lives on a separate mux path).
+func readinessMiddleware(rd *logics.Readiness, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// agent还未就绪，则返回 UnHealthy
+		if rd != nil && !rd.IsReady() {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			rest.WriteResp(w, rest.NewBaseResp(errf.UnHealthy,
+				"agent is not ready: initial sync of skill or prompt has not completed yet"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}

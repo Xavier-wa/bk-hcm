@@ -1,0 +1,124 @@
+# agent-after-tool-hitl Specification
+
+## Purpose
+
+为主机申领 Agent 的 Graph 提供「工具调用后中断」能力：在保留既有 `hitl`（`human_confirm`，工具调用前中断）的同时，新增 `after_tool_hitl` 节点与 `tool` 节点条件路由，使 Agent 能在调用离线偏好推荐、预测余量推荐、拆单试算等推荐工具后，按结果判定是否中断让用户确认方案，并以 Graph state 累积合并推荐候选、恢复后回到 `llm` 继续任务。
+
+## Requirements
+
+### Requirement: tool 节点后置条件路由识别推荐工具
+
+`BuildGraph` SHALL 将 `tool` 节点的固定回边替换为条件路由，由路由函数检查最近一条 assistant 消息的 `tool_calls`：当包含 `get_biz_apply_recommend_by_static`（离线偏好推荐）、`get_biz_apply_recommend_by_plan`（预测余量推荐）或 `get_biz_apply_recommend_split_suborder`（拆单试算）之一时 SHALL 路由到 `after_tool_hitl` 节点；否则 SHALL 路由到 `llm` 节点（保持原有行为）。`hitl`（`human_confirm`，工具调用前中断）节点与其路由 SHALL 保持不变。
+
+#### Scenario: 调用推荐工具后进入 after_tool_hitl
+
+- **WHEN** `tool` 节点执行的本轮 `tool_calls` 含三个推荐工具之一
+- **THEN** 路由到 `after_tool_hitl` 节点
+
+#### Scenario: 非推荐工具保持回 llm
+
+- **WHEN** `tool` 节点执行的本轮 `tool_calls` 不含推荐工具（如 skill 工具或其他 MCP 工具）
+- **THEN** 路由到 `llm` 节点
+
+#### Scenario: 工具调用前中断不受影响
+
+- **WHEN** LLM 仅调用 `human_confirm`
+- **THEN** 仍路由到 `hitl` 节点并触发工具调用前中断，行为与改造前一致
+
+### Requirement: after_tool_hitl 对离线偏好推荐结果按库存够数判定中断
+
+`after_tool_hitl` 节点处理 `get_biz_apply_recommend_by_static`（离线偏好推荐）结果时 SHALL 比较返回方案数与入参 `limit`：当 `len(Items) >= limit` 时 SHALL 在调用 `graph.Interrupt` 之前构造方案 payload（中断 key 基 `after_tool_hitl.recommend_select.interrupt`，payload 含 `recommendations`）并触发中断；当 `len(Items) < limit`（含为 0）时 SHALL 不触发中断并路由回 `llm`。`limit` 缺省值 SHALL 为 `DefaultRecommendLimit=5`（入参缺失时由 `extractLimit` 兜底）。
+
+#### Scenario: 离线偏好推荐方案够数触发中断
+
+- **WHEN** `get_biz_apply_recommend_by_static` 返回方案数 `>= limit`
+- **THEN** `after_tool_hitl` 构造方案 payload 后触发中断，等待用户选择
+
+#### Scenario: 离线偏好推荐方案不足回 llm 补充
+
+- **WHEN** `get_biz_apply_recommend_by_static` 返回方案数 `< limit`
+- **THEN** `after_tool_hitl` 不触发中断，路由回 `llm`，由 LLM 续调 `get_biz_apply_recommend_by_plan`
+
+### Requirement: after_tool_hitl 对预测余量推荐结果合并候选并按有方案中断
+
+`after_tool_hitl` 节点处理 `get_biz_apply_recommend_by_plan`（预测余量推荐）结果时 SHALL 将其追加到已累积的离线偏好推荐候选之后（离线偏好在前、预测余量补足，过滤无 `Suborder` 的无效项；当前实现为顺序拼接 + 过滤，不做组合键去重）；当合并后 `len > 0` 时 SHALL 在调用 `graph.Interrupt` 之前构造合并方案 payload（中断 key 基 `after_tool_hitl.recommend_select.interrupt`）并触发中断；当合并后无方案时 SHALL 不触发中断并路由回 `llm`。
+
+#### Scenario: 预测余量推荐后合并有方案触发中断
+
+- **WHEN** 离线偏好与预测余量合并后方案数 `> 0`
+- **THEN** `after_tool_hitl` 以合并方案构造 payload 并触发中断
+
+#### Scenario: 预测余量推荐后仍无方案回 llm 决策
+
+- **WHEN** 离线偏好与预测余量合并去重后无任何方案
+- **THEN** `after_tool_hitl` 不触发中断，路由回 `llm` 由其决策（问用户 / 走无预测分支）
+
+### Requirement: after_tool_hitl 对拆单试算结果按出单中断
+
+`after_tool_hitl` 节点处理 `get_biz_apply_recommend_split_suborder`（拆单试算）结果时 SHALL 判断**本次返回的增量子单**数量：当 `len(Suborders) >= 1` 时 SHALL 在调用 `graph.Interrupt` 之前构造「主单 + 多子单」详细方案 payload（中断 key 基 `after_tool_hitl.recommend_suborder_confirm.interrupt`，payload 含 `suborders`）并触发中断；当无增量子单时 SHALL 不触发中断并路由回 `llm`。
+
+由于拆单试算接口在增量拆分场景下**只返回本次新算出的增量子单、不回显入参 `occupied_suborders`**，`after_tool_hitl` SHALL 从触发本次中断的那次工具调用的 arguments 中解析 `occupied_suborders`（SHALL 兼容 tool-proxy schema `{parameters:{body_param:{occupied_suborders}}}` 与直连 schema `{body_param:{occupied_suborders}}` 两种嵌套，与 `extractLimit` 的取值模式一致），并将其与返回的增量子单按「已占用子单在前、本次增量子单在后」的顺序合并，以合并后的**完整清单**作为 payload 的 `suborders`，使确认卡片展示本批次全部已确认配置。当 arguments 中不含 `occupied_suborders`、解析失败或其为空数组时 SHALL 退化为仅使用返回的增量子单，且 SHALL NOT 因解析失败而阻断中断。
+
+合并 SHALL 仅作用于中断展示 payload：SHALL NOT 改变拆单试算接口的请求参数与返回契约，SHALL NOT 以合并后的数量作为中断判定依据。
+
+#### Scenario: 拆单试算出详细单触发中断
+
+- **WHEN** `get_biz_apply_recommend_split_suborder` 返回增量子单数 `>= 1` 且入参未带 `occupied_suborders`
+- **THEN** `after_tool_hitl` 以返回的增量子单构造主单+子单 payload 并触发中断，等待用户确认
+
+#### Scenario: 增量拆分时合并已占用子单一并展示
+
+- **WHEN** 入参带 `occupied_suborders`（如已确认的 S2.MEDIUM4 子单）且 `get_biz_apply_recommend_split_suborder` 返回增量子单（如 S3.MEDIUM4）
+- **THEN** 中断 payload 的 `suborders` 为「已占用子单 + 增量子单」的合并清单（已占用在前），确认卡片同时展示两条配置，历史已确认子单不丢失
+
+#### Scenario: 占用子单解析失败退化为仅增量
+
+- **WHEN** 工具调用 arguments 中 `occupied_suborders` 缺失、结构非法或为空数组
+- **THEN** `after_tool_hitl` 仅以返回的增量子单构造 payload 并正常触发中断，不报错、不阻断流程
+
+#### Scenario: 中断判定只看增量子单
+
+- **WHEN** 入参带 `occupied_suborders` 但本次返回的增量子单为空（余量/库存不足，可分配总量 < 1）
+- **THEN** `after_tool_hitl` 不触发中断、不因历史占用子单弹出确认卡片，路由回 `llm`
+
+#### Scenario: 拆单试算空结果回 llm
+
+- **WHEN** `get_biz_apply_recommend_split_suborder` 返回空（余量/库存不足，可分配总量 < 1）
+- **THEN** `after_tool_hitl` 不触发中断，路由回 `llm`
+
+### Requirement: 推荐候选以 Graph state 累积且离线偏好推荐为轮边界
+
+`after_tool_hitl` SHALL 以 Graph state 累积推荐候选：处理 `get_biz_apply_recommend_by_static` 时 SHALL 覆盖写候选集合（作为新一轮推荐的边界，丢弃上一轮残留）；处理 `get_biz_apply_recommend_by_plan` 时 SHALL 在已有候选基础上合并去重后写回。中断路径下候选 delta 因 InterruptError 不被应用 SHALL 不影响后续流程，故合并 payload SHALL 在中断前构造完成。
+
+#### Scenario: 离线偏好推荐覆盖写清除上一轮候选
+
+- **WHEN** 新一轮推荐先调用 `get_biz_apply_recommend_by_static`
+- **THEN** state 中的推荐候选被其结果覆盖，不含上一轮残留
+
+#### Scenario: 预测余量推荐在离线偏好候选上合并
+
+- **WHEN** 同一轮离线偏好推荐不足后调用 `get_biz_apply_recommend_by_plan`
+- **THEN** state 候选为离线偏好候选与预测余量有效项的顺序合并结果（离线偏好在前）
+
+### Requirement: after_tool_hitl 恢复后回到 llm
+
+`after_tool_hitl` 触发中断并经 resume 后 SHALL 将用户选择并入消息（复用 `message.BuildFallbackResumeDelta`）并路由回 `llm` 继续当前任务；`after_tool_hitl` → `llm` SHALL 为循环边。
+
+`after_tool_hitl` SHALL 优先采用前端经 `forwardedProps` 传入、存于 `inv.RunOptions.RuntimeState[StateKeyForwardedResumeValue]` 的结构化回复（该值由 `service.go: tryPrepareAutoResume` 在**每次 HTTP Run** 重建进 RuntimeState，语义为前端本轮结构化协议）：命中（非空字符串）时 SHALL 以其作为用户选择并发自定义事件 `after_tool_hitl.resume_forwarded`（payload `{value}`）、忽略 `graph.Interrupt` 返回的自由文本 resume 值；未命中时 SHALL 回退使用 `graph.Interrupt` 返回的自由文本 resume 值，且该值 SHALL 为非空字符串（否则报错终止）。
+
+子图输入映射 `makeSubgraphInputMapper` SHALL 在构建子图 `state` 时 `delete(child, StateKeyForwardedResumeValue)`，使该 key **不进入**子图持久化 `state`。由此，子图 `after_tool_hitl → llm` 循环边同轮多次中断恢复时，持久化 checkpoint 不含旧值，`mergeInitialStateNonInternal` 的 checkpoint 优先规则不会压制本轮新值；每次恢复经 `mergeInitialStateNonInternal` 用本轮 `tryPrepareAutoResume` 写入的 `inv.RunOptions.RuntimeState` 新值补位，`after_tool_hitl` 读到当轮值，避免脏读。
+
+#### Scenario: 前端结构化回复优先恢复
+
+- **WHEN** 前端经 `forwardedProps` 传入了非空结构化回复（写入 `inv.RunOptions.RuntimeState[StateKeyForwardedResumeValue]`）
+- **THEN** `after_tool_hitl` 以该结构化值作为用户选择、发 `after_tool_hitl.resume_forwarded` 事件，并将其并入消息回到 `llm`
+
+#### Scenario: 无结构化回复时用自由文本恢复
+
+- **WHEN** `inv.RunOptions.RuntimeState[StateKeyForwardedResumeValue]` 未命中（本轮无 forwarded），仅有 `graph.Interrupt` 返回的自由文本值
+- **THEN** `after_tool_hitl` 校验其为非空字符串后并入消息，流程回到 `llm` 继续
+
+#### Scenario: 入口剥键避免同轮二次中断脏读
+
+- **WHEN** 子图 `after_tool_hitl → llm` 同轮内发生多次中断恢复（如先 by_static 选 A、再 by_plan 选 B），且子图 `state` 已不含 `StateKeyForwardedResumeValue`（入口剥键）
+- **THEN** 每次恢复的 checkpoint 均不含该 key，`mergeInitialStateNonInternal` 用本轮 `tryPrepareAutoResume` 写入的当轮值（B）补位，`after_tool_hitl` 读到 B（而非第一次的 A），不误用历史选择

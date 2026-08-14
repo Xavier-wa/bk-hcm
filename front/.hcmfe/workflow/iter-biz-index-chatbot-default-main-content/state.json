@@ -1,0 +1,110 @@
+{
+  "id": "iter-biz-index-chatbot-default-main-content",
+  "title": "aiagent - 资源管理首页chatbot - 默认主内容区",
+  "currentStage": "done",
+  "createdAt": "2026-06-05T11:51:03.143Z",
+  "updatedAt": "2026-06-08T09:20:04.367Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-default-main-content/prd.md",
+        "kind": "file",
+        "addedAt": "2026-06-05T11:51:51.242Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-default-main-content/design.md",
+        "kind": "file",
+        "addedAt": "2026-06-05T12:11:46.595Z"
+      },
+      {
+        "ref": "https://www.figma.com/design/nKX02SsMK8StZYAEEw0MfK/%E4%B8%9A%E5%8A%A1%E8%B5%84%E6%BA%90?node-id=2006-6056",
+        "kind": "url",
+        "addedAt": "2026-06-05T12:11:52.268Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-default-main-content/api.md",
+        "kind": "file",
+        "addedAt": "2026-06-08T02:01:49.872Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-default-main-content/coding.md",
+        "kind": "file",
+        "addedAt": "2026-06-08T02:31:20.983Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-default-main-content/test.md",
+        "kind": "file",
+        "addedAt": "2026-06-08T09:18:15.512Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-06-05T12:07:44.461Z",
+      "note": "User confirmed PRD: 大卡片直接发送/小卡片填入输入框; 仅首页空态展示; 已有会话无消息保持空白; 卡片前端固定配置、清单从Figma 2006-6056提取; 欢迎区=欢迎语+功能tips+大卡片; 全业务统一"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-06-08T01:59:47.907Z",
+      "note": "User confirmed Design: 欢迎区+大卡片(响应式,默认4张,点击直发)+小卡片(响应式+分段翻页,默认10个,统一注入tag+默认词待发送,无直达); 云朵图标用 cloud-assistant.svg; 空输入发送置灰; 卡片文案留 api 阶段定稿"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-06-08T02:20:21.052Z",
+      "note": "User confirmed API: 无新增后端接口; 场景标识走 create_session 的 session_tag 入参(后端已就绪), 前端 key→名称映射仅 host_apply:主机申领; 带 tag 会话自动归入文件夹; 大卡片直发/小卡片注入待发均复用 sendMessage; createSession 需扩展 sessionTag 参数; 卡片文案用默认可微调"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-06-08T09:16:33.305Z",
+      "note": "User approved coding: 默认主内容区(欢迎区+响应式大卡片直发+小卡片注入待发) 已落地; session_tag 经 create_session 透传并按 host_apply 映射文件夹; 稿面对齐: 全局面包屑替代会话标题、底部 w-name@小助手、灰底/间距/留白响应式; 小卡片排与输入框同宽、单按钮分段翻页、icon #699df4; 场景 chip 去 icon + padding-left 两列布局 + 进入带 tag 会话只读回显; resolveSessionTagName 抽到 utils.ts; hcmfe lint 通过"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-06-08T09:19:58.132Z",
+      "note": "User decided to skip in-workflow manual test and go straight to done; test.md P0/P1/P2 用例清单保留供后续自测/QA 复测; 总体结论 Skipped; hcmfe lint 已通过"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-06-05T11:51:03.143Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-06-05T12:07:49.852Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-06-08T01:59:54.098Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-06-08T02:20:28.557Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-06-08T09:16:40.796Z"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-06-08T09:20:04.367Z"
+    }
+  ],
+  "requirementId": "req-aiagent-biz-index-chatbot",
+  "branch": "feat-biz-index-chatbot"
+}

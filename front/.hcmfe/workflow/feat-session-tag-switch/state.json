@@ -1,0 +1,151 @@
+{
+  "id": "feat-session-tag-switch",
+  "title": "aiagent-同会话内动态切换场景标签",
+  "currentStage": "done",
+  "createdAt": "2026-08-05T08:01:04.784Z",
+  "updatedAt": "2026-08-06T06:29:19.356Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-session-tag-switch/prd.md",
+        "kind": "file",
+        "addedAt": "2026-08-05T09:55:44.550Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-session-tag-switch/design.md",
+        "kind": "file",
+        "addedAt": "2026-08-06T02:09:29.373Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-session-tag-switch/api.md",
+        "kind": "file",
+        "addedAt": "2026-08-06T02:12:05.908Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-session-tag-switch/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-06T02:15:02.359Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-session-tag-switch/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-06T06:24:25.600Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-08-06T02:08:37.994Z",
+      "note": "用户确认 PRD 可作为 Design 唯一依据"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-08-06T02:11:35.189Z",
+      "note": "用户确认 design / 跳过两个 post"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-08-06T02:14:07.464Z",
+      "note": "用户确认 api.md 可作为 Coding 唯一依据"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-06T06:24:05.752Z",
+      "note": "用户确认编码可作为进入 test 的依据；已 seat align"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-06T06:27:43.957Z",
+      "note": "用户确认自测通过（测试通过）"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-08-05T08:01:04.784Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-08-06T02:08:37.994Z",
+      "note": "用户确认 PRD 可作为 Design 唯一依据"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-08-06T02:11:35.189Z",
+      "note": "用户确认 design / 跳过两个 post"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-08-06T02:14:07.464Z",
+      "note": "用户确认 api.md 可作为 Coding 唯一依据"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-06T06:24:05.752Z",
+      "note": "用户确认编码可作为进入 test 的依据；已 seat align"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-06T06:27:43.957Z",
+      "note": "用户确认自测通过（测试通过）"
+    }
+  ],
+  "requirementId": "req-aiagent-biz-index-chatbot",
+  "branch": "feat-session-tag-switch",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598136844127"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "completed",
+      "at": "2026-08-05T09:53:03.586Z",
+      "note": "已完成：澄清回写 docs/reqs/场景标签切换.md + TAPD description；无需拆分；RICE=75 / effort=8；tapd-analyst 全量解读完成（无图无评论）"
+    },
+    "hcm-design-icon-intake": {
+      "status": "skipped",
+      "at": "2026-08-06T02:11:26.283Z",
+      "note": "用户确认跳过：无新增图标，沿用现网文件夹开合图标"
+    },
+    "hcm-design-comp-intake": {
+      "status": "skipped",
+      "at": "2026-08-06T02:11:26.509Z",
+      "note": "用户确认跳过：§3.y 已写明复用既有 chip/文件夹，无新 page/comp 落码"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-06T06:29:19.356Z",
+      "note": "story 1069995598136844127: for_test→tested(status_13)→done(status_14)；无 parentId；未改 owner"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/hooks/chatbot/types.ts",
+        "src/hooks/chatbot/use-session.ts",
+        "src/hooks/chatbot/use-event.ts",
+        "src/hooks/chatbot/use-chatbot.ts",
+        "views/chatbot/index.vue"
+      ],
+      "contentFingerprint": "0fe1c414247b8090ea1543e9f4e7b6b810deac86",
+      "codeBaseline": "64dbd569d9e436e02242d90bbabee8656241b549",
+      "seatedAt": "2026-08-06T06:24:00.519Z"
+    }
+  }
+}

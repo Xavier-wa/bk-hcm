@@ -1,0 +1,105 @@
+{
+  "id": "fix-biz-chatbot-403-apply",
+  "title": "业务 chatbot 直链无权限页-申请权限无响应修复",
+  "currentStage": "done",
+  "createdAt": "2026-07-28T08:09:26.914Z",
+  "updatedAt": "2026-07-28T11:56:14.643Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/fix-biz-chatbot-403-apply/coding.md",
+        "kind": "file",
+        "addedAt": "2026-07-28T09:08:59.361Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/fix-biz-chatbot-403-apply/test.md",
+        "kind": "file",
+        "addedAt": "2026-07-28T09:42:00.495Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-07-28T11:53:16.684Z",
+      "note": "用户确认：已并进 host 直链不分流修正，coding.md 与代码对齐，可作为 test 阶段依据"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-07-28T11:55:05.737Z",
+      "note": "用户确认推进到 done：代码与 lint 已完成，test.md 清单已交付；运行时验证依赖无权限测试账号，结论 Pending 由执行人后续回填"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-07-28T08:09:26.914Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-07-28T09:41:32.335Z",
+      "note": "用户确认 coding.md 与 router 改动可作为 test 阶段依据"
+    },
+    {
+      "from": "test",
+      "to": "coding",
+      "at": "2026-07-28T11:48:51.621Z",
+      "note": "用户确认：并进本单——直链 /business/host 不应被默认首页分流拉到 chatbot，仅 / 与 /business 触发默认首页跳转"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-07-28T11:53:16.684Z",
+      "note": "用户确认：已并进 host 直链不分流修正，coding.md 与代码对齐，可作为 test 阶段依据"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-07-28T11:55:05.737Z",
+      "note": "用户确认推进到 done：代码与 lint 已完成，test.md 清单已交付；运行时验证依赖无权限测试账号，结论 Pending 由执行人后续回填"
+    }
+  ],
+  "branch": "feat-aigent-business-index-auth",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598136566294"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "completed",
+      "at": "2026-07-28T09:07:44.275Z",
+      "note": "澄清+评估已完成：本地 docs/reqs/AI助手无权限回退.md；TAPD description 已回写（含原需求描述）；无需拆分；effort=3 人时，RICE=400；单据仍在 backlog，即将按 tapdSync 追平"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-07-28T11:54:47.314Z",
+      "note": "menu-route 模块文档已记录 biz_agent_assistant 主动授权特殊处理与默认首页分流收窄（仅 / 与 /business）；docs_status 确认 menu-route hasDrift=false（基线 2026-07-28T11:49:48 已覆盖本次 router 改动）。其余 stale 模块（base/chatbot/resource/business/ticket/model）属其他分支改动，不属本单范围。promotionQueue.totalOpen=0，无待评审晶升候选。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-07-28T11:56:14.643Z",
+      "note": "story 1069995598136566294（objectType=story）：status_12(for test) → status_13(tested) → status_14(done/已上线)，forward-only 逐级追平，stories_get 复核 v_status=done(已上线)。owner 未变更（yunyaoyang）；无 parent_id，无需 rollup。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/router/index.ts"
+      ],
+      "contentFingerprint": "004e0c7793cdc2edcdf0cadc398d8c11393208a8",
+      "codeBaseline": "8e782d293578831900549457400b12432e8fb992",
+      "seatedAt": "2026-07-28T11:50:07.043Z"
+    }
+  }
+}

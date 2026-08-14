@@ -36,6 +36,7 @@ import {
   MENU_BUSINESS_OPERATION_LOG,
   MENU_SERVICE_TICKET_MANAGEMENT,
   MENU_BUSINESS_LOAD_BALANCER,
+  MENU_BUSINESS_CHATBOT,
   MENU_BUSINESS_CLOUD_ACCOUNT,
 } from '@/constants/menu-symbol';
 import { jsonp } from '@/http';
@@ -67,9 +68,9 @@ export default defineComponent({
     const isMenuOpen = ref<boolean>(true);
     const language = ref(Cookies.get('blueking_language') || i18n.global.locale.value);
 
-    const isNeedSideMenu = computed(
-      () => ![Senarios.resource, Senarios.scheme, Senarios.unauthorized].includes(whereAmI.value),
-    );
+    const isNeedSideMenu = computed(() => {
+      return ![Senarios.unknown, Senarios.resource, Senarios.scheme, Senarios.unauthorized].includes(whereAmI.value);
+    });
 
     const { hasPagePermission, permissionMsg, logout } = usePagePermissionStore();
 
@@ -90,6 +91,7 @@ export default defineComponent({
           MENU_SERVICE_TICKET_MANAGEMENT,
           MENU_BUSINESS_OPERATION_LOG,
           MENU_BUSINESS_LOAD_BALANCER,
+          MENU_BUSINESS_CHATBOT,
           MENU_BUSINESS_CLOUD_ACCOUNT,
           MENU_BUSINESS_TICKET_MANAGEMENT,
         ].includes(config.name)

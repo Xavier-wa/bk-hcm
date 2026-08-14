@@ -163,6 +163,9 @@ const (
 
 	// PermissionPolicyLibrary 权限策略库
 	PermissionPolicyLibrary ResourceType = "permission_policy_library"
+
+	// AgentAssistant 智能体助手
+	AgentAssistant ResourceType = "agent_assistant"
 )
 
 // resourceTypes 所有合法的 ResourceType 枚举值

@@ -1,6 +1,6 @@
 /* eslint-disable no-useless-escape */
 // eslint-disable
-import { computed, defineComponent, reactive, ref, watch } from 'vue';
+import { computed, defineComponent, onMounted, reactive, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { Form, Input, Select, Checkbox, Button, Radio, Switcher, Slider, Alert, Popover } from 'bkui-vue';
 import ConditionOptions from '../components/common/condition-options/index.vue';
@@ -36,6 +36,9 @@ import { Senarios, useWhereAmI } from '@/hooks/useWhereAmI';
 import { pluginHandler } from '@pluginHandler/service-apply-cvm';
 import { bizApplyCvmCloudAreaSelectedKey } from '@/constants/storage-symbols';
 import cloudAreaFilter from './cloud-area-filter.plugin';
+import AiAssistant from '@/components/ai-assistant/index.vue';
+import { SESSION_TAG_HOST_APPLY } from '@/views/chatbot/constants';
+import { useHostApplyBackfillStore } from '@/store/chatbot/host-apply-backfill';
 const { BK_HCM_AJAX_URL_PREFIX } = window.PROJECT_CONFIG;
 
 const accountStore = useAccountStore();
@@ -68,6 +71,40 @@ export default defineComponent({
     const { t } = useI18n();
     const router = useRouter();
     const route = useRoute();
+
+    // 跨形态联动：携带 query sessionCode 进入本页时，自动唤起 AI 浮窗并加载对应会话
+    const aiAssistantRef = ref<InstanceType<typeof AiAssistant>>();
+    // selectPlan=1 表示由「选择方案 + 添加到配置清单」跳转而来：取 backfill 首条规格，会话打开后选中对应方案
+    const parsePreselectSuborder = () => {
+      if (route.query.selectPlan !== '1' || typeof route.query.backfill !== 'string') return undefined;
+      try {
+        const list = JSON.parse(route.query.backfill);
+        return Array.isArray(list) ? list[0] : undefined;
+      } catch {
+        return undefined;
+      }
+    };
+    onMounted(() => {
+      const sessionCode = typeof route.query.sessionCode === 'string' ? route.query.sessionCode : '';
+      if (!sessionCode) return;
+      // 先按场景加载会话列表并切换到深链会话，再唤起面板，避免 show() 二次拉取
+      aiAssistantRef.value?.initSessions(sessionCode, parsePreselectSuborder());
+      aiAssistantRef.value?.show();
+    });
+
+    // 聊天「添加到配置清单」透传的预选账号：全页经 query.accountId 进入；浮窗同页经 backfill store 写入。
+    // 传给账号选择卡片，命中后预选同一账号（与聊天前置选择一致）。
+    const hostApplyBackfillStore = useHostApplyBackfillStore();
+    const presetAccountId = ref(typeof route.query.accountId === 'string' ? route.query.accountId : '');
+    watch(
+      () => hostApplyBackfillStore.pending,
+      (suborders) => {
+        if (suborders.length && hostApplyBackfillStore.accountId) {
+          presetAccountId.value = hostApplyBackfillStore.accountId;
+        }
+      },
+    );
+
     const isSubmitBtnLoading = ref(false);
     const usageNum = ref(0);
     const limitNum = ref(-1);
@@ -1048,6 +1085,7 @@ export default defineComponent({
 
     return () => (
       <div>
+        <AiAssistant ref={aiAssistantRef} title='海垒 AI 助手' sceneTag={SESSION_TAG_HOST_APPLY} />
         <DetailHeader fromConfig={fromConfig.value}>
           <p class={'purchase-cvm-header-title'}>购买主机</p>
         </DetailHeader>
@@ -1057,6 +1095,7 @@ export default defineComponent({
           <Form model={formData} rules={formRules} ref={formRef} onSubmit={handleFormSubmit} formType='vertical'>
             <AccountSelectorCard
               v-model={cond.cloudAccountId}
+              presetAccountId={presetAccountId.value}
               bkBizId={whereAmI.value === Senarios.business && getBizsId()}
               disabled={isResourcePage}
               placeholder={isResourcePage && '请在左侧选择账号'}

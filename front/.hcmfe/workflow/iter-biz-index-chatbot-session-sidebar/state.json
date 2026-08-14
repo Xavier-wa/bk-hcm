@@ -1,0 +1,110 @@
+{
+  "id": "iter-biz-index-chatbot-session-sidebar",
+  "title": "aiagent - 资源管理首页chatbot - 侧边栏会话列表",
+  "currentStage": "done",
+  "createdAt": "2026-05-28T08:00:17.790Z",
+  "updatedAt": "2026-06-05T11:44:34.677Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-session-sidebar/prd.md",
+        "kind": "file",
+        "addedAt": "2026-05-28T08:01:58.773Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-session-sidebar/design.md",
+        "kind": "file",
+        "addedAt": "2026-06-01T11:39:04.308Z"
+      },
+      {
+        "ref": "https://www.figma.com/design/nKX02SsMK8StZYAEEw0MfK/%E4%B8%9A%E5%8A%A1%E8%B5%84%E6%BA%90?node-id=2008-8150",
+        "kind": "url",
+        "addedAt": "2026-06-02T06:32:52.274Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-session-sidebar/api.md",
+        "kind": "file",
+        "addedAt": "2026-06-03T07:42:45.924Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-session-sidebar/coding.md",
+        "kind": "file",
+        "addedAt": "2026-06-03T08:19:35.922Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/iter-biz-index-chatbot-session-sidebar/test.md",
+        "kind": "file",
+        "addedAt": "2026-06-05T11:40:23.825Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-06-01T11:36:49.413Z",
+      "note": "User confirmed PRD"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-06-02T06:32:53.734Z",
+      "note": "User confirmed: 历史对话文案 OK; search in scope; drag deferred to next iteration"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-06-03T08:16:35.035Z",
+      "note": "User confirmed API: resolveBizApiPath, list/create dual dimension, update/delete biz only, session_tag"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-06-05T11:38:35.863Z",
+      "note": "User confirmed coding complete; lint passed (no lint command configured)"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-06-05T11:44:30.037Z",
+      "note": "User opted to skip in-workflow manual testing; test.md checklist retained for later self-test/QA; advancing to done"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-05-28T08:00:17.790Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-06-01T11:36:58.181Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-06-02T06:33:03.989Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-06-03T08:16:36.003Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-06-05T11:38:44.986Z"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-06-05T11:44:34.677Z"
+    }
+  ],
+  "requirementId": "req-aiagent-biz-index-chatbot",
+  "branch": "feat-biz-index-chatbot"
+}

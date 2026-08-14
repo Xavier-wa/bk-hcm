@@ -27,6 +27,7 @@ import (
 
 	"hcm/cmd/api-server/options"
 	"hcm/cmd/api-server/service"
+	mcpmetrics "hcm/cmd/api-server/service/mcp/metrics"
 	"hcm/pkg/cc"
 	"hcm/pkg/logs"
 	"hcm/pkg/metrics"
@@ -81,12 +82,22 @@ func (as *apiService) prepare(opt *options.Option) error {
 	}
 	logs.Infof("jwt disable state: %v", opt.DisableJWT)
 
+	apiCfg := cc.ApiServer()
+
 	// init metrics
-	network := cc.ApiServer().Network
+	network := apiCfg.Network
 	metrics.InitMetrics(net.JoinHostPort(network.BindIP, strconv.Itoa(int(network.Port))))
+	if apiCfg.MCP.Ingress.Enable || apiCfg.MCP.Internal.Enable {
+		mcpmetrics.InitMCPMetrics()
+		logs.Infof("init mcp metrics bootstrap success")
+	}
 
 	// new api server discovery client.
-	discOpt := serviced.DiscoveryOption{Services: []cc.Name{cc.CloudServerName, cc.WoaServerName, cc.AccountServerName}}
+	discoverServices := []cc.Name{cc.CloudServerName, cc.WoaServerName, cc.AccountServerName}
+	if apiCfg.MCP.Ingress.Enable || apiCfg.A2APassthrough.Enable {
+		discoverServices = append(discoverServices, cc.AgentServerName)
+	}
+	discOpt := serviced.DiscoveryOption{Services: discoverServices}
 	dis, err := serviced.NewDiscovery(cc.ApiServer().Service, discOpt)
 	if err != nil {
 		return fmt.Errorf("new service discovery faield, err: %v", err)

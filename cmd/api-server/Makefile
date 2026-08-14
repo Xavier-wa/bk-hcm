@@ -9,6 +9,7 @@ default:
 	@echo -e "\033[34;1mBuilding $(SERVER)...\033[0m"
 	go build -ldflags ${LDVersionFLAG} -o $(BIN) api_server.go
 	@cp -r etc $(BINDIR)
+	@cp -f ../../docs/support-file/helm/files/bk_apigw_resources_bk-hcm_internal_mcp.yaml $(BINDIR)/etc/
 	@sh $(GENERATOR) '$(SERVER)' '$(ARGS)' '$(BINDIR)'
 	@echo -e "\033[32;1mBuild $(SERVER) success!\n\033[0m"
 
@@ -17,6 +18,7 @@ package:
 	go build -ldflags ${LDVersionFLAG} -o $(PKGBIN) api_server.go
 	@cp -f etc/api_server.yaml $(PKGETC)/
 	@cp -f etc/api_gw_public.key $(PKGETC)/apiserver_api_gw_public.key
+	@cp -f ../../docs/support-file/helm/files/bk_apigw_resources_bk-hcm_internal_mcp.yaml $(PKGETC)/
 	@echo -e "\033[32;1mPackage $(SERVER) success!\n\033[0m"
 
 docker:

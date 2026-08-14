@@ -23,3 +23,10 @@ bkcodeai.json
 .codebuddy/memory/
 .codebuddy/plans/
 **/docs/reqs
+# ai-practice skill/agent 安装产物（由 install-to-target.sh 自动维护，勿手动编辑本段）
+.cursor/
+.codebuddy/
+.claude/
+.codex/
+.agents/
+project.json

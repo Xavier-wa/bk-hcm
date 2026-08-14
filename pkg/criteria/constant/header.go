@@ -48,6 +48,19 @@ const (
 	BKGWAuthKey = "X-Bkapi-Authorization"
 	// ContentTypeKey is content type header key.
 	ContentTypeKey = "Content-Type"
+
+	// BKTicket is blueking ticket header key.
+	BKTicket = "X-Bk-Ticket"
+
+	// AccessTokenKey is the context key for BK access_token (tool proxy init / refresh).
+	AccessTokenKey = "access_token"
+
+	// BkBizIDKey is the bk biz ID header key.
+	BkBizIDKey = "X-Bk-Biz-Id"
+
+	// MCPCallerSourceHeader 标识 MCP/A2A 等内部调用的来源服务名，
+	// 取值为 cc.Name 字符串（例如 cc.APIServerName）。
+	MCPCallerSourceHeader = "X-Bkhcm-Caller-Source"
 )
 
 const (
@@ -55,4 +68,6 @@ const (
 	BKHTTPCookieLanguageKey = "blueking_language"
 	// WebSourceAppCode app code for web source
 	WebSourceAppCode = "hcm-web-server"
+	// AgentSourceAppCode app code for agent-server source
+	AgentSourceAppCode = "hcm-agent-server"
 )
