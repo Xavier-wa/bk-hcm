@@ -33,8 +33,10 @@ import (
 //
 // POST /api/v1/agent/sessions/create
 func (svc *service) CreateSession(cts *rest.Contexts) (interface{}, error) {
-	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Create}}
-	return svc.createSession(cts, constant.UnassignedBiz, authRes)
+	if err := svc.authorizeAgentAssistant(cts.Kit, meta.Create); err != nil {
+		return nil, err
+	}
+	return svc.createSession(cts, constant.UnassignedBiz)
 }
 
 // BizCreateSession creates a new session under a business.
@@ -49,12 +51,13 @@ func (svc *service) BizCreateSession(cts *rest.Contexts) (interface{}, error) {
 		return nil, errf.Newf(errf.InvalidParameter, "bk_biz_id must be greater than 0")
 	}
 
-	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Create}, BizID: bizID}
-	return svc.createSession(cts, bizID, authRes)
+	if err := svc.authorizeBizSession(cts.Kit, bizID); err != nil {
+		return nil, err
+	}
+	return svc.createSession(cts, bizID)
 }
 
-func (svc *service) createSession(cts *rest.Contexts, bizID int64, authRes meta.ResourceAttribute) (
-	*proto.CreateSessionResp, error) {
+func (svc *service) createSession(cts *rest.Contexts, bizID int64) (*proto.CreateSessionResp, error) {
 
 	if svc.cli == nil {
 		return nil, errf.New(errf.UnHealthy, "data service client is not configured")
@@ -67,12 +70,6 @@ func (svc *service) createSession(cts *rest.Contexts, bizID int64, authRes meta.
 
 	if err := req.Validate(); err != nil {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
-	}
-
-	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit, authRes); err != nil {
-		logs.Errorf("create session: permission denied, user: %s, bk_biz_id: %d, err: %v, rid: %s",
-			cts.Kit.User, bizID, err, cts.Kit.Rid)
-		return nil, errf.New(errf.PermissionDenied, "permission denied")
 	}
 
 	createReq := &dsaiagent.CreateAiagentSessionReq{

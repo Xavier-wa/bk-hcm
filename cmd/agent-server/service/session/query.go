@@ -42,8 +42,10 @@ import (
 //
 // POST /api/v1/agent/sessions/list
 func (svc *service) ListSessions(cts *rest.Contexts) (interface{}, error) {
-	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Find}}
-	return svc.listSessions(cts, constant.UnassignedBiz, authRes)
+	if err := svc.authorizeAgentAssistant(cts.Kit, meta.Find); err != nil {
+		return nil, err
+	}
+	return svc.listSessions(cts, constant.UnassignedBiz)
 }
 
 // BizListSessions queries the current user's session list in a specific business.
@@ -58,12 +60,13 @@ func (svc *service) BizListSessions(cts *rest.Contexts) (interface{}, error) {
 		return nil, errf.Newf(errf.InvalidParameter, "bk_biz_id must be greater than 0")
 	}
 
-	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Find}, BizID: bizID}
-	return svc.listSessions(cts, bizID, authRes)
+	if err := svc.authorizeBizSession(cts.Kit, bizID); err != nil {
+		return nil, err
+	}
+	return svc.listSessions(cts, bizID)
 }
 
-func (svc *service) listSessions(cts *rest.Contexts, bkBizID int64, authRes meta.ResourceAttribute) (
-	interface{}, error) {
+func (svc *service) listSessions(cts *rest.Contexts, bkBizID int64) (interface{}, error) {
 
 	if svc.cli == nil {
 		return nil, errf.New(errf.UnHealthy, "data service client is not configured")
@@ -76,12 +79,6 @@ func (svc *service) listSessions(cts *rest.Contexts, bkBizID int64, authRes meta
 
 	if err := req.Validate(); err != nil {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
-	}
-
-	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit, authRes); err != nil {
-		logs.Errorf("list sessions: permission denied, user: %s, bk_biz_id: %d, err: %v, rid: %s",
-			cts.Kit.User, bkBizID, err, cts.Kit.Rid)
-		return nil, errf.New(errf.PermissionDenied, "permission denied")
 	}
 
 	filterRules := make([]*filter.AtomRule, 0)

@@ -1,4 +1,4 @@
-## Requirements
+## ADDED Requirements
 
 ### Requirement: IAM 下线业务-智能体助手
 
@@ -21,6 +21,8 @@
 
 - **WHEN** 用户只被授予 `biz_agent_assistant`、未被授予 `agent_assistant`
 - **THEN** 调用 `/agui` `/history` `/cancel` MUST 返回 `PermissionDenied`
+
+## MODIFIED Requirements
 
 ### Requirement: 业务维度创建会话 API
 
@@ -109,25 +111,6 @@ agent-server SHALL 提供 `DELETE /api/v1/agent/bizs/{bk_biz_id}/sessions/{sessi
 - **WHEN** path `bk_biz_id` 为 `0` 或负数
 - **THEN** 系统 MUST 返回 `InvalidParameter`
 
-### Requirement: 平台维度创建会话语义扩展
-
-现有 `POST /api/v1/agent/sessions/create` SHALL 保持可用。创建时 MUST 将会话 `bk_biz_id` 写为 `constant.UnassignedBiz`（`-1`）；鉴权 MUST 保持平台级 `agent_assistant` Create 权限。
-
-#### Scenario: 平台 create 写入未分配业务
-
-- **WHEN** 用户调用 `POST /api/v1/agent/sessions/create`
-- **THEN** 创建的会话记录 `bk_biz_id` MUST 为 `-1`
-- **THEN** 响应 MUST NOT 要求返回 `bk_biz_id`
-
-### Requirement: 平台维度会话列表语义扩展
-
-现有 `POST /api/v1/agent/sessions/list` SHALL 继续使用现有列表语义：服务端 MUST NOT 主动追加 `bk_biz_id` 过滤；鉴权 MUST 保持平台级 `agent_assistant` Find 权限。客户端传入的 filter 仍按现有机制与 `user=当前用户` 合并处理。
-
-#### Scenario: 跨业务返回全部会话
-
-- **WHEN** 用户有多业务会话（含不同 `bk_biz_id`），调用 `POST /api/v1/agent/sessions/list` 且未传入 `bk_biz_id` filter
-- **THEN** 响应 MUST 返回该用户全部会话，包含不同 `bk_biz_id` 的记录
-
 ### Requirement: 未改动接口保持 sessionCode 访问方式
 
 以下平台接口 MUST NOT 在请求体或路径中新增 `bk_biz_id` 参数，仍仅通过 `session_code`（或 path 中的 `session_code`）访问：`POST /agui`、`POST /history`、`POST /cancel`、`PATCH/DELETE /sessions/{session_code}`、`GET /sessions/{session_code}/context_stats`。业务维度更新/删除会话通过 `/bizs/{bk_biz_id}/sessions/{session_code}` 路径访问，不改变平台接口协议。
@@ -148,36 +131,6 @@ agent-server SHALL 提供 `DELETE /api/v1/agent/bizs/{bk_biz_id}/sessions/{sessi
 - **WHEN** 客户端调用 `POST /api/v1/agent/history` 或 `POST /api/v1/agent/cancel`
 - **THEN** 系统 MUST 继续只校验平台级 `agent_assistant` 与会话归属，MUST NOT 新增「业务访问」校验
 
-### Requirement: session_code 接口会话归属显式校验
-
-`POST /agui`、`POST /history`、`POST /cancel` 与 `GET /sessions/{session_code}/context_stats` 在通过 `session_code` 解析到会话元数据后，MUST 显式校验会话 `user` 与当前登录用户一致；若不一致，MUST 拒绝访问，不得将请求转发至下游 AG-UI runner 或读取该会话上下文统计。
-
-#### Scenario: 当前用户访问自己的会话
-
-- **WHEN** 用户 A 使用属于用户 A 的 `session_code` 调用 `/agui`
-- **THEN** middleware MUST 通过归属校验并继续改写请求体
-
-#### Scenario: 当前用户访问他人会话
-
-- **WHEN** 用户 B 使用属于用户 A 的 `session_code` 调用 `/agui`
-- **THEN** 系统 MUST 返回 `PermissionDenied` 或等效未授权错误
-- **THEN** 请求 MUST NOT 进入下游 AG-UI runner
-
-#### Scenario: 当前用户访问他人 context_stats
-
-- **WHEN** 用户 B 使用属于用户 A 的 `session_code` 调用 `/sessions/{session_code}/context_stats`
-- **THEN** 系统 MUST 返回 `PermissionDenied` 或等效未授权错误
-- **THEN** 系统 MUST NOT 读取或返回用户 A 的会话上下文统计
-
-### Requirement: 会话更新删除归属校验保持
-
-`PATCH/DELETE /api/v1/agent/sessions/{session_code}` MUST 继续校验会话 `user` 与当前登录用户一致；行为与改造前一致。
-
-#### Scenario: 用户 B 无法操作用户 A 的会话
-
-- **WHEN** 用户 B 使用用户 A 的 `session_code` 调用更新或删除
-- **THEN** 系统 MUST 拒绝操作
-
 ### Requirement: 业务 API 接口文档
 
 系统 SHALL 在 `docs/api-docs/web-server/docs/biz/agent/` 下更新业务维度会话 create/list/update/delete 接口文档，将所需权限改为「业务访问」；版本占位符遵循仓库接口文档规范。格式对齐现有 agent-server 接口文档。
@@ -185,4 +138,12 @@ agent-server SHALL 提供 `DELETE /api/v1/agent/bizs/{bk_biz_id}/sessions/{sessi
 #### Scenario: 文档覆盖业务 API 鉴权组合
 
 - **WHEN** 查阅 API 文档
-- **THEN** MUST 存在 `POST /api/v1/agent/bizs/{bk_biz_id}/sessions/create`、`POST /api/v1/agent/bizs/{bk_biz_id}/sessions/list`、`PATCH /api/v1/agent/bizs/{bk_biz_id}/sessions/{session_code}` 与 `DELETE /api/v1/agent/bizs/{bk_biz_id}/sessions/{session_code}` 的完整说明（参数、响应、错误码），且权限描述 MUST 为业务访问，MUST NOT 再写「业务-智能体助手」或要求平台智能体助手
+- **THEN** MUST 存在上述四个接口的完整说明（参数、响应、错误码），且权限描述 MUST 为业务访问，MUST NOT 再写「业务-智能体助手」或要求平台智能体助手
+
+## REMOVED Requirements
+
+### Requirement: IAM 业务-智能体助手权限点
+
+**Reason**: 业务会话改为只鉴「业务访问」；对话运行仍走平台「智能体助手」。该业务智能体 Action 不再产生任何能力，继续注册会造成误授。
+
+**Migration**: 无存量迁移。业务会话运行时改为校验 `biz_access`；IAM 注册中删除 `biz_agent_assistant`。前端入口由独立变更加 `chatbot_access` / `agent_assistant`，须同迭代发布。

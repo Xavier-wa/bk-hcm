@@ -35,8 +35,10 @@ import (
 //
 // PATCH /api/v1/agent/sessions/{session_code}
 func (svc *service) UpdateSession(cts *rest.Contexts) (interface{}, error) {
-	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Update}}
-	return svc.updateSession(cts, constant.UnassignedBiz, authRes)
+	if err := svc.authorizeAgentAssistant(cts.Kit, meta.Update); err != nil {
+		return nil, err
+	}
+	return svc.updateSession(cts, constant.UnassignedBiz)
 }
 
 // BizUpdateSession updates a session's name under a business.
@@ -51,12 +53,13 @@ func (svc *service) BizUpdateSession(cts *rest.Contexts) (interface{}, error) {
 		return nil, errf.Newf(errf.InvalidParameter, "bk_biz_id must be greater than 0")
 	}
 
-	authRes := meta.ResourceAttribute{Basic: &meta.Basic{Type: meta.AgentAssistant, Action: meta.Update}, BizID: bizID}
-	return svc.updateSession(cts, bizID, authRes)
+	if err := svc.authorizeBizSession(cts.Kit, bizID); err != nil {
+		return nil, err
+	}
+	return svc.updateSession(cts, bizID)
 }
 
-func (svc *service) updateSession(cts *rest.Contexts, bkBizID int64, authRes meta.ResourceAttribute) (
-	interface{}, error) {
+func (svc *service) updateSession(cts *rest.Contexts, bkBizID int64) (interface{}, error) {
 
 	if svc.cli == nil {
 		return nil, errf.New(errf.UnHealthy, "data service client is not configured")
@@ -74,12 +77,6 @@ func (svc *service) updateSession(cts *rest.Contexts, bkBizID int64, authRes met
 
 	if err := req.Validate(); err != nil {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
-	}
-
-	if err := svc.authorizer.AuthorizeWithPerm(cts.Kit, authRes); err != nil {
-		logs.Errorf("update session: permission denied, user: %s, bk_biz_id: %d, err: %v, rid: %s",
-			cts.Kit.User, bkBizID, err, cts.Kit.Rid)
-		return nil, errf.New(errf.PermissionDenied, "permission denied")
 	}
 
 	// Verify session belongs to current user.
