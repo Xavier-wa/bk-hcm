@@ -123,16 +123,7 @@ func (l *Logics) collectCounts(kt *kit.Kit, lookbackDays int) (map[userCountKey]
 	}
 
 	for _, item := range devices {
-		if item.CloudRegion == "" {
-			logs.Warnf("cloud region is empty, id: %s, rid: %s", item.ID, kt.Rid)
-			continue
-		}
-		if item.ImageID == "" {
-			logs.Warnf("image id is empty, id: %s, rid: %s", item.ID, kt.Rid)
-			continue
-		}
-		if _, ok := validImages[item.ImageID]; !ok {
-			logs.Warnf("skip invalid image, id: %s, image: %s, rid: %s", item.ID, item.ImageID, kt.Rid)
+		if skipDeviceForCount(kt, item, validImages) {
 			continue
 		}
 
@@ -157,6 +148,27 @@ func (l *Logics) collectCounts(kt *kit.Kit, lookbackDays int) (map[userCountKey]
 	}
 
 	return userCounts, bizCounts, nil
+}
+
+// skipDeviceForCount reports whether a device should be skipped before counting.
+func skipDeviceForCount(kt *kit.Kit, item *cvmapply.ZiyanCvmDeviceInfo, validImages map[string]struct{}) bool {
+	if item.CloudRegion == "" {
+		logs.Warnf("cloud region is empty, id: %s, rid: %s", item.ID, kt.Rid)
+		return true
+	}
+	if item.ImageID == "" {
+		logs.Warnf("image id is empty, id: %s, rid: %s", item.ID, kt.Rid)
+		return true
+	}
+	if _, ok := validImages[item.ImageID]; !ok {
+		logs.Warnf("skip invalid image, id: %s, image: %s, rid: %s", item.ID, item.ImageID, kt.Rid)
+		return true
+	}
+	if err := item.RequireType.Validate(); err != nil {
+		logs.Warnf("skip unsupported require type, id: %s, require_type: %d, rid: %s", item.ID, item.RequireType, kt.Rid)
+		return true
+	}
+	return false
 }
 
 func (l *Logics) queryValidImageIDs(kt *kit.Kit, imageIDs []string) (map[string]struct{}, error) {
