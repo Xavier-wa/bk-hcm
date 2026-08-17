@@ -4,6 +4,7 @@
 - 该接口所需权限：业务访问。
 - 该接口功能描述：创建用于创建账号的申请。
 - 说明：当 `type=registration`（登记账号）时走免审直连交付，不创建 ITSM 审批单、不落 HCM 申请单，同步创建账号；当 `type=resource` / `security_audit` 时仍走 ITSM 审批并创建申请单。
+- path 中的 `{bk_biz_id}` 是调用方业务上下文，用于「业务访问」鉴权，须为真实业务 ID（大于 0）。body 中的 `bk_biz_id` 是账号管理业务：仅 `type=resource` 时必填，且必须与 path 一致；`type=registration` / `security_audit` 时不允许传递（缺省或为 0）。
 
 ### URL
 
@@ -20,7 +21,7 @@ POST /api/v1/cloud/bizs/{bk_biz_id}/applications/types/add_account
 | type          | string       | 是  | 账号类型 (枚举值：resource:资源账号、registration:登记账号、security_audit:安全审计账号) |
 | site          | string       | 是  | 站点（枚举值：china:中国站、international:国际站）                       |
 | memo          | string       | 否  | 备注                                                        |
-| bk_biz_id     | int64        | 是  | 管理业务，非资源账号不允许传递该参数                                        |
+| bk_biz_id     | int64        | 否  | 管理业务。仅 type=resource 时必填，且须与 path 中的 bk_biz_id 一致、为真实管理业务；type=registration / security_audit 时不允许传递（缺省或为 0） |
 | usage_biz_ids | int64 array  | 是  | 使用业务，非资源账号的该字段长度必须为1                                      |
 | extension     | object       | 是  | 混合云差异字段                                                   |
 | remark        | string       | 否  | 单据备注                                                      |
@@ -77,7 +78,7 @@ POST /api/v1/cloud/bizs/{bk_biz_id}/applications/types/add_account
 
 ### 调用示例
 
-#### TCloud
+#### TCloud 资源账号（resource）
 
 ```json
 {
@@ -101,6 +102,32 @@ POST /api/v1/cloud/bizs/{bk_biz_id}/applications/types/add_account
   "memo": ""
 }
 ```
+
+> path `{bk_biz_id}` 与 body `bk_biz_id` 必须一致，且为真实管理业务。
+
+#### TCloud 登记账号（registration）
+
+```json
+{
+  "vendor": "tcloud",
+  "name": "hcm-reg-demo",
+  "managers": [
+    "hcm"
+  ],
+  "type": "registration",
+  "site": "china",
+  "usage_biz_ids": [
+    1010011010
+  ],
+  "extension": {
+    "cloud_main_account_id": "main-xxxxxx",
+    "cloud_sub_account_id": "sub-xxxxxx"
+  },
+  "memo": ""
+}
+```
+
+> path 使用真实业务 ID 做「业务访问」鉴权；body **不传** `bk_biz_id`（或为 0）。`type=security_audit` 同样不传 body `bk_biz_id`。
 
 #### Aws
 

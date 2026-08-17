@@ -129,7 +129,7 @@ type AccountCreateReq[T AccountExtensionCreateReq] struct {
 	Managers         []string               `json:"managers" validate:"required"`
 	Type             enumor.AccountType     `json:"type" validate:"required"`
 	Site             enumor.AccountSiteType `json:"site" validate:"required"`
-	Memo             *string                `json:"memo" validate:"required"`
+	Memo             *string                `json:"memo" validate:"omitempty"`
 	Extension        *T                     `json:"extension" validate:"required"`
 	BkBizID          int64                  `json:"bk_biz_id" validate:"omitempty"`
 	UsageBizIDs      []int64                `json:"usage_biz_ids" validate:"required"`

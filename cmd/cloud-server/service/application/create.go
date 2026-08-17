@@ -352,13 +352,25 @@ func (a *applicationSvc) CreateBizForAddAccount(cts *rest.Contexts) (interface{}
 	if err != nil {
 		return nil, err
 	}
-	if req.BkBizID != bizID {
-		return nil, errf.Newf(errf.InvalidParameter,
-			"path bk_biz_id(%d) does not match request body bk_biz_id(%d)", bizID, req.BkBizID)
+	if err := validateBizAddAccountPathBody(bizID, req); err != nil {
+		return nil, err
 	}
 	handler := accounthandler.NewApplicationOfAddAccount(a.getHandlerOption(cts), a.authorizer, req)
 
 	return a.create(cts, commReq, handler)
+}
+
+// validateBizAddAccountPathBody 校验业务视角录入接口的 path 与 body 中 bk_biz_id。
+// path 仅用于业务访问鉴权；body 才是账号管理业务。仅资源账号要求二者一致。
+func validateBizAddAccountPathBody(pathBizID int64, req *proto.AccountAddReq) error {
+	if req.Type != enumor.ResourceAccount {
+		return nil
+	}
+	if req.BkBizID != pathBizID {
+		return errf.Newf(errf.InvalidParameter,
+			"path bk_biz_id(%d) does not match request body bk_biz_id(%d)", pathBizID, req.BkBizID)
+	}
+	return nil
 }
 
 // CreateForCreateCvm ...
