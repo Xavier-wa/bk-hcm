@@ -311,16 +311,7 @@ func (dao *PermissionTemplateDao) ListJoinSubAccount(kt *kit.Kit,
 		return nil, err
 	}
 
-	innerSQL := fmt.Sprintf(
-		`SELECT pt.*,
-			(SELECT COUNT(*) FROM %s AS sa
-				WHERE JSON_CONTAINS(sa.permission_template_ids, JSON_QUOTE(pt.id))) AS associated_sub_account_count
-		FROM %s AS pt
-		%s`,
-		table.SubAccountTable,
-		table.PermissionTemplateTable,
-		whereSQL,
-	)
+	innerSQL := buildPermTmplJoinInnerSQL(whereSQL)
 	selectSQL := fmt.Sprintf(
 		`SELECT * FROM (%s) AS tmp %s`,
 		innerSQL, pageExpr,
@@ -334,6 +325,20 @@ func (dao *PermissionTemplateDao) ListJoinSubAccount(kt *kit.Kit,
 	}
 
 	return &types.ListPermissionTmplJoinDetails{Count: 0, Details: details}, nil
+}
+
+// buildPermTmplJoinInnerSQL builds the inner SELECT that computes associated_sub_account_count.
+func buildPermTmplJoinInnerSQL(whereSQL string) string {
+	return fmt.Sprintf(
+		`SELECT pt.*, COUNT(sa.id) AS associated_sub_account_count
+		FROM %s AS pt
+		LEFT JOIN %s AS sa
+			ON sa.account_id = pt.account_id AND sa.vendor = pt.vendor
+			AND JSON_CONTAINS(sa.permission_template_ids, JSON_QUOTE(pt.id))
+		%s
+		GROUP BY pt.id`,
+		table.PermissionTemplateTable, table.SubAccountTable, whereSQL,
+	)
 }
 
 // buildPermTmplJoinWhere builds the WHERE clause and named args for permission_template join list.
@@ -432,10 +437,11 @@ func buildPermTmplExtWhereForTCloud(whereExprs []string, args map[string]interfa
 	}
 
 	if len(tc.CloudSubAccountIDs) > 0 {
+		// sa2: distinct from buildPermTmplJoinInnerSQL's outer LEFT JOIN alias `sa`.
 		whereExprs = append(whereExprs,
-			fmt.Sprintf(`EXISTS (SELECT 1 FROM %s AS sa WHERE sa.account_id = pt.account_id`+
-				` AND sa.vendor = pt.vendor AND sa.cloud_id IN (:cloud_sub_account_ids)`+
-				` AND JSON_CONTAINS(sa.permission_template_ids, JSON_QUOTE(pt.id)))`,
+			fmt.Sprintf(`EXISTS (SELECT 1 FROM %s AS sa2 WHERE sa2.account_id = pt.account_id`+
+				` AND sa2.vendor = pt.vendor AND sa2.cloud_id IN (:cloud_sub_account_ids)`+
+				` AND JSON_CONTAINS(sa2.permission_template_ids, JSON_QUOTE(pt.id)))`,
 				table.SubAccountTable))
 		args["cloud_sub_account_ids"] = tc.CloudSubAccountIDs
 	}
