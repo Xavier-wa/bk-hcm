@@ -110,7 +110,12 @@ func NewService(sd serviced.ServiceDiscover) (*Service, error) {
 		return nil, err
 	}
 
-	crpCli, err := cvmapi.NewCVMClientInterface(cvmapi.CVMCli{CvmApiAddr: cc.HCService().Crp.Host}, metrics.Register())
+	crpConf := cc.HCService().Crp
+	crpCli, err := cvmapi.NewCVMClientInterface(cvmapi.CVMCli{
+		CvmAPIAddr: crpConf.Host,
+		APIKey:     crpConf.APIKey,
+		APISecret:  crpConf.APISecret,
+	}, metrics.Register())
 	if err != nil {
 		return nil, err
 	}

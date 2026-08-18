@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	ptypes "hcm/cmd/woa-server/types/plan"
+	"hcm/pkg/cc"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
@@ -164,7 +165,8 @@ func (f *ResPlanFetcher) GetOrderList(kt *kit.Kit, orderID string) ([]*cvmapi.Qu
 		},
 		Params: &cvmapi.QueryOrderListParam{
 			DestroyReturnPlanOrderId: []string{orderID},
-			UserName:                 cvmapi.CvmApiKeyVal,
+			// 云梯侧该用户名即调用方申请的 api_key
+			UserName: cc.WoaServer().ClientConfig.CvmOpt.APIKey,
 		},
 	}
 

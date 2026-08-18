@@ -140,3 +140,5 @@ securityGroupMgmtSkipList:
 # defines crp related settings
 crp:
   host: http://127.0.0.1
+  api_key: test
+  api_secret: test

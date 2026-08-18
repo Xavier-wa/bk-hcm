@@ -76,10 +76,12 @@ const (
 	// CvmZoneAll 所有可用区
 	CvmZoneAll = "all"
 
-	// CvmApiKey CVM API key
-	CvmApiKey = "api_key"
-	// CvmApiKeyVal CVM API key value
-	CvmApiKeyVal = "octopuskg"
+	// CvmAPIKey 云梯接口鉴权的 api_key 参数名
+	CvmAPIKey = "api_key"
+	// CvmAPITs 云梯接口签名鉴权的时间戳参数名，值为秒级时间戳
+	CvmAPITs = "api_ts"
+	// CvmAPISign 云梯接口签名鉴权的签名参数名
+	CvmAPISign = "api_sign"
 
 	// CvmCbsPlanQueryId 需求预测查询id
 	CvmCbsPlanQueryId = "16318853269804145"
@@ -210,9 +212,13 @@ const (
 
 // CVMCli yunti client options
 type CVMCli struct {
-	// CvmApiAddr yunti api address
-	CvmApiAddr        string `yaml:"host"`
+	// CvmAPIAddr yunti api address
+	CvmAPIAddr        string `yaml:"host"`
 	CvmLaunchPassword string `yaml:"launch_password"`
+	// APIKey 云梯接口鉴权的 api_key
+	APIKey string `yaml:"api_key"`
+	// APISecret 云梯接口签名鉴权的密钥，用于计算 api_sign
+	APISecret string `yaml:"api_secret"`
 }
 
 // NewCvmQueryApproveLogReq CVM审批日志查询请求元数据

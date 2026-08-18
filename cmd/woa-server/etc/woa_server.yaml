@@ -135,6 +135,8 @@ cvm:
   old_host: http://127.0.0.1
   host: http://127.0.0.1
   launch_password: test
+  api_key: test
+  api_secret: test
 
 tjj:
   host: http://127.0.0.1

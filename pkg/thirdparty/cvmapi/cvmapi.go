@@ -14,6 +14,7 @@ package cvmapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -120,6 +121,14 @@ type CVMClientInterface interface {
 
 // NewCVMClientInterface creates a cvm api instance
 func NewCVMClientInterface(opts CVMCli, reg prometheus.Registerer) (CVMClientInterface, error) {
+	if len(opts.APIKey) == 0 {
+		return nil, errors.New("cvm api key is not set")
+	}
+
+	if len(opts.APISecret) == 0 {
+		return nil, errors.New("cvm api secret is not set")
+	}
+
 	cli, err := client.NewClient(nil)
 	if err != nil {
 		return nil, err
@@ -129,25 +138,31 @@ func NewCVMClientInterface(opts CVMCli, reg prometheus.Registerer) (CVMClientInt
 		Client: cli,
 		Discover: &ServerDiscovery{
 			name:    "cvm api",
-			servers: []string{opts.CvmApiAddr},
+			servers: []string{opts.CvmAPIAddr},
 		},
 		MetricOpts: client.MetricOption{Register: reg},
 	}
 
-	cvm := &cvmApi{
-		client: rest.NewClient(c, "/"),
+	cvm := &cvmAPI{
+		client:    rest.NewClient(c, "/"),
+		apiKey:    opts.APIKey,
+		apiSecret: opts.APISecret,
 	}
 
 	return cvm, nil
 }
 
-// cvmApi cvm api interface implementation
-type cvmApi struct {
+// cvmAPI cvm api interface implementation
+type cvmAPI struct {
 	client rest.ClientInterface
+	// apiKey 云梯接口鉴权的 api_key
+	apiKey string
+	// apiSecret 云梯接口签名鉴权的密钥
+	apiSecret string
 }
 
 // CreateCvmOrder creates cvm order
-func (c *cvmApi) CreateCvmOrder(ctx context.Context, header http.Header, req *OrderCreateReq) (*OrderCreateResp,
+func (c *cvmAPI) CreateCvmOrder(ctx context.Context, header http.Header, req *OrderCreateReq) (*OrderCreateResp,
 	error) {
 
 	subPath := "/apply/api/cvm"
@@ -156,7 +171,7 @@ func (c *cvmApi) CreateCvmOrder(ctx context.Context, header http.Header, req *Or
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -170,14 +185,14 @@ func (c *cvmApi) CreateCvmOrder(ctx context.Context, header http.Header, req *Or
 }
 
 // QueryCvmOrders query cvm orders
-func (c *cvmApi) QueryCvmOrders(ctx context.Context, header http.Header, req *OrderQueryReq) (*OrderQueryResp, error) {
+func (c *cvmAPI) QueryCvmOrders(ctx context.Context, header http.Header, req *OrderQueryReq) (*OrderQueryResp, error) {
 	subPath := "/apply/api/cvm"
 	resp := new(OrderQueryResp)
 	err := c.client.Post().
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -191,7 +206,7 @@ func (c *cvmApi) QueryCvmOrders(ctx context.Context, header http.Header, req *Or
 }
 
 // QueryCvmInstances query cvm instances
-func (c *cvmApi) QueryCvmInstances(ctx context.Context, header http.Header, req *InstanceQueryReq) (*InstanceQueryResp,
+func (c *cvmAPI) QueryCvmInstances(ctx context.Context, header http.Header, req *InstanceQueryReq) (*InstanceQueryResp,
 	error) {
 
 	subPath := "/apply/api/cvm"
@@ -200,7 +215,7 @@ func (c *cvmApi) QueryCvmInstances(ctx context.Context, header http.Header, req 
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -209,14 +224,14 @@ func (c *cvmApi) QueryCvmInstances(ctx context.Context, header http.Header, req 
 }
 
 // QueryCvmCapacity query cvm inventory
-func (c *cvmApi) QueryCvmCapacity(ctx context.Context, header http.Header, req *CapacityReq) (*CapacityResp, error) {
+func (c *cvmAPI) QueryCvmCapacity(ctx context.Context, header http.Header, req *CapacityReq) (*CapacityResp, error) {
 	subPath := "/capacity/api/queryApplyCapacity"
 	resp := new(CapacityResp)
 	err := c.client.Post().
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -225,14 +240,14 @@ func (c *cvmApi) QueryCvmCapacity(ctx context.Context, header http.Header, req *
 }
 
 // QueryCvmVpc query cvm subnet info
-func (c *cvmApi) QueryCvmVpc(ctx context.Context, header http.Header, req *VpcReq) (*VpcResp, error) {
+func (c *cvmAPI) QueryCvmVpc(ctx context.Context, header http.Header, req *VpcReq) (*VpcResp, error) {
 	subPath := "/apply/api/cvm"
 	resp := new(VpcResp)
 	err := c.client.Post().
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -241,7 +256,7 @@ func (c *cvmApi) QueryCvmVpc(ctx context.Context, header http.Header, req *VpcRe
 }
 
 // QueryRealCvmSubnet query real cvm subnet info
-func (c *cvmApi) QueryRealCvmSubnet(kt *kit.Kit, subnetReq SubnetRealParam) (*SubnetResp, error) {
+func (c *cvmAPI) QueryRealCvmSubnet(kt *kit.Kit, subnetReq SubnetRealParam) (*SubnetResp, error) {
 	req := &SubnetRealReq{
 		ReqMeta: ReqMeta{
 			Id:      CvmId,
@@ -262,7 +277,7 @@ func (c *cvmApi) QueryRealCvmSubnet(kt *kit.Kit, subnetReq SubnetRealParam) (*Su
 		WithContext(kt.Ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(kt.Header()).
 		Do().
 		Into(resp)
@@ -283,7 +298,7 @@ func (c *cvmApi) QueryRealCvmSubnet(kt *kit.Kit, subnetReq SubnetRealParam) (*Su
 }
 
 // GetApproveLog get approve log
-func (c *cvmApi) GetApproveLog(ctx context.Context, header http.Header, req *GetApproveLogReq) (*GetApproveLogResp,
+func (c *cvmAPI) GetApproveLog(ctx context.Context, header http.Header, req *GetApproveLogReq) (*GetApproveLogResp,
 	error) {
 
 	subPath := "/apply/api/cvm/getApproveLog"
@@ -292,7 +307,7 @@ func (c *cvmApi) GetApproveLog(ctx context.Context, header http.Header, req *Get
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -301,7 +316,7 @@ func (c *cvmApi) GetApproveLog(ctx context.Context, header http.Header, req *Get
 }
 
 // QueryCvmCbsPlans query cvm and cbs plans
-func (c *cvmApi) QueryCvmCbsPlans(ctx context.Context, header http.Header, req *CvmCbsPlanQueryReq) (
+func (c *cvmAPI) QueryCvmCbsPlans(ctx context.Context, header http.Header, req *CvmCbsPlanQueryReq) (
 	*CvmCbsPlanQueryResp, error) {
 
 	subPath := "/yunti-demand/external"
@@ -310,7 +325,7 @@ func (c *cvmApi) QueryCvmCbsPlans(ctx context.Context, header http.Header, req *
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -319,7 +334,7 @@ func (c *cvmApi) QueryCvmCbsPlans(ctx context.Context, header http.Header, req *
 }
 
 // QueryAdjustAbleDemand query adjust able demand
-func (c *cvmApi) QueryAdjustAbleDemand(ctx context.Context, header http.Header, req *CvmCbsAdjustAblePlanQueryReq) (
+func (c *cvmAPI) QueryAdjustAbleDemand(ctx context.Context, header http.Header, req *CvmCbsAdjustAblePlanQueryReq) (
 	*CvmCbsPlanQueryResp, error) {
 
 	subPath := "/yunti-demand/external"
@@ -328,7 +343,7 @@ func (c *cvmApi) QueryAdjustAbleDemand(ctx context.Context, header http.Header, 
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -337,7 +352,7 @@ func (c *cvmApi) QueryAdjustAbleDemand(ctx context.Context, header http.Header, 
 }
 
 // AdjustCvmCbsPlans adjust cvm and cbs plans
-func (c *cvmApi) AdjustCvmCbsPlans(ctx context.Context, header http.Header, req *CvmCbsPlanAdjustReq) (
+func (c *cvmAPI) AdjustCvmCbsPlans(ctx context.Context, header http.Header, req *CvmCbsPlanAdjustReq) (
 	*CvmCbsPlanAdjustResp, error) {
 
 	subPath := "/yunti-demand/external"
@@ -346,7 +361,7 @@ func (c *cvmApi) AdjustCvmCbsPlans(ctx context.Context, header http.Header, req 
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -355,7 +370,7 @@ func (c *cvmApi) AdjustCvmCbsPlans(ctx context.Context, header http.Header, req 
 }
 
 // AddCvmCbsPlan add cvm and cbs plan order
-func (c *cvmApi) AddCvmCbsPlan(ctx context.Context, header http.Header, req *AddCvmCbsPlanReq) (*AddCvmCbsPlanResp,
+func (c *cvmAPI) AddCvmCbsPlan(ctx context.Context, header http.Header, req *AddCvmCbsPlanReq) (*AddCvmCbsPlanResp,
 	error) {
 
 	subPath := "/yunti-demand/external"
@@ -364,7 +379,7 @@ func (c *cvmApi) AddCvmCbsPlan(ctx context.Context, header http.Header, req *Add
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -373,7 +388,7 @@ func (c *cvmApi) AddCvmCbsPlan(ctx context.Context, header http.Header, req *Add
 }
 
 // QueryPlanOrder query cvm and cbs plan order
-func (c *cvmApi) QueryPlanOrder(ctx context.Context, header http.Header, req *QueryPlanOrderReq) (*QueryPlanOrderResp,
+func (c *cvmAPI) QueryPlanOrder(ctx context.Context, header http.Header, req *QueryPlanOrderReq) (*QueryPlanOrderResp,
 	error) {
 
 	subPath := "/yunti-demand/external"
@@ -382,7 +397,7 @@ func (c *cvmApi) QueryPlanOrder(ctx context.Context, header http.Header, req *Qu
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -391,7 +406,7 @@ func (c *cvmApi) QueryPlanOrder(ctx context.Context, header http.Header, req *Qu
 }
 
 // QueryPlanOrderChange query cvm and cbs plan order change
-func (c *cvmApi) QueryPlanOrderChange(ctx context.Context, header http.Header, req *PlanOrderChangeReq) (
+func (c *cvmAPI) QueryPlanOrderChange(ctx context.Context, header http.Header, req *PlanOrderChangeReq) (
 	*PlanOrderChangeResp, error) {
 
 	subPath := "/yunti-demand/external"
@@ -400,7 +415,7 @@ func (c *cvmApi) QueryPlanOrderChange(ctx context.Context, header http.Header, r
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -409,7 +424,7 @@ func (c *cvmApi) QueryPlanOrderChange(ctx context.Context, header http.Header, r
 }
 
 // QueryDemandChangeLog query cvm and cbs demand change log
-func (c *cvmApi) QueryDemandChangeLog(ctx context.Context, header http.Header, req *DemandChangeLogQueryReq) (
+func (c *cvmAPI) QueryDemandChangeLog(ctx context.Context, header http.Header, req *DemandChangeLogQueryReq) (
 	*DemandChangeLogQueryResp, error) {
 
 	subPath := "/yunti-demand/external"
@@ -418,7 +433,7 @@ func (c *cvmApi) QueryDemandChangeLog(ctx context.Context, header http.Header, r
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -427,7 +442,7 @@ func (c *cvmApi) QueryDemandChangeLog(ctx context.Context, header http.Header, r
 }
 
 // ReportPenaltyRatio report penalty ratio
-func (c *cvmApi) ReportPenaltyRatio(ctx context.Context, header http.Header, req *CvmCbsPlanPenaltyRatioReportReq) (
+func (c *cvmAPI) ReportPenaltyRatio(ctx context.Context, header http.Header, req *CvmCbsPlanPenaltyRatioReportReq) (
 	*CvmCbsPlanPenaltyRatioReportResp, error) {
 
 	subPath := "/tocservice/obs/"
@@ -436,7 +451,7 @@ func (c *cvmApi) ReportPenaltyRatio(ctx context.Context, header http.Header, req
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -445,7 +460,7 @@ func (c *cvmApi) ReportPenaltyRatio(ctx context.Context, header http.Header, req
 }
 
 // QueryReturnPlan query cvm return plan
-func (c *cvmApi) QueryReturnPlan(ctx context.Context, header http.Header, req *QueryReturnPlanReq) (
+func (c *cvmAPI) QueryReturnPlan(ctx context.Context, header http.Header, req *QueryReturnPlanReq) (
 	*QueryReturnPlanResp, error) {
 
 	subPath := "/yunti-return/webapi/cvm"
@@ -454,7 +469,7 @@ func (c *cvmApi) QueryReturnPlan(ctx context.Context, header http.Header, req *Q
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -473,7 +488,7 @@ func (c *cvmApi) QueryReturnPlan(ctx context.Context, header http.Header, req *Q
 }
 
 // SubmitAppendReturnOrder 提交退回计划新增(追加)单。
-func (c *cvmApi) SubmitAppendReturnOrder(ctx context.Context, header http.Header, req *SubmitAppendReturnOrderReq) (
+func (c *cvmAPI) SubmitAppendReturnOrder(ctx context.Context, header http.Header, req *SubmitAppendReturnOrderReq) (
 	*SubmitAppendReturnOrderResp, error) {
 
 	subPath := "/yunti-return/webapi/cvm"
@@ -482,7 +497,7 @@ func (c *cvmApi) SubmitAppendReturnOrder(ctx context.Context, header http.Header
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -501,7 +516,7 @@ func (c *cvmApi) SubmitAppendReturnOrder(ctx context.Context, header http.Header
 }
 
 // SubmitAdjustReturnOrderForApi 提交退回计划调整&删除单（删除模式 src=[{id}]、update=[]）。
-func (c *cvmApi) SubmitAdjustReturnOrderForApi(ctx context.Context, header http.Header,
+func (c *cvmAPI) SubmitAdjustReturnOrderForApi(ctx context.Context, header http.Header,
 	req *SubmitAdjustReturnOrderReq) (*SubmitAdjustReturnOrderResp, error) {
 
 	subPath := "/yunti-return/webapi/cvm"
@@ -510,7 +525,7 @@ func (c *cvmApi) SubmitAdjustReturnOrderForApi(ctx context.Context, header http.
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -529,7 +544,7 @@ func (c *cvmApi) SubmitAdjustReturnOrderForApi(ctx context.Context, header http.
 }
 
 // QueryReturnOrderDetail 按 orderId 查询退回计划订单详情，供调度器轮询推进子单状态机。
-func (c *cvmApi) QueryReturnOrderDetail(ctx context.Context, header http.Header, req *QueryReturnOrderDetailReq) (
+func (c *cvmAPI) QueryReturnOrderDetail(ctx context.Context, header http.Header, req *QueryReturnOrderDetailReq) (
 	*QueryReturnOrderDetailResp, error) {
 
 	subPath := "/yunti-return/webapi/cvm"
@@ -538,7 +553,7 @@ func (c *cvmApi) QueryReturnOrderDetail(ctx context.Context, header http.Header,
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -557,7 +572,7 @@ func (c *cvmApi) QueryReturnOrderDetail(ctx context.Context, header http.Header,
 }
 
 // GetReasonClassByObsProject 按 OBS 项目类型查询退回原因大类（注意：走 order 子路径）。
-func (c *cvmApi) GetReasonClassByObsProject(ctx context.Context, header http.Header,
+func (c *cvmAPI) GetReasonClassByObsProject(ctx context.Context, header http.Header,
 	req *GetReasonClassByObsProjectReq) (*GetReasonClassByObsProjectResp, error) {
 
 	subPath := "/yunti-return/webapi/order"
@@ -566,7 +581,7 @@ func (c *cvmApi) GetReasonClassByObsProject(ctx context.Context, header http.Hea
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -585,7 +600,7 @@ func (c *cvmApi) GetReasonClassByObsProject(ctx context.Context, header http.Hea
 }
 
 // CreateCvmReturnOrder creates cvm return order
-func (c *cvmApi) CreateCvmReturnOrder(ctx context.Context, header http.Header, req *ReturnReq) (*OrderCreateResp,
+func (c *cvmAPI) CreateCvmReturnOrder(ctx context.Context, header http.Header, req *ReturnReq) (*OrderCreateResp,
 	error) {
 
 	subPath := "/apply/api"
@@ -594,7 +609,7 @@ func (c *cvmApi) CreateCvmReturnOrder(ctx context.Context, header http.Header, r
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -603,7 +618,7 @@ func (c *cvmApi) CreateCvmReturnOrder(ctx context.Context, header http.Header, r
 }
 
 // QueryCvmReturnOrders query cvm return order status
-func (c *cvmApi) QueryCvmReturnOrders(ctx context.Context, header http.Header, req *OrderQueryReq) (*ReturnQueryResp,
+func (c *cvmAPI) QueryCvmReturnOrders(ctx context.Context, header http.Header, req *OrderQueryReq) (*ReturnQueryResp,
 	error) {
 
 	subPath := "/apply/api"
@@ -612,7 +627,7 @@ func (c *cvmApi) QueryCvmReturnOrders(ctx context.Context, header http.Header, r
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -621,7 +636,7 @@ func (c *cvmApi) QueryCvmReturnOrders(ctx context.Context, header http.Header, r
 }
 
 // QueryCvmReturnDetail query cvm return order detail
-func (c *cvmApi) QueryCvmReturnDetail(ctx context.Context, header http.Header, req *ReturnDetailReq) (*ReturnDetailResp,
+func (c *cvmAPI) QueryCvmReturnDetail(ctx context.Context, header http.Header, req *ReturnDetailReq) (*ReturnDetailResp,
 	error) {
 
 	subPath := "/apply/api"
@@ -630,7 +645,7 @@ func (c *cvmApi) QueryCvmReturnDetail(ctx context.Context, header http.Header, r
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -639,7 +654,7 @@ func (c *cvmApi) QueryCvmReturnDetail(ctx context.Context, header http.Header, r
 }
 
 // CreateUpgradeOrder creates cvm upgrade order
-func (c *cvmApi) CreateUpgradeOrder(kt *kit.Kit, req *UpgradeReq) (*OrderCreateResp,
+func (c *cvmAPI) CreateUpgradeOrder(kt *kit.Kit, req *UpgradeReq) (*OrderCreateResp,
 	error) {
 
 	subPath := "/upgrade/api"
@@ -648,7 +663,7 @@ func (c *cvmApi) CreateUpgradeOrder(kt *kit.Kit, req *UpgradeReq) (*OrderCreateR
 		WithContext(kt.Ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(kt.Header()).
 		Do().
 		Into(resp)
@@ -657,7 +672,7 @@ func (c *cvmApi) CreateUpgradeOrder(kt *kit.Kit, req *UpgradeReq) (*OrderCreateR
 }
 
 // QueryCvmUpgradeDetail query cvm upgrade order detail
-func (c *cvmApi) QueryCvmUpgradeDetail(kt *kit.Kit, req *UpgradeDetailReq) (
+func (c *cvmAPI) QueryCvmUpgradeDetail(kt *kit.Kit, req *UpgradeDetailReq) (
 	*UpgradeDetailResp, error) {
 
 	subPath := "/upgrade/api"
@@ -666,7 +681,7 @@ func (c *cvmApi) QueryCvmUpgradeDetail(kt *kit.Kit, req *UpgradeDetailReq) (
 		WithContext(kt.Ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(kt.Header()).
 		Do().
 		Into(resp)
@@ -675,7 +690,7 @@ func (c *cvmApi) QueryCvmUpgradeDetail(kt *kit.Kit, req *UpgradeDetailReq) (
 }
 
 // GetCvmProcess check if cvm is in any process like "退回"
-func (c *cvmApi) GetCvmProcess(ctx context.Context, header http.Header, req *GetCvmProcessReq) (*GetCvmProcessResp,
+func (c *cvmAPI) GetCvmProcess(ctx context.Context, header http.Header, req *GetCvmProcessReq) (*GetCvmProcessResp,
 	error) {
 
 	subPath := "/operation/api/"
@@ -684,7 +699,7 @@ func (c *cvmApi) GetCvmProcess(ctx context.Context, header http.Header, req *Get
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -698,7 +713,7 @@ func (c *cvmApi) GetCvmProcess(ctx context.Context, header http.Header, req *Get
 }
 
 // GetErpProcess check if physical machine is in any process like "退回"
-func (c *cvmApi) GetErpProcess(ctx context.Context, header http.Header, req *GetErpProcessReq) (*GetErpProcessResp,
+func (c *cvmAPI) GetErpProcess(ctx context.Context, header http.Header, req *GetErpProcessReq) (*GetErpProcessResp,
 	error) {
 
 	subPath := "/operation/api/"
@@ -707,7 +722,7 @@ func (c *cvmApi) GetErpProcess(ctx context.Context, header http.Header, req *Get
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -721,7 +736,7 @@ func (c *cvmApi) GetErpProcess(ctx context.Context, header http.Header, req *Get
 }
 
 // QueryCvmInstanceType query cvm instance type
-func (c *cvmApi) QueryCvmInstanceType(kt *kit.Kit, params *QueryCvmInstanceTypeParams) (
+func (c *cvmAPI) QueryCvmInstanceType(kt *kit.Kit, params *QueryCvmInstanceTypeParams) (
 	*QueryCvmInstanceTypeResp, error) {
 
 	req := &QueryCvmInstanceTypeReq{
@@ -738,7 +753,7 @@ func (c *cvmApi) QueryCvmInstanceType(kt *kit.Kit, params *QueryCvmInstanceTypeP
 		WithContext(kt.Ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(kt.Header()).
 		Do().
 		Into(resp)
@@ -759,7 +774,7 @@ func (c *cvmApi) QueryCvmInstanceType(kt *kit.Kit, params *QueryCvmInstanceTypeP
 }
 
 // GetInstanceTypeInfo get instance type info
-func (c *cvmApi) GetInstanceTypeInfo(kt *kit.Kit, params *GetInstanceTypeInfoParams) (
+func (c *cvmAPI) GetInstanceTypeInfo(kt *kit.Kit, params *GetInstanceTypeInfoParams) (
 	*GetInstanceTypeInfoResp, error) {
 
 	req := &GetInstanceTypeInfoReq{
@@ -776,7 +791,7 @@ func (c *cvmApi) GetInstanceTypeInfo(kt *kit.Kit, params *GetInstanceTypeInfoPar
 		WithContext(kt.Ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(kt.Header()).
 		Do().
 		Into(resp)
@@ -797,7 +812,7 @@ func (c *cvmApi) GetInstanceTypeInfo(kt *kit.Kit, params *GetInstanceTypeInfoPar
 }
 
 // GetCvmApproveLogs get cvm approve logs
-func (c *cvmApi) GetCvmApproveLogs(ctx context.Context, header http.Header,
+func (c *cvmAPI) GetCvmApproveLogs(ctx context.Context, header http.Header,
 	req *GetCvmApproveLogReq) (*GetCvmApproveLogsResp, error) {
 
 	subPath := "/api/approve"
@@ -806,7 +821,7 @@ func (c *cvmApi) GetCvmApproveLogs(ctx context.Context, header http.Header,
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -815,7 +830,7 @@ func (c *cvmApi) GetCvmApproveLogs(ctx context.Context, header http.Header,
 }
 
 // RevokeCvmOrder revoke cvm order
-func (c *cvmApi) RevokeCvmOrder(ctx context.Context, header http.Header, req *RevokeCvmOrderReq) (
+func (c *cvmAPI) RevokeCvmOrder(ctx context.Context, header http.Header, req *RevokeCvmOrderReq) (
 	*RevokeCvmOrderResp, error) {
 
 	subPath := "/apply/api/"
@@ -824,7 +839,7 @@ func (c *cvmApi) RevokeCvmOrder(ctx context.Context, header http.Header, req *Re
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -833,7 +848,7 @@ func (c *cvmApi) RevokeCvmOrder(ctx context.Context, header http.Header, req *Re
 }
 
 // QueryOrderList ...
-func (c *cvmApi) QueryOrderList(ctx context.Context, header http.Header, req *QueryOrderListReq) (
+func (c *cvmAPI) QueryOrderList(ctx context.Context, header http.Header, req *QueryOrderListReq) (
 	*QueryOrderListResp, error) {
 
 	subPath := "/yunti-demand/external"
@@ -842,7 +857,7 @@ func (c *cvmApi) QueryOrderList(ctx context.Context, header http.Header, req *Qu
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -851,7 +866,7 @@ func (c *cvmApi) QueryOrderList(ctx context.Context, header http.Header, req *Qu
 }
 
 // CreateTransOrder 需求转移
-func (c *cvmApi) CreateTransOrder(ctx context.Context, header http.Header, req *TransOrderReq) (
+func (c *cvmAPI) CreateTransOrder(ctx context.Context, header http.Header, req *TransOrderReq) (
 	*TransOrderResp, error) {
 
 	subPath := "/yunti-demand/external"
@@ -860,7 +875,7 @@ func (c *cvmApi) CreateTransOrder(ctx context.Context, header http.Header, req *
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -869,15 +884,15 @@ func (c *cvmApi) CreateTransOrder(ctx context.Context, header http.Header, req *
 }
 
 // MatchSwapGroup CRP亲合度可申领量匹配
-func (c *cvmApi) MatchSwapGroup(ctx context.Context, header http.Header, req *MatchSwapGroupReq) (*MatchSwapGroupResp,
+func (c *cvmAPI) MatchSwapGroup(ctx context.Context, header http.Header, req *MatchSwapGroupReq) (*MatchSwapGroupResp,
 	error) {
-	subPath := "/packer/api/"
+	subPath := "/packer/api"
 	resp := new(MatchSwapGroupResp)
 	err := c.client.Post().
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -891,15 +906,15 @@ func (c *cvmApi) MatchSwapGroup(ctx context.Context, header http.Header, req *Ma
 }
 
 // QueryMatchTask CRP查询匹配单状态
-func (c *cvmApi) QueryMatchTask(ctx context.Context, header http.Header, req *QueryMatchTaskReq) (*QueryMatchTaskResp,
+func (c *cvmAPI) QueryMatchTask(ctx context.Context, header http.Header, req *QueryMatchTaskReq) (*QueryMatchTaskResp,
 	error) {
-	subPath := "/packer/api/"
+	subPath := "/packer/api"
 	resp := new(QueryMatchTaskResp)
 	err := c.client.Post().
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -913,7 +928,7 @@ func (c *cvmApi) QueryMatchTask(ctx context.Context, header http.Header, req *Qu
 }
 
 // ConfirmOrderForIEG CRP预测单据审批（自动过单）
-func (c *cvmApi) ConfirmOrderForIEG(ctx context.Context, header http.Header, req *ConfirmOrderForIEGReq) (
+func (c *cvmAPI) ConfirmOrderForIEG(ctx context.Context, header http.Header, req *ConfirmOrderForIEGReq) (
 	*ConfirmOrderForIEGResp, error) {
 
 	subPath := "/yunti-demand/external"
@@ -922,7 +937,7 @@ func (c *cvmApi) ConfirmOrderForIEG(ctx context.Context, header http.Header, req
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -936,7 +951,7 @@ func (c *cvmApi) ConfirmOrderForIEG(ctx context.Context, header http.Header, req
 }
 
 // QueryZoneCityList 查询可用区与城市映射列表
-func (c *cvmApi) QueryZoneCityList(ctx context.Context, header http.Header, req *QueryZoneCityListReq) (
+func (c *cvmAPI) QueryZoneCityList(ctx context.Context, header http.Header, req *QueryZoneCityListReq) (
 	*QueryZoneCityListResp, error) {
 
 	subPath := "/yunti-demand/external"
@@ -945,7 +960,7 @@ func (c *cvmApi) QueryZoneCityList(ctx context.Context, header http.Header, req 
 		WithContext(ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(header).
 		Do().
 		Into(resp)
@@ -959,7 +974,7 @@ func (c *cvmApi) QueryZoneCityList(ctx context.Context, header http.Header, req 
 }
 
 // QueryCvmTypeList 查询「可填报需求预测」的CVM机型列表（含物理机机型族等映射信息）
-func (c *cvmApi) QueryCvmTypeList(kt *kit.Kit, params *QueryCvmTypeListParams) (*QueryCvmTypeListResp, error) {
+func (c *cvmAPI) QueryCvmTypeList(kt *kit.Kit, params *QueryCvmTypeListParams) (*QueryCvmTypeListResp, error) {
 	req := &QueryCvmTypeListReq{
 		ReqMeta: ReqMeta{
 			Id:      CvmId,
@@ -974,7 +989,7 @@ func (c *cvmApi) QueryCvmTypeList(kt *kit.Kit, params *QueryCvmTypeListParams) (
 		WithContext(kt.Ctx).
 		Body(req).
 		SubResourcef(subPath).
-		WithParam(CvmApiKey, CvmApiKeyVal).
+		WithParams(c.authParams()).
 		WithHeaders(kt.Header()).
 		Do().
 		Into(resp)

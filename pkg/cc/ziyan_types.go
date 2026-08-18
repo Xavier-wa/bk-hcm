@@ -192,22 +192,34 @@ func (c ClientConfig) validate() error {
 
 // CVMCliConf yunti client config
 type CVMCliConf struct {
-	CvmApiAddr        string `yaml:"host"`
-	CvmOldApiAddr     string `yaml:"old_host"`
+	CvmAPIAddr        string `yaml:"host"`
+	CvmOldAPIAddr     string `yaml:"old_host"`
 	CvmLaunchPassword string `yaml:"launch_password"`
+	// APIKey 云梯接口鉴权的 api_key
+	APIKey string `yaml:"api_key"`
+	// APISecret 云梯接口签名鉴权的密钥，用于计算 api_sign
+	APISecret string `yaml:"api_secret"`
 }
 
 func (c CVMCliConf) validate() error {
-	if len(c.CvmApiAddr) == 0 {
+	if len(c.CvmAPIAddr) == 0 {
 		return errors.New("cvm.host is not set")
 	}
 
-	if len(c.CvmOldApiAddr) == 0 {
+	if len(c.CvmOldAPIAddr) == 0 {
 		return errors.New("cvm.old_host is not set")
 	}
 
 	if len(c.CvmLaunchPassword) == 0 {
 		return errors.New("cvm.launch_password is not set")
+	}
+
+	if len(c.APIKey) == 0 {
+		return errors.New("cvm.api_key is not set")
+	}
+
+	if len(c.APISecret) == 0 {
+		return errors.New("cvm.api_secret is not set")
 	}
 
 	return nil
@@ -1219,11 +1231,23 @@ func (c *StuckCheckCfg) trySetDefault() {
 // Crp crp client options
 type Crp struct {
 	Host string `yaml:"host"`
+	// APIKey 云梯接口鉴权的 api_key
+	APIKey string `yaml:"api_key"`
+	// APISecret 云梯接口签名鉴权的密钥，用于计算 api_sign
+	APISecret string `yaml:"api_secret"`
 }
 
 func (c Crp) validate() error {
 	if len(c.Host) == 0 {
 		return errors.New("crp host is not set")
+	}
+
+	if len(c.APIKey) == 0 {
+		return errors.New("crp.api_key is not set")
+	}
+
+	if len(c.APISecret) == 0 {
+		return errors.New("crp.api_secret is not set")
 	}
 
 	return nil

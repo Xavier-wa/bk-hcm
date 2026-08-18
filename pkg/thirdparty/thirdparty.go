@@ -92,18 +92,28 @@ func NewClient(opts cc.ClientConfig, reg prometheus.Registerer) (*Client, error)
 
 // newNoBKThirdClient 实例化第三方服务client
 func newNoBKThirdClient(opts cc.ClientConfig, reg prometheus.Registerer) (*Client, error) {
-	cvmConf := cvmapi.CVMCli{CvmApiAddr: opts.CvmOpt.CvmApiAddr, CvmLaunchPassword: opts.CvmOpt.CvmLaunchPassword}
+	cvmConf := cvmapi.CVMCli{
+		CvmAPIAddr:        opts.CvmOpt.CvmAPIAddr,
+		CvmLaunchPassword: opts.CvmOpt.CvmLaunchPassword,
+		APIKey:            opts.CvmOpt.APIKey,
+		APISecret:         opts.CvmOpt.APISecret,
+	}
 	cvm, err := cvmapi.NewCVMClientInterface(cvmConf, reg)
 	if err != nil {
-		logs.Errorf("failed to new cvm api client, conf: %v, err: %v", cvmConf, err)
+		// 配置中含鉴权密钥，日志只打印地址
+		logs.Errorf("failed to new cvm api client, host: %s, err: %v", cvmConf.CvmAPIAddr, err)
 		return nil, err
 	}
 
-	oldCvmConf := cvmapi.CVMCli{CvmApiAddr: opts.CvmOpt.CvmOldApiAddr,
-		CvmLaunchPassword: opts.CvmOpt.CvmLaunchPassword}
+	oldCvmConf := cvmapi.CVMCli{
+		CvmAPIAddr:        opts.CvmOpt.CvmOldAPIAddr,
+		CvmLaunchPassword: opts.CvmOpt.CvmLaunchPassword,
+		APIKey:            opts.CvmOpt.APIKey,
+		APISecret:         opts.CvmOpt.APISecret,
+	}
 	oldCvm, err := cvmapi.NewCVMClientInterface(oldCvmConf, reg)
 	if err != nil {
-		logs.Errorf("failed to new cvm api client, conf: %v, err: %v", oldCvmConf, err)
+		logs.Errorf("failed to new old cvm api client, host: %s, err: %v", oldCvmConf.CvmAPIAddr, err)
 		return nil, err
 	}
 
