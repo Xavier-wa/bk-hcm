@@ -2706,6 +2706,21 @@ func getApplyOrderZones(spec *types.ResourceSpec) []string {
 	return []string{}
 }
 
+// getSpecConcreteZones 获取申请单中的具体可用区列表，
+// "全部"、"分Campus" 等标识不是具体可用区，会被过滤掉；返回空列表表示不限定可用区。
+func getSpecConcreteZones(spec *types.ResourceSpec) []string {
+	zones := getApplyOrderZones(spec)
+	concreteZones := make([]string, 0, len(zones))
+	for _, zone := range zones {
+		if len(zone) == 0 || zone == cvmapi.CvmZoneAll || zone == cvmapi.CvmSeparateCampus {
+			continue
+		}
+		concreteZones = append(concreteZones, zone)
+	}
+
+	return slice.Unique(concreteZones)
+}
+
 func (s *scheduler) validateModification(kt *kit.Kit, order *types.ApplyOrder, param *types.ModifyApplyReq) error {
 	// validate replicas and modify param
 	param, err := s.validateReplicasAndModifyParam(kt, order, param)
@@ -2840,54 +2855,85 @@ func (s *scheduler) validateReplicasAndModifyParam(kt *kit.Kit, order *types.App
 }
 
 func (s *scheduler) validateModifyDeviceType(kt *kit.Kit, order *types.ApplyOrder, param *types.ModifyApplyReq) error {
+	// 修改后的机型必须以本次提交的目标可用区为准校验，多可用区时要求每个目标可用区都有配置
+	modifiedZones := getSpecConcreteZones(param.Spec)
+	modified, err := s.getDeviceFamilyAndCoreType(kt, param.Spec.DeviceType, param.Spec.Region, modifiedZones)
+	if err != nil {
+		logs.Errorf("failed to get modified device group, subOrderID: %s, err: %v, rid: %s",
+			order.SubOrderId, err, kt.Rid)
+		return err
+	}
+
+	// 目标机型在目标地域/可用区下没有配置，属于机型不可用，不能误判为机型族变更
+	if len(modified.deviceFamily) == 0 || len(modified.missingZones) > 0 {
+		unavailableZones := modified.missingZones
+		if len(unavailableZones) == 0 {
+			unavailableZones = modifiedZones
+		}
+		logs.Errorf("modify device type is unavailable in target zones, subOrderID: %s, deviceType: %s, region: %s, "+
+			"targetZones: %v, unavailableZones: %v, rid: %s", order.SubOrderId, param.Spec.DeviceType,
+			param.Spec.Region, modifiedZones, unavailableZones, kt.Rid)
+		return errf.Newf(errf.InvalidParameter, "修改后的机型%s在地域%s的%s下未找到配置，"+
+			"请确认该机型在目标可用区是否可售", param.Spec.DeviceType, param.Spec.Region,
+			describeZones(unavailableZones))
+	}
+
 	// 小额绿通需要按常规项目去校验 --story=125266150
-	originDeviceGroup, originDeviceSize, err := s.getDeviceFamilyAndCoreType(kt, order.Spec.DeviceType,
-		order.Spec.Region, order.Spec.Zone)
+	origin, err := s.getDeviceFamilyAndCoreType(kt, order.Spec.DeviceType, order.Spec.Region,
+		getSpecConcreteZones(order.Spec))
 	if err != nil {
-		logs.Errorf("failed to get device group, err: %v", err)
+		logs.Errorf("failed to get origin device group, subOrderID: %s, err: %v, rid: %s",
+			order.SubOrderId, err, kt.Rid)
 		return err
 	}
 
-	modifiedDeviceGroup, modifiedDeviceSize, err := s.getDeviceFamilyAndCoreType(kt, param.Spec.DeviceType,
-		param.Spec.Region, param.Spec.Zone)
-	if err != nil {
-		logs.Errorf("failed to get device group, err: %v", err)
-		return err
-	}
-
-	// modification is valid if found no device config
-	if originDeviceGroup == "" {
+	// 修改前的机型查不到配置时无法比较机型族，保持放行
+	if len(origin.deviceFamily) == 0 {
 		return nil
 	}
 
 	// 机型族不一致
-	if originDeviceGroup != modifiedDeviceGroup {
+	if origin.deviceFamily != modified.deviceFamily {
 		logs.Errorf("modify device type is invalid, for its device group changed, subOrderID: %s, "+
 			"originDeviceGroup: %s, modifiedDeviceGroup: %s, rid: %s",
-			order.SubOrderId, originDeviceGroup, modifiedDeviceGroup, kt.Rid)
-		return errf.Newf(errf.InvalidParameter, "modify device type is invalid, for its device group changed, "+
-			"originDeviceGroup: %s, modifiedDeviceGroup: %s", originDeviceGroup, modifiedDeviceGroup)
+			order.SubOrderId, origin.deviceFamily, modified.deviceFamily, kt.Rid)
+		return errf.Newf(errf.InvalidParameter, "修改前后机型族不一致，不允许跨机型族修改，"+
+			"修改前机型族: %s, 修改后机型族: %s", origin.deviceFamily, modified.deviceFamily)
 	}
 
 	// 大小核心不一致
-	if originDeviceSize != modifiedDeviceSize {
-		logs.Errorf("modify device size is invalid, for its device group changed, subOrderID: %s, "+
+	if origin.coreType != modified.coreType {
+		logs.Errorf("modify device size is invalid, for its device size changed, subOrderID: %s, "+
 			"originDeviceSize: %s, modifiedDeviceSize: %s, rid: %s",
-			order.SubOrderId, originDeviceSize, modifiedDeviceSize, kt.Rid)
-		return errf.Newf(errf.InvalidParameter, "modify device type is invalid, for its device size changed, "+
-			"originDeviceSize: %s, modifiedDeviceSize: %s", originDeviceSize, modifiedDeviceSize)
+			order.SubOrderId, origin.coreType, modified.coreType, kt.Rid)
+		return errf.Newf(errf.InvalidParameter, "修改前后机型大小核心不一致，不允许修改，"+
+			"修改前大小核心: %s, 修改后大小核心: %s", origin.coreType, modified.coreType)
 	}
 
 	return nil
 }
 
-func (s *scheduler) getDeviceFamilyAndCoreType(kt *kit.Kit, deviceType, region, zone string) (string, string, error) {
+// deviceTypeConfig 机型在目标地域、可用区下的配置信息
+type deviceTypeConfig struct {
+	// deviceFamily 机型族，为空表示目标地域、可用区下没有该机型的配置
+	deviceFamily string
+	// coreType 机型大小核心类型
+	coreType string
+	// missingZones 查询不到机型配置的目标可用区列表
+	missingZones []string
+}
+
+// getDeviceFamilyAndCoreType 查询机型在目标地域、可用区下的机型族与大小核心。
+// The zones parameter holds the concrete target zones, an empty slice means no zone restriction.
+func (s *scheduler) getDeviceFamilyAndCoreType(kt *kit.Kit, deviceType, region string, zones []string) (
+	*deviceTypeConfig, error) {
+
 	rules := make([]*filter.AtomRule, 0)
 	rules = append(rules, tools.RuleEqual("vendor", enumor.TCloudZiyan))
 	rules = append(rules, tools.RuleEqual("device_type", deviceType))
 	rules = append(rules, tools.RuleEqual("region", region))
-	if zone != "" && zone != cvmapi.CvmSeparateCampus {
-		rules = append(rules, tools.RuleEqual("zone", zone))
+	if len(zones) > 0 {
+		rules = append(rules, tools.RuleIn("zone", zones))
 	}
 	req := &protocloud.DeviceTypeListReq{
 		ListReq: core.ListReq{
@@ -2898,13 +2944,38 @@ func (s *scheduler) getDeviceFamilyAndCoreType(kt *kit.Kit, deviceType, region, 
 	deviceInfo, err := s.configLogics.Device().ListDeviceType(kt, req)
 	if err != nil {
 		logs.Errorf("failed to list device type, err: %v, req: %+v, rid: %s", err, req, kt.Rid)
-		return "", "", err
-	}
-	if len(deviceInfo.Details) == 0 {
-		return "", "", nil
+		return nil, err
 	}
 
-	return deviceInfo.Details[0].DeviceFamily, string(deviceInfo.Details[0].CoreType), nil
+	config := &deviceTypeConfig{missingZones: make([]string, 0, len(zones))}
+	if len(deviceInfo.Details) == 0 {
+		config.missingZones = append(config.missingZones, zones...)
+		return config, nil
+	}
+
+	config.deviceFamily = deviceInfo.Details[0].DeviceFamily
+	config.coreType = string(deviceInfo.Details[0].CoreType)
+
+	existZones := make(map[string]struct{}, len(deviceInfo.Details))
+	for _, detail := range deviceInfo.Details {
+		existZones[detail.Zone] = struct{}{}
+	}
+	for _, zone := range zones {
+		if _, ok := existZones[zone]; !ok {
+			config.missingZones = append(config.missingZones, zone)
+		}
+	}
+
+	return config, nil
+}
+
+// describeZones 生成用于错误提示的可用区描述，空列表表示未限定具体可用区
+func describeZones(zones []string) string {
+	if len(zones) == 0 {
+		return "全部可用区"
+	}
+
+	return "可用区" + strings.Join(zones, "、")
 }
 
 func (s *scheduler) validateModifyZone(kt *kit.Kit, order *types.ApplyOrder, param *types.ModifyApplyReq) error {

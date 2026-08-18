@@ -35,8 +35,8 @@ func TestTicketToUnifyOrder_EmptySuborders(t *testing.T) {
 			Remark:      "test remark",
 			Stage:       types.TicketStageTerminate,
 			Suborders:   nil, // 空 Suborders
-			CreateAt:    now,
-			UpdateAt:    now,
+			CreatedAt:   now,
+			UpdatedAt:   now,
 		},
 	}
 
@@ -107,8 +107,8 @@ func TestTicketToUnifyOrder_MultipleSuborders(t *testing.T) {
 					},
 				},
 			},
-			CreateAt: now,
-			UpdateAt: now,
+			CreatedAt: now,
+			UpdatedAt: now,
 		},
 	}
 
@@ -183,8 +183,8 @@ func TestTicketToUnifyOrder_ZoneToZonesConversion(t *testing.T) {
 					},
 				},
 			},
-			CreateAt: now,
-			UpdateAt: now,
+			CreatedAt: now,
+			UpdatedAt: now,
 		},
 	}
 
@@ -231,8 +231,8 @@ func TestTicketToUnifyOrder_SeparateCampusConversion(t *testing.T) {
 					},
 				},
 			},
-			CreateAt: now,
-			UpdateAt: now,
+			CreatedAt: now,
+			UpdatedAt: now,
 		},
 	}
 
@@ -273,8 +273,8 @@ func TestTicketToUnifyOrder_MultipleTickets(t *testing.T) {
 			RequireType: enumor.RequireTypeRegular,
 			Stage:       types.TicketStageTerminate,
 			Suborders:   nil, // 空 Suborders
-			CreateAt:    now,
-			UpdateAt:    now,
+			CreatedAt:   now,
+			UpdatedAt:   now,
 		},
 		{
 			OrderId:     2002,
@@ -293,8 +293,8 @@ func TestTicketToUnifyOrder_MultipleTickets(t *testing.T) {
 					},
 				},
 			},
-			CreateAt: now,
-			UpdateAt: now,
+			CreatedAt: now,
+			UpdatedAt: now,
 		},
 	}
 
