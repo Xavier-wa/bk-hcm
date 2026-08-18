@@ -21,8 +21,10 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/findmany/recycle/host
 | bk_username  | string	array     | 否   | 提单人列表，数量最大20                   |
 | ip           | string array     | 否   | 设备内网IP列表，数量最大500               |
 | bk_asset_id  | string array |否 | 固资号列表，数量最大500                |
-| start        | string	          | 否   | 单据创建时间过滤条件起点日期，格式如"2022-05-01" |
-| end          | string	          | 否   | 单据创建时间过滤条件终点日期，格式如"2022-05-01" |
+| return_start | string       | 否 | 完成时间筛选起点，格式 `YYYY-MM-DD`，对应 `return_time`；须与 `return_end` 成对传入 |
+| return_end   | string       | 否 | 完成时间筛选终点，格式 `YYYY-MM-DD`（含当天）；须与 `return_start` 成对传入 |
+| create_start | string       | 否 | 创建时间筛选起点，格式 `YYYY-MM-DD`，对应 `create_at`；须与 `create_end` 成对传入 |
+| create_end   | string       | 否 | 创建时间筛选终点，格式 `YYYY-MM-DD`（含当天）；须与 `create_start` 成对传入 |
 | page         | object	          | 是   | 分页信息                           |
 
 #### page
@@ -36,6 +38,8 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/findmany/recycle/host
 说明：
 
 - enable_count 如果此标记为true，表示此次请求是获取数量。此时其余字段必须为初始化值，start为0,limit为:0。
+- `return_start`/`return_end`、`create_start`/`create_end` 各组须成对传入，不可只传其中一个。
+- 完成时间、创建时间两组筛选条件为 AND 关系。
 
 - 默认按ip升序排序
 
@@ -127,5 +131,6 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/findmany/recycle/host
 | resource_type | string    | 资源类型。"QCLOUDCVM": 腾讯云虚拟机, "IDCPM": IDC物理机, "QCLOUDDVM": Qcloud富容器, "IDCDVM": IDC富容器 |
 | device_type   | string    | 机型           |
 | zone_name     | string    | 区域           |
+| return_time   | string    | 完成时间，未完成时为空 |
 | create_at     | timestamp | 记录创建时间    |
 | update_at     | timestamp | 记录更新时间    |

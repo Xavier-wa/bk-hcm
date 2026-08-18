@@ -22,6 +22,8 @@ package constant
 const (
 	// UnsetRecycleTime defines default value for unset recycle time
 	UnsetRecycleTime = -1
+	// RecycleHostQueryArrayLimit is max length of array filter fields in recycle host list query.
+	RecycleHostQueryArrayLimit = 20
 )
 
 // GlobalConfigTypeRecycle 回收相关配置类型

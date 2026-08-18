@@ -845,8 +845,10 @@ type GetRecycleHostReq struct {
 	RecycleType []table.RecycleType   `json:"recycle_type"`
 	User        []string              `json:"bk_username"`
 	IP          []string              `json:"ip"`
-	Start       string                `json:"start"`
-	End         string                `json:"end"`
+	ReturnStart string                `json:"return_start"`
+	ReturnEnd   string                `json:"return_end"`
+	CreateStart string                `json:"create_start"`
+	CreateEnd   string                `json:"create_end"`
 	Page        metadata.BasePage     `json:"page"`
 }
 
@@ -854,85 +856,75 @@ type GetRecycleHostReq struct {
 // errKey: invalid key
 // err: detail reason why errKey is invalid
 func (param *GetRecycleHostReq) Validate() error {
-	arrayLimit := 20
-	if len(param.OrderID) > arrayLimit {
-		return fmt.Errorf("order_id exceed limit %d", arrayLimit)
+	if err := validateGetRecycleHostArrayFields(param); err != nil {
+		return err
 	}
 
-	if len(param.SuborderID) > arrayLimit {
-		return fmt.Errorf("suborder_id exceed limit %d", arrayLimit)
+	if err := validateRecycleHostDateRangePair(
+		param.ReturnStart, param.ReturnEnd, "return_start", "return_end",
+	); err != nil {
+		return err
 	}
 
+	if err := validateRecycleHostDateRangePair(
+		param.CreateStart, param.CreateEnd, "create_start", "create_end",
+	); err != nil {
+		return err
+	}
+
+	return validateGetRecycleHostPage(param.Page)
+}
+
+// validateGetRecycleHostArrayFields validates array field lengths for GetRecycleHostReq.
+func validateGetRecycleHostArrayFields(param *GetRecycleHostReq) error {
 	if len(param.BizID) == 0 {
 		return errors.New("bk_biz_id is required")
 	}
 
-	if len(param.BkAssetID) > pkg.BKMaxInstanceLimit {
-		return fmt.Errorf("bk_asset_id exceed limit %d", pkg.BKMaxInstanceLimit)
+	arrayFieldChecks := []struct {
+		field  string
+		length int
+		limit  int
+	}{
+		{"order_id", len(param.OrderID), constant.RecycleHostQueryArrayLimit},
+		{"suborder_id", len(param.SuborderID), constant.RecycleHostQueryArrayLimit},
+		{"bk_asset_id", len(param.BkAssetID), pkg.BKMaxInstanceLimit},
+		{"device_type", len(param.DeviceType), constant.RecycleHostQueryArrayLimit},
+		{"bk_zone_name", len(param.Zone), constant.RecycleHostQueryArrayLimit},
+		{"sub_zone", len(param.SubZone), constant.RecycleHostQueryArrayLimit},
+		{"stage", len(param.Stage), constant.RecycleHostQueryArrayLimit},
+		{"status", len(param.Status), constant.RecycleHostQueryArrayLimit},
+		{"recycle_type", len(param.RecycleType), constant.RecycleHostQueryArrayLimit},
+		{"bk_username", len(param.User), constant.RecycleHostQueryArrayLimit},
+		{"ip", len(param.IP), pkg.BKMaxInstanceLimit},
 	}
-
-	if len(param.DeviceType) > arrayLimit {
-		return fmt.Errorf("device_type exceed limit %d", arrayLimit)
-	}
-
-	if len(param.Zone) > arrayLimit {
-		return fmt.Errorf("bk_zone_name exceed limit %d", arrayLimit)
-	}
-
-	if len(param.SubZone) > arrayLimit {
-		return fmt.Errorf("sub_zone exceed limit %d", arrayLimit)
-	}
-
-	if len(param.Stage) > arrayLimit {
-		return fmt.Errorf("stage exceed limit %d", arrayLimit)
-	}
-
-	if len(param.Status) > arrayLimit {
-		return fmt.Errorf("status exceed limit %d", arrayLimit)
-	}
-
-	if len(param.RecycleType) > arrayLimit {
-		return fmt.Errorf("recycle_type exceed limit %d", arrayLimit)
-	}
-
-	if len(param.User) > arrayLimit {
-		return fmt.Errorf("bk_username exceed limit %d", arrayLimit)
-	}
-
-	if len(param.IP) > pkg.BKMaxInstanceLimit {
-		return fmt.Errorf("ip exceed limit %d", pkg.BKMaxInstanceLimit)
-	}
-
-	if len(param.Start) > 0 {
-		_, err := time.Parse(dateLayout, param.Start)
-		if err != nil {
-			return fmt.Errorf("start date format should be like %s", dateLayout)
+	for _, check := range arrayFieldChecks {
+		if check.length > check.limit {
+			return fmt.Errorf("%s exceed limit %d", check.field, check.limit)
 		}
 	}
 
-	if len(param.End) > 0 {
-		_, err := time.Parse(dateLayout, param.End)
-		if err != nil {
-			return fmt.Errorf("end date format should be like %s", dateLayout)
-		}
-	}
+	return nil
+}
 
-	if param.Page.EnableCount {
-		if param.Page.Start > 0 || param.Page.Limit > 0 || param.Page.Sort != "" {
+// validateGetRecycleHostPage validates page params for GetRecycleHostReq.
+func validateGetRecycleHostPage(page metadata.BasePage) error {
+	if page.EnableCount {
+		if page.Start > 0 || page.Limit > 0 || page.Sort != "" {
 			return fmt.Errorf("params page can not be set")
 		}
 		return nil
 	}
 
-	if param.Page.Start < 0 {
+	if page.Start < 0 {
 		return fmt.Errorf("invalid page.start < 0")
 	}
 
-	if param.Page.Limit < 0 {
+	if page.Limit < 0 {
 		return fmt.Errorf("invalid page.limit < 0")
 	}
 
-	if param.Page.Limit > 5000 {
+	if page.Limit > 5000 {
 		return fmt.Errorf("exceed page.limit 5000")
 	}
 
@@ -1014,27 +1006,96 @@ func (param *GetRecycleHostReq) GetFilter() (map[string]interface{}, error) {
 		}
 	}
 
-	timeCond := make(map[string]interface{})
-	if len(param.Start) > 0 {
-		startTime, err := time.Parse(dateLayout, param.Start)
-		if err == nil {
-			timeCond[pkg.BKDBGTE] = startTime
-		}
+	if returnTimeCond, err := buildReturnTimeFilter(param.ReturnStart, param.ReturnEnd); err != nil {
+		return nil, err
+	} else if len(returnTimeCond) > 0 {
+		filter["return_time"] = returnTimeCond
 	}
 
-	if len(param.End) > 0 {
-		endTime, err := time.Parse(dateLayout, param.End)
-		if err == nil {
-			// '%lte: 2006-01-02' means '%lt: 2006-01-03 00:00:00'
-			timeCond[pkg.BKDBLT] = endTime.AddDate(0, 0, 1)
-		}
-	}
-
-	if len(timeCond) > 0 {
-		filter["create_at"] = timeCond
+	if createTimeCond, err := buildCreateAtTimeFilter(param.CreateStart, param.CreateEnd); err != nil {
+		return nil, err
+	} else if len(createTimeCond) > 0 {
+		filter["create_at"] = createTimeCond
 	}
 
 	return filter, nil
+}
+
+// validateRecycleHostDateRangePair validates recycle host date range params must be set in pairs.
+func validateRecycleHostDateRangePair(start, end, startField, endField string) error {
+	hasStart := len(start) > 0
+	hasEnd := len(end) > 0
+	if hasStart != hasEnd {
+		return fmt.Errorf("%s and %s must be set together", startField, endField)
+	}
+	if !hasStart {
+		return nil
+	}
+
+	startTime, err := time.Parse(dateLayout, start)
+	if err != nil {
+		return fmt.Errorf("%s date format should be like %s", startField, dateLayout)
+	}
+
+	endTime, err := time.Parse(dateLayout, end)
+	if err != nil {
+		return fmt.Errorf("%s date format should be like %s", endField, dateLayout)
+	}
+
+	if startTime.After(endTime) {
+		return fmt.Errorf("%s must not be later than %s", startField, endField)
+	}
+
+	return nil
+}
+
+// buildReturnTimeFilter builds return_time filter for recycle host query.
+// return_time is stored as string (see RecycleHost.ReturnTime), so bounds use date strings
+// in YYYY-MM-DD and rely on lexicographic order; end is exclusive via next-day string.
+func buildReturnTimeFilter(start, end string) (map[string]interface{}, error) {
+	timeCond := make(map[string]interface{})
+	if len(start) > 0 {
+		timeCond[pkg.BKDBGTE] = start
+	}
+
+	if len(end) == 0 {
+		return timeCond, nil
+	}
+
+	endTime, err := time.Parse(dateLayout, end)
+	if err != nil {
+		return nil, fmt.Errorf("return_end date format should be like %s", dateLayout)
+	}
+	// end date is inclusive; use next day as upper bound for string comparison.
+	timeCond[pkg.BKDBLT] = endTime.AddDate(0, 0, 1).Format(dateLayout)
+
+	return timeCond, nil
+}
+
+// buildCreateAtTimeFilter builds create_at filter for recycle host query.
+// create_at is stored as time.Time (see RecycleHost.CreateAt), so bounds use parsed time values.
+func buildCreateAtTimeFilter(start, end string) (map[string]interface{}, error) {
+	timeCond := make(map[string]interface{})
+	if len(start) > 0 {
+		startTime, err := time.Parse(dateLayout, start)
+		if err != nil {
+			return nil, fmt.Errorf("create_start date format should be like %s", dateLayout)
+		}
+		timeCond[pkg.BKDBGTE] = startTime
+	}
+
+	if len(end) == 0 {
+		return timeCond, nil
+	}
+
+	endTime, err := time.Parse(dateLayout, end)
+	if err != nil {
+		return nil, fmt.Errorf("create_end date format should be like %s", dateLayout)
+	}
+	// end date is inclusive; upper bound is start of the next day.
+	timeCond[pkg.BKDBLT] = endTime.AddDate(0, 0, 1)
+
+	return timeCond, nil
 }
 
 // GetRecycleHostRst get recycle host info result
