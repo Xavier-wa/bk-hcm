@@ -30,3 +30,8 @@ bkcodeai.json
 .codex/
 .agents/
 project.json
+**/.graphify_root
+**/.graphify_python
+docs/dev-map/cache/
+docs/dev-map/cost.json
+graphify-out/

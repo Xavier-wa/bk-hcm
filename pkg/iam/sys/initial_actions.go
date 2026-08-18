@@ -311,7 +311,6 @@ func genBizCosResManActions() []client.ResourceAction {
 			RelatedResourceTypes: bizResource,
 			RelatedActions:       []client.ActionID{BizAccess},
 			Version:              1,
-			Hidden:               true,
 		}, {
 			ID:                   BizCosBucketFind,
 			Name:                 ActionIDNameMap[BizCosBucketFind],
@@ -320,7 +319,6 @@ func genBizCosResManActions() []client.ResourceAction {
 			RelatedResourceTypes: bizResource,
 			RelatedActions:       []client.ActionID{BizAccess},
 			Version:              1,
-			Hidden:               true,
 		}, {
 			ID:                   BizCosBucketDelete,
 			Name:                 ActionIDNameMap[BizCosBucketDelete],
@@ -329,7 +327,6 @@ func genBizCosResManActions() []client.ResourceAction {
 			RelatedResourceTypes: bizResource,
 			RelatedActions:       []client.ActionID{BizAccess},
 			Version:              1,
-			Hidden:               true,
 		},
 	}
 }
