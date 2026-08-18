@@ -229,30 +229,30 @@ func TestGroupBudgetDemands(t *testing.T) {
 	}
 }
 
-func TestIsSuborderTerminated(t *testing.T) {
+func TestIsSuborderFinished(t *testing.T) {
 	tests := []struct {
 		name   string
 		stage  enumor.TicketStage
 		status enumor.ApplyStatus
 		want   bool
 	}{
-		{"备货中-未终止", enumor.TicketStageRunning, enumor.ApplyStatusMatching, false},
-		{"待匹配-未终止", enumor.TicketStageRunning, enumor.ApplyStatusWaitForMatch, false},
-		{"已完成-未终止", enumor.TicketStageDone, enumor.ApplyStatusDone, false},
-		{"暂停-未终止", enumor.TicketStageRunning, enumor.ApplyStatusPaused, false},
-		{"备货异常-未终止", enumor.TicketStageSuspend, enumor.ApplyStatusMatching, false},
-		{"Status 运行中", enumor.TicketStageRunning, enumor.ApplyStatusTerminate, false},
-		{"Status 运行中", enumor.TicketStageRunning, enumor.ApplyStatusGracefulTerminate, false},
+		{"备货中-未完结", enumor.TicketStageRunning, enumor.ApplyStatusMatching, false},
+		{"待匹配-未完结", enumor.TicketStageRunning, enumor.ApplyStatusWaitForMatch, false},
+		{"已完成-已完结", enumor.TicketStageDone, enumor.ApplyStatusDone, true},
+		{"暂停-未完结", enumor.TicketStageRunning, enumor.ApplyStatusPaused, false},
+		{"备货异常-未完结", enumor.TicketStageSuspend, enumor.ApplyStatusMatching, false},
+		{"Status 终止但 stage 仍备货中-未完结", enumor.TicketStageRunning, enumor.ApplyStatusTerminate, false},
+		{"优雅终止但 stage 仍备货中-未完结", enumor.TicketStageRunning, enumor.ApplyStatusGracefulTerminate, false},
 
-		{"Stage 终止", enumor.TicketStageTerminate, enumor.ApplyStatusMatching, true},
-		{"Stage 和 Status 均终止", enumor.TicketStageTerminate, enumor.ApplyStatusTerminate, true},
+		{"Stage 终止-已完结", enumor.TicketStageTerminate, enumor.ApplyStatusMatching, true},
+		{"Stage 和 Status 均终止-已完结", enumor.TicketStageTerminate, enumor.ApplyStatusTerminate, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sub := tasktypes.ApplyOrder{Stage: tt.stage, Status: tt.status}
-			if got := sub.IsSuborderTerminated(); got != tt.want {
-				t.Errorf("IsSuborderTerminated() = %v, want %v", got, tt.want)
+			if got := sub.IsSuborderFinished(); got != tt.want {
+				t.Errorf("IsSuborderFinished() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -284,12 +284,36 @@ func TestCalcSuborderConsumeCore(t *testing.T) {
 			want:          100,
 		},
 		{
-			name:          "活跃-已完成-按申请",
+			name:          "完结-已完成-申请与已生产相同-按已生产",
 			stage:         enumor.TicketStageDone,
 			status:        enumor.ApplyStatusDone,
 			appliedCore:   100,
 			productedCore: 100,
 			want:          100,
+		},
+		{
+			name:          "完结-已完成-缩量-按已生产",
+			stage:         enumor.TicketStageDone,
+			status:        enumor.ApplyStatusDone,
+			appliedCore:   320,
+			productedCore: 160,
+			want:          160,
+		},
+		{
+			name:          "完结-已完成-未生产-占用为0",
+			stage:         enumor.TicketStageDone,
+			status:        enumor.ApplyStatusDone,
+			appliedCore:   320,
+			productedCore: 0,
+			want:          0,
+		},
+		{
+			name:          "复现-103265-1-DONE缩量-按已生产160",
+			stage:         enumor.TicketStageDone,
+			status:        enumor.ApplyStatusDone,
+			appliedCore:   320,
+			productedCore: 160,
+			want:          160,
 		},
 		{
 			name:          "活跃-已生产超出申请-按已生产兜底",
@@ -308,20 +332,20 @@ func TestCalcSuborderConsumeCore(t *testing.T) {
 			want:          50,
 		},
 		{
-			name:          "终止-Status TERMINATE-按已生产",
+			name:          "进行中-Status TERMINATE-仍按申请与已生产取大",
 			stage:         enumor.TicketStageRunning,
 			status:        enumor.ApplyStatusTerminate,
 			appliedCore:   100,
 			productedCore: 50,
-			want:          50,
+			want:          100,
 		},
 		{
-			name:          "终止-优雅终止-按已生产",
+			name:          "进行中-优雅终止-仍按申请与已生产取大",
 			stage:         enumor.TicketStageRunning,
 			status:        enumor.ApplyStatusGracefulTerminate,
 			appliedCore:   100,
 			productedCore: 50,
-			want:          50,
+			want:          100,
 		},
 		{
 			name:          "终止-未生产任何主机-占用为0",

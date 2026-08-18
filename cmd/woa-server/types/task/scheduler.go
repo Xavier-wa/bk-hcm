@@ -73,9 +73,10 @@ type ApplyOrder struct {
 	UpdatedAt       time.Time         `json:"updated_at" bson:"update_at"`
 }
 
-// IsSuborderTerminated 判断子单是否已终止：终止后剩余的主机不再继续生产
-func (subOrder *ApplyOrder) IsSuborderTerminated() bool {
-	return subOrder.Stage == enumor.TicketStageTerminate
+// IsSuborderFinished 判断子单是否已完结，不再继续生产。
+// 完结阶段仅包含已完成与已终止；优雅终止且 stage 仍为备货中时不算完结。
+func (subOrder *ApplyOrder) IsSuborderFinished() bool {
+	return subOrder.Stage == enumor.TicketStageDone || subOrder.Stage == enumor.TicketStageTerminate
 }
 
 // MarshalJSON 向后兼容旧版本 create_at/update_at 字段，避免影响已有直调接口的用户，

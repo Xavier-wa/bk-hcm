@@ -1728,11 +1728,12 @@ func addSpecApplyOrderConsumePool(kt *kit.Kit, poolMap ResPlanConsumePool, sub *
 	if sub.RequireType == enumor.RequireTypeDissolve {
 		consumePoolKey.PlanType = ""
 	}
-	// 占用预测核心数 = max(AppliedCore, 已生产核心数)，终止单据按已生产核心数
+	// 占用预测核心数：完结（DONE/TERMINATE）按已生产核数，进行中按 max(AppliedCore, 已生产核数)
 	consumeCpuCore := calcSuborderConsumeCore(sub, productedCore)
 	logs.V(2).Infof("calc cvm suborder consume core, suborderID: %s, stage: %s, status: %s, applied: %d, "+
 		"delivered: %d, producteCore: %d, consumeCore: %d, rid: %s",
-		sub.SubOrderId, sub.Stage, sub.Status, sub.AppliedCore, sub.DeliveredCore, productedCore, consumeCpuCore, kt.Rid)
+		sub.SubOrderId, sub.Stage, sub.Status, sub.AppliedCore, sub.DeliveredCore, productedCore, consumeCpuCore,
+		kt.Rid)
 	if consumeCpuCore <= 0 {
 		return
 	}
@@ -1763,14 +1764,13 @@ func addPlanExpendApplyOrderConsumePool(poolMap ResPlanConsumePool, sub *tasktyp
 // calcSuborderConsumeCore 计算单个 CVM 子单对预测额度的实际占用核心数。
 //
 // 规则：
-//   - 终止单据：占用 = 已生产核心数（剩余不会再生产，但已生产的不会自动退还）
-//   - 活跃单据：占用 = max(AppliedCore, 已生产核心数)，AppliedCore 覆盖"卡在交付前重复提单"场景，
+//   - 完结单据（stage 为 DONE 或 TERMINATE）：占用 = 已生产核心数（剩余不会再生产，但已生产的不会自动退还）
+//   - 进行中单据：占用 = max(AppliedCore, 已生产核心数)，AppliedCore 覆盖"卡在交付前重复提单"场景，
 //     已生产核心数兜底极少数手工补录超 AppliedCore 情形
 //
 // productedCore 由 batchCalcSuborderProductedCore 一次性预算好后传入，避免逐单查询。
 func calcSuborderConsumeCore(sub *tasktypes.ApplyOrder, productedCore int64) int64 {
-	// 若单据已终止，返回"已生产核心数"
-	if sub.IsSuborderTerminated() {
+	if sub.IsSuborderFinished() {
 		return productedCore
 	}
 
