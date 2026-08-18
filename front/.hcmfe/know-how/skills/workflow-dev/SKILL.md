@@ -292,23 +292,45 @@ TAPD 每个项目的真实状态 key (如 story 的 `status_12`、bug 的 `resol
 适用：用户只有口头描述、事先没有 TAPD id；`bkdevbuddy_workflow_intent` 常为 `create_workflow_only`。时机在 **lite/full 确认并 `workflow_init` 之后、进入主工作之前**（不是 intent 刚返回时）。
 
 1. 调用 `bkdevbuddy_workflow_init` 时传入 `utterance`（用户原话）与 `title`，便于返回准确的 `tapdOffer`。
-2. 若响应含 `tapdOffer`（工作流尚未绑定 TAPD）→ 先定 `workspaceId`（`tapdOffer.workspaceId` / 用户从 `workspaceCandidates` 选 / `user_participant_workspace_get`），再**补齐必填字段后再问用户确认**：
+2. 若响应含 `tapdOffer`（工作流尚未绑定 TAPD）→ 先定 `workspaceId`（`tapdOffer.workspaceId` / 用户从 `workspaceCandidates` 选 / `user_participant_workspace_get`），再**补齐必填（含处理人）后展示草稿确认**——**未单独确认处理人前禁止 `stories_create` / `bugs_create`**：
    - **发现必填 / 默认值（建单前必做）**
      - story：`get_stories_template_list` → 取默认或用户指定模板 → `get_default_story_template` 读各字段 `required` / `default_value`；建单时传 `templated_id`（若用了模板）。
      - bug：`tapd_fields_summary_get`(object_type=bug) 概览字段，对 `current_owner` 及看起来像必填的字段再 `tapd_field_detail_get`；有 `template_id` 时按模板默认值填。
      - 同时看 `tapdOffer.fieldPrepHints`（至少含处理人 + 标题）。
-   - **处理人（硬要求）**
-     - story 用 `owner`，bug 用 `current_owner`。
-     - 优先用模板 / 字段默认值；**没有默认值则必须询问用户**（要 TAPD 昵称/账号，不要臆造、不要用脱敏占位符当真实处理人）。
-     - 确认草稿时**必须展示**拟写入的处理人。
-   - 展示草稿：`objectType`（默认 story；仅原话明确「创建 bug 单 / 建缺陷单」等时为 bug；「修 bug」仍为 story）/ `draftTitle` / `draftDescription` / 项目 / **全部待写入的必填字段（含处理人）**。
-3. **用户明确同意**后：
-   - TAPD MCP：`stories_create`（`name` + 必填含 `owner` 等）或 `bugs_create`（`title` + 必填含 `current_owner` 等）；缺必填被 TAPD 拒绝时，把缺项补问用户后重试，禁止空字段硬撞。
+   - **处理人（硬闸，每次建单必做）**
+     - story 用 `owner`，bug 用 `current_owner`；取值顺序：
+       1. 模板 / 字段非空 `default_value`；
+       2. 否则用 TAPD MCP 查**当前登录用户**昵称（`lookup_tapd_tool` 检索「获取当前用户」类工具；查到则作为建议默认）；
+       3. 仍无 → **必须请用户填写** TAPD 昵称/账号。
+     - **禁止**臆造、脱敏占位、留空、「待定」、或因「项目可能自动带处理人」而跳过确认。
+     - 用**编号选择器**让用户确认处理人（与草稿一并展示亦可，但处理人必须单独可见、可选）：
+
+       ````text
+       处理人（必填，默认 1；直接回复序号或「确认」）：
+       1. <nick>  ← 当前登录用户（或模板默认，注明来源）
+       2. 自定义输入
+       ````
+
+       有模板默认且与当前用户不同时，两者都列入选项；用户改选或自定义后，后续草稿用其最终值。
+   - **展示草稿（缺任一项不得请用户「确认建单」）**，至少包含下列行：
+
+     ````text
+     拟创建 TAPD 单（确认后才会调用 create）：
+     - 类型：story | bug
+     - 项目：<workspaceId / 名>
+     - 标题：<draftTitle>
+     - 处理人：<最终 nick>（来源：模板默认 | 当前登录用户 | 用户指定）
+     - 其它必填：…
+     回复「确认建单」创建；「跳过」则不建不 link。
+     ````
+
+3. **用户明确同意（且草稿已含非空处理人）**后：
+   - TAPD MCP：`stories_create`（`name` + **必传 `owner`** 等）或 `bugs_create`（`title` + **必传 `current_owner`** 等）；缺必填被 TAPD 拒绝时，把缺项补问用户后重试，禁止空字段硬撞。
    - 该 workspace/objectType 若尚未同步状态模型 → `bkdevbuddy_tapd_status_sync`
    - `bkdevbuddy_tapd_link` 绑定新建单据的 19 位 id
    - 再按下方「绑定 vs 追平」处理 `stageNodes` / `tapdSync`
 4. **用户拒绝** → 不建不 link，继续后续主工作；**本会话不再重复询问**（除非用户主动要求建单）。
-5. **禁止**静默建单。无父需求的新建 story **不**自动 `bkdevbuddy_req_init`（仍走 workflow-only）。
+5. **禁止**静默建单；**禁止**确认文案未出现「处理人：…」就调用 create。无父需求的新建 story **不**自动 `bkdevbuddy_req_init`（仍走 workflow-only）。
 6. 用户事后贴已有 TAPD id → 走下方「中途追加单据」/ 直接 `tapd_link`，不再走本建单 offer。
 
 ### 绑定工作流 ↔ 单据

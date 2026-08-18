@@ -130,6 +130,14 @@
     },
     {
       "type": "skills",
+      "name": "wf-cr-fetch"
+    },
+    {
+      "type": "skills",
+      "name": "wf-cr-publish"
+    },
+    {
+      "type": "skills",
       "name": "wf-design-comp-intake"
     },
     {
@@ -151,6 +159,10 @@
     {
       "type": "skills",
       "name": "wf-test-checklist"
+    },
+    {
+      "type": "skills",
+      "name": "workflow-cr"
     },
     {
       "type": "skills",

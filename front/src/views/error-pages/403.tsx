@@ -3,6 +3,8 @@ import { Button } from 'bkui-vue';
 import { useI18n } from 'vue-i18n';
 import { useCommonStore } from '@/store';
 import { useRoute } from 'vue-router';
+import WName from '@/components/w-name';
+import { ASSISTANT_CONTACT } from '@/views/chatbot/constants';
 
 import permissions from '@/assets/image/403.png';
 import './403.scss';
@@ -195,6 +197,14 @@ export default defineComponent({
               <p class='mt5 sub-describe'>{this.t('该功能由平台资源的管理员维护，属于管理员的权限')}</p>
             </>
           )}
+          {this.urlKey === 'agent_assistant' && (
+            <>
+              <p class='mt5 sub-describe'>{this.t('当前无「平台-智能体助手」权限。')}</p>
+              <p class='mt5 sub-describe'>
+                {this.t('该权限控制业务首页、AI 助手页面和浮窗入口。请联系管理员申请权限。')}
+              </p>
+            </>
+          )}
           {this.renderScrApplyTips()}
 
           <h2 class='mt20'>功能说明：</h2>
@@ -285,12 +295,27 @@ export default defineComponent({
               <p class='mt5 sub-describe'>{this.t('该功能由平台资源的管理员维护，属于管理员的权限')}</p>
             </>
           )}
+          {this.urlKey === 'agent_assistant' && (
+            <>
+              <p class='mt5 sub-describe'>
+                {this.t('平台-智能体助手用于在已有业务访问的业务里使用海垒 AI 助手（首页、对话页、浮窗）。')}
+              </p>
+              <p class='mt5 sub-describe'>
+                {this.t('若同时没有业务访问权限，请先申请对应业务的「业务访问」，再申请本权限。')}
+              </p>
+            </>
+          )}
           {this.renderScrFunctionTips()}
         </div>
         <div class='btn-warp'>
-          <Button class='mt20' theme='primary' loading={this.urlLoading} onClick={this.handlePermissionJump}>
-            {this.t('申请权限')}
-          </Button>
+          {/* 平台-智能体助手为主动授权，不走 IAM 自助申请，改为拉起企微联系管理员 */}
+          {this.urlKey === 'agent_assistant' ? (
+            <WName class='mt20' name={ASSISTANT_CONTACT.name} alias={this.t('联系管理员申请')} />
+          ) : (
+            <Button class='mt20' theme='primary' loading={this.urlLoading} onClick={this.handlePermissionJump}>
+              {this.t('申请权限')}
+            </Button>
+          )}
         </div>
       </div>
     );

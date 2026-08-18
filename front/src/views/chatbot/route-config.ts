@@ -15,8 +15,8 @@ const chatbotBiz: RouteRecordRaw[] = [
         title: '首页',
         activeKey: MENU_BUSINESS_CHATBOT,
         icon: 'hcm-icon bkhcm-icon-home-fill',
-        // 业务视角 chatbot 权限：无该权限时不展示「首页」入口（见 store/common.ts biz_agent_assistant）
-        checkAuth: 'biz_agent_assistant',
+        // 平台-智能体助手：无该权限时不展示「首页」入口（见 store/common.ts agent_assistant）
+        checkAuth: 'agent_assistant',
         layout: {
           // 复用全局面包屑展示「首页」，首页无需返回箭头
           breadcrumbs: {

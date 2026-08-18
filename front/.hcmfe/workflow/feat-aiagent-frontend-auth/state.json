@@ -1,0 +1,124 @@
+{
+  "id": "feat-aiagent-frontend-auth",
+  "title": "【aiagent-权限点调整】前端鉴权逻辑调整",
+  "currentStage": "coding",
+  "createdAt": "2026-08-17T08:42:22.091Z",
+  "updatedAt": "2026-08-17T12:43:05.592Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-frontend-auth/prd.md",
+        "kind": "file",
+        "addedAt": "2026-08-17T08:46:17.714Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-frontend-auth/design.md",
+        "kind": "file",
+        "addedAt": "2026-08-17T08:57:52.755Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-frontend-auth/api.md",
+        "kind": "file",
+        "addedAt": "2026-08-17T08:59:55.533Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-frontend-auth/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-17T09:04:00.826Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-08-17T08:57:17.528Z",
+      "note": "用户确认 PRD 可作为 design 唯一依据（含直访复用通用申请页、申请平台智能体助手、无业务访问先申请业务访问）"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-08-17T08:59:19.437Z",
+      "note": "用户确认 design.md 豁免说明可作为下一阶段依据；icon-intake 与 comp-intake 均跳过"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-08-17T09:03:02.679Z",
+      "note": "用户确认 api.md 可作为 coding 唯一依据"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-08-17T08:42:22.091Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-08-17T08:57:17.528Z",
+      "note": "用户确认 PRD 可作为 design 唯一依据（含直访复用通用申请页、申请平台智能体助手、无业务访问先申请业务访问）"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-08-17T08:59:19.437Z",
+      "note": "用户确认 design.md 豁免说明可作为下一阶段依据；icon-intake 与 comp-intake 均跳过"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-08-17T09:03:02.679Z",
+      "note": "用户确认 api.md 可作为 coding 唯一依据"
+    }
+  ],
+  "branch": "feat-aiagent-frontend-auth",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137216875",
+    "parentId": "1069995598137211216"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "skipped",
+      "at": "2026-08-17T08:44:15.740Z",
+      "note": "用户原话：「只执行tapd-analyst」。跳过 tapd-story-clarification 与 tapd-story-evaluation（非已完成豁免），仅按 PRD 闸口单独派发 tapd-analyst。"
+    },
+    "hcm-design-icon-intake": {
+      "status": "skipped",
+      "at": "2026-08-17T08:59:10.878Z",
+      "note": "用户原话：「确认，两个都跳过」。本期无新增图标，沿用现网申请页/菜单/浮窗图标。"
+    },
+    "hcm-design-comp-intake": {
+      "status": "skipped",
+      "at": "2026-08-17T08:59:15.493Z",
+      "note": "用户原话：「确认，两个都跳过」。无新 UI，只改现网能力门与申请对象。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/store/common.ts",
+        "src/views/chatbot/route-config.ts",
+        "src/router/module/business.ts",
+        "src/router/index.ts",
+        "src/components/ai-assistant/index.vue",
+        "src/views/error-pages/403.tsx",
+        "views/chatbot/constants.ts",
+        "views/home/index.tsx",
+        "403.tsx",
+        "store/common.ts",
+        "hooks/useVerify.ts",
+        "home/index.tsx"
+      ],
+      "contentFingerprint": "6d743955c49dfea9832a305ae84865708d477eda",
+      "codeBaseline": "985f85f6a67ada93d1bf191c747b0e15ed73d435",
+      "seatedAt": "2026-08-17T12:43:05.591Z"
+    }
+  }
+}

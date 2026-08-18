@@ -8,6 +8,7 @@
 ## 职责
 
 - **双入口**：`views/chatbot`（全页）与 `components/ai-assistant`（浮窗，按 `sceneTag` 过滤会话）；消息列表与交互卡在 `components/chatbot`。
+- **入口鉴权**：首页菜单 `checkAuth`、默认落地、冷启动分流、浮窗显隐均认 IAM `agent_assistant`（「平台-智能体助手」）。不再读 `biz_agent_assistant` / `chatbot_access`。无平台权限时菜单和浮窗不展示；直访 chatbot 走通用申请页（先补业务访问，再申请 `agent_assistant`）。
 - **会话内核**：`hooks/chatbot/use-chatbot.ts` 组装 `useSession` / `useStream` / `useMessage`；对外提供发送、续跑、刷新、跨标签同步状态。
 - **场景卡片**：HITL / 账号选择 / 主机申领推荐·预提单·确认提交；只读态由运行态字段（`__selectedIndex` 等）或「后续已有 user 消息」推断。
 - **多入口读一致性**（`feat-aiagent-session-sync`）：

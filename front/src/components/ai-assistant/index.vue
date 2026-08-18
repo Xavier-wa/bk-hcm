@@ -37,9 +37,9 @@ const props = withDefaults(
   },
 );
 
-// 与业务「首页」菜单 checkAuth（biz_agent_assistant）对齐：无权限不渲染浮窗入口
+// 与业务「首页」菜单 checkAuth（agent_assistant）对齐：无权限不渲染浮窗入口
 const commonStore = useCommonStore();
-const hasBizChatbotAccess = computed(() => !!commonStore.authVerifyData?.permissionAction?.biz_agent_assistant);
+const hasBizChatbotAccess = computed(() => !!commonStore.authVerifyData?.permissionAction?.agent_assistant);
 
 // 浮窗自持有 useChatbot 实例并 provide，与全页相互独立；通过 ChatbotKey 供原子组件 inject。
 // 传入 sceneTag 使会话列表按场景加载、新会话归入对应场景。
