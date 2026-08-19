@@ -143,16 +143,18 @@ type GetVpcListRst struct {
 
 // Subnet cvm subnet config
 type Subnet struct {
-	BkInstId         string `json:"id" bson:"id"`
-	Region           string `json:"region" bson:"region"`
-	Zone             string `json:"zone" bson:"zone"`
-	VpcId            string `json:"vpc_id" bson:"vpc_id"`
-	VpcName          string `json:"vpc_name" bson:"vpc_name"`
-	SubnetId         string `json:"subnet_id" bson:"subnet_id"`
-	SubnetName       string `json:"subnet_name" bson:"subnet_name"`
-	Enable           bool   `json:"enable" bson:"enable"`
-	Comment          string `json:"comment"`
-	AvailableIpCount uint64 `json:"available_ip_count"`
+	BkInstId   string `json:"id" bson:"id"`
+	Region     string `json:"region" bson:"region"`
+	Zone       string `json:"zone" bson:"zone"`
+	VpcId      string `json:"vpc_id" bson:"vpc_id"`
+	VpcName    string `json:"vpc_name" bson:"vpc_name"`
+	SubnetId   string `json:"subnet_id" bson:"subnet_id"`
+	SubnetName string `json:"subnet_name" bson:"subnet_name"`
+	Enable     bool   `json:"enable" bson:"enable"`
+	Comment    string `json:"comment"`
+	// AvailableIpCount 剩余可用 IP 数。
+	// 下拉接口未取到（CRP 失败或未查询）时为 nil，JSON 为 null；CRP 明确返回 0 时为 0。
+	AvailableIpCount *uint64 `json:"available_ip_count"`
 }
 
 // GetSubnetParam get subnet list request param

@@ -34,7 +34,7 @@ func (s *service) GetSubnet(cts *rest.Contexts) (interface{}, error) {
 		Zones:      []string{input.Zone},
 		CloudVpcID: input.Vpc,
 	}
-	rst, err := s.logics.Subnet().GetAllSubnet(cts.Kit, subnetReq)
+	rst, err := s.logics.Subnet().GetAllSubnetWithAvailIP(cts.Kit, subnetReq)
 	if err != nil {
 		logs.Errorf("failed to get subnet list, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, err

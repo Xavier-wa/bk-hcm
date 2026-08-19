@@ -39,6 +39,8 @@ const listCountIPBatchSize = 100
 type SubnetIf interface {
 	// GetAllSubnet get all subnet
 	GetAllSubnet(kt *kit.Kit, req *types.GetAllSubnetReq) (*types.GetSubnetResult, error)
+	// GetAllSubnetWithAvailIP get all subnet and fill available IP from CRP
+	GetAllSubnetWithAvailIP(kt *kit.Kit, req *types.GetAllSubnetReq) (*types.GetSubnetResult, error)
 	// GetSubnetList get subnet detail config list
 	GetSubnetList(kt *kit.Kit, input *types.GetSubnetListParam) (*types.GetSubnetResult, error)
 	// UpdateSubnetBatch update subnet batch
@@ -48,7 +50,7 @@ type SubnetIf interface {
 // NewSubnetOp creates a subnet interface
 func NewSubnetOp(client *client.ClientSet, thirdCli *thirdparty.Client) SubnetIf {
 	return &subnet{
-		cvm:    thirdCli.OldCVM,
+		cvm:    thirdCli.CVM,
 		client: client,
 	}
 }
@@ -100,6 +102,75 @@ func (s *subnet) GetAllSubnet(kt *kit.Kit, req *types.GetAllSubnetReq) (*types.G
 	}
 
 	return rst, nil
+}
+
+// GetAllSubnetWithAvailIP get all subnet and fill available IP from CRP leftIpNum.
+func (s *subnet) GetAllSubnetWithAvailIP(kt *kit.Kit, req *types.GetAllSubnetReq) (*types.GetSubnetResult, error) {
+	rst, err := s.GetAllSubnet(kt, req)
+	if err != nil {
+		return nil, err
+	}
+	if rst == nil || len(rst.Info) == 0 {
+		return rst, nil
+	}
+
+	// 覆盖 GetSubnetList 可能带上的 TCloud IP，下拉口径只认 CRP；未取到保持 nil
+	for _, item := range rst.Info {
+		if item != nil {
+			item.AvailableIpCount = nil
+		}
+	}
+
+	if req == nil || len(req.Region) == 0 || len(req.CloudVpcID) == 0 || len(req.Zones) != 1 ||
+		len(req.Zones[0]) == 0 {
+		logs.Warnf("skip fill subnet avail ip, region/zone/vpc incomplete, req: %+v, rid: %s", req, kt.Rid)
+		return rst, nil
+	}
+
+	leftIPMap, err := s.queryLeftIPMap(kt, req.Region, req.Zones[0], req.CloudVpcID)
+	if err != nil {
+		logs.Warnf("query crp subnet left ip failed, err: %v, region: %s, zone: %s, vpc: %s, rid: %s",
+			err, req.Region, req.Zones[0], req.CloudVpcID, kt.Rid)
+		return rst, nil
+	}
+
+	for _, item := range rst.Info {
+		if item == nil {
+			continue
+		}
+		// 用云上 subnet_id（cloud_id）对齐 CRP Id，不能用 HCM 资源 id
+		leftIPNum, ok := leftIPMap[item.SubnetId]
+		if !ok || leftIPNum < 0 {
+			item.AvailableIpCount = cvt.ValToPtr(uint64(0))
+			continue
+		}
+		item.AvailableIpCount = cvt.ValToPtr(uint64(leftIPNum))
+	}
+
+	return rst, nil
+}
+
+// queryLeftIPMap 调 CRP getRealSubnetInfo，按云上子网 ID 构建 leftIpNum 映射
+func (s *subnet) queryLeftIPMap(kt *kit.Kit, region, zone, vpc string) (map[string]int, error) {
+	resp, err := s.cvm.QueryRealCvmSubnet(kt, cvmapi.SubnetRealParam{
+		Region:      region,
+		CloudCampus: zone,
+		VpcId:       vpc,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	leftIPMap := make(map[string]int, len(resp.Result))
+	for _, item := range resp.Result {
+		if item == nil {
+			continue
+		}
+		leftIPMap[item.Id] = item.LeftIpNum
+	}
+	logs.Infof("query crp subnet left ip success, region: %s, zone: %s, vpc: %s, count: %d, crpTraceID: %s, rid: %s",
+		region, zone, vpc, len(leftIPMap), resp.TraceId, kt.Rid)
+	return leftIPMap, nil
 }
 
 // GetSubnetList get subnet detail config list
@@ -159,16 +230,17 @@ func (s *subnet) GetSubnetList(kt *kit.Kit, input *types.GetSubnetListParam) (*t
 			vpcName = vpcIDNameMap[subnetDetail.CloudVpcID]
 		}
 		subnetResult = append(subnetResult, &types.Subnet{
-			BkInstId:         subnetDetail.ID,
-			Region:           subnetDetail.Region,
-			Zone:             subnetDetail.Zone,
-			VpcId:            subnetDetail.CloudVpcID,
-			VpcName:          vpcName,
-			SubnetId:         subnetDetail.CloudID,
-			SubnetName:       subnetDetail.Name,
-			Enable:           enableCvm,
-			Comment:          cvt.PtrToVal(subnetDetail.Memo),
-			AvailableIpCount: availIPMap[subnetDetail.ID],
+			BkInstId:   subnetDetail.ID,
+			Region:     subnetDetail.Region,
+			Zone:       subnetDetail.Zone,
+			VpcId:      subnetDetail.CloudVpcID,
+			VpcName:    vpcName,
+			SubnetId:   subnetDetail.CloudID,
+			SubnetName: subnetDetail.Name,
+			Enable:     enableCvm,
+			Comment:    cvt.PtrToVal(subnetDetail.Memo),
+			// 配置列表保持数字；ListCountIP 失败时 map 为空，这里仍是 0 而不是 null
+			AvailableIpCount: cvt.ValToPtr(availIPMap[subnetDetail.ID]),
 		})
 	}
 
