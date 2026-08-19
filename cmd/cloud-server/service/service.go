@@ -120,6 +120,8 @@ type Service struct {
 	// moaCli 调用接入MOA的第三方系统API集合
 	moaCli  pkgmoa.Client
 	etcdCli *etcd3.Client
+	// ccWatcher cc 事件监听器，仅在开启云资源同步时初始化
+	ccWatcher *bkcc.Watcher
 }
 
 // NewService create a service instance.
@@ -150,6 +152,7 @@ func NewService(sd serviced.ServiceDiscover) (*Service, error) {
 		if err != nil {
 			return nil, fmt.Errorf("new cc syncer failed, err: %v", err)
 		}
+		svr.ccWatcher = watcher
 		go watcher.Watch(sd)
 	}
 
@@ -393,6 +396,7 @@ func (s *Service) apiSet(bkHcmUrl string) *restful.Container {
 		CmsiCli:    s.cmsiCli,
 		CmdbCli:    s.cmdbCli,
 		UserMgrCli: s.userMgrCli,
+		CCWatcher:  s.ccWatcher,
 	}
 
 	account.InitAccountService(c)

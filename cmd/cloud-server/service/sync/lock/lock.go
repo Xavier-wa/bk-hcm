@@ -106,3 +106,8 @@ func (mux *EtcdMutex) UnLock(leaseID etcd3.LeaseID) error {
 func Key(accountID string) string {
 	return fmt.Sprintf("/hcm/lock/%s/sync/%s", cc.CloudServerName, accountID)
 }
+
+// ResKey returns a resource-level sync lock key.
+func ResKey(accountID string, resName string) string {
+	return fmt.Sprintf("%s/%s", Key(accountID), resName)
+}

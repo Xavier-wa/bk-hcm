@@ -25,6 +25,7 @@ import (
 
 	logicsadmin "hcm/cmd/cloud-server/logics/admin"
 	"hcm/cmd/cloud-server/service/capability"
+	"hcm/cmd/cloud-server/service/watch/bkcc"
 	apisysteminit "hcm/pkg/api/cloud-server/system-init"
 	"hcm/pkg/client"
 	"hcm/pkg/logs"
@@ -38,6 +39,7 @@ func InitAdminService(c *capability.Capability) {
 	svc := &adminService{
 		client:      c.ApiClient,
 		adminLogics: c.Logics.Admin,
+		ccWatcher:   c.CCWatcher,
 	}
 
 	svc.registerAdminService(c.WebService)
@@ -50,11 +52,14 @@ func (s *adminService) registerAdminService(c *restful.WebService) {
 
 	// 这里注册的接口都无法被webserver访问，只能被系统内部调用，无需鉴权
 	adminH.Add("Init", http.MethodPost, "/init", s.Init)
+	adminH.Add("ResetCCWatchCursor", http.MethodPost, "/cc_sync/watch/cursor/reset", s.ResetCCWatchCursor)
 }
 
 type adminService struct {
 	client      *client.ClientSet
 	adminLogics logicsadmin.Interface
+	// ccWatcher cc 事件监听器，未开启云资源同步时为 nil
+	ccWatcher *bkcc.Watcher
 }
 
 // Init 系统初始化

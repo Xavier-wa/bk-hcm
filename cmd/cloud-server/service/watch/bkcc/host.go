@@ -63,7 +63,18 @@ func (w *Watcher) watchCCEvent(ctx context.Context, tenantID string, resType cmd
 		}
 
 		kt := core.NewTenantBackendKit(tenantID)
-		cursor, err := w.getEventCursor(kt, tenantID, resType)
+
+		// check reset flag before reading cursor, so the reset takes effect from this round.
+		if w.needResetCursor(kt, resType) {
+			if err := w.setEventCursor(kt, resType, ""); err != nil {
+				logs.Errorf("reset event cursor failed, err: %v, type: %s, tenant: %s, rid: %s", err, resType,
+					tenantID, kt.Rid)
+				continue
+			}
+			logs.Infof("reset event cursor by flag, type: %s, tenant: %s, rid: %s", resType, tenantID, kt.Rid)
+		}
+
+		cursor, err := w.getEventCursor(kt, resType)
 		if err != nil {
 			logs.Errorf("get event cursor failed, err: %v, type: %s, tenant: %s, rid: %s", err, resType, tenantID,
 				kt.Rid)
@@ -77,7 +88,7 @@ func (w *Watcher) watchCCEvent(ctx context.Context, tenantID string, resType cmd
 				tenantID, kt.Rid)
 			// 如果事件节点不存在，cc会返回该错误码，此时需要将cursor设置为""，从当前时间开始监听事件
 			if strings.Contains(err.Error(), cmdb.CCErrEventChainNodeNotExist) {
-				if err = w.setEventCursor(kt, tenantID, resType, ""); err != nil {
+				if err = w.setEventCursor(kt, resType, ""); err != nil {
 					logs.Errorf("set event cursor failed, err: %v, resource type: %v, val: %s, tenant: %s, rid: %s",
 						err, resType, "", tenantID, kt.Rid)
 				}
@@ -88,7 +99,7 @@ func (w *Watcher) watchCCEvent(ctx context.Context, tenantID string, resType cmd
 		if !result.Watched {
 			if len(result.Events) != 0 {
 				newCursor := result.Events[0].Cursor
-				if err = w.setEventCursor(kt, tenantID, resType, newCursor); err != nil {
+				if err = w.setEventCursor(kt, resType, newCursor); err != nil {
 					logs.Errorf("set event cursor failed, err: %v, resource type: %v, val: %s, tenant: %s, rid: %s",
 						err, resType, newCursor, tenantID, kt.Rid)
 				}
@@ -103,7 +114,7 @@ func (w *Watcher) watchCCEvent(ctx context.Context, tenantID string, resType cmd
 
 		if len(result.Events) != 0 {
 			newCursor := result.Events[len(result.Events)-1].Cursor
-			if err = w.setEventCursor(kt, tenantID, resType, newCursor); err != nil {
+			if err = w.setEventCursor(kt, resType, newCursor); err != nil {
 				logs.Errorf("set event cursor failed, err: %v, resource type: %v, val: %s, tenant: %s, rid: %s",
 					err, resType, newCursor, tenantID, kt.Rid)
 			}

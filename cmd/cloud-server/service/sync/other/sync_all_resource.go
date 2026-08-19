@@ -77,3 +77,19 @@ func SyncAllResource(kt *kit.Kit, cliSet *client.ClientSet, opt *SyncAllResource
 
 	return "", nil
 }
+
+// SyncHostResource syncs host resource only.
+func SyncHostResource(kt *kit.Kit, cliSet *client.ClientSet, opt *SyncAllResourceOption) error {
+	if err := opt.Validate(); err != nil {
+		return err
+	}
+
+	sd := &detail.SyncDetail{
+		Kt:        kt,
+		DataCli:   cliSet.DataService(),
+		AccountID: opt.AccountID,
+		Vendor:    string(enumor.Other),
+	}
+
+	return SyncHost(kt, cliSet, opt.AccountID, sd)
+}

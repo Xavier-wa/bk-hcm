@@ -23,6 +23,7 @@ package capability
 import (
 	"hcm/cmd/cloud-server/logics"
 	"hcm/cmd/cloud-server/logics/audit"
+	"hcm/cmd/cloud-server/service/watch/bkcc"
 	"hcm/pkg/client"
 	"hcm/pkg/cryptography"
 	"hcm/pkg/iam/auth"
@@ -55,4 +56,6 @@ type Capability struct {
 	CmdbCli    cmdb.Client
 
 	UserMgrCli usermgr.Client
+	// CCWatcher cc 事件监听器，仅在开启云资源同步时初始化，未开启时为 nil
+	CCWatcher *bkcc.Watcher
 }

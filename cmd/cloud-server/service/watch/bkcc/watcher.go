@@ -29,6 +29,7 @@ import (
 	"hcm/pkg/api/core"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/serviced"
@@ -48,10 +49,10 @@ type Watcher struct {
 }
 
 // NewWatcher create cc Watcher
-func NewWatcher(cliSet *client.ClientSet, etcdCli *clientv3.Client) (Watcher, error) {
+func NewWatcher(cliSet *client.ClientSet, etcdCli *clientv3.Client) (*Watcher, error) {
 	op := &leaseOp{cli: clientv3.NewLease(etcdCli), leaseMap: make(map[string]clientv3.LeaseID)}
 	// todo ccHostPoolBiz后续使用cc提供的api获取
-	return Watcher{
+	return &Watcher{
 		CliSet:        cliSet,
 		EtcdCli:       etcdCli,
 		leaseOp:       op,
@@ -116,11 +117,11 @@ func (w *Watcher) cancelAllTenants() {
 }
 
 func getCursorKey(tenantID string, cursorType cmdb.CursorType) string {
-	return fmt.Sprintf("/hcm/event/cc/%s/%s", tenantID, cursorType)
+	return fmt.Sprintf("%s%s/%s", constant.EventCursorKeyPrefix, tenantID, cursorType)
 }
 
-func (w *Watcher) getEventCursor(kt *kit.Kit, tenantID string, cursorType cmdb.CursorType) (string, error) {
-	key := getCursorKey(tenantID, cursorType)
+func (w *Watcher) getEventCursor(kt *kit.Kit, cursorType cmdb.CursorType) (string, error) {
+	key := getCursorKey(kt.TenantID, cursorType)
 	resp, err := w.EtcdCli.Get(kt.Ctx, key)
 	if err != nil {
 		logs.Errorf("get cmdb event cursor from etcd fail, err: %v, key: %s, rid: %s", err, key, kt.Rid)
@@ -136,8 +137,73 @@ func (w *Watcher) getEventCursor(kt *kit.Kit, tenantID string, cursorType cmdb.C
 	return string(resp.Kvs[0].Value), nil
 }
 
-func (w *Watcher) setEventCursor(kt *kit.Kit, tenantID string, cursorType cmdb.CursorType, cursor string) error {
-	key := getCursorKey(tenantID, cursorType)
+// ResetEventCursor resets event cursor to latest for the given resource type.
+// Target tenant is from kt.TenantID. Returns the previous cursor for audit.
+// It writes a reset flag instead of overwriting the cursor directly, to avoid
+// racing with the in-flight watch loop committing its own cursor back.
+func (w *Watcher) ResetEventCursor(kt *kit.Kit, cursorType cmdb.CursorType) (string, error) {
+	preCursor, err := w.getEventCursor(kt, cursorType)
+	if err != nil {
+		logs.Errorf("get event cursor failed, err: %v, type: %s, tenant: %s, rid: %s", err, cursorType, kt.TenantID,
+			kt.Rid)
+		return "", err
+	}
+
+	if err = w.markResetCursor(kt, cursorType); err != nil {
+		logs.Errorf("set reset cursor flag failed, err: %v, type: %s, tenant: %s, rid: %s", err, cursorType, kt.TenantID,
+			kt.Rid)
+		return "", err
+	}
+
+	logs.Infof("reset event cursor success, pre cursor: %s, type: %s, tenant: %s, rid: %s",
+		preCursor, cursorType, kt.TenantID, kt.Rid)
+	return preCursor, nil
+}
+
+func getResetCursorFlagKey(tenantID string, cursorType cmdb.CursorType) string {
+	return fmt.Sprintf("%s%s/%s", constant.ResetCursorFlagKeyPrefix, tenantID, cursorType)
+}
+
+func (w *Watcher) markResetCursor(kt *kit.Kit, cursorType cmdb.CursorType) error {
+	key := getResetCursorFlagKey(kt.TenantID, cursorType)
+
+	leaseID, err := w.leaseOp.getLeaseID(kt, key)
+	if err != nil {
+		logs.Errorf("get lease id failed, err: %v, key: %s, rid: %s", err, key, kt.Rid)
+		return err
+	}
+
+	if _, err = w.EtcdCli.Put(kt.Ctx, key, constant.ResetCursorFlagValue, clientv3.WithLease(leaseID)); err != nil {
+		logs.Errorf("set reset cursor flag failed, err: %v, key: %s, rid: %s", err, key, kt.Rid)
+		return err
+	}
+
+	return nil
+}
+
+// needResetCursor checks and clears the reset cursor flag. Returns true if a reset was requested.
+func (w *Watcher) needResetCursor(kt *kit.Kit, cursorType cmdb.CursorType) bool {
+	key := getResetCursorFlagKey(kt.TenantID, cursorType)
+	resp, err := w.EtcdCli.Get(kt.Ctx, key)
+	if err != nil {
+		logs.Errorf("get reset cursor flag failed, err: %v, key: %s, rid: %s", err, key, kt.Rid)
+		return false
+	}
+	if len(resp.Kvs) == 0 {
+		return false
+	}
+
+	if _, err = w.EtcdCli.Delete(kt.Ctx, key); err != nil {
+		logs.Errorf("delete reset cursor flag failed, err: %v, key: %s, rid: %s", err, key, kt.Rid)
+		return false
+	}
+
+	logs.Infof("reset cursor flag found, type: %s, tenant: %s, rid: %s", cursorType, kt.TenantID, kt.Rid)
+	return true
+}
+
+func (w *Watcher) setEventCursor(kt *kit.Kit, cursorType cmdb.CursorType, cursor string) error {
+	key := getCursorKey(kt.TenantID, cursorType)
 
 	leaseID, err := w.leaseOp.getLeaseID(kt, key)
 	if err != nil {
