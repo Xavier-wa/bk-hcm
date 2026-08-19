@@ -89,7 +89,9 @@ export const properties: ModelPropertyColumn[] = [
       if (value === 0) {
         prefix = type === 'delete' ? '-' : '+';
       }
-      return h('span', { style: { color: type === 'add' ? '#299e56' : '#ea3636' } }, `${prefix}${value}`);
+      // 新增、预算申报均为资源增量，展示为绿色正向；其余（调整/取消）为红色
+      const isIncrement = type === 'add' || type === 'budget_declare';
+      return h('span', { style: { color: isIncrement ? '#299e56' : '#ea3636' } }, `${prefix}${value}`);
     },
   },
   {

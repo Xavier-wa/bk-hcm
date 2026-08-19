@@ -1,0 +1,100 @@
+{
+  "id": "feat-ticket-resplan-add-type",
+  "title": "资源预测-新增\"预算申报\"类型-前端展示适配与筛选项",
+  "currentStage": "done",
+  "createdAt": "2026-07-23T17:04:53.593Z",
+  "updatedAt": "2026-07-24T03:05:23.989Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-ticket-resplan-add-type/coding.md",
+        "kind": "file",
+        "addedAt": "2026-07-24T02:58:52.310Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-ticket-resplan-add-type/test.md",
+        "kind": "file",
+        "addedAt": "2026-07-24T03:02:13.001Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-07-24T03:01:40.037Z",
+      "note": "用户确认编码完成（budget_declare TS 类型 + 已审批核数列增量色值；展示列/筛选项后端 meta 驱动），lint 通过、freshness fresh，推进到 test。"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-07-24T03:04:54.168Z",
+      "note": "用户确认推进到 done；test.md 结论已回写（小范围前端适配，展示/筛选依赖后端返回 budget_declare，上线后抽验）；文档收口已完成。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-07-23T17:04:53.593Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-07-24T03:01:40.037Z",
+      "note": "用户确认编码完成（budget_declare TS 类型 + 已审批核数列增量色值；展示列/筛选项后端 meta 驱动），lint 通过、freshness fresh，推进到 test。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-07-24T03:04:54.168Z",
+      "note": "用户确认推进到 done；test.md 结论已回写（小范围前端适配，展示/筛选依赖后端返回 budget_declare，上线后抽验）；文档收口已完成。"
+    }
+  ],
+  "branch": "feat-ticket-resplan-add-type",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598136446978",
+    "parentId": "1069995598135604383"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "completed",
+      "at": "2026-07-24T02:58:08.065Z",
+      "note": "澄清：已按 tapd-clarification-desc-preserve 快照原文并回写规范化需求文档到 TAPD（保留原需求描述+原型截图，状态仍 backlog）；本地存 docs/reqs/预算申报类型展示.md。评估：单用户故事无需拆分，RICE=80（Reach20/Impact2/Conf100%/Effort0.5人天），工时4人时，已更新 TAPD effort/size。"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-07-24T03:04:46.580Z",
+      "note": "docs_status 命中 base/ticket。本需求主要归属 ticket 模块（资源预测列表 column.ts）：已把 ticket.md 从 stub 补齐为 drafted（补充资源预测 ticket_type 枚举含 budget_declare、展示/筛选后端驱动、已审批核数列增量色值语义）并 docs_deepen 刷新基线。base 模块仅涉 store 类型联合值新增（无行为文档影响），且 base 当前 drift 主要来自本分支之外的变动（chatbot 迁移等），故未重基线以免误收无关漂移。promotionQueue=0，无高价值经验晟升。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-07-24T03:05:23.989Z",
+      "note": "单据 story 1069995598136446978 按 forward-only 追平：for_test(status_12) → tested(status_13) → done(status_14)，最终 status_14(done/已上线)，owner 未变。父需求 1069995598135604383 已处 done(status_14) 终态，rollup 无法再前进，无需更新。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/store/ticket/resource-plan.ts",
+        "src/views/ticket/children/resource-plan/list/children/data-list/column.ts",
+        "condition.ts",
+        "front/src/store/ticket/resource-plan.ts",
+        "front/src/views/ticket/children/resource-plan/list/children/data-list/column.ts",
+        "store/ticket/resource-plan.ts",
+        "views/.../data-list/column.ts"
+      ],
+      "contentFingerprint": "50e8cbfdc0aab3596aa02946c5e29616afebd35b",
+      "codeBaseline": "d647136d5faa6f7abd4644eecab4ed2e2427a509",
+      "seatedAt": "2026-07-24T02:58:52.312Z"
+    }
+  }
+}

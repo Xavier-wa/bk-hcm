@@ -15,7 +15,7 @@ export interface IResourcePlanTicketItem {
   demand_class: string;
   status: string;
   status_name: string;
-  ticket_type: 'add' | 'adjust' | 'delete';
+  ticket_type: 'add' | 'adjust' | 'delete' | 'budget_declare';
   ticket_type_name: string;
   original_info: {
     cvm: {
