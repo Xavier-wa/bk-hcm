@@ -1939,8 +1939,161 @@ paths:
         - SCR
         - Apply
       responses:
-        default:
-          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                    description: 错误编码。0 表示 success，>0 表示失败错误
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            source:
+                              type: string
+                              description: 推荐来源：`user`-用户维度 / `biz`-业务维度
+                            suborder:
+                              type: object
+                              properties:
+                                zone:
+                                  type: string
+                                  description: 可用区；未传 `zone` 入参时值为 `"all"`（表示不限可用区）
+                                region:
+                                  type: string
+                                  description: 地域
+                                image_id:
+                                  type: string
+                                  description: 镜像ID
+                                replicas:
+                                  type: number
+                                  description: 申请数量
+                                data_disk:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      disk_num:
+                                        type: number
+                                        description: 磁盘数量
+                                      disk_size:
+                                        type: number
+                                        description: 磁盘大小，单位 GB
+                                      disk_type:
+                                        type: string
+                                        description: 磁盘类型：`CLOUD_PREMIUM`-高性能云硬盘 / `CLOUD_SSD`-SSD云硬盘
+                                  description: 数据盘规格列表
+                                res_assign:
+                                  type: number
+                                  description: 资源分配方式：1-有资源区域优先 / 2-分Campus生产；指定具体 `zone` 时不返回该字段
+                                bk_asset_id:
+                                  type: string
+                                  description: 继承固资号；仅滚服候选返回
+                                charge_type:
+                                  type: string
+                                  description: 计费模式：`PREPAID`-包年包月 / `POSTPAID_BY_HOUR`-按量计费；非滚服候选固定为 `PREPAID`，滚服候选取自命中固资的计费模式
+                                device_type:
+                                  type: string
+                                  description: 机型
+                                system_disk:
+                                  type: object
+                                  properties:
+                                    disk_num:
+                                      type: number
+                                      description: 磁盘数量
+                                    disk_size:
+                                      type: number
+                                      description: 磁盘大小，单位 GB
+                                    disk_type:
+                                      type: string
+                                      description: 磁盘类型：`CLOUD_PREMIUM`-高性能云硬盘 / `CLOUD_SSD`-SSD云硬盘
+                                  description: 系统盘规格
+                                require_type:
+                                  type: number
+                                  description: 需求类型：1-常规项目 / 2-春节保障 / 3-机房裁撤 / 6-滚服项目 / 7-小额绿通 / 8-春保资源池 / 9-短租项目
+                                charge_months:
+                                  type: number
+                                  description: 购买时长，单位月，取命中固资的剩余月数；仅滚服候选返回，按量计费固资算不出正值时不返回该字段
+                                billing_start_time:
+                                  type: string
+                                  description: 继承固资的套餐计费起始时间，RFC3339 格式；仅滚服候选返回，固资无该时间时不返回该字段
+                                billing_expire_time:
+                                  type: string
+                                  description: 继承固资的套餐计费到期时间，RFC3339 格式；仅滚服候选返回，按量计费固资无到期时间时不返回该字段
+                                inherit_instance_id:
+                                  type: string
+                                  description: 被继承的云主机实例 ID，即命中固资的云主机实例 ID；仅滚服候选返回
+                              description: 推荐子单信息
+                        description: 推荐方案列表
+                    description: 响应数据
+                  result:
+                    type: boolean
+                    description: '请求成功与否。true: 请求成功；false: 请求失败'
+                  message:
+                    type: string
+                    description: 请求失败返回的错误信息
+                description: 成功响应
+          description: 成功响应
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - limit
+              - bk_username
+              properties:
+                zone:
+                  type: string
+                  default: ''
+                  description: 可用区，如 `ap-beijing-1`；指定后 `res_assign` 不返回，最大长度 64
+                limit:
+                  type: number
+                  default: ''
+                  description: 返回推荐方案数量上限，范围 [1, 20]
+                region:
+                  type: string
+                  default: ''
+                  description: 地域，如 `ap-beijing`，最大长度 128
+                image_id:
+                  type: string
+                  default: ''
+                  description: 镜像ID，最大长度 64
+                replicas:
+                  type: number
+                  default: ''
+                  description: 申请数量；未传则使用服务端配置的默认申请数量，最小值 1
+                res_assign:
+                  type: number
+                  default: ''
+                  description: 资源分配方式：1-有资源区域优先 / 2-分Campus生产；未传默认为 1，指定具体 `zone` 时不适用
+                bk_username:
+                  type: string
+                  default: ''
+                  description: 申请人用户名，最大长度 64
+                device_type:
+                  type: string
+                  default: ''
+                  description: 机型，如 `S5.MEDIUM4`，最大长度 64
+                require_type:
+                  type: number
+                  default: ''
+                  description: 需求类型：1-常规项目 / 2-春节保障 / 3-机房裁撤 / 6-滚服项目 / 7-小额绿通 / 8-春保资源池 / 9-短租项目
+        required: true
+        description: ''
       x-bk-apigateway-resource:
         isPublic: false
         allowApplyPermission: true
@@ -1991,8 +2144,315 @@ paths:
         - SCR
         - Apply
       responses:
-        default:
-          description: ''
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                    description: 错误编码。0 表示 success，>0 表示失败错误
+                  data:
+                    type: object
+                    properties:
+                      suborders:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            zone:
+                              type: string
+                              description: 可用区，原样透传入参（`all` 或具体可用区）
+                            region:
+                              type: string
+                              description: 地域，原样透传入参
+                            image_id:
+                              type: string
+                              description: 镜像ID，原样透传入参
+                            replicas:
+                              type: number
+                              description: '该子单拆分后实际分配台数，所有子单合计 ≤ 入参 `replicas` '
+                            data_disk:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  disk_num:
+                                    type: number
+                                    description: 磁盘数量
+                                  disk_size:
+                                    type: number
+                                    description: 磁盘大小，单位 GB
+                                  disk_type:
+                                    type: string
+                                    description: '磁盘类型：`CLOUD_PREMIUM`-高性能云硬盘 / `CLOUD_SSD`-SSD云硬盘 '
+                              description: 数据盘规格列表，原样透传入参
+                            res_assign:
+                              type: number
+                              description: 资源分配方式，原样透传入参
+                            bk_asset_id:
+                              type: string
+                              description: 继承固资号，原样透传入参；仅滚服项目返回
+                            charge_type:
+                              type: string
+                              description: 计费模式：`PREPAID`-包年包月（预测内 / 不校验预测类型）/ `POSTPAID_BY_HOUR`-按量计费（预测外）；滚服项目原样透传入参 `charge_type`
+                            device_type:
+                              type: string
+                              description: 机型，原样透传入参
+                            system_disk:
+                              type: object
+                              properties:
+                                disk_num:
+                                  type: number
+                                  description: 磁盘数量
+                                disk_size:
+                                  type: number
+                                  description: 磁盘大小，单位 GB
+                                disk_type:
+                                  type: string
+                                  description: 磁盘类型：`CLOUD_PREMIUM`-高性能云硬盘 / `CLOUD_SSD`-SSD云硬盘
+                              description: 系统盘规格，原样透传入参
+                            require_type:
+                              type: number
+                              description: 需求类型：1-常规项目 / 2-春节保障 / 3-机房裁撤 / 6-滚服项目 / 7-小额绿通 / 8-春保资源池 / 9-短租项目
+                            charge_months:
+                              type: number
+                              description: 购买时长，单位月，原样透传入参；仅滚服项目返回
+                            billing_start_time:
+                              type: string
+                              description: 继承固资的套餐计费起始时间，RFC3339 格式，原样透传入参；仅滚服项目返回
+                            billing_expire_time:
+                              type: string
+                              description: 继承固资的套餐计费到期时间，RFC3339 格式，原样透传入参；仅滚服项目返回
+                            inherit_instance_id:
+                              type: string
+                              description: 被继承的云主机实例 ID，原样透传入参；仅滚服项目返回
+                        description: 拆分后的子单列表（增量场景仅含本次新算出的增量子单）；滚服项目最多 1 个子单；可分配总量 < 1 时为空数组
+                    description: 响应数据
+                  result:
+                    type: boolean
+                    description: '请求成功与否。true: 请求成功；false: 请求失败'
+                  message:
+                    type: string
+                    description: 请求失败返回的错误信息
+                description: 成功响应
+          description: 成功响应
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: number
+        required: true
+        description: 业务id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - zone
+              - region
+              - image_id
+              - replicas
+              - bk_biz_id
+              - res_assign
+              - device_type
+              - system_disk
+              - require_type
+              properties:
+                zone:
+                  type: string
+                  default: ''
+                  description: 可用区，`all` 表示全部可用区，或具体可用区如 `ap-beijing-1`，最大长度 64
+                region:
+                  type: string
+                  default: ''
+                  description: 地域，如 `ap-beijing`，最大长度 128
+                image_id:
+                  type: string
+                  default: ''
+                  description: 镜像ID，最大长度 64
+                replicas:
+                  type: number
+                  default: ''
+                  description: 申请数量，最小值 1
+                bk_biz_id:
+                  type: number
+                  default: ''
+                  description: 业务id, 请求路径参数
+                data_disk:
+                  type: array
+                  items:
+                    type: object
+                    default: ''
+                    properties:
+                      disk_num:
+                        type: number
+                        default: ''
+                        description: 磁盘数量
+                      disk_size:
+                        type: number
+                        default: ''
+                        description: 磁盘大小，单位 GB
+                      disk_type:
+                        type: string
+                        default: ''
+                        description: 磁盘类型：`CLOUD_PREMIUM`-高性能云硬盘 / `CLOUD_SSD`-SSD云硬盘
+                  default: ''
+                  description: 数据盘规格列表
+                res_assign:
+                  type: number
+                  default: ''
+                  description: 资源分配方式：1-有资源区域优先 / 2-分Campus生产
+                bk_asset_id:
+                  type: string
+                  default: ''
+                  description: 继承固资号；仅滚服项目填充
+                charge_type:
+                  type: string
+                  default: ''
+                  description: 计费模式：`PREPAID`-包年包月 / `POSTPAID_BY_HOUR`-按量计费；仅滚服项目（`require_type=6`）透传且必填，其他需求类型不填，计费模式仍由系统按预测池来源推导
+                device_type:
+                  type: string
+                  default: ''
+                  description: 机型，如 `S5.MEDIUM4`，最大长度 64
+                system_disk:
+                  type: object
+                  default: ''
+                  properties:
+                    disk_num:
+                      type: number
+                      default: ''
+                      description: 磁盘数量
+                    disk_size:
+                      type: number
+                      default: ''
+                      description: 磁盘大小，单位 GB
+                    disk_type:
+                      type: string
+                      default: ''
+                      description: 磁盘类型：`CLOUD_PREMIUM`-高性能云硬盘 / `CLOUD_SSD`-SSD云硬盘
+                  description: 系统盘规格
+                require_type:
+                  type: number
+                  default: ''
+                  description: 需求类型：1-常规项目 / 2-春节保障 / 3-机房裁撤 / 6-滚服项目 / 7-小额绿通 / 8-春保资源池 / 9-短租项目
+                charge_months:
+                  type: number
+                  default: ''
+                  description: 购买时长，单位月；仅滚服项目填充，滚服项目且 `charge_type` 为 `PREPAID` 时必填且需大于 0
+                billing_start_time:
+                  type: string
+                  default: ''
+                  description: 继承固资的套餐计费起始时间，RFC3339 格式；仅滚服项目填充
+                occupied_suborders:
+                  type: array
+                  items:
+                    type: object
+                    default: ''
+                    properties:
+                      zone:
+                        type: string
+                        default: ''
+                        description: 可用区
+                      region:
+                        type: string
+                        default: ''
+                        description: 地域
+                      image_id:
+                        type: string
+                        default: ''
+                        description: 镜像ID
+                      replicas:
+                        type: number
+                        default: ''
+                        description: 申请数量
+                      data_disk:
+                        type: array
+                        items:
+                          type: object
+                          default: ''
+                          properties:
+                            disk_num:
+                              type: number
+                              default: ''
+                              description: 磁盘数量
+                            disk_size:
+                              type: number
+                              default: ''
+                              description: 磁盘大小，单位 GB
+                            disk_type:
+                              type: string
+                              default: ''
+                              description: 磁盘类型：`CLOUD_PREMIUM`-高性能云硬盘 / `CLOUD_SSD`-SSD云硬盘
+                          description: 磁盘数量
+                        default: ''
+                        description: 数据盘规格列表
+                      res_assign:
+                        type: number
+                        default: ''
+                        description: 资源分配方式
+                      bk_asset_id:
+                        type: string
+                        default: ''
+                        description: 继承固资号；仅滚服项目填充
+                      charge_type:
+                        type: string
+                        default: ''
+                        description: 计费模式：`PREPAID`-包年包月 / `POSTPAID_BY_HOUR`-按量计费；仅滚服项目（`require_type=6`）透传且必填，其他需求类型不填，计费模式仍由系统按预测池来源推导
+                      device_type:
+                        type: string
+                        default: ''
+                        description: 机型
+                      system_disk:
+                        type: object
+                        default: ''
+                        properties:
+                          disk_num:
+                            type: number
+                            default: ''
+                          disk_size:
+                            type: number
+                            default: ''
+                            description: 磁盘大小，单位 GB
+                          disk_type:
+                            type: string
+                            default: ''
+                            description: 磁盘类型：`CLOUD_PREMIUM`-高性能云硬盘 / `CLOUD_SSD`-SSD云硬盘
+                        description: 系统盘规格
+                      require_type:
+                        type: number
+                        default: ''
+                        description: 需求类型：1-常规项目 / 2-春节保障 / 3-机房裁撤 / 6-滚服项目 / 7-小额绿通 / 8-春保资源池 / 9-短租项目
+                      charge_months:
+                        type: number
+                        default: ''
+                        description: 购买时长，单位月；仅滚服项目填充，滚服项目且 `charge_type` 为 `PREPAID` 时必填且需大于 0
+                      billing_start_time:
+                        type: string
+                        default: ''
+                        description: 继承固资的套餐计费起始时间，RFC3339 格式；仅滚服项目填充
+                      billing_expire_time:
+                        type: string
+                        default: ''
+                        description: 继承固资的套餐计费到期时间，RFC3339 格式；仅滚服项目填充
+                      inherit_instance_id:
+                        type: string
+                        default: ''
+                        description: 被继承的云主机实例 ID；仅滚服项目填充，滚服项目必填
+                  default: ''
+                  description: 已占用子单数组，用于增量拆分；每个元素 `require_type` 必须等于本次请求的 `require_type`
+                billing_expire_time:
+                  type: string
+                  default: ''
+                  description: 继承固资的套餐计费到期时间，RFC3339 格式；仅滚服项目填充
+                inherit_instance_id:
+                  type: string
+                  default: ''
+                  description: 被继承的云主机实例 ID；仅滚服项目填充，滚服项目必填
+        required: true
+        description: ''
       x-bk-apigateway-resource:
         isPublic: false
         allowApplyPermission: true
@@ -2265,6 +2725,228 @@ paths:
         pluginConfigs: []
         authConfig:
           userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/task/check/apply/order/host:
+    post:
+      operationId: check_biz_apply_order_host
+      description: 主机申领选择滚服项目或机房裁撤时，校验业务下被继承套餐的主机，并返回被继承主机的信息
+      tags:
+        - SCR
+        - Apply
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                    description: 错误编码。0 表示 success，>0 表示失败错误
+                  data:
+                    type: object
+                    properties:
+                      device_type:
+                        type: string
+                        description: 机型
+                      device_group:
+                        type: string
+                        description: 机型族
+                      charge_months:
+                        type: number
+                        description: 购买时长，单位：月，如果是按量计费类型，则这个字段没有值
+                      generation_type:
+                        type: string
+                        description: 机型代次
+                      bk_cloud_inst_id:
+                        type: string
+                        description: 被继承主机云实例ID
+                      billing_start_time:
+                        type: string
+                        description: 套餐计费起始时间
+                      instance_charge_type:
+                        type: string
+                        description: 实例计费模式。(PREPAID：表示预付费，即包年包月、POSTPAID_BY_HOUR：表示后付费，即按量计费、CDHPAID：专用宿主机付费，即只对专用宿主机计费，不对专用宿主机上的实例计费。、SPOTPAID：表示竞价实例付费。)。
+                      new_billing_expire_time:
+                        type: string
+                        description: 新申请机器套餐计费过期时间
+                      old_billing_expire_time:
+                        type: string
+                        description: 被继承机器套餐计费过期时间
+                    description: 响应数据
+                  result:
+                    type: boolean
+                    description: '请求成功与否。true: 请求成功；false: 请求失败'
+                  message:
+                    type: string
+                    description: 请求失败返回的错误信息
+                description: 成功响应
+          description: 成功响应
+      parameters:
+        - in: path
+          name: bk_biz_id
+          schema:
+            type: number
+          required: true
+          description: 业务id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - region
+                - bk_asset_id
+                - require_type
+              properties:
+                region:
+                  type: string
+                  default: ''
+                  description: 机器所在的地域
+                bk_asset_id:
+                  type: string
+                  default: ''
+                  description: 被继承主机固资号
+                require_type:
+                  type: string
+                  default: ''
+                  description: '需求类型(3: 机房裁撤 6:滚服项目)'
+        required: true
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/task/check/apply/order/host
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+  /api/v1/woa/bizs/{bk_biz_id}/rolling_servers/inherited_hosts/list:
+    post:
+      operationId: list_biz_rolling_server_inherited_hosts
+      description: 查询业务下滚服项目可继承的固资候选，按入参机型族分组返回，每族按已使用时长由长到短最多返回 5 条
+      tags:
+        - SCR
+        - Apply
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                    description: 错误编码。0 表示 success，>0 表示失败错误
+                  data:
+                    type: object
+                    properties:
+                      info:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            hosts:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  bk_asset_id:
+                                    type: string
+                                    description: 固资号
+                                  device_type:
+                                    type: string
+                                    description: 机型
+                                  charge_months:
+                                    type: number
+                                    description: 剩余月数（当前时间到套餐到期时间）
+                                  is_recommended:
+                                    type: boolean
+                                    description: 是否为推荐项
+                                  bk_host_innerip:
+                                    type: string
+                                    description: 内网 IP
+                                  bk_cloud_inst_id:
+                                    type: string
+                                    description: 云主机实例 ID
+                                  billing_start_time:
+                                    type: string
+                                    description: 套餐计费起始时间，RFC3339 格式
+                                  billing_expire_time:
+                                    type: string
+                                    description: 套餐计费到期时间，RFC3339 格式。按量计费固资无到期时间
+                                  instance_charge_type:
+                                    type: string
+                                    description: 实例计费模式。PREPAID：包年包月；POSTPAID_BY_HOUR：按量计费
+                              description: 该机型族下的候选，最多 5 条。该族无可继承机器时为空数组 `[]`（不为 `null`、不省略该分组）
+                            device_family:
+                              type: string
+                              description: 机型族中文名，回显入参值
+                        description: 按机型族分组的候选列表，每个入参机型族对应一项，顺序与入参 `device_families` 一致
+                    description: 响应数据
+                  result:
+                    type: boolean
+                    description: 请求成功与否。true:请求成功；false:请求失败
+                  message:
+                    type: string
+                    description: 请求失败返回的错误信息
+                description: 成功响应
+          description: 成功响应
+      parameters:
+        - in: path
+          name: bk_biz_id
+          schema:
+            type: number
+          required: true
+          description: 业务id
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - region
+                - device_families
+              properties:
+                region:
+                  type: string
+                  default: ''
+                  description: 机器所在的地域
+                device_families:
+                  type: array
+                  items:
+                    type: string
+                    default: ''
+                    description: 机型族中文名列表，如 `标准型` / `高IO型` / `大数据型` / `计算型` / `GPU型`
+                  default: ''
+                  description: '需求类型(3: 机房裁撤 6:滚服项目)'
+        required: true
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/bizs/{bk_biz_id}/rolling_servers/inherited_hosts/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
           appVerifiedRequired: true
           resourcePermissionRequired: true
         descriptionEn:

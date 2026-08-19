@@ -32,6 +32,7 @@ import (
 	types "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/api/core"
 	rsproto "hcm/pkg/api/data-service/rolling-server"
+	woaserver "hcm/pkg/api/woa-server"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
@@ -99,6 +100,9 @@ type Logics interface {
 	CheckReturnedStatusBySubOrderID(kt *kit.Kit, orders []*table.RecycleOrder) error
 	// PushReturnNotifications 推送归还到期提醒通知
 	PushReturnNotifications(kt *kit.Kit, bizIDs []int64, extraReceivers []string) error
+	// ListInheritedHosts 查询指定业务、指定地域、**多个**机型族下可继承的固资候选，返回以机型族为 key 的结果
+	ListInheritedHosts(kt *kit.Kit, bkBizID int64, region string, deviceFamilies []string) (
+		map[string][]*woaserver.InheritedHost, error)
 }
 
 // logics rolling server logics.

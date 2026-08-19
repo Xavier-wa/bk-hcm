@@ -22,11 +22,11 @@ package woaserver
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	"hcm/pkg/thirdparty/cvmapi"
-	cvt "hcm/pkg/tools/converter"
 )
 
 // ApplyRecommendTopReq is the request for getting top apply recommendations.
@@ -80,10 +80,6 @@ func (r *ApplyRecommendByStaticReq) Validate() error {
 		if err := r.RequireType.Validate(); err != nil {
 			return err
 		}
-		// 滚服项目依赖固资号/继承实例能力，暂不支持。
-		if cvt.PtrToVal(r.RequireType) == enumor.RequireTypeRollServer {
-			return fmt.Errorf("require type %s is temporarily not supported", r.RequireType.GetName())
-		}
 	}
 	if r.ResAssign != nil {
 		if err := r.ResAssign.Validate(); err != nil {
@@ -115,10 +111,6 @@ func (r *ApplyRecommendByPlanReq) Validate() error {
 	if r.RequireType != nil {
 		if err := r.RequireType.Validate(); err != nil {
 			return err
-		}
-		// 滚服项目依赖固资号/继承实例能力，暂不支持。
-		if cvt.PtrToVal(r.RequireType) == enumor.RequireTypeRollServer {
-			return fmt.Errorf("require type %s is temporarily not supported", r.RequireType.GetName())
 		}
 	}
 	if r.ResAssign != nil {
@@ -155,6 +147,18 @@ type ApplyRecommendSplitSubOrderReq struct {
 	DataDisk   []enumor.DiskSpec `json:"data_disk" validate:"omitempty,dive"`
 	// OccupiedSuborders 已占用子单数组（可选），用于增量拆分：扣减已占用预测余量与库存后再计算增量子单。
 	OccupiedSuborders []*ApplyRecommendSuborder `json:"occupied_suborders,omitempty"`
+	// ChargeType 计费模式；仅滚服项目透传，不再由预测内外推导；非滚服需求类型不填，计费模式仍由系统按预测池来源推导。
+	ChargeType cvmapi.ChargeType `json:"charge_type,omitempty"`
+	// ChargeMonths 购买时长（月），仅滚服项目填充。
+	ChargeMonths uint `json:"charge_months,omitempty"`
+	// AssetID 继承固资号，仅滚服项目填充。
+	AssetID string `json:"bk_asset_id,omitempty"`
+	// InheritInstanceID 被继承的云主机实例 ID，仅滚服项目填充，滚服场景下不得为空。
+	InheritInstanceID string `json:"inherit_instance_id,omitempty"`
+	// BillingStartTime 继承固资的套餐计费起始时间，仅滚服项目填充。
+	BillingStartTime *time.Time `json:"billing_start_time,omitempty"`
+	// BillingExpireTime 继承固资的套餐计费到期时间，仅滚服项目填充。
+	BillingExpireTime *time.Time `json:"billing_expire_time,omitempty"`
 }
 
 // Validate ApplyRecommendSplitSubOrderReq.
@@ -165,9 +169,17 @@ func (r *ApplyRecommendSplitSubOrderReq) Validate() error {
 	if err := r.RequireType.Validate(); err != nil {
 		return err
 	}
-	// 滚服项目依赖固资号/继承实例能力，暂不支持。
 	if r.RequireType == enumor.RequireTypeRollServer {
-		return fmt.Errorf("require type %s is temporarily not supported", r.RequireType.GetName())
+		if r.InheritInstanceID == "" {
+			return fmt.Errorf("inherit_instance_id is required for require type %s", r.RequireType.GetName())
+		}
+		if err := r.ChargeType.Validate(); err != nil {
+			return err
+		}
+		if r.ChargeType == cvmapi.ChargeTypePrePaid && r.ChargeMonths < 1 {
+			return fmt.Errorf("charge_months is required and should be greater than 0 for prepaid require type %s",
+				r.RequireType.GetName())
+		}
 	}
 	if err := r.ResAssign.Validate(); err != nil {
 		return err
@@ -204,4 +216,14 @@ type ApplyRecommendSuborder struct {
 	ChargeType cvmapi.ChargeType `json:"charge_type"`
 	SystemDisk enumor.DiskSpec   `json:"system_disk"`
 	DataDisk   []enumor.DiskSpec `json:"data_disk"`
+	// ChargeMonths 购买时长（月），仅滚服项目填充。
+	ChargeMonths uint `json:"charge_months,omitempty"`
+	// AssetID 继承固资号，仅滚服项目填充。
+	AssetID string `json:"bk_asset_id,omitempty"`
+	// InheritInstanceID 被继承的云主机实例 ID，仅滚服项目填充。
+	InheritInstanceID string `json:"inherit_instance_id,omitempty"`
+	// BillingStartTime 继承固资的套餐计费起始时间，仅滚服项目填充。
+	BillingStartTime *time.Time `json:"billing_start_time,omitempty"`
+	// BillingExpireTime 继承固资的套餐计费到期时间，仅滚服项目填充。
+	BillingExpireTime *time.Time `json:"billing_expire_time,omitempty"`
 }

@@ -19,6 +19,7 @@ import (
 	"hcm/cmd/woa-server/logics/dissolve"
 	gclogics "hcm/cmd/woa-server/logics/green-channel"
 	planLogics "hcm/cmd/woa-server/logics/plan"
+	rollingserver "hcm/cmd/woa-server/logics/rolling-server"
 	taskLogics "hcm/cmd/woa-server/logics/task"
 	"hcm/cmd/woa-server/service/capability"
 	"hcm/pkg/client"
@@ -41,6 +42,7 @@ func InitService(c *capability.Capability) {
 		authorizer:     c.Authorizer,
 		itsmClient:     c.ThirdCli.ITSM,
 		gcLogics:       c.GcLogic,
+		rsLogics:       c.RsLogic,
 		dissolveLogics: c.DissolveLogic,
 		cvmClient:      c.ThirdCli.CVM,
 	}
@@ -70,6 +72,7 @@ type service struct {
 	authorizer     auth.Authorizer
 	itsmClient     itsm.Client
 	gcLogics       gclogics.Logics
+	rsLogics       rollingserver.Logics
 	dissolveLogics dissolve.Logics
 	cvmClient      cvmapi.CVMClientInterface
 	Tasks          map[enumor.CronTask]core.Task

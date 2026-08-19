@@ -1968,3 +1968,18 @@ func (u *UpdateApplyTicketDemandReq) Validate() error {
 
 	return nil
 }
+
+// QuotaInsufficientError 表示额度不足。
+// 提交/审批链路将其视为硬失败；推荐链路可用 errors.As 识别后静默丢弃候选。
+type QuotaInsufficientError struct {
+	// Reason 是额度不足的具体原因说明。
+	Reason string
+}
+
+// Error 实现 error 接口。
+func (e *QuotaInsufficientError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return e.Reason
+}

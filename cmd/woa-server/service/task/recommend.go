@@ -20,11 +20,14 @@
 package task
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 
 	planlogics "hcm/cmd/woa-server/logics/plan"
+	ctypes "hcm/cmd/woa-server/types/config"
 	ptypes "hcm/cmd/woa-server/types/plan"
+	types "hcm/cmd/woa-server/types/task"
 	"hcm/pkg/api/core"
 	dt "hcm/pkg/api/core/cloud/device-type"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
@@ -238,7 +241,134 @@ func (s *service) GetBizApplyRecommendByStatic(cts *rest.Contexts) (interface{},
 		logs.Errorf("filter candidates by capacity failed, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, err
 	}
-	return &woaserver.ApplyRecommendByStaticResp{Items: assembleStaticPlans(candidates, req, applyNum)}, nil
+	candidates, inheritMap, err := s.enrichRollServerCandidates(cts.Kit, bkBizID, candidates, applyNum, req.Limit)
+	if err != nil {
+		logs.Errorf("enrich roll server candidates failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
+	}
+	items := assembleStaticPlans(candidates, req, applyNum, inheritMap)
+	return &woaserver.ApplyRecommendByStaticResp{Items: items}, nil
+}
+
+// enrichRollServerCandidates 为滚服候选补全继承固资并做额度预检，返回保留下来的候选与各候选命中的固资。
+// 只有滚服候选进入本流程，非滚服候选原样保留且不额外发起任何 CMDB 查询。
+// 无可用固资、额度不足的候选静默丢弃且只记日志（响应结构不变）；机型信息、固资、额度服务的调用失败一律透出 error。
+// 攒够 limit 个候选即停：后续候选无论去留都排在方案列表 limit 名之后，多查固资与额度不会改变出参。
+func (s *service) enrichRollServerCandidates(kt *kit.Kit, bkBizID int64, candidates []*staticRecommendCandidate,
+	applyNum, limit int) ([]*staticRecommendCandidate, map[*staticRecommendCandidate]*woaserver.InheritedHost,
+	error) {
+
+	inheritMap := make(map[*staticRecommendCandidate]*woaserver.InheritedHost)
+	deviceTypes := make([]string, 0)
+	for _, c := range candidates {
+		if c.requireType == enumor.RequireTypeRollServer {
+			deviceTypes = append(deviceTypes, c.deviceType)
+		}
+	}
+	if len(deviceTypes) == 0 {
+		return candidates, inheritMap, nil
+	}
+
+	// 机型 → 机型族反查，滚服候选涉及的机型一次批量取回
+	deviceInfoMap, err := s.configLogics.Device().ListCvmInstanceInfoByDeviceTypes(kt, slice.Unique(deviceTypes))
+	if err != nil {
+		logs.Errorf("list cvm instance info by device types failed, err: %v, deviceTypes: %v, rid: %s", err,
+			deviceTypes, kt.Rid)
+		return nil, nil, err
+	}
+
+	hostCache := make(map[string][]*woaserver.InheritedHost)
+	result := make([]*staticRecommendCandidate, 0, len(candidates))
+	for _, c := range candidates {
+		if len(result) >= limit {
+			break
+		}
+		if c.requireType != enumor.RequireTypeRollServer {
+			result = append(result, c)
+			continue
+		}
+		var host *woaserver.InheritedHost
+		host, hostCache, err = s.matchInheritedHost(kt, bkBizID, c, deviceInfoMap, hostCache)
+		if err != nil {
+			return nil, nil, err
+		}
+		if host == nil {
+			continue
+		}
+		canApply, err := s.preCheckRollServerQuota(kt, bkBizID, c, applyNum)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !canApply {
+			continue
+		}
+		inheritMap[c] = host
+		result = append(result, c)
+	}
+	return result, inheritMap, nil
+}
+
+// matchInheritedHost 取该滚服候选可继承的固资：机型 → 机型族 → 该族候选首条。
+// 同一 (region, 机型族) 在单次请求内只查一次；反查不到机型族或该族无候选时返回 nil，表示该候选应被丢弃。
+func (s *service) matchInheritedHost(kt *kit.Kit, bkBizID int64, c *staticRecommendCandidate,
+	deviceInfoMap map[string]ctypes.DeviceTypeCpuItem, hostCache map[string][]*woaserver.InheritedHost) (
+	*woaserver.InheritedHost, map[string][]*woaserver.InheritedHost, error) {
+
+	deviceFamily := deviceInfoMap[c.deviceType].DeviceGroup
+	if deviceFamily == "" {
+		logs.Warnf("drop roll server candidate, device family not found, region: %s, deviceType: %s, rid: %s",
+			c.region, c.deviceType, kt.Rid)
+		return nil, hostCache, nil
+	}
+
+	cacheKey := buildInheritedHostKey(c.region, deviceFamily)
+	hosts, cached := hostCache[cacheKey]
+	if !cached {
+		hostMap, err := s.rsLogics.ListInheritedHosts(kt, bkBizID, c.region, []string{deviceFamily})
+		if err != nil {
+			logs.Errorf("list inherited hosts failed, err: %v, biz: %d, region: %s, deviceFamily: %s, rid: %s",
+				err, bkBizID, c.region, deviceFamily, kt.Rid)
+			return nil, nil, err
+		}
+		hosts = hostMap[deviceFamily]
+		hostCache[cacheKey] = hosts
+	}
+	if len(hosts) == 0 {
+		logs.Warnf("drop roll server candidate, no inheritable host, region: %s, deviceFamily: %s, rid: %s",
+			c.region, deviceFamily, kt.Rid)
+		return nil, hostCache, nil
+	}
+	return hosts[0], hostCache, nil
+}
+
+// preCheckRollServerQuota 按单个候选独立做额度预检，不跨候选累加——推荐返回多个方案但用户最终只会选一个。
+// 核数由额度出口内部按 CPUAmount × Replicas 计算，与落库 applied_core 同口径。
+// 额度不足返回 false 由调用方静默丢弃，额度服务故障透出 error，不静默放行。
+func (s *service) preCheckRollServerQuota(kt *kit.Kit, bkBizID int64, c *staticRecommendCandidate,
+	applyNum int) (bool, error) {
+
+	suborders := []*types.Suborder{{
+		Replicas: uint(applyNum),
+		Spec:     &types.ResourceSpec{DeviceType: c.deviceType},
+	}}
+	err := s.logics.Scheduler().CheckApplyQuota(kt, bkBizID, c.requireType, suborders)
+	var quotaErr *types.QuotaInsufficientError
+	if errors.As(err, &quotaErr) {
+		logs.Warnf("drop roll server candidate, quota not enough, biz: %d, region: %s, deviceType: %s, "+
+			"reason: %s, rid: %s", bkBizID, c.region, c.deviceType, quotaErr.Reason, kt.Rid)
+		return false, nil
+	}
+	if err != nil {
+		logs.Errorf("pre check apply quota failed, err: %v, biz: %d, deviceType: %s, rid: %s", err, bkBizID,
+			c.deviceType, kt.Rid)
+		return false, err
+	}
+	return true, nil
+}
+
+// buildInheritedHostKey 构建单次请求内继承固资候选的缓存 key。
+func buildInheritedHostKey(region, deviceFamily string) string {
+	return fmt.Sprintf("%s|%s", region, deviceFamily)
 }
 
 // listStaticCandidates 查静态推荐候选：user 优先 biz 补足，A 类入参收窄，按四元组去重。
@@ -279,8 +409,6 @@ func (s *service) listStaticCandidates(kt *kit.Kit, bkBizID int64,
 // buildStaticFilterRules 构建 A 类过滤条件（入参非空者）。
 func buildStaticFilterRules(req *woaserver.ApplyRecommendByStaticReq) []filter.RuleFactory {
 	rules := make([]filter.RuleFactory, 0)
-	// 滚服项目依赖固资号/继承实例能力，暂不支持。
-	rules = append(rules, tools.RuleNotEqual("require_type", enumor.RequireTypeRollServer))
 	if req.RequireType != nil {
 		rules = append(rules, tools.RuleEqual("require_type", *req.RequireType))
 	}
@@ -385,8 +513,9 @@ func (s *service) queryCapacitySatisfied(kt *kit.Kit, triples []capacityTriple,
 }
 
 // assembleStaticPlans 组装方案：每候选 1 个子单，按候选顺序（user 优先 biz、count 倒序）取前 N。
+// inheritMap 只对滚服候选有值，非滚服候选取不到固资信息，组装结果与补全能力引入前逐字段一致。
 func assembleStaticPlans(candidates []*staticRecommendCandidate, req *woaserver.ApplyRecommendByStaticReq,
-	applyNum int) []*woaserver.ApplyRecommendItem {
+	applyNum int, inheritMap map[*staticRecommendCandidate]*woaserver.InheritedHost) []*woaserver.ApplyRecommendItem {
 
 	zone := cvmapi.CvmZoneAll
 	var resAssign *enumor.ResAssign
@@ -405,29 +534,53 @@ func assembleStaticPlans(candidates []*staticRecommendCandidate, req *woaserver.
 		if len(items) >= req.Limit {
 			break
 		}
-		items = append(items, &woaserver.ApplyRecommendItem{
-			Source: c.source,
-			Suborder: &woaserver.ApplyRecommendSuborder{
-				RequireType: c.requireType,
-				Region:      c.region,
-				Zone:        zone,
-				DeviceType:  c.deviceType,
-				ImageID:     c.imageID,
-				ResAssign:   resAssign,
-				Replicas:    applyNum,
-				ChargeType:  cvmapi.ChargeTypePrePaid,
-				SystemDisk: enumor.DiskSpec{
-					DiskType: enumor.DiskPremium, DiskSize: constant.RecommendSystemDiskSize,
-					DiskNum: constant.RecommendDiskNum,
-				},
-				DataDisk: []enumor.DiskSpec{{
-					DiskType: enumor.DiskPremium, DiskSize: constant.RecommendDataDiskSize,
-					DiskNum: constant.RecommendDiskNum,
-				}},
+		suborder := &woaserver.ApplyRecommendSuborder{
+			RequireType: c.requireType,
+			Region:      c.region,
+			Zone:        zone,
+			DeviceType:  c.deviceType,
+			ImageID:     c.imageID,
+			ResAssign:   resAssign,
+			Replicas:    applyNum,
+			ChargeType:  cvmapi.ChargeTypePrePaid,
+			SystemDisk: enumor.DiskSpec{
+				DiskType: enumor.DiskPremium, DiskSize: constant.RecommendSystemDiskSize,
+				DiskNum: constant.RecommendDiskNum,
 			},
-		})
+			DataDisk: []enumor.DiskSpec{{
+				DiskType: enumor.DiskPremium, DiskSize: constant.RecommendDataDiskSize,
+				DiskNum: constant.RecommendDiskNum,
+			}},
+		}
+		suborder = fillStaticRollServerFields(suborder, inheritMap[c])
+		items = append(items, &woaserver.ApplyRecommendItem{Source: c.source, Suborder: suborder})
 	}
 	return items
+}
+
+// fillStaticRollServerFields 用补全到的继承固资填充滚服子单的计费模式与五个滚服字段。
+// 非滚服候选在 inheritMap 中取不到值（host 为 nil），直接返回、不写入任何滚服字段。
+func fillStaticRollServerFields(suborder *woaserver.ApplyRecommendSuborder,
+	host *woaserver.InheritedHost) *woaserver.ApplyRecommendSuborder {
+	if host == nil {
+		return suborder
+	}
+	// 计费模式继承自固资，覆盖默认的 PREPAID
+	suborder.ChargeType = cvmapi.ChargeType(host.InstanceChargeType)
+	suborder.AssetID = host.AssetID
+	suborder.InheritInstanceID = host.CloudInstID
+	// 按量计费固资没有套餐起止时间，剩余月数随之算不出正值；此类零值不下发，避免响应里出现无意义的零时间。
+	if host.ChargeMonths > 0 {
+		suborder.ChargeMonths = uint(host.ChargeMonths)
+	}
+	if !host.BillingStartTime.IsZero() {
+		suborder.BillingStartTime = cvt.ValToPtr(host.BillingStartTime)
+	}
+	if !host.BillingExpireTime.IsZero() {
+		suborder.BillingExpireTime = cvt.ValToPtr(host.BillingExpireTime)
+	}
+
+	return suborder
 }
 
 // buildCapacityKey 构建库存校验的去重 key（不含镜像维度）。
@@ -475,6 +628,13 @@ func (s *service) GetBizApplyRecommendByPlan(cts *rest.Contexts) (interface{}, e
 	if req.RequireType != nil {
 		requireType = cvt.PtrToVal(req.RequireType)
 	}
+	// 滚服项目不校验预测（NeedVerifyResPlan 为 false），基于预测余量的推荐对其无意义，
+	// 此处直接返回空方案，调用方应通过by_static_recommend获取推荐方案。
+	if requireType == enumor.RequireTypeRollServer {
+		logs.Infof("skip plan recommend for roll server, return empty items, biz: %d, rid: %s", bkBizID, cts.Kit.Rid)
+		return &woaserver.ApplyRecommendByStaticResp{Items: make([]*woaserver.ApplyRecommendItem, 0)}, nil
+	}
+
 	applyNum := cc.WoaServer().ApplyRecommend.DefaultApplyNum
 	if req.Replicas != nil {
 		applyNum = cvt.PtrToVal(req.Replicas)
@@ -1023,6 +1183,18 @@ func allocateSplit(count, availInPlan, availOutPlan, availCapacity int64, skipCa
 func assembleSplitSuborders(req *woaserver.ApplyRecommendSplitSubOrderReq,
 	inPlan, outPlan int64) []*woaserver.ApplyRecommendSuborder {
 
+	// 滚服项目的计费模式取自入参透传的继承固资信息，不走预测内/外推导；
+	// 滚服不校验预测（NeedVerifyResPlan 为 false），分配结果恒落在预测内一侧，故只出 1 个子单。
+	if req.RequireType == enumor.RequireTypeRollServer {
+		total := inPlan + outPlan
+		if total <= 0 {
+			return []*woaserver.ApplyRecommendSuborder{}
+		}
+		return []*woaserver.ApplyRecommendSuborder{
+			buildSplitSuborder(req, req.ChargeType, int(total)),
+		}
+	}
+
 	suborders := make([]*woaserver.ApplyRecommendSuborder, 0, 2)
 	if inPlan > 0 {
 		suborders = append(suborders, buildSplitSuborder(req, cvmapi.ChargeTypePrePaid, int(inPlan)))
@@ -1038,7 +1210,7 @@ func buildSplitSuborder(req *woaserver.ApplyRecommendSplitSubOrderReq, chargeTyp
 	applyNum int) *woaserver.ApplyRecommendSuborder {
 
 	resAssign := req.ResAssign
-	return &woaserver.ApplyRecommendSuborder{
+	suborder := &woaserver.ApplyRecommendSuborder{
 		RequireType: req.RequireType,
 		Region:      req.Region,
 		Zone:        req.Zone,
@@ -1050,4 +1222,22 @@ func buildSplitSuborder(req *woaserver.ApplyRecommendSplitSubOrderReq, chargeTyp
 		SystemDisk:  req.SystemDisk,
 		DataDisk:    req.DataDisk,
 	}
+	return fillSplitRollServerFields(suborder, req)
+}
+
+// fillSplitRollServerFields 把入参透传的继承固资信息原样填入子单，仅滚服项目（require_type=6）生效；
+// 非滚服子单不写入任何滚服字段，序列化时由 omitempty 略去，响应与改动前逐字段一致。
+func fillSplitRollServerFields(suborder *woaserver.ApplyRecommendSuborder,
+	req *woaserver.ApplyRecommendSplitSubOrderReq) *woaserver.ApplyRecommendSuborder {
+
+	if req.RequireType != enumor.RequireTypeRollServer {
+		return suborder
+	}
+	suborder.ChargeMonths = req.ChargeMonths
+	suborder.AssetID = req.AssetID
+	suborder.InheritInstanceID = req.InheritInstanceID
+	suborder.BillingStartTime = req.BillingStartTime
+	suborder.BillingExpireTime = req.BillingExpireTime
+
+	return suborder
 }

@@ -92,6 +92,9 @@ func (s *service) initService(h *rest.Handler) {
 
 	h.Add("ManualTriggerCrossMonthTermination", http.MethodPost,
 		s.tasks[enumor.CronTaskRollingMonthlyTerminateNotice].GetURL(), s.TerminateLastMonthOrders)
+
+	// 继承固资推荐
+	h.Add("ListInheritedHosts", http.MethodPost, "/inherited_hosts/list", s.ListInheritedHosts)
 }
 
 // bizService 业务下的接口
@@ -104,4 +107,7 @@ func (s *service) bizService(h *rest.Handler) {
 
 	// 业务配额
 	h.Add("ListBizBizQuotaConfigs", http.MethodPost, "/biz_quotas/list", s.ListBizBizQuotaConfigs)
+
+	// 继承固资推荐
+	h.Add("ListBizInheritedHosts", http.MethodPost, "/inherited_hosts/list", s.ListBizInheritedHosts)
 }

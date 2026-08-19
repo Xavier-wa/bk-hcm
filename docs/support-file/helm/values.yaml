@@ -117,6 +117,7 @@ apiserver:
       #     serverVersion: 1.0.0
       #     openapiSpecPath: bk_apigw_resources_bk-hcm_internal_mcp.yaml
       #     includeOperationIDs:
+      #       - check_biz_apply_*
       #       - get_apply_*
       #       - list_apply_*
       #       - create_apply

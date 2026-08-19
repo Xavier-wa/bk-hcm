@@ -3,6 +3,7 @@
 - 该接口提供版本：v1.9.2.0+。
 - 该接口所需权限：业务访问。
 - 该接口功能描述：将一个已确定的机型方案，结合实时预测余量与库存，按计费模式拆分组装成 1 个主机申请单据（主单）含多个子单。预测内余量满足的台数组装为包年包月（PREPAID）子单，预测内装不下、溢出预测外余量的台数组装为按量计费（POSTPAID_BY_HOUR）子单；一个入参组合最多拆 2 个子单。申请数量尽量满足，无法满足时只要可分配总量 ≥ 1 即返回部分子单。
+- 滚服项目（`require_type=6`）拆单规则不同：滚服不校验预测，计费模式直接取入参 `charge_type`，不再按预测内/预测外推导，因此最多只返回 1 个子单；入参中的继承固资信息（`bk_asset_id`、`inherit_instance_id`、`charge_months`、`billing_start_time`、`billing_expire_time`）原样回填到子单中，可由查询滚服可继承固资候选接口获取。
 
 ### URL
 
@@ -28,6 +29,12 @@ POST /api/v1/woa/bizs/{bk_biz_id}/task/apply/recommend/split_suborder
 | system_disk | object      | 是   | 系统盘规格                                                              |
 | data_disk   | object array | 否  | 数据盘规格列表                                                           |
 | occupied_suborders | object array | 否 | 已占用子单数组，用于增量拆分；每个元素 `require_type` 必须等于本次请求的 `require_type` |
+| charge_type | string      | 否   | 计费模式：`PREPAID`-包年包月 / `POSTPAID_BY_HOUR`-按量计费；仅滚服项目（`require_type=6`）透传且必填，其他需求类型不填，计费模式仍由系统按预测池来源推导 |
+| inherit_instance_id | string | 否 | 被继承的云主机实例 ID；仅滚服项目填充，滚服项目必填                             |
+| bk_asset_id | string      | 否   | 继承固资号；仅滚服项目填充                                                  |
+| charge_months | int       | 否   | 购买时长，单位月；仅滚服项目填充，滚服项目且 `charge_type` 为 `PREPAID` 时必填且需大于 0 |
+| billing_start_time | string | 否  | 继承固资的套餐计费起始时间，RFC3339 格式；仅滚服项目填充                        |
+| billing_expire_time | string | 否 | 继承固资的套餐计费到期时间，RFC3339 格式；仅滚服项目填充                        |
 
 #### system_disk / data_disk[n] / occupied_suborders[n]
 
@@ -68,6 +75,31 @@ system_disk 与 data_disk[n] 结构同响应中的磁盘结构；occupied_subord
       "replicas": 5
     }
   ]
+}
+```
+
+#### 滚服项目请求参数示例
+
+```json
+{
+  "require_type": 6,
+  "region": "ap-guangzhou",
+  "zone": "all",
+  "device_type": "S5.LARGE8",
+  "image_id": "img-xxxxxxxx",
+  "res_assign": 1,
+  "replicas": 10,
+  "charge_type": "PREPAID",
+  "charge_months": 10,
+  "bk_asset_id": "TC241120001357",
+  "inherit_instance_id": "ins-0a1b2c3d",
+  "billing_start_time": "2024-11-20T10:15:30+08:00",
+  "billing_expire_time": "2027-05-20T10:15:30+08:00",
+  "system_disk": {
+    "disk_type": "CLOUD_PREMIUM",
+    "disk_size": 100,
+    "disk_num": 1
+  }
 }
 ```
 
@@ -129,6 +161,47 @@ system_disk 与 data_disk[n] 结构同响应中的磁盘结构；occupied_subord
 }
 ```
 
+#### 滚服项目响应示例
+
+```json
+{
+  "result": true,
+  "code": 0,
+  "message": "success",
+  "data": {
+    "suborders": [
+      {
+        "require_type": 6,
+        "region": "ap-guangzhou",
+        "zone": "all",
+        "device_type": "S5.LARGE8",
+        "image_id": "img-xxxxxxxx",
+        "res_assign": 1,
+        "replicas": 10,
+        "charge_type": "PREPAID",
+        "charge_months": 10,
+        "bk_asset_id": "TC241120001357",
+        "inherit_instance_id": "ins-0a1b2c3d",
+        "billing_start_time": "2024-11-20T10:15:30+08:00",
+        "billing_expire_time": "2027-05-20T10:15:30+08:00",
+        "system_disk": {
+          "disk_type": "CLOUD_PREMIUM",
+          "disk_size": 100,
+          "disk_num": 1
+        },
+        "data_disk": [
+          {
+            "disk_type": "CLOUD_PREMIUM",
+            "disk_size": 500,
+            "disk_num": 1
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
 ### 响应参数说明
 
 | 参数名称 | 参数类型 | 描述                                    |
@@ -142,7 +215,7 @@ system_disk 与 data_disk[n] 结构同响应中的磁盘结构；occupied_subord
 
 | 参数名称   | 参数类型        | 描述                                          |
 |-----------|---------------|-----------------------------------------------|
-| suborders | object array  | 拆分后的子单列表（增量场景仅含本次新算出的增量子单）；可分配总量 < 1 时为空数组 |
+| suborders | object array  | 拆分后的子单列表（增量场景仅含本次新算出的增量子单）；滚服项目最多 1 个子单；可分配总量 < 1 时为空数组 |
 
 #### data.suborders[n]
 
@@ -155,9 +228,14 @@ system_disk 与 data_disk[n] 结构同响应中的磁盘结构；occupied_subord
 | image_id   | string       | 镜像ID，原样透传入参                                                                            |
 | res_assign | int          | 资源分配方式，原样透传入参                                                                       |
 | replicas   | int          | 该子单拆分后实际分配台数，所有子单合计 ≤ 入参 `replicas`                                          |
-| charge_type | string      | 计费模式：`PREPAID`-包年包月（预测内 / 不校验预测类型）/ `POSTPAID_BY_HOUR`-按量计费（预测外）        |
+| charge_type | string      | 计费模式：`PREPAID`-包年包月（预测内 / 不校验预测类型）/ `POSTPAID_BY_HOUR`-按量计费（预测外）；滚服项目原样透传入参 `charge_type` |
 | system_disk | object      | 系统盘规格，原样透传入参                                                                         |
 | data_disk  | object array | 数据盘规格列表，原样透传入参                                                                      |
+| inherit_instance_id | string | 被继承的云主机实例 ID，原样透传入参；仅滚服项目返回                                          |
+| bk_asset_id | string      | 继承固资号，原样透传入参；仅滚服项目返回                                                         |
+| charge_months | int       | 购买时长，单位月，原样透传入参；仅滚服项目返回                                                     |
+| billing_start_time | string | 继承固资的套餐计费起始时间，RFC3339 格式，原样透传入参；仅滚服项目返回                          |
+| billing_expire_time | string | 继承固资的套餐计费到期时间，RFC3339 格式，原样透传入参；仅滚服项目返回                          |
 
 #### data.suborders[n].system_disk / data_disk[n]
 

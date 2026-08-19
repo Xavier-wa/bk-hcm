@@ -99,6 +99,7 @@ type Interface interface {
 	// CreateApplyOrder creates resource apply order
 	CreateApplyOrder(kit *kit.Kit, param *types.ApplyReq) (*types.CreateApplyOrderResult, error)
 	// CheckApplyQuota checks whether the apply exceeds quota for require types that need quota management
+	// 额度不足返回 *types.QuotaInsufficientError；额度服务故障返回普通 error
 	CheckApplyQuota(kt *kit.Kit, bizID int64, requireType enumor.RequireType,
 		suborders []*types.Suborder) error
 	// GetApplyOrder gets resource apply order info
@@ -1061,8 +1062,9 @@ func (s *scheduler) doCreateOrderPostOp(kt *kit.Kit, ticket *types.ApplyTicket, 
 	return nil
 }
 
-// CheckApplyQuota 按申请类型对需要额度管理的申请统一做额度校验，作为唯一对外入口供审批建单前置校验与提单预检共用，
-// 避免两处分发逻辑漂移。校验所用核数口径与 applied_core 落库保持一致。
+// CheckApplyQuota 按申请类型对需要额度管理的申请统一做额度校验，作为唯一对外入口供审批建单前置校验、
+// 提单预检与推荐预检共用，避免分发逻辑漂移。校验所用核数口径与 applied_core 落库保持一致。
+// 额度不足返回 *types.QuotaInsufficientError，额度服务故障返回普通 error。
 func (s *scheduler) CheckApplyQuota(kt *kit.Kit, bizID int64, requireType enumor.RequireType,
 	suborders []*types.Suborder) error {
 
@@ -1119,9 +1121,10 @@ func (s *scheduler) checkRollingApplyQuota(kt *kit.Kit, bizID int64, requireType
 		return err
 	}
 	if !canApply {
-		logs.Errorf("can not apply host, bizID: %d, appliedType: %s, reason: %s, rid: %s", bizID, appliedType,
+		// 额度不足对推荐链路是正常过滤条件，只记 Warn；提交/审批链路由调用方按 error 记 Error
+		logs.Warnf("can not apply host, bizID: %d, appliedType: %s, reason: %s, rid: %s", bizID, appliedType,
 			reason, kt.Rid)
-		return fmt.Errorf("%s", reason)
+		return &types.QuotaInsufficientError{Reason: reason}
 	}
 
 	return nil
@@ -1208,8 +1211,9 @@ func (s *scheduler) checkGreenChannelApplyQuota(kt *kit.Kit, bizID int64, requir
 		return err
 	}
 	if !canApply {
-		logs.Errorf("can not apply green channel host, bizID: %d, reason: %s, rid: %s", bizID, reason, kt.Rid)
-		return fmt.Errorf("%s", reason)
+		// 额度不足只记 Warn，提交/审批链路由调用方按 error 记 Error
+		logs.Warnf("can not apply green channel host, bizID: %d, reason: %s, rid: %s", bizID, reason, kt.Rid)
+		return &types.QuotaInsufficientError{Reason: reason}
 	}
 
 	return nil
@@ -3336,12 +3340,7 @@ func (s *scheduler) CheckInheritedHost(kt *kit.Kit, param *types.CheckInheritedH
 		return nil, err
 	}
 
-	chargeMonths := calculateMonths(time.Now(), host.BillingExpireTime)
-
-	// 兜底逻辑，如果当前时间加申请的月份数时间还是小于原来的套餐时间，那么就加上一个月
-	if time.Now().AddDate(0, chargeMonths, 0).Before(host.BillingExpireTime) {
-		chargeMonths++
-	}
+	chargeMonths := rollingserver.CalcRemainMonths(time.Now(), host.BillingExpireTime)
 
 	// 校验机型是否匹配
 	cvmInfoMap, err := s.configLogics.Device().ListCvmInstanceInfoByDeviceTypes(kt, []string{host.SvrDeviceClassName})
@@ -3542,22 +3541,6 @@ func (s *scheduler) checkInheritedHost(kt *kit.Kit, param *types.CheckInheritedH
 	}
 
 	return nil
-}
-
-func calculateMonths(startTime, endTime time.Time) int {
-	// 计算年份差和月份差
-	yearDiff := endTime.Year() - startTime.Year()
-	monthDiff := endTime.Month() - startTime.Month()
-
-	// 总月数 = 年份差 * 12 + 月份差
-	totalMonths := yearDiff*12 + int(monthDiff)
-
-	// 如果结束时间的日大于开始时间的日，则添加一个月
-	if endTime.Day() > startTime.Day() {
-		totalMonths++
-	}
-
-	return totalMonths
 }
 
 // CancelApplyTicketItsm ...

@@ -53,6 +53,13 @@ const (
 
 	// RsExpiredTerminationZonesMaxRunes 过期终止通知邮件中可用区列最大展示字符数
 	RsExpiredTerminationZonesMaxRunes = 10
+
+	// RsInheritedHostReturnLimit 滚服单个机型族对外返回的候选主机条数上限。
+	RsInheritedHostReturnLimit = 5
+	// RsInheritedHostQueryConcurrency 滚服继承固资候选查询的机型族并发数上限。
+	RsInheritedHostQueryConcurrency = 10
+	// RsInheritedHostRecommendMonths 滚服继承固资候选作为推荐项所需的套餐计费月数下限。
+	RsInheritedHostRecommendMonths = 36
 )
 
 const (

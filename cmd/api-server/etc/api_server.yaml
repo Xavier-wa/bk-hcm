@@ -107,6 +107,7 @@ mcp:
         #   # [可选] 工具暴露白名单，支持精确匹配 + glob 通配符（如 list_*）。
         #   # 空数组（或省略）= 暴露 openapiSpecPath 中全部 operationId。
         includeOperationIDs:
+          - check_biz_apply_*
           - get_resource_*
           - get_apply_*
           - get_cvm_*
