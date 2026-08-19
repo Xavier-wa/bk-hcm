@@ -1,9 +1,9 @@
 {
   "id": "feat-aiagent-frontend-auth",
   "title": "【aiagent-权限点调整】前端鉴权逻辑调整",
-  "currentStage": "coding",
+  "currentStage": "done",
   "createdAt": "2026-08-17T08:42:22.091Z",
-  "updatedAt": "2026-08-17T12:43:05.592Z",
+  "updatedAt": "2026-08-18T03:16:07.756Z",
   "artifacts": {
     "prd": [
       {
@@ -32,6 +32,13 @@
         "kind": "file",
         "addedAt": "2026-08-17T09:04:00.826Z"
       }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-frontend-auth/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-18T03:08:43.550Z"
+      }
     ]
   },
   "approvals": {
@@ -49,6 +56,11 @@
       "stage": "api",
       "approvedAt": "2026-08-17T09:03:02.679Z",
       "note": "用户确认 api.md 可作为 coding 唯一依据"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-18T03:15:25.819Z",
+      "note": "用户确认 P0/P1 全部通过，test.md 已回写 PASS；文档收口完成，可作为发布/合入依据。"
     }
   },
   "history": [
@@ -74,6 +86,18 @@
       "to": "coding",
       "at": "2026-08-17T09:03:02.679Z",
       "note": "用户确认 api.md 可作为 coding 唯一依据"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-18T03:07:11.509Z",
+      "note": "用户明确要求推进到 test；coding 已完成、评审、提交并推送，coding.md 已登记且 freshness=fresh。常规 next 仅因工作区已干净而误判无代码变更，故强制校正阶段，不跳过任何实际编码产物。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-18T03:15:25.819Z",
+      "note": "用户确认 P0/P1 全部通过，test.md 已回写 PASS；文档收口完成，可作为发布/合入依据。"
     }
   ],
   "branch": "feat-aiagent-frontend-auth",
@@ -98,6 +122,16 @@
       "status": "skipped",
       "at": "2026-08-17T08:59:15.493Z",
       "note": "用户原话：「确认，两个都跳过」。无新 UI，只改现网能力门与申请对象。"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-18T03:15:21.036Z",
+      "note": "docs_status 命中 base/menu-route/auth/chatbot/app-shell；补充 base 归属边界、menu-route 异步守卫约束，纠正 auth 对当前 useVerify/403 链路的错误废弃描述并扩充 globs；已 deepen base/menu-route/auth。复核后 touched modules 均无 stub/drift，promotionQueue=0。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-18T03:16:07.756Z",
+      "note": "story 1069995598137216875 按 resolvedTargets 由 status_12 逐级推进 status_13 → status_14，最终 status_14；未修改 owner。父需求全部 2 个子项均为 status_14，rollup 目标 done，但父需求当前 status_18 不要求前进（shouldAdvance=false）。"
     }
   },
   "artifactFreshness": {

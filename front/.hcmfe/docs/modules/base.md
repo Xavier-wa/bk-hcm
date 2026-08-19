@@ -15,7 +15,7 @@
 - **菜单与路由** → [menu-route](menu-route.md)：`src/router/**`、`src/constants/menu-symbol.ts`。
 - **权限控制** → [auth](auth.md)：`src/common/auth-service.ts`、`src/constants/auth-symbols.ts`、`src/components/auth|permission/**`。
 
-其中 menu-route/auth 的部分文件物理上仍落在 `common/constants/components` 下，属概念分层（glob 与 base 宽 glob 有意重叠）。
+其中 menu-route/auth 的部分文件物理上仍落在 `common/constants/components/hooks/store/views` 下，属概念分层（glob 与 base 宽 glob 有意重叠）。命中 `src/store/common.ts`、`src/hooks/useVerify.ts` 或 `src/views/error-pages/403.tsx` 的鉴权改动，优先阅读并更新 [auth](auth.md)；命中 `src/components/ai-assistant/**` 的业务行为优先归 [chatbot](chatbot.md)，base 只记录共享层边界。
 
 ## 架构北极星（目标形态）
 

@@ -2,7 +2,7 @@
   "version": 1,
   "project": "hcm",
   "generatedAt": "2026-07-14T09:49:59.375Z",
-  "updatedAt": "2026-08-17T09:24:26.840Z",
+  "updatedAt": "2026-08-18T03:16:48.979Z",
   "modules": [
     {
       "id": "base",
@@ -35,10 +35,10 @@
       "doc": "modules/base.md",
       "status": "drafted",
       "fingerprint": {
-        "computedAt": "2026-07-23T01:39:05.307Z",
-        "rootHash": "d67ef9e362ba271b5ac02d3bb4b744624793eebf"
+        "computedAt": "2026-08-18T03:15:08.889Z",
+        "rootHash": "c05b180ee11e2ac8eecd8bab4e33eb6d1b98a459"
       },
-      "updatedAt": "2026-07-23T01:39:05.307Z"
+      "updatedAt": "2026-08-18T03:15:08.889Z"
     },
     {
       "id": "component-variant",
@@ -101,10 +101,10 @@
         "auth"
       ],
       "fingerprint": {
-        "computedAt": "2026-08-17T09:24:26.840Z",
-        "rootHash": "da15585eeb6b905fa7523a9ab0bd3463f15b6be1"
+        "computedAt": "2026-08-18T03:15:07.800Z",
+        "rootHash": "62e93c34dbeb5d2e5492e7421016f611b723af76"
       },
-      "updatedAt": "2026-08-17T09:24:26.840Z"
+      "updatedAt": "2026-08-18T03:15:07.801Z"
     },
     {
       "id": "auth",
@@ -115,7 +115,10 @@
         "src/common/auth-service.ts",
         "src/constants/auth-symbols.ts",
         "src/components/auth/**",
-        "src/components/permission/**"
+        "src/components/permission/**",
+        "src/hooks/useVerify.ts",
+        "src/store/common.ts",
+        "src/views/error-pages/403.tsx"
       ],
       "doc": "modules/auth.md",
       "status": "drafted",
@@ -124,10 +127,10 @@
         "menu-route"
       ],
       "fingerprint": {
-        "computedAt": "2026-07-14T12:09:36.331Z",
-        "rootHash": "0d7c29242d75484bb50d2773be261e7848c43ee6"
+        "computedAt": "2026-08-18T03:16:48.979Z",
+        "rootHash": "e148be382f467e34902211a4f5a8287ee340ea69"
       },
-      "updatedAt": "2026-07-15T04:01:34.725Z"
+      "updatedAt": "2026-08-18T03:16:48.979Z"
     },
     {
       "id": "operation-log",

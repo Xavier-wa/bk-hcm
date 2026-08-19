@@ -21,7 +21,7 @@
 ## 关键文件
 
 - `src/constants/menu-symbol.ts` — 所有菜单/路由的 Symbol 常量（导航一律用 Symbol，禁止硬编码路径字符串）。
-- `src/router/index.ts` — 路由实例、全局守卫（`beforeEach` 内含视图级鉴权，见 auth 模块）。`/business/chatbot` 命中平台权限 `agent_assistant`（比 `biz_access` 的 `/^\/business/` 更具体）。无 `agent_assistant` 时：有 `biz_access` 则进通用申请页申请 `agent_assistant`；无 `biz_access` 则先申请业务访问。默认首页分流：`/` → `/business`，由**全局守卫**在 verify 就绪后按 `agent_assistant` 落到 chatbot 或 host；直链 `/business/host` 不拦截。`/business` 节点不能用 `redirect`（匹配阶段鉴权未回）也不能用 `beforeEnter`（站内跳转记录复用会被跳过，停在无组件的 `/business`）。`/403/:id` 仅在该权限确实缺失时停留，已具备时才弹回 `/`。
+- `src/router/index.ts` — 路由实例、全局守卫（`beforeEach` 内含视图级鉴权，见 auth 模块）。`/business/chatbot` 命中平台权限 `agent_assistant`（比 `biz_access` 的 `/^\/business/` 更具体）。无 `agent_assistant` 时：有 `biz_access` 则进 `/403/agent_assistant`；无 `biz_access` 则先进入 `/403/biz_access`。默认首页分流：`/` → `/business`，由**全局守卫**在 verify 就绪后按 `agent_assistant` 落到 chatbot 或 host；直链 `/business/host` 不拦截。`/business` 节点不能用 `redirect`（匹配阶段鉴权未回）也不能用 `beforeEnter`（站内跳转记录复用会被跳过，停在无组件的 `/business`）。守卫会归一化尾斜杠，避免 `/business/` 放行到无组件路由。`/403/:id` 仅在该权限确实缺失时停留，已具备时才弹回 `/` 并保留 query。
 - `src/router/meta.ts` — 路由 meta 配置类 `Meta`；面包屑用 `layout.breadcrumb.show`。
 - `src/router/utils/action.ts` — `routerAction`（跳转唯一入口，见下）。
 - `src/router/utils/history-storage.ts` — 自定义历史栈，支撑 `history`/`back` 智能返回。
@@ -30,6 +30,12 @@
 - `common/menu-service.ts` / `components/layout/menu.vue` — 规则描述的目标菜单方案，**当前仓库尚未落地**（还没有该文件）；菜单是否展示应由此独立控制，而非路由 meta。
 
 ## 关键约定
+
+### 全局守卫的异步鉴权门闩
+
+`src/router/index.ts` 以“鉴权结果是否就绪”决定是否拉取 verify，不依赖 `from.path` 判断冷启动。重定向链上 `from` 仍可能是 START_LOCATION，因此并发导航共用模块级 `authVerifyPromise`，避免重复请求；verify 失败时清空门闩并按无权限结束当前导航，使后续导航可以重试，不能让导航悬挂或把整场会话永久锁在空权限状态。
+
+守卫每个 `next()` 分支后必须立即 `return`。业务访问拦截、`/business` 默认落地、细粒度页面权限、403 停留/弹回的执行顺序不可互换。
 
 ### 路由跳转统一走 routerAction
 
