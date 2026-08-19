@@ -64,6 +64,25 @@ export interface IInheritCvm {
   generation_type: string;
 }
 
+// 候选固资列表项（接口返回）
+export interface IInheritedHost {
+  bk_asset_id: string;
+  bk_host_innerip: string;
+  bk_cloud_inst_id: string;
+  device_type: string;
+  instance_charge_type: string;
+  billing_start_time: string;
+  billing_expire_time: string;
+  charge_months: number;
+  is_recommended: boolean;
+}
+
+// 机型族分组
+export interface IInheritedHostGroup {
+  device_family: string;
+  hosts: IInheritedHost[];
+}
+
 export interface IManyCvmCapacityItem {
   device_type: string;
   region: string;
@@ -85,6 +104,7 @@ export const useCvmDeviceStore = defineStore('cvm-device', () => {
 
   const inheritCvmLoading = ref(false);
   const cvmCapacityLoading = ref(false);
+  const inheritedHostListLoading = ref(false);
 
   const getDeviceList = async (params: QueryBuilderType) => {
     deviceListLoading.value = true;
@@ -188,6 +208,26 @@ export const useCvmDeviceStore = defineStore('cvm-device', () => {
     }
   };
 
+  // 查询滚服项目可继承的固资候选列表（按机型族分组）
+  const getInheritedHostList = async (params: { bk_biz_id: number; region: string; device_families: string[] }) => {
+    inheritedHostListLoading.value = true;
+    try {
+      const res: IListResData<IInheritedHostGroup[]> = await http.post(
+        `/api/v1/woa/${resolveBizApiPath(params.bk_biz_id)}rolling_servers/inherited_hosts/list`,
+        {
+          region: params.region,
+          device_families: params.device_families,
+        },
+      );
+      return res?.data?.info ?? [];
+    } catch (error) {
+      console.error(error);
+      return Promise.reject(error);
+    } finally {
+      inheritedHostListLoading.value = false;
+    }
+  };
+
   const getManyCvmCapacity = async (
     params: {
       device_types: string[];
@@ -227,6 +267,8 @@ export const useCvmDeviceStore = defineStore('cvm-device', () => {
     getChargeTypeDeviceTypeList,
     inheritCvmLoading,
     getInheritCvm,
+    inheritedHostListLoading,
+    getInheritedHostList,
     cvmCapacityLoading,
     getManyCvmCapacity,
   };

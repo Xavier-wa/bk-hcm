@@ -10,7 +10,7 @@ import { transformSimpleCondition } from '@/utils/search';
 import { RequirementType } from '@/store/config/requirement';
 import { QueryRuleOPEnum } from '@/typings';
 import { useConfigSpringResPoolStore } from '@/store/config/spring-res-pool';
-import { type IDeviceFamilyItem } from '@/store/config/device-family';
+import { useConfigDeviceFamilyStore, type IDeviceFamilyItem } from '@/store/config/device-family';
 import HcmFormDeviceFamily from '@/components/form/device-family.vue';
 import ChargeType from './charge-type.vue';
 import AssetMatch from './asset-match.vue';
@@ -56,6 +56,7 @@ const isInheritDissolve = ref(isDissolve.value && !!props.defaultData?.inheritAs
 const isInheritPackage = computed(() => isRollingServer.value || isInheritDissolve.value);
 
 const cvmDeviceStore = useCvmDeviceStore();
+const configDeviceFamilyStore = useConfigDeviceFamilyStore();
 
 const { cvmChargeTypes, cvmChargeTypeNames, getMonthName } = useCvmChargeType();
 const springResPoolStore = useConfigSpringResPoolStore();
@@ -536,6 +537,15 @@ const handleDeviceGroupChange = (items: IDeviceFamilyItem[]) => {
   getDeviceTypeList();
 };
 
+// 固资号推荐下拉内 Tab 切换时同步外部机型族
+const handleDeviceGroupChangeFromAssetMatch = async (deviceGroup: string) => {
+  condition.deviceGroup = deviceGroup;
+  selectedRowKeys.value = [];
+  // 查出对应机型族项后复用现有切换逻辑（GPU型等有 children 的族需按 children 查询）
+  const familyList = await configDeviceFamilyStore.getDeviceFamily();
+  handleDeviceGroupChange(familyList.filter((family) => family.name === deviceGroup));
+};
+
 const handleDeviceTypeChange = () => {
   // 小额绿通、春保资源池禁用了仅展示可用机型
   if (!isGreenChannelOrSpringPool.value) {
@@ -717,9 +727,12 @@ provide('isInheritPackage', isInheritPackage);
               :region="region"
               :require-type="requireType"
               :inherit-instance-id="applyData.inheritInstanceId"
+              :device-group="condition.deviceGroup"
+              :enable-recommend="isRollingServer"
               v-model="applyData.inheritAssetId"
               @check-success="handleAssetMatchSuccess"
               @check-fail="handleAssetMatchFail"
+              @device-group-change="handleDeviceGroupChangeFromAssetMatch"
             />
           </div>
           <div class="charge-type-container">

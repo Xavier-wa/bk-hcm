@@ -1,0 +1,165 @@
+{
+  "id": "feat-cvm-apply-inherit-asset-recommend",
+  "title": "主机申领-滚服项目-继承固资号选择推荐-前端",
+  "currentStage": "done",
+  "createdAt": "2026-08-12T06:34:41.325Z",
+  "updatedAt": "2026-08-12T07:59:47.896Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-apply-inherit-asset-recommend/prd.md",
+        "kind": "file",
+        "addedAt": "2026-08-12T06:42:48.146Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": "https://www.figma.com/design/nKX02SsMK8StZYAEEw0MfK/%E4%B8%9A%E5%8A%A1%E8%B5%84%E6%BA%90?node-id=1242-23549",
+        "kind": "url",
+        "addedAt": "2026-08-12T07:04:48.750Z"
+      },
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-apply-inherit-asset-recommend/design.md",
+        "kind": "file",
+        "addedAt": "2026-08-12T07:04:50.592Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-apply-inherit-asset-recommend/api.md",
+        "kind": "file",
+        "addedAt": "2026-08-12T07:10:11.278Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-apply-inherit-asset-recommend/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-12T07:18:34.652Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-apply-inherit-asset-recommend/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-12T07:36:48.115Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-08-12T07:03:21.595Z",
+      "note": "PRD 已确认通过。含 8 需求点 / 12 验收标准 / 14 已定稿事项 / 已有初步实现差异对比。关键修正：Tab 栏无“全部”（只有 5 个机型族），可用区选择器有“全部”（选到时取消回填）。推荐规则改为≥36个月，去掉搜索框，选择后自动校验。"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-08-12T07:08:14.148Z",
+      "note": "Design 已确认通过。含布局/交互/状态流转/异常边界/PRD验收映射/实现边界。OCR降级处理（无Figma MCP），基于tapd-analyst OCR+用户初步实现识别稿面。post节点icon-intake/comp-intake已跳过（用户已有初步实现）。"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-08-12T07:16:17.899Z",
+      "note": "API 已确认通过。含 2 个新增接口 A/B（资源管理/服务请求入口）+ 复用校验接口 + 类型定义 + 接口选择策略。后端已做分组/排序/推荐标记，前端只需映射 Tab + 隐藏 0 候选 + 自动回填 + 自动校验。"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-12T07:34:20.922Z",
+      "note": "Coding 已确认通过。store 层新增 getInheritedHostList + 类型定义；asset-list.vue 对接接口 + Tab 动态生成 + 0候选隐藏 + 无设备文案 + 推荐标记 + 自动回填 + loading 过渡效果；asset-match.vue 传递 props + 自动校验。freshness 已 align。"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-12T07:58:57.345Z",
+      "note": "Test 完成。产物：test.md（5 P0 + 8 P1 + 8 P2 手测用例）。E2E 骨架已搭建（playwright.config.ts + spec 文件，12 条 mock 用例）供环境恢复后使用，但因 pnpm 10.x 损坏无法实际运行。手测验证通过后推进到 done。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-08-12T06:34:41.325Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-08-12T07:03:21.595Z",
+      "note": "PRD 已确认通过。含 8 需求点 / 12 验收标准 / 14 已定稿事项 / 已有初步实现差异对比。关键修正：Tab 栏无“全部”（只有 5 个机型族），可用区选择器有“全部”（选到时取消回填）。推荐规则改为≥36个月，去掉搜索框，选择后自动校验。"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-08-12T07:08:14.148Z",
+      "note": "Design 已确认通过。含布局/交互/状态流转/异常边界/PRD验收映射/实现边界。OCR降级处理（无Figma MCP），基于tapd-analyst OCR+用户初步实现识别稿面。post节点icon-intake/comp-intake已跳过（用户已有初步实现）。"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-08-12T07:16:17.899Z",
+      "note": "API 已确认通过。含 2 个新增接口 A/B（资源管理/服务请求入口）+ 复用校验接口 + 类型定义 + 接口选择策略。后端已做分组/排序/推荐标记，前端只需映射 Tab + 隐藏 0 候选 + 自动回填 + 自动校验。"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-12T07:34:20.922Z",
+      "note": "Coding 已确认通过。store 层新增 getInheritedHostList + 类型定义；asset-list.vue 对接接口 + Tab 动态生成 + 0候选隐藏 + 无设备文案 + 推荐标记 + 自动回填 + loading 过渡效果；asset-match.vue 传递 props + 自动校验。freshness 已 align。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-12T07:58:57.345Z",
+      "note": "Test 完成。产物：test.md（5 P0 + 8 P1 + 8 P2 手测用例）。E2E 骨架已搭建（playwright.config.ts + spec 文件，12 条 mock 用例）供环境恢复后使用，但因 pnpm 10.x 损坏无法实际运行。手测验证通过后推进到 done。"
+    }
+  ],
+  "requirementId": "req-feat-cvm-apply-inherit-asset-recommend",
+  "branch": "feat-cvm-apply-inherit-asset-recommend",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598136963986",
+    "parentId": "1069995598136066256"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "completed",
+      "at": "2026-08-12T06:42:17.329Z",
+      "note": "用户选择跳过澄清（单据已 design approved，需求文档 v2.1 澄清完成 2026-07-22）。已完整执行 tapd-story-evaluation：无需拆分（单一组件改造，用户故事≤2），RICE 评分 63（Reach=50, Impact=5, Confidence=75%, Effort=3人天），预估工时 24 人时。已执行 tapd-analyst 全量解读：正文+5张图片OCR识别，评论区无内容，输出 12 条净需求点。"
+    },
+    "hcm-design-icon-intake": {
+      "status": "skipped",
+      "at": "2026-08-12T07:06:59.040Z",
+      "note": "用户已有初步实现，图标已在 asset-match.vue / asset-list.vue 中确定（Success/Close/bk-badge dot/bkhcm-icon-file），design.md §3.x 已填语义列，无需额外 intake。"
+    },
+    "hcm-design-comp-intake": {
+      "status": "skipped",
+      "at": "2026-08-12T07:06:59.361Z",
+      "note": "用户已有初步实现，组件已在 asset-match.vue / asset-list.vue 中确定（bk-select/bk-tab/bk-table/bk-popover 等），design.md §3.y 已填通识四列 + 项目三列，无需额外 intake。"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-12T07:35:58.682Z",
+      "note": "文档收口完成。docs_status 检测到 base 模块 hasDrift，但本次改动属于 rolling-server 功能域。已将 rolling-server.md 从 stub 深化为 drafted，补充了职责、核心组件、关键流程（固资号选择器双模式、可用区联动、机型族 Tab、bk-select clickoutside 陷阱、接口选择策略）。"
+    },
+    "hcm-verify-e2e": {
+      "status": "skipped",
+      "at": "2026-08-12T07:58:51.903Z",
+      "note": "已创建 E2E 骨架（front/e2e/playwright.config.ts + tests/asset-inherit-recommend.spec.ts，12 条 mock 测试用例）供环境恢复后使用。当前无法运行原因：1) pnpm 10.x 损坏 monorepo node_modules 无法启动 dev server；2) npx playwright install 因 pnpm .pnpm 符号链接干扰失败；3) Playwright MCP 也无浏览器。降级为手测验证，test.md 已包含 5 P0 + 8 P1 + 8 P2 手测用例。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-12T07:59:47.896Z",
+      "note": "TAPD 收口完成。story 1069995598136963986：for_test(status_12) → tested(status_13) → done(status_14)。父需求 1069995598136066256 已在 design approved(status_24)，语义链高于滚动目标 doing(status_11)，按向前只进不退回不更新。无 bug 单据。无 owner 变更。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/store/cvm/device.ts",
+        "src/components/device-type-selector/cvm-apply/children/asset-list.vue",
+        "src/components/device-type-selector/cvm-apply/children/asset-match.vue"
+      ],
+      "contentFingerprint": "9eb8853b0754ee18fd7158fc5acc01a1e623de2b",
+      "codeBaseline": "aefedbba835e67c7af821fcca067b1e0851ad5d2",
+      "seatedAt": "2026-08-12T07:34:01.437Z"
+    }
+  }
+}
