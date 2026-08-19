@@ -42,6 +42,8 @@ const (
 	TCLBDescribeMax = 20
 	// TCLBDeleteProtect 腾讯云负载均衡删除保护
 	TCLBDeleteProtect = "DeleteProtect"
+	// DefaultTargetsPrefetchMaxListeners CLB同步预取RS的监听器数量默认上限，超过则跳过预取
+	DefaultTargetsPrefetchMaxListeners = 10000
 )
 
 const (

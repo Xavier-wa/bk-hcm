@@ -133,9 +133,11 @@ func (cli *client) getTargetGruop(kt *kit.Kit, lbId string, cloudIDs []string,
 
 // ListenerTargets 监听器下的target，用来更新目标组.
 // SyncBaseParams 中的CloudID作为监听器id筛选，不传的话就是同步当前LB下的全部监听器
-func (cli *client) ListenerTargets(kt *kit.Kit, param *SyncBaseParams, opt *SyncListenerOption) error {
+// listenerTargets 为当前批次监听器及其 RS；nil 或空切片表示未全量拉取，按原逻辑按批拉取
+func (cli *client) ListenerTargets(kt *kit.Kit, param *SyncBaseParams, opt *SyncListenerOption,
+	listenerTargets []typeslb.TCloudListenerTarget) error {
 
-	cloudListenerTargets, relMap, tgRsMap, lb, err := cli.listTargetRelated(kt, param, opt)
+	cloudListenerTargets, relMap, tgRsMap, lb, err := cli.listTargetRelated(kt, param, opt, listenerTargets)
 	if err != nil {
 		logs.Errorf("fail to list related res during targets syncing, err: %v, rid: %s", err, kt.Rid)
 		return err
@@ -204,15 +206,20 @@ func (cli *client) ListenerTargets(kt *kit.Kit, param *SyncBaseParams, opt *Sync
 }
 
 // 获取同步rs所需关联资源
-func (cli *client) listTargetRelated(kt *kit.Kit, param *SyncBaseParams, opt *SyncListenerOption) (
+func (cli *client) listTargetRelated(kt *kit.Kit, param *SyncBaseParams, opt *SyncListenerOption,
+	listenerTargets []typeslb.TCloudListenerTarget) (
 	[]typeslb.TCloudListenerTarget, map[string]*corelb.BaseTargetListenerRuleRel,
 	map[string][]corelb.BaseTarget, *corelb.TCloudLoadBalancer, error) {
 
-	// 获取监听器详情
-	cloudListenerTargets, err := cli.listTargetsFromCloud(kt, param, opt)
-	if err != nil {
-		logs.Errorf("fail to list target from cloud while syncing, err: %v, rid: %s", err, kt.Rid)
-		return nil, nil, nil, nil, err
+	// 获取监听器rs列表；空切片视为未全量拉取，走按批拉取
+	cloudListenerTargets := listenerTargets
+	if len(cloudListenerTargets) == 0 {
+		targets, err := cli.listTargetsFromCloud(kt, param, opt)
+		if err != nil {
+			logs.Errorf("fail to list target from cloud while syncing, err: %v, rid: %s", err, kt.Rid)
+			return nil, nil, nil, nil, err
+		}
+		cloudListenerTargets = targets
 	}
 
 	// 获取db中的目标组关系和rs列表
@@ -614,7 +621,7 @@ func (cli *client) listTargetsFromDB(kt *kit.Kit, param *SyncBaseParams, opt *Sy
 		listReq.Page.Start += uint32(core.DefaultMaxPageLimit)
 	}
 	relMap = make(map[string]*corelb.BaseTargetListenerRuleRel)
-	tgRsMap = make(map[string][]corelb.BaseTarget)
+	tgRsMap = make(map[string][]corelb.BaseTarget, len(relList))
 	if len(relList) == 0 {
 		return relMap, tgRsMap, nil
 	}
@@ -628,21 +635,28 @@ func (cli *client) listTargetsFromDB(kt *kit.Kit, param *SyncBaseParams, opt *Sy
 
 	// 目标组ID 去重
 	tgIDs := cvt.MapKeyToStringSlice(tgIDMap)
-	// 查询对应的rs列表
+	// 预先初始化所有目标组的key，没有rs的目标组为空切片，避免上层判空遗漏导致 panic
 	for _, tgID := range tgIDs {
-		// 按目标组查询
+		tgRsMap[tgID] = make([]corelb.BaseTarget, 0)
+	}
+	// 按目标组分批查询对应的rs列表，避免逐个目标组查询导致请求数随目标组数量线性增长
+	for _, tgIDBatch := range slice.Split(tgIDs, constant.CloudResourceSyncMaxLimit) {
 		req := &core.ListReq{
-			Filter: tools.ExpressionAnd(tools.RuleEqual("target_group_id", tgID)),
+			Filter: tools.ExpressionAnd(tools.RuleIn("target_group_id", tgIDBatch)),
 			Page:   core.NewDefaultBasePage(),
 		}
 		for {
 			// 查询对应的rs列表
 			rsList, err := cli.dbCli.Global.LoadBalancer.ListTarget(kt, req)
 			if err != nil {
-				logs.Errorf("fail to list targets of target group(id=%s), err: %v, rid: %s", tgID, err, kt.Rid)
+				logs.Errorf("fail to list targets of target group(ids=%v), err: %v, rid: %s", tgIDBatch, err, kt.Rid)
 				return nil, nil, err
 			}
-			tgRsMap[tgID] = append(tgRsMap[tgID], rsList.Details...)
+			// 批量查询返回的是多个目标组的rs，按目标组归类
+			for i := range rsList.Details {
+				tgID := rsList.Details[i].TargetGroupID
+				tgRsMap[tgID] = append(tgRsMap[tgID], rsList.Details[i])
+			}
 
 			if uint(len(rsList.Details)) < core.DefaultMaxPageLimit {
 				break

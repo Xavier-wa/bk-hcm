@@ -471,6 +471,9 @@ hcservice:
         listConcurrent: 1
     # if no any rule matched, use this default config
     defaultConcurrent: 1
+    # 单台负载均衡预取RS的监听器数量上限，超过则跳过预取，回退按批拉取。
+    # 监听器与RS一般不超过1:2，用监听器数量近似约束预取内存。0或未配置时默认10000。
+    targetsPrefetchMaxListeners: 10000
   # 安全组资源归属白名单, 数据类型[]string
   securityGroupMgmtSkipList:
     # - sg-xxxxx

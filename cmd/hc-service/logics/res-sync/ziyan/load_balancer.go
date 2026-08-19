@@ -56,7 +56,10 @@ import (
 func (cli *client) LoadBalancerWithListener(kt *kit.Kit, params *SyncBaseParams, opt *SyncLBOption) (
 	*SyncResult, error) {
 
+	start := time.Now()
+	lbStart := time.Now()
 	_, err := cli.LoadBalancer(kt, params, opt)
+	lbCost := time.Since(lbStart)
 	if err != nil {
 		logs.Errorf("fail to sync load balancer with rel, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
@@ -70,7 +73,9 @@ func (cli *client) LoadBalancerWithListener(kt *kit.Kit, params *SyncBaseParams,
 	}
 
 	// 同步对应安全组关联关系
+	sgStart := time.Now()
 	err = cli.lbSgRel(kt, params, opt, lbList)
+	sgCost := time.Since(sgStart)
 	if err != nil {
 		logs.Errorf("fail to sync load balancer sg rel, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
@@ -86,11 +91,15 @@ func (cli *client) LoadBalancerWithListener(kt *kit.Kit, params *SyncBaseParams,
 		LbInfos:   lbList,
 	}
 
+	listenerStart := time.Now()
 	if _, err = cli.listenerByLbBatch(kt, lblParams); err != nil {
 		logs.Errorf("fail to sync listener of lbs, err: %v, ids: %v, rid: %s", err, requiredLBCloudIds, kt.Rid)
 		return nil, err
 	}
+	listenerCost := time.Since(listenerStart)
 
+	logs.Infof("lb with listener batch done, lbs: %d, cost: %s, steps: lb=%s, sg=%s, listener=%s, rid: %s",
+		len(lbList), time.Since(start), lbCost, sgCost, listenerCost, kt.Rid)
 	return new(SyncResult), nil
 }
 

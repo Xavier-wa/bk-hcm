@@ -1050,11 +1050,16 @@ type SyncConfig struct {
 	DefaultConcurrent uint `yaml:"defaultConcurrent"`
 	// 并发配置
 	ConcurrentRules []SyncConcurrentRule `yaml:"concurrentRules"`
+	// TargetsPrefetchMaxListeners 单台负载均衡预取RS的监听器数量上限，超过则跳过预取。
+	TargetsPrefetchMaxListeners uint `yaml:"targetsPrefetchMaxListeners"`
 }
 
 func (s *SyncConfig) trySetDefault() {
 	if s.DefaultConcurrent == 0 {
 		s.DefaultConcurrent = 1
+	}
+	if s.TargetsPrefetchMaxListeners == 0 {
+		s.TargetsPrefetchMaxListeners = constant.DefaultTargetsPrefetchMaxListeners
 	}
 	for i := range s.ConcurrentRules {
 		r := &s.ConcurrentRules[i]

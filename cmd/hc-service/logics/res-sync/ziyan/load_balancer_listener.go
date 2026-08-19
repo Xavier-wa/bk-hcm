@@ -23,6 +23,7 @@ package ziyan
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"hcm/cmd/hc-service/logics/res-sync/common"
 	typeslb "hcm/pkg/adaptor/types/load-balancer"
@@ -111,7 +112,7 @@ func (cli *client) Listener(kt *kit.Kit, params *SyncBaseParams, opt *SyncListen
 			Region:    params.Region,
 			CloudIDs:  cloudLblIds,
 		}
-		if err := cli.listener(kt, lblParam, opt, listeners); err != nil {
+		if err := cli.listener(kt, lblParam, opt, listeners, make([]typeslb.TCloudListenerTarget, 0)); err != nil {
 			return nil, err
 		}
 	}
@@ -138,6 +139,18 @@ func (cli *client) listenerOfLoadBalancer(kt *kit.Kit, params *SyncBaseParams, o
 		return nil, err
 	}
 
+	// 一次拉取该 LB 下全部监听器及其 RS，后续分批同步复用。
+	// 监听器与RS数量比一般不超过1:2，查询RS数量耗时，会拖慢同步
+	// 用监听器数量近似约束内存；超过阈值则跳过全量拉取，回退按批拉取。
+	var lbListenerTargetMap map[string]typeslb.TCloudListenerTarget
+	maxListeners := cc.HCService().SyncConfig.TargetsPrefetchMaxListeners
+	if len(cloudListeners) > int(maxListeners) {
+		logs.Infof("skip listing all listener targets, too many listeners, lb: %s, listeners: %d, max: %d, rid: %s",
+			opt.CloudLBID, len(cloudListeners), maxListeners, kt.Rid)
+	} else if len(cloudListeners) > 0 {
+		lbListenerTargetMap = cli.listAllListenerTargetsFromCloud(kt, params, opt)
+	}
+
 	//  分批同步云上监听器
 	for _, listeners := range slice.Split(cloudListeners, constant.TCLBDescribeMax) {
 
@@ -147,11 +160,45 @@ func (cli *client) listenerOfLoadBalancer(kt *kit.Kit, params *SyncBaseParams, o
 			Region:    params.Region,
 			CloudIDs:  cloudLblIds,
 		}
-		if err := cli.listener(kt, lblParam, opt, listeners); err != nil {
+
+	listenerTargets := make([]typeslb.TCloudListenerTarget, 0)
+	if lbListenerTargetMap != nil {
+		var miss []string
+		listenerTargets, miss = matchListenerTargets(lbListenerTargetMap, cloudLblIds)
+		//miss的会fallback到下游按批拉取
+		if len(miss) > 0 {
+			logs.Warnf("listener targets not found, lb: %s, not found: %v, rid: %s",
+				opt.CloudLBID, miss, kt.Rid)
+		}
+	}
+
+	if err := cli.listener(kt, lblParam, opt, listeners, listenerTargets); err != nil {
 			return nil, err
 		}
 	}
 	return nil, nil
+}
+
+// listAllListenerTargetsFromCloud 拉取该 LB 下全部监听器及其 RS，后续分批同步复用。
+// 不传 CloudIDs，一次拉取整台 LB；失败返回 nil，调用方回退到按批拉取。
+func (cli *client) listAllListenerTargetsFromCloud(kt *kit.Kit, params *SyncBaseParams,
+	opt *SyncListenerOption) map[string]typeslb.TCloudListenerTarget {
+	listParam := &SyncBaseParams{
+		AccountID: params.AccountID,
+		Region:    params.Region,
+	}
+	lbListenerTargets, err := cli.listTargetsFromCloud(kt, listParam, opt)
+	if err != nil {
+		logs.Warnf("list all listener targets failed, fallback to batch fetch, err: %v, lb: %s, rid: %s",
+			err, opt.CloudLBID, kt.Rid)
+		return nil
+	}
+
+	listenerTargetMap := make(map[string]typeslb.TCloudListenerTarget, len(lbListenerTargets))
+	for _, listenerTarget := range lbListenerTargets {
+		listenerTargetMap[cvt.PtrToVal(listenerTarget.ListenerId)] = listenerTarget
+	}
+	return listenerTargetMap
 }
 
 // RemoveListenerDeleteFromCloud ...
@@ -367,9 +414,12 @@ func (cli *client) deleteLayer7RuleByLbIDAndCloudIDs(kt *kit.Kit, lbID string, c
 }
 
 // listener 同步指定监听器, 复用
+// listenerTargets 为当前批次监听器及其 RS；nil 或空切片表示未全量拉取，按原逻辑按批拉取
 func (cli *client) listener(kt *kit.Kit, params *SyncBaseParams, opt *SyncListenerOption,
-	cloudListeners []typeslb.TCloudListener) error {
+	cloudListeners []typeslb.TCloudListener, listenerTargets []typeslb.TCloudListenerTarget) error {
 
+	start := time.Now()
+	ruleCost, targetsCost, tgCost := time.Duration(0), time.Duration(0), time.Duration(0)
 	if len(params.CloudIDs) != len(cloudListeners) {
 		return errors.New("length of cloud_ids mismatches length of cloud_listeners")
 	}
@@ -410,7 +460,9 @@ func (cli *client) listener(kt *kit.Kit, params *SyncBaseParams, opt *SyncListen
 		}
 	}
 	// 同步监听器下的四层/七层规则
+	ruleStart := time.Now()
 	_, err = cli.loadBalancerRule(kt, params, opt, cloudListeners)
+	ruleCost = time.Since(ruleStart)
 	if err != nil {
 		logs.Errorf("fail to sync listener rule for sync listener, err: %v, opt: %+v, rid: %s", err, opt, kt.Rid)
 		return err
@@ -422,19 +474,27 @@ func (cli *client) listener(kt *kit.Kit, params *SyncBaseParams, opt *SyncListen
 	}
 
 	// 同步相关目标组中的rs
-	err = cli.ListenerTargets(kt, targetParam, opt)
+	targetsStart := time.Now()
+	err = cli.ListenerTargets(kt, targetParam, opt, listenerTargets)
+	targetsCost = time.Since(targetsStart)
 	if err != nil {
 		logs.Errorf("fail to sync listener targets for sync listener, err: %v, opt: %+v, rid: %s", err, opt, kt.Rid)
 		return err
 	}
 
 	// 同步本地目标组
+	tgStart := time.Now()
 	err = cli.LocalTargetGroup(kt, targetParam, opt, cloudListeners)
+	tgCost = time.Since(tgStart)
 	if err != nil {
 		logs.Errorf("fail to sync target group for listener, err: %v, opt: %+v, rid: %s", err, opt, kt.Rid)
 		return err
 	}
 
+	logs.Infof("lb listener sync done, lb: %s, listeners: %d, add: %d, update: %d, del: %d, cost: %s, "+
+		"steps: rule=%s, targets=%s, local_tg=%s, rid: %s",
+		opt.CloudLBID, len(cloudListeners), len(addSlice), len(updateMap), len(delCloudIDs), time.Since(start),
+		ruleCost, targetsCost, tgCost, kt.Rid)
 	return nil
 }
 
@@ -867,6 +927,31 @@ type SyncListenerOption struct {
 // Validate ...
 func (o *SyncListenerOption) Validate() error {
 	return validator.Validate.Struct(o)
+}
+
+// matchListenerTargets 按监听器云 ID 从全量索引中取出对应监听器及其 RS
+func matchListenerTargets(listenerTargetMap map[string]typeslb.TCloudListenerTarget, cloudIDs []string) (
+	[]typeslb.TCloudListenerTarget, []string) {
+
+	if len(cloudIDs) == 0 {
+		listenerTargets := make([]typeslb.TCloudListenerTarget, 0, len(listenerTargetMap))
+		for _, listenerTarget := range listenerTargetMap {
+			listenerTargets = append(listenerTargets, listenerTarget)
+		}
+		return listenerTargets, nil
+	}
+
+	listenerTargets := make([]typeslb.TCloudListenerTarget, 0, len(cloudIDs))
+	miss := make([]string, 0)
+	for _, id := range cloudIDs {
+		listenerTarget, ok := listenerTargetMap[id]
+		if !ok {
+			miss = append(miss, id)
+			continue
+		}
+		listenerTargets = append(listenerTargets, listenerTarget)
+	}
+	return listenerTargets, miss
 }
 
 // SyncListenerBatchOption ...
