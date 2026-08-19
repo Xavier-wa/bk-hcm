@@ -1,0 +1,73 @@
+{
+  "id": "feat-clblist-op-copy-add-clbname",
+  "title": "负载均衡-列表-复制负载均衡名称",
+  "currentStage": "done",
+  "createdAt": "2026-07-10T04:09:48.316Z",
+  "updatedAt": "2026-07-10T06:51:17.054Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-clblist-op-copy-add-clbname/coding.md",
+        "kind": "file",
+        "addedAt": "2026-07-10T06:37:04.773Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-clblist-op-copy-add-clbname/test.md",
+        "kind": "file",
+        "addedAt": "2026-07-10T06:37:39.020Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-07-10T06:37:11.417Z",
+      "note": "编码完成：在 CLB BatchCopy 组件中新增“负载均衡名称”复制项，改动仅 1 个文件"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-07-10T06:49:53.172Z",
+      "note": "测试清单已生成，改动仅 1 个文件 3 行代码，用户确认推进"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-07-10T04:09:48.316Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-07-10T06:37:11.417Z",
+      "note": "编码完成：在 CLB BatchCopy 组件中新增“负载均衡名称”复制项，改动仅 1 个文件"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-07-10T06:49:53.172Z",
+      "note": "测试清单已生成，改动仅 1 个文件 3 行代码，用户确认推进"
+    }
+  ],
+  "branch": "feat-clblist-op-copy-add-clbname",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "completed",
+      "at": "2026-07-10T06:36:55.510Z",
+      "note": "已完成需求澄清（TAPD 正文+描述图片分析，确认复制名称功能在侧边栏列表和表格批量复制中实现），简单需求无需评估和全量解读"
+    }
+  },
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598135954580"
+  }
+}

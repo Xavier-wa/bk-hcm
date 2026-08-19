@@ -10,6 +10,12 @@
     <template #menus>
       <copy-to-clipboard
         type="dropdown-item"
+        :text="t('负载均衡名称')"
+        :content="selectedLoadBalancerNames"
+        @success="handleSuccess"
+      />
+      <copy-to-clipboard
+        type="dropdown-item"
         :text="t('负载均衡ID')"
         :content="selectedLoadBalancerCloudIDs"
         @success="handleSuccess"
@@ -43,6 +49,7 @@ const props = defineProps<{ selections: any[] }>();
 const { t } = useI18n();
 const dropdownRef = useTemplateRef<typeof HcmDropdown>('dropdown');
 
+const selectedLoadBalancerNames = computed(() => props.selections?.map((item) => item.name)?.join('\n'));
 const selectedLoadBalancerCloudIDs = computed(() => props.selections?.map((item) => item.cloud_id)?.join('\n'));
 const selectedLoadBalancerVIPs = computed(() => props.selections?.map((item) => getInstVip(item))?.join('\n'));
 const selectedLoadBalancerDomains = computed(() => props.selections?.map((item) => item.domain)?.join('\n'));
