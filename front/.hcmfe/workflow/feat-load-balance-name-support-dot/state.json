@@ -1,0 +1,100 @@
+{
+  "id": "feat-load-balance-name-support-dot",
+  "title": "负载均衡-名称支持英文点号",
+  "currentStage": "done",
+  "createdAt": "2026-08-13T06:07:27.910Z",
+  "updatedAt": "2026-08-13T06:27:06.653Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-load-balance-name-support-dot/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-13T06:21:36.320Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-load-balance-name-support-dot/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-13T06:26:12.854Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-13T06:21:41.403Z",
+      "note": "coding 完成：useRenderForm.tsx 的 name 校验正则放开英文点号(.)、提示文案同步；coding.md 已登记 artifact 并绑定变更文件；test.md 已写入。lint 0 错误。"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-13T06:26:15.776Z",
+      "note": "test 阶段就绪（test.md 已登记 artifact，含 P0/P1/P2 手测清单），用户已自测通过、确认推提测。推进 done，触发 tapdSync story→for_test。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-08-13T06:07:27.910Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-13T06:21:41.403Z",
+      "note": "coding 完成：useRenderForm.tsx 的 name 校验正则放开英文点号(.)、提示文案同步；coding.md 已登记 artifact 并绑定变更文件；test.md 已写入。lint 0 错误。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-13T06:26:15.776Z",
+      "note": "test 阶段就绪（test.md 已登记 artifact，含 P0/P1/P2 手测清单），用户已自测通过、确认推提测。推进 done，触发 tapdSync story→for_test。"
+    }
+  ],
+  "branch": "feat-load-balance-name-support-dot",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598136645087"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "skipped",
+      "at": "2026-08-13T06:10:32.430Z",
+      "note": "本单 story_1069995598136645087 已读全正文、Q-002(前端是否拦截点号)已在本会话澄清并确认「前端同步放开」，范围已定(改 useRenderForm.tsx 的 name 校验正则+提示文案)。对一行正则改动执行 RICE 评估/澄清回写价值不大，按契约跳过；后续进入 coding.md 不再依赖该节点产物。"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-13T06:22:34.958Z",
+      "note": "docs_status({changedFiles:[useRenderForm.tsx]}) 返回 touchedModules=[]：本次改动未归属任何需深化的模块文档（load-balancer.md 尚无 baseline，未映射该文件）。staleModules 的 drift 为既有、与本次无关。gaps=空，按收口规则跳过正文，无需补写文档。"
+    },
+    "hcm-verify-e2e": {
+      "status": "skipped",
+      "at": "2026-08-13T06:22:50.316Z",
+      "note": "本次为 CLB 实例名称前端校验正则放行点号（一行改动），验证方式已在 test.md 提供 P0/P1/P2 手测清单（含点号通过/首尾点号拒绝/长度边界等）。无适配该表单校验的 E2E 自动化底座，且内网 SSO/域名受限，按契约 optional 节点留痕跳过；交由 QA 按 test.md 手测。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-13T06:27:06.653Z",
+      "note": "tapdSync 收口：绑定的 story_1069995598136645087（objectType=story）按 resolvedTargets forward-only 从 status_11(doing) 追平到 status_14(done/已上线，本工作流语义=开发流完成)。无父需求，无需 rollup。未变更 owner（owner=v_hjynhuang;v_xhxgxiong;）。注：本次前端放开点号与 story PRD 数据校验规则正则一致，符合 Q-002「已确认需前端调整」。代码改动尚未 commit（仅工作区），按 tapdSync 契约不阻断状态推进。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "front/src/views/service/service-apply/clb/hooks/useRenderForm.tsx",
+        "useRenderForm.tsx",
+        "business/forms/security/index.vue"
+      ],
+      "contentFingerprint": "6e2eb9d82a04e334ac023b1105df851f7e48b31f",
+      "codeBaseline": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+      "seatedAt": "2026-08-13T06:21:36.331Z"
+    }
+  }
+}
