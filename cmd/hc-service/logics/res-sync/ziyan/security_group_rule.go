@@ -20,6 +20,8 @@
 package ziyan
 
 import (
+	"sort"
+
 	securitygrouprule "hcm/pkg/adaptor/types/security-group-rule"
 	"hcm/pkg/api/core"
 	corecloud "hcm/pkg/api/core/cloud"
@@ -282,9 +284,14 @@ func (cli *client) listSGRuleFromCloud(kt *kit.Kit, region, cloudSGID string) (s
 func (cli *client) updateSGRule(kt *kit.Kit, sgID string, updateRules map[string]*corecloud.
 	TCloudSecurityGroupRule) error {
 
+	// 按规则 ID 排序，保证同一批更新按相同顺序逐行加锁，避免并发事务更新同表多行时因加锁顺序不一致产生死锁。
+	ids := converter.MapKeyToStringSlice(updateRules)
+	sort.Strings(ids)
+
 	// convert update rules map to rule slice
 	ruleSlice := make([]protocloud.TCloudSGRuleBatchUpdate, 0, len(updateRules))
-	for id, rule := range updateRules {
+	for _, id := range ids {
+		rule := updateRules[id]
 		//  override id by map key
 		ruleSlice = append(ruleSlice, protocloud.TCloudSGRuleBatchUpdate{
 			ID:               id,
@@ -319,12 +326,43 @@ func (cli *client) updateSGRule(kt *kit.Kit, sgID string, updateRules map[string
 		req := &protocloud.TCloudSGRuleBatchUpdateReq{Rules: updateRuleBatch}
 		err := cli.dbCli.TCloudZiyan.SecurityGroup.BatchUpdateSecurityGroupRule(kt, req, sgID)
 		if err != nil {
+			// 主机同步与独立安全组同步会并发写入相同规则，当值已相同时 MySQL affected rows 为 0，
+			// 数据服务会将其转为 RecordNotFound。此处按 id 回查，规则确实不存在时继续返回原错误；
+			// 规则仍存在则视为并发重复写入成功，避免中断主机同步。
+			// 仅报错时进一步排查，不影响效率。
+			if errf.IsRecordNotFound(err) && cli.sgRulesAllExist(kt, sgID, updateRuleBatch) {
+				logs.Warnf("[%s] update sg rules hit 0 affected rows but all rules exist, treat as concurrent "+
+					"duplicate success, sgID: %s, count: %d, rid: %s", enumor.TCloudZiyan, sgID,
+					len(updateRuleBatch), kt.Rid)
+				continue
+			}
 			logs.Errorf("[%s] request dataservice to batch update tcloud ziyan security group rule failed, "+
 				"err: %v, batch idx: %d, rid: %s", enumor.TCloudZiyan, err, batchIdx, kt.Rid)
 			return err
 		}
 	}
 	return nil
+}
+
+// sgRulesAllExist checks whether every rule in the batch still exists in db.
+func (cli *client) sgRulesAllExist(kt *kit.Kit, sgID string, batch []protocloud.TCloudSGRuleBatchUpdate) bool {
+
+	ids := make([]string, 0, len(batch))
+	for _, one := range batch {
+		ids = append(ids, one.ID)
+	}
+	listReq := &protocloud.TCloudSGRuleListReq{
+		Field:  []string{"id"},
+		Filter: tools.ContainersExpression("id", ids),
+		Page:   core.NewDefaultBasePage(),
+	}
+	resp, err := cli.dbCli.TCloudZiyan.SecurityGroup.ListSecurityGroupRule(kt, listReq, sgID)
+	if err != nil {
+		logs.Warnf("[%s] list sg rules to verify 0-row update failed, err: %v, sgID: %s, rid: %s",
+			enumor.TCloudZiyan, err, sgID, kt.Rid)
+		return false
+	}
+	return len(resp.Details) == len(ids)
 }
 
 // deleteSGRule delete security group rule
