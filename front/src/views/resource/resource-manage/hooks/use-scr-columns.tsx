@@ -710,13 +710,6 @@ export default (type: string, isSimpleShow = false) => {
     { label: '园区', field: 'zone_name' },
     { label: '所在母机IP', field: 'owner_ip', render: ({ row }: any) => row.owner_ip || '--' },
     {
-      label: '交付时间',
-      field: 'updated_at',
-      width: 160,
-      render: ({ cell }: any) => timeFormatter(cell),
-      exportFormatter: (row: any) => timeFormatter(row.updated_at),
-    },
-    {
       label: '生产时间',
       field: 'created_at',
       width: 160,
