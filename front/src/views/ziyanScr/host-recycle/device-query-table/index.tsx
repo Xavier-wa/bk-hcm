@@ -42,12 +42,22 @@ export default defineComponent({
     });
     const defaultTime = () => [new Date(dayjs().subtract(30, 'day').format('YYYY-MM-DD')), new Date()];
     const deviceForm = ref(defaultDeviceForm());
-    const timeForm = ref(defaultTime());
+    const returnTimeForm = ref(defaultTime());
+    const createTimeForm = ref([] as Date[]);
     const handleTime = (time: any) => (!time ? '' : dayjs(time).format('YYYY-MM-DD'));
     const timeObj = computed(() => {
       return {
-        start: handleTime(timeForm.value[0]) as string,
-        end: handleTime(timeForm.value[1]) as string,
+        return_start: handleTime(returnTimeForm.value[0]) as string,
+        return_end: handleTime(returnTimeForm.value[1]) as string,
+      };
+    });
+    const createTimeObj = computed(() => {
+      if (!createTimeForm.value || createTimeForm.value.length < 2) {
+        return {};
+      }
+      return {
+        create_start: handleTime(createTimeForm.value[0]) as string,
+        create_end: handleTime(createTimeForm.value[1]) as string,
       };
     });
     const deviceTypeList = ref([]);
@@ -82,6 +92,7 @@ export default defineComponent({
       const params = {
         ...deviceForm.value,
         ...timeObj.value,
+        ...createTimeObj.value,
         page: pageInfo.value,
         bk_biz_id:
           deviceForm.value.bk_biz_id?.[0] === 0 || isEmpty(deviceForm.value.bk_biz_id)
@@ -240,7 +251,10 @@ export default defineComponent({
               <FloatInput v-model={deviceForm.value.bk_asset_id} placeholder='请输入单号，多个换行分割' />
             </FormItem>
             <FormItem label='完成时间'>
-              <DatePicker v-model={timeForm.value} type='daterange' />
+              <DatePicker v-model={returnTimeForm.value} type='daterange' />
+            </FormItem>
+            <FormItem label='创建时间'>
+              <DatePicker v-model={createTimeForm.value} type='daterange' />
             </FormItem>
           </Form>
           <div class='btn-container'>

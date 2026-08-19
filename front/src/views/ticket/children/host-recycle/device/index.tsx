@@ -42,6 +42,7 @@ export default defineComponent({
       stage: [] as any[],
       bk_username: [userStore.username],
       dateRange: applicationTime(),
+      createDateRange: [] as string[],
       bk_asset_id: [] as string[],
     });
 
@@ -57,12 +58,15 @@ export default defineComponent({
     const requestListParams = computed(() => {
       const params = {
         ...formModel,
-        start: formModel.dateRange[0],
-        end: formModel.dateRange[1],
+        return_start: formModel.dateRange[0],
+        return_end: formModel.dateRange[1],
+        create_start: formModel.createDateRange[0] || '',
+        create_end: formModel.createDateRange[1] || '',
         bk_biz_id: [getBizsId()],
       };
       params.order_id = params.order_id.length ? params.order_id.map((v) => +v) : [];
       params.dateRange = undefined;
+      params.createDateRange = undefined;
       removeEmptyFields(params);
       return params;
     });
@@ -260,6 +264,10 @@ export default defineComponent({
             {
               title: t('完成时间'),
               content: <ScrDatePicker class='full-width' v-model={formModel.dateRange} />,
+            },
+            {
+              title: t('创建时间'),
+              content: <ScrDatePicker class='full-width' v-model={formModel.createDateRange} />,
             },
             {
               title: t('固资号'),
