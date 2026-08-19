@@ -13,6 +13,7 @@
 package task
 
 import (
+	"errors"
 	"fmt"
 
 	types "hcm/cmd/woa-server/types/task"
@@ -66,10 +67,10 @@ func (s *service) CheckBizApplyOrder(cts *rest.Contexts) (any, error) {
 }
 
 // checkApplyOrder 执行提单前完整只读校验链并归一化结果。
-// 校验顺序与创建路径完全对齐：需求类型/预测余量 → 需求类型特定校验/数据填充 → GPU 计费时长 → 机型信息填充 → 实时容量。
-// 前四步与创建路径完全同源：validateApplyOrder + ProcessApplyOrderByRequireType + VerifyCvmGPUChargeMonth
-// + FillCVMAppliedCore，确保 check 和 create 在相同的数据状态与校验顺序下执行后续逻辑。
-// 业务类失败（参数非法、预测不足、GPU 不通过、容量不足）归一为 {pass:false, reason}；
+// 校验顺序与创建路径对齐：需求类型/预测余量 → 额度 → 需求类型特定校验/数据填充 → GPU 计费时长 →
+// 机型信息填充 → 实时容量。额度入口与推荐方案共用 CheckApplyQuota；额度不足归一为
+// {pass:false, reason} 供 Agent 提示用户，额度服务故障透出为 error。
+// 业务类失败（参数非法、预测不足、额度不足、GPU 不通过、容量不足）归一为 {pass:false, reason}；
 // 系统异常（下游调用失败等）透出为 error。
 func (s *service) checkApplyOrder(kt *kit.Kit, input *types.ApplyReq) (*types.CheckApplyOrderResp, error) {
 	// 1. 需求类型校验 + 预测内/外余量校验（与创建路径同源）
@@ -84,7 +85,21 @@ func (s *service) checkApplyOrder(kt *kit.Kit, input *types.ApplyReq) (*types.Ch
 		return nil, err
 	}
 
-	// 2. 需求类型特定校验 + 内存数据填充（与创建路径同源）：
+	// 2. 额度校验：与推荐方案同一入口 CheckApplyQuota（滚服/资源池/小额绿通）。
+	//    推荐链路额度不足静默丢弃候选；预检链路额度不足返回 Pass=false，Agent 据此拒绝提单。
+	if err := s.logics.Scheduler().CheckApplyQuota(kt, input.BkBizId, input.RequireType, input.Suborders); err != nil {
+		var quotaErr *types.QuotaInsufficientError
+		if errors.As(err, &quotaErr) {
+			logs.Infof("check apply order not passed on quota verify, reason: %s, bizID: %d, rid: %s",
+				quotaErr.Reason, input.BkBizId, kt.Rid)
+			return &types.CheckApplyOrderResp{Pass: false, Reason: quotaErr.Reason}, nil
+		}
+		logs.Errorf("failed to check apply order on quota verify, err: %v, bizID: %d, rid: %s",
+			err, input.BkBizId, kt.Rid)
+		return nil, err
+	}
+
+	// 3. 需求类型特定校验 + 内存数据填充（与创建路径同源）：
 	//    - 滚服：校验继承机型族一致性
 	//    - 裁撤：从 BKCC 继承 charge_type，供后续 GPU 计费时长与容量校验使用
 	//    - 弹性资源池：校验 charge_type 与配置一致
@@ -99,7 +114,7 @@ func (s *service) checkApplyOrder(kt *kit.Kit, input *types.ApplyReq) (*types.Ch
 		return nil, err
 	}
 
-	// 3. GPU 计费时长校验（只读，与创建路径同源）
+	// 4. GPU 计费时长校验（只读，与创建路径同源）
 	if err := s.logics.Scheduler().VerifyCvmGPUChargeMonth(kt, input.Suborders); err != nil {
 		if reason, ok := businessRejectReason(err); ok {
 			logs.Infof("check apply order not passed on gpu charge month verify, reason: %s, bizID: %d, rid: %s",
@@ -111,7 +126,7 @@ func (s *service) checkApplyOrder(kt *kit.Kit, input *types.ApplyReq) (*types.Ch
 		return nil, err
 	}
 
-	// 4. 机型信息填充（机型族/核数），顺序与创建路径一致
+	// 5. 机型信息填充（机型族/核数），顺序与创建路径一致
 	filled, err := s.logics.Scheduler().FillCVMAppliedCore(kt, input)
 	if err != nil {
 		logs.Errorf("failed to fill cvm applied core for check, err: %v, bizID: %d, rid: %s",
@@ -120,7 +135,7 @@ func (s *service) checkApplyOrder(kt *kit.Kit, input *types.ApplyReq) (*types.Ch
 	}
 	input = filled
 
-	// 5. 实时容量校验（与生产路径同源：委托给 scheduler 统一维护）
+	// 6. 实时容量校验（与生产路径同源：委托给 scheduler 统一维护）
 	pass, reason, err := s.logics.Scheduler().VerifyApplyCapacity(kt, input)
 	if err != nil {
 		logs.Errorf("failed to check apply order on capacity verify, err: %v, bizID: %d, rid: %s",

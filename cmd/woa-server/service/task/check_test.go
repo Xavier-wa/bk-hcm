@@ -48,4 +48,3 @@ func TestBusinessRejectReason(t *testing.T) {
 		})
 	}
 }
-
