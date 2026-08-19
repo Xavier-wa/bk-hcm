@@ -1,6 +1,6 @@
 ---
 name: wf-docs-closeout
-description: 文档收口：先 docs_status 算 gaps（touched 且 stub/stale），有缺口才更新 modules 并 deepen；无缺口可跳过正文。仅高价值信号 docs_promote；待评审时强提示 promotions-review。test.post required（存在 docs 底座且 docs 开启时）。当 pending hcm-docs-closeout 或 closeout 指向文档收口时使用。
+description: 文档收口：先 docs_status 算 gaps（touched 且 stub/stale），有缺口才更新 modules 并 deepen；无缺口可跳过正文。按触发器补漏询问是否 docs_promote（只进 pending）；待评审仅在用户确认后走 promotions-review。test.post required（存在 docs 底座且 docs 开启时）。当 pending hcm-docs-closeout 或 closeout 指向文档收口时使用。
 ---
 
 # 文档收口 Skill（wf-docs-closeout）
@@ -33,9 +33,11 @@ description: 文档收口：先 docs_status 算 gaps（touched 且 stub/stale）
    - gaps 为空且中途已 deepen 过 → 本步可跳过。
    - **禁止**在未实际更新模块文档正文的情况下调用 `docs_deepen` / `bkdevbuddy_docs_deepen`（deepen 只用于刚写完之后刷基线，不能用来"消掉" stale/stub 状态而不写内容）。
 
-4. **（可选）高价值经验晋升**
-   - 仅返工/意外/可复用套路 → `bkdevbuddy_docs_promote({ title, summary, why, kind })`。
-   - 不要无差别记录每次改动。
+4. **（补漏）经验捕获**
+   - 只回看本迭代是否还有未问过的触发器命中：用户纠正 / 换打法 / 新约定 / 意外根因。
+   - 命中 → 先问用户是否记下；同意 → `bkdevbuddy_docs_promote({ title, summary, why, kind })`，只回「已记下，之后可评审。」
+   - 未命中 → 不问、不写。不要无差别记录每次改动。
+   - **禁止**在本步开启 `promotions-review`。
 
 5. **强提示评审（不阻塞 done）**
    - `promotionQueue.totalOpen > 0` → 向用户确认是否现在 `promotions-review`。

@@ -299,7 +299,16 @@ const HeavyChart = defineAsyncComponent(() => import('./heavy-chart.vue'));
 </script>
 ```
 
-### 7.8 AI Agent 执行规则
+### 7.8 组件事件处理函数命名
+
+凡**直接绑定**到组件 / DOM 事件的函数（模板 `@xxx=`、TSX `onXxx=`）必须以 `handle` 开头，例如 `handleSelectionChange`、`handlePageChange`。
+
+- ✅ `<bk-table @selection-change="handleSelectionChange" />`
+- ✅ `<Table onSelectionChange={handleSelectionChange} />`
+- ❌ 把内部工具函数（如 `pruneMixedDemandClassSelection`）直接绑到事件；应包一层 `handleSelectionChange`，再在其中调用工具函数
+- 内部工具函数 / 纯计算函数**可不加** `handle` 前缀
+
+### 7.9 AI Agent 执行规则
 
 编写 Vue 组件时必须遵循：
 
@@ -316,3 +325,4 @@ const HeavyChart = defineAsyncComponent(() => import('./heavy-chart.vue'));
 11. 透传属性用 `useAttrs()`，插槽用 `useSlots()`
 12. 清理副作用用 `onCleanup`
 13. 避免不必要的深度监听，优先 getter `() => obj.prop`
+14. 直接绑定到组件 / DOM 事件的函数必须以 `handle` 开头（见 §7.8）

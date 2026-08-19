@@ -1,0 +1,69 @@
+{
+  "version": 2,
+  "criteria": {},
+  "proposals": {
+    "sync-derived-filter-state": {
+      "title": "同步筛选条件时必须带上派生状态",
+      "times": 1,
+      "firstProposedAt": "2026-08-18T09:30:41.569Z",
+      "lastProposedAt": "2026-08-18T09:30:41.569Z",
+      "contexts": [
+        "mr-3328"
+      ]
+    },
+    "no-event-watch-feedback-loop": {
+      "title": "不要让事件与 watch 互相触发同一副作用",
+      "times": 1,
+      "firstProposedAt": "2026-08-18T09:30:41.569Z",
+      "lastProposedAt": "2026-08-18T09:30:41.569Z",
+      "contexts": [
+        "mr-3328"
+      ]
+    },
+    "no-nested-v-model-same-binding": {
+      "title": "同一值不要叠两层 v-model",
+      "times": 1,
+      "firstProposedAt": "2026-08-18T09:30:41.569Z",
+      "lastProposedAt": "2026-08-18T09:30:41.569Z",
+      "contexts": [
+        "mr-3328"
+      ]
+    },
+    "autofill-honor-recommended-flag": {
+      "title": "带推荐标记的列表自动回填必须吃推荐位",
+      "times": 1,
+      "firstProposedAt": "2026-08-18T09:30:41.569Z",
+      "lastProposedAt": "2026-08-18T09:30:41.569Z",
+      "contexts": [
+        "mr-3328"
+      ]
+    },
+    "reuse-canonical-enum-source": {
+      "title": "可枚举业务名走已有数据源，禁止平行写死",
+      "times": 1,
+      "firstProposedAt": "2026-08-18T09:30:41.569Z",
+      "lastProposedAt": "2026-08-18T09:30:41.569Z",
+      "contexts": [
+        "mr-3328"
+      ]
+    },
+    "guard-async-watch-races": {
+      "title": "异步 watch 必须丢弃过期响应",
+      "times": 1,
+      "firstProposedAt": "2026-08-18T09:30:41.569Z",
+      "lastProposedAt": "2026-08-18T09:30:41.569Z",
+      "contexts": [
+        "mr-3328"
+      ]
+    },
+    "use-project-time-formatter": {
+      "title": "时间展示统一走项目 formatter",
+      "times": 1,
+      "firstProposedAt": "2026-08-18T09:30:41.569Z",
+      "lastProposedAt": "2026-08-18T09:30:41.569Z",
+      "contexts": [
+        "mr-3328"
+      ]
+    }
+  }
+}

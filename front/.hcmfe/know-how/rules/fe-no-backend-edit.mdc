@@ -31,8 +31,9 @@ bkdevbuddy / `/workflow-dev` 在本项目中只服务 **HCM 前端**。**不得*
 2. **禁止写入**常见后端路径与类型（即使落在 workspace 内）：
    - `**/*.go`、`**/go.mod`、`**/go.sum`
    - `server/`、`cmd/`、`pkg/`、`internal/`（仓库内后端树）
+   - `docs/api-docs/**`（后端维护的对外接口文档；契约增量只写 `<dataDir>/workflow/<id>/api.md`）
    - 非前端服务的部署 / CI 脚本（用户未点名时）
-3. **允许只读**：为理解接口契约、排错或写 `api.md`，可以 Read / Grep 后端代码；读完只把结论写进 `<dataDir>/` 产物或前端适配代码，**不得**据此改后端（`<dataDir>` 见 `bkdevbuddy-data-dir` rule）。
+3. **允许只读**：为理解接口契约、排错或写 `api.md`，可以 Read / Grep 后端代码与 `docs/api-docs/**`；读完只把结论写进 `<dataDir>/` 产物或前端适配代码，**不得**据此改后端源码或后端 API 文档（`<dataDir>` 见 `bkdevbuddy-data-dir` rule）。
 4. **接口缺口处理**：发现需后端配合时，在 `api.md` / `coding.md` / 对话中标注「需后端配合」及期望契约，交给用户决定是否另开后端任务；**不要**自己开改。
 
 ## 允许写入的典型前端范围（仅规则生效时）

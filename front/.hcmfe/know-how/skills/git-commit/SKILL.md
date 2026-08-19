@@ -169,14 +169,21 @@ short_id = String(Number(long_id.slice(-9)))   // 去掉短 ID 段前导 0
 
 1. 解析清单：跳过 `[ ]`；采用用户改过的 message / files；若用户手写了 `(scope)` 则保留。
 2. 校验：带 `--story`/`--bug` 的 ID 必须是短 ID（≤9 位数字）；若仍是 19 位 → 拒绝该条并提示先修正。
-3. 逐条：`git add -- <files...>`，再 HEREDOC commit：
+3. 逐条：`git add -- <files...>`，再 commit。**禁止用 `git commit -m "中文"`**：
+   - Windows PowerShell 5.1 会把无 BOM 的 UTF-8 脚本/命令文本按系统 ANSI 码页（GBK/CP936）解码，或经 cmd.exe 的 GBK 控制台转码：中文在传给 git 前就已损坏，git 只把错误字节原样存盘 → commit message 乱码。不同 shell/通道行为不一致，因此不能依赖 `-m` 的编码路径。
+   - bash heredoc `<<'EOF' ... EOF` 在 PowerShell 也不支持（PowerShell 只有 here-string `@'...'@`，没有 bash heredoc 语法，旧写法会直接解析报错）。
 
-```bash
-git commit -m "$(cat <<'EOF'
-feat: webhook方式同步issue状态 --story=135926589
-EOF
-)"
-```
+   **改用临时文件 + `-F`（跨平台、无乱码）**：
+
+   1. 用 Write 工具把 commit message 写到仓库内临时文件（如 `.git/COMMIT_MSG_TMP.txt`），**UTF-8 无 BOM** 编码（Write 工具默认即 UTF-8）。放在 `.git/` 下不被跟踪、也不受 `core.autocrlf` 和 clean/smudge 过滤影响，字节在多平台保持一致；常规仓库可直接用，worktree/submodule 场景改用 `git rev-parse --git-path COMMIT_MSG_TMP.txt` 解析真实路径。
+   2. 执行 `git commit -F <临时文件路径>`（`-F` 直接读文件内容作为 message，绕开 shell 的编码转换）。
+   3. 无论成功失败都用 Delete 工具清理临时文件（固定文件名，下次写入会覆盖，风险低）。
+
+   临时文件内容示例（UTF-8 无 BOM）：
+
+   ```text
+   feat: webhook方式同步issue状态 --story=135926589
+   ```
 
 4. 失败（含 hook）：报告错误，不 amend；是否继续后续条先问用户。
 5. 成功后 `git status`，列出新 commit。

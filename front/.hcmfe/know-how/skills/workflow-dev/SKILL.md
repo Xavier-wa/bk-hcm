@@ -15,7 +15,7 @@ description: "[bkdevbuddy] 开发工作流入口 — 按 PRD/Design/API/Coding/T
 - **bkdevbuddy_workflow_intent** — 决定当前对话该挂到哪条工作流 (见 contract, **会话第一步**)
 - **bkdevbuddy_workflow_status** — 查看当前开发工作流状态 (阶段/产物/缺失项)
 - **bkdevbuddy_workflow_init** — 新建工作流(迭代); 传 `requirement` 关联到已有 Requirement。**不要**用它静默创建新 Requirement；缺失 Requirement 时先走 `bkdevbuddy_req_init` 预览 + 用户确认。小需求可传 `mode: 'lite'` 走轻量链 (见 [轻量模式 lite])。未绑定 TAPD 时响应含 `tapdOffer`（见 [口头建 TAPD 单]）；`create_workflow_only` 后建议传 `utterance`（用户原话）
-- **bkdevbuddy_workflow_next** — 推进到下一阶段 (前置检查未通过会被拒)。**这是唯一的用户确认闸口**: 调用它会顺带把当前阶段登记为已审批 (可带 `note`) 再推进; 只能在用户明确说"继续/确认"之后调
+- **bkdevbuddy_workflow_next** — 推进到下一阶段 (前置检查未通过会被拒)。**这是唯一的用户确认闸口**: 调用它会顺带把当前阶段登记为已审批 (可带 `note`) 再推进; 只能在用户明确说"继续/确认"之后调。coding 阶段按[编码完成证据]三类任一放行, **已 commit / 已 push 且工作区干净是正常可推进状态**
 - **bkdevbuddy_workflow_artifact_add** — 给当前阶段关联产物 (文件路径或 URL); coding 阶段可传 `boundFiles`（或在 md 反引号中写代码路径）以自动落座 freshness 基线
 - **bkdevbuddy_workflow_artifact_seat** — 落座/豁免 coding 产物保鲜基线 (`mode: align|waive`; waive 时 `note` 必填)
 - **bkdevbuddy_workflow_artifact_reconcile** — 拿到 coding.md 对齐任务包 (含绑定文件 diff); **禁止**据此改 prd/design
@@ -24,9 +24,10 @@ description: "[bkdevbuddy] 开发工作流入口 — 按 PRD/Design/API/Coding/T
 - **bkdevbuddy_workflow_node_complete** — 将 `workflow_status.stageNodes` 中的 pending 前置/后置处理标记为已完成
 - **bkdevbuddy_workflow_node_skip** — 在用户明确拒绝执行 optional 节点后跳过 (note 必填, 记录用户理由)
 - **bkdevbuddy_workflow_relink** — 把当前工作流改挂到另一个 Requirement (修正错关联)
-- **bkdevbuddy_tapd_status_sync** — 把某项目 (workspace) 的 TAPD `status` 字段选项映射到语义状态链并缓存 (见 [TAPD 单据状态自动流转])
+- **bkdevbuddy_tapd_status_sync** — 保存该项目 (workspace) TAPD `status` 字段的**全部**真实选项, 对齐语义链并生成 transition 规则 (见 [TAPD 单据状态自动流转])
+- **bkdevbuddy_tapd_transition_plan** — 由「当前真实 status key + 目标语义」算出合法的真实 key 更新路径; **任何 TAPD 状态写入前必须先调它**, 禁止手工比较序号
 - **bkdevbuddy_tapd_link** — 把当前工作流绑定到它要驱动的 TAPD 单据 (story/bug); 绑定后 status/next 会返回 `tapdSync` 指引块
-- **bkdevbuddy_tapd_rollup** — 由子需求状态计算父需求应流转到的目标状态 (确定性、只进不退)
+- **bkdevbuddy_tapd_rollup** — 由子单据状态计算父需求应流转到的目标状态 (确定性、只进不退); 子项用 `objectType` 模型、父项用 `parentObjectType` 模型 (默认 `story`)
 - **bkdevbuddy_req_init / _show / _list** — Requirement (跨迭代聚合的需求实体) CRUD；其中 `bkdevbuddy_req_init` 默认返回 `mode=preview` 且 `wrote=false`，仅在 `confirm=true` 时写盘
 - **bkdevbuddy_req_merge_iteration** — 把已完成迭代的 PRD/Design/API 合并到 Requirement 主版本, 设置新代码基线 (通常 iteration done 时调一次)
 - **bkdevbuddy_drift_check** — 检测代码相对上次基线的漂移 (**编码后必调**)
@@ -146,6 +147,13 @@ description: "[bkdevbuddy] 开发工作流入口 — 按 PRD/Design/API/Coding/T
 - **加绑 / 改码后对齐**: 追加 TAPD 绑定后立刻补节；每组代码改动后更新对应 `**文件**`/`**改动点**`，再 seat / next / 按单 commit。
 - **单绑**（`length <= 1`）不启用本闸门，可继续旧单节写法。
 
+**编码完成证据 (coding→test 门禁)**: 引擎不再要求"工作区必须脏"。以下**三类任一**成立即视为有编码成果:
+- **A 工作区相关变更**: 有 `boundFiles` 时工作区变更须与 `boundFiles` 相交; 无 `boundFiles` 时只统计数据目录外的代码/测试文件。`state.json` / `coding.md` / 无关文档不算成果。
+- **B baseline 后的相关提交**: 进入 coding 时引擎已在 history 里记下 `gitHead`; `gitHead..HEAD` 的改动路径按同样规则相交即成立。**已 push 与否不影响判定**。
+- **C fresh 产物 + 绑定文件已提交**: freshness 为 `fresh`、`boundFiles` 非空、全部被 Git 跟踪且与 HEAD 一致。
+
+因此**已 commit（含已 push）且工作区干净是正常可推进状态**: **禁止**为了过闸而制造脏工作区、回改文件或用 `set_stage(force=true)` 绕过。三类全不成立时 reasons 会逐类说明（无相关工作区变更 / baseline 后无相关提交 / 产物非 fresh 或绑定文件未提交），照原因补真实编码成果即可。`boundFiles` 必须是数据目录**之外**的真实代码路径——只写 `state.json` 之类的数据目录路径会被 `artifact_seat` 直接拒绝, 也不会退化成"任意代码文件都算"。freshness (`stale`/`untracked`)、多单 `## 单据 N` 结构、required 节点与 `pendingTapdActions` 仍是**各自独立**的闸口, 不因本证据成立而放宽。
+
 - **test** 测试: 见下面 [Test 阶段执行清单]
 - **done** 完成: 通知用户工作流已结束
 
@@ -258,7 +266,7 @@ description: "[bkdevbuddy] 开发工作流入口 — 按 PRD/Design/API/Coding/T
 - 被跳过的阶段会记进 workflow history, 目录仍自洽, drift-check / merge 照常工作。
 
 ### lite 下的推进
-- 与 [推进通用流程] 一致, 只是链更短、部分阶段可能无产物文件。coding 阶段推进到 test 前**仍需** `bkdevbuddy_lint` 且仍校验有 git 改动。
+- 与 [推进通用流程] 一致, 只是链更短、部分阶段可能无产物文件。coding 阶段推进到 test 前**仍需** `bkdevbuddy_lint`, 并按[编码完成证据]接受相关工作区变更、coding baseline 后相关提交、或 fresh 且已提交的绑定文件三者任一; **不要求保留脏工作区**。
 - **TAPD 别漏追平**: lite 从 `coding` (语义 `doing`) 起步, 没有「推进进入 coding」的 `next`, 追平路径 (如 `[todo, doing]`) 由 `tapd_link`/`status` 的 `tapdSync` 给出。**何时追平**遵循 [绑定 vs 追平] 通用规则: 有 pending `stageNodes` 时先处理节点再追平; 无 pending 时 link 后即可追平。**不可**拖到已进入编码主工作或多次 `next` 之后仍未追平。
 - **前置处理别漏了**: 当前阶段若有 pending `stageNodes.pre`, 必须在写 coding.md / 编码前按 [阶段前置/后置处理] 做完; **禁止**因 lite「直接编码」而静默跳过。
 
@@ -279,13 +287,21 @@ backlog(新) < todo(已规划) < doing(开发中) < for test(提测) < tested(�
 
 **追平不跳级 (lite 与 full 都适用)**: 单据初始通常是 `backlog`, 语义链是 `backlog < todo < doing < for_test < tested < done`, 逐级只进不退。**绝不能**从 `backlog` 直接跳到 `doing` 而跳过 `todo`。full 天然经 prd(todo) 再到 coding(doing); lite 从 coding 起步时, 引擎/`tapd_link` 返回的 `tapdSync` 已给出**完整追平路径** (如 `[todo, doing]`), 按序逐级前进即可 (已在更高状态的会被 forward-only 守卫幂等跳过)。
 
+**语义里程碑 ≠ 项目真实状态图**: 语义链是 bkdevbuddy 固定的里程碑; TAPD 项目的真实状态 (如 `approved`/「已评审」) 由 `status:sync` 全量保存。内置规则识别 `approved`: 它只越过 `backlog`, 下一个语义里程碑是 `todo`, 因此**真实写入路径是 `approved → todo → doing`**, **禁止** `approved → doing` 跳级。
+
+**写 TAPD 前必须先规划 (硬红线)**: 任何 `stories_update` / `bugs_update` 之前, 先 `stories_get`/`bugs_get`(with_v_status=1) 读真实 key, 再调 `bkdevbuddy_tapd_transition_plan`(workspaceId, objectType, `currentStatusKey`=真实 key, `targetSemantics`=`childTargets`), 然后**只**沿返回的 `path` 逐个真实 key 更新。**禁止**在提示词里手工比较序号, 也**禁止**直接拿 `resolvedTargets` 写入——它只是展示/兼容字段。
+
+**未知状态显式阻塞, 不静默跳过**: planner / roll-up 遇到既非语义状态、也没有 transition 规则的真实 key 时返回 blocker + 待配置 key (`pendingConfiguration` / `unmappedStatusKeys`), 不再猜测、不再把它从 roll-up 分母里悄悄剔除。此时按 blocker 的 `suggestion` 处理: 要么给该状态配 transition 规则 (`satisfies` + 必要的 `nextSemantic`, 经 `status:sync` 的 `mappings` 传入), 要么在确实不该参与父级 roll-up 时显式声明 `excludedFromRollup: true`; **不许**因"不认识"就忽略。同理, **本次最终目标**语义在对应模型里没有真实 key 时也会阻塞 (`MISSING_TARGET_SEMANTIC`), 哪怕当前状态已高于目标; 而路径中间缺失的里程碑 (项目本就没有该语义) 会被跳过, 不算阻塞。
+
 **`done` 是工作流完成态, 不以真实上线为前提 (关键, 别再误判; 仅适用于 story, 或 `childTargets` 实际含 `done` 的单据)**: 当工作流推进到 `done` 阶段 (test 通过并完成) 时, story 的 `tapdSync` 会给出 `[tested, done]`, 你**必须**按序把单据推到 `tested` 再到 `done`。TAPD 里 done 的真实 label 常写作"已上线", 但在本工作流语义里它只表示"开发/交付流程已完成", **与代码是否已提交 / 是否已合并 / 是否已部署 / 是否真的上线无关, 也与真实 CI 不严格对应**。**严禁**以"代码还没提交 / 还没上线 / CI 还没过"为由停在 `tested` 而不推到 `done` —— 只要工作流走到了 done 阶段, 就把 story 一路推到 `done`。bug 不适用本段——见上方[按 objectType 分型]，最高停在 `for_test`，`childTargets` 通常为空。多单绑定时，done 收口必须遍历 `tapdSync.items` 的**每一张单据**，按其 `objectType` 分别验收 (story 追到 `done`；bug 核对 `for_test`)；仅在用户明确同意时才可 skip 某张单据。只有全部单据按其分型到位后才能 `bkdevbuddy_workflow_node_complete`，并在 note 中回填每张单据最终的 status key。
 
 ### 一次性准备: 同步状态模型
 TAPD 每个项目的真实状态 key (如 story 的 `status_12`、bug 的 `resolved`) 因项目/对象类型而异, 必须先发现并缓存:
 1. 用 TAPD MCP `tapd_field_detail_get`(object_type=story|bug, field_names=["status"]) 取回 `status` 字段的选项 (key→label 映射)。
-2. 把该映射作为 `options` 传给 `bkdevbuddy_tapd_status_sync`(workspaceId, objectType, options)。它按英文 label token 对齐到语义链并写入 `<dataDir>/tapd.json`。
-3. story 和 bug 各同步一次。返回里的 `unmatched` 表示该对象类型缺哪些语义状态 (正常, 不是错误)。
+2. 把**完整**映射作为 `options` 传给 `bkdevbuddy_tapd_status_sync`(workspaceId, objectType, options)。它保存全部真实选项、按英文 label token 对齐语义链、并为 `approved` 等生成 transition 规则, 写入 `<dataDir>/tapd.json`。**不要**只传命中语义的子集。
+3. story 和 bug 各同步一次。返回里的 `unmatched` 表示该对象类型缺哪些语义状态 (正常, 不是错误): 缺的是**中间里程碑** (如项目没有 `tested`) 时 planner 会直接跳过它继续走到最终目标, 只有**本次要推进的最终目标语义**缺失才会以 `MISSING_TARGET_SEMANTIC` 阻塞; `unmappedStatusKeys` 表示哪些真实状态**待配置** —— planner / roll-up 碰到它们会阻塞, 需按上文用 `mappings` 补 transition 规则或标 `excludedFromRollup: true`。
+4. `mappings` 是持久配置: 补过一次之后, 后续不带 `mappings` 的 `status:sync` 会保留这些规则 (label 按最新 options 刷新); 只有再次显式传同一个 key 才会覆盖, TAPD 删掉该选项才会消失。
+5. 旧 `tapd.json` (只有 `statusModel`) 仍可读, 但 planner / roll-up 会以 `STALE_STATUS_CONFIG` 阻塞, 直到重跑一次 `status:sync` 补齐完整 options/transitions。
 
 ### 口头建 TAPD 单（无事先单据）
 
@@ -346,11 +362,11 @@ TAPD 每个项目的真实状态 key (如 story 的 `status_12`、bug 的 `resol
 3. 按需对新单做澄清/评估；按 `tapdSync` 追平；若出现 `pendingTapdActions` 先清再继续。
 
 ### 每次推进时执行 (AI 职责)
-`tapdSync` 块字段: `linked` / `configured` / `itemId` / `childTargets` (本步要走的语义状态, 有序) / `resolvedTargets` (含真实 key/label) / `ownerAction` / `parentId` / `rollup`。另关注响应里的 `pendingTapdActions`。
+`tapdSync` 块字段: `linked` / `configured` / `itemId` / `childTargets` (本步要走的语义状态, 有序; 作为 planner 的 `targetSemantics`) / `resolvedTargets` (真实 key/label, **仅展示与向后兼容, 不得据此直接写入**) / `ownerAction` / `parentId` / `rollup`。另关注响应里的 `pendingTapdActions`。
 
 1. 若 `configured=false`, 先按上面的"同步状态模型"补齐, 否则跳过 TAPD 流转 (只提示用户)。
-2. **先读当前状态**: 用 TAPD MCP `stories_get` / `bugs_get`(with_v_status=1) 取回单据当前 status key, 定位它在语义链中的序号。
-3. **只进不退**: 遍历 `resolvedTargets`, 仅当目标语义序号 **严格大于** 当前序号时, 才用 TAPD MCP 更新工具 (`stories_update` / `bugs_update`, 传真实 `status` key) 推进; 目标 ≤ 当前一律跳过 (幂等)。
+2. **先读当前状态**: 用 TAPD MCP `stories_get` / `bugs_get`(with_v_status=1) 取回单据当前真实 status key。
+3. **先规划再写入**: 用该真实 key + `childTargets` 调 `bkdevbuddy_tapd_transition_plan`, 只沿返回 `path` 里的真实 key 逐个 `stories_update` / `bugs_update`; `path` 为空表示已达标 (幂等跳过), 返回 blocker 则停下该单并报告待配置状态。**禁止**手工比较序号或直接用 `resolvedTargets` 写入 (仅展示用)。
 4. **有 `ownerAction`**: 对 bug 同步改处理人（`bugs_get` reporter → `bugs_update(current_owner=…)`），再 `bkdevbuddy_tapd_action_complete` 清 `pendingTapdActions`（`note` 回填最终 owner）。**未清 pending 时下次 `workflow_next` 会被引擎拒绝。**
 5. **工作流回退不回退 TAPD**: 用 `bkdevbuddy_workflow_set_stage` 向后跳修订产物时, **绝不**下调 TAPD 状态 —— 状态只单调前进。
 6. **更新被拒时**: 若 TAPD 因项目工作流规则 (check_workflow) 拒绝某次跃迁, 如实回报用户、不要反复重试或绕过。
@@ -358,8 +374,9 @@ TAPD 每个项目的真实状态 key (如 story 的 `status_12`、bug 的 `resol
 ### 父需求 roll-up
 仅当 `tapdSync.parentId` 存在时:
 1. 子单据状态更新后, 用 TAPD MCP `stories_get`({ parent_id, with_v_status:1 }) 拉取**全部**同级子单据的当前状态。
-2. 把这些子单据的 status key 传给 `bkdevbuddy_tapd_rollup`(workspaceId, objectType, childStatusKeys, parentCurrentStatusKey?)。它按阈值确定性算出父需求应到的最高语义状态 (默认: `todo` 任一子项即可、`doing` ≥50%、`for_test/tested/done` 需 100% 子项达到; 链外状态如驳回/挂起自动不计入分母)。
-3. 若返回 `shouldAdvance=true` (即目标严格前进于父当前), 用真实 `targetKey` 更新父需求; 否则跳过。父需求同样**只进不退**。
+2. 把这些子单据的 status key 传给 `bkdevbuddy_tapd_rollup`(workspaceId, `objectType`=**子项**类型, `parentObjectType`=**父项**类型 (默认 `story`), childStatusKeys, parentCurrentStatusKey?)。子项 key 用子项模型解析、父项当前状态与目标 key 用父项模型解析 —— 子 bug + 父 story 时**不要**用 bug 模型解释父 story 的 key。它按阈值确定性算出父需求应到的最高语义状态 (默认: `todo` 任一子项即可、`doing` ≥50%、`for_test/tested/done` 需 100% 子项达到)。
+3. 若返回 `shouldAdvance=true`, 沿 `parentPath` 的真实 key 逐级更新父需求 (父项若停在 `approved` 也要走 `todo → doing`); 否则跳过。父需求同样**只进不退**。
+4. **阻塞即停**: 任一参与计算的状态无法解析 (`ok:false` + `unmappedStatusKeys`)、或父模型缺目标语义 (`MISSING_TARGET_SEMANTIC`) 时, **不要**降低分母或猜测继续; 按 `suggestion` 配 transition 规则 / `excludedFromRollup: true`, 或补齐目标状态后重试。驳回/挂起等不参与 roll-up 的状态**必须显式**声明 `excludedFromRollup: true`。
 
 ## 事后修订 / 回退 (重要)
 

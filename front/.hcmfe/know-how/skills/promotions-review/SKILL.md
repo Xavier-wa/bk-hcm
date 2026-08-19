@@ -7,8 +7,9 @@ description: 评审并落成经验晋升候选（docs promotions）：起草/更
 
 ## 何时用
 
-- closeout / `docs_status` 显示 `promotionQueue.totalOpen > 0`，且**用户确认**现在评审
-- 用户主动要求「评审 promotions / 经验晋升」
+- **用户明确要求**「评审 promotions / 经验晋升」，或 closeout 里用户确认现在评审
+- `docs_status` / stop hook 出现待评审计数 **不是**启动条件；捕获成功（`docs_promote` 返回 notice）**不是**启动条件
+- **禁止**在刚 `docs_promote` 之后自动进入本 skill
 
 ## 步骤
 
