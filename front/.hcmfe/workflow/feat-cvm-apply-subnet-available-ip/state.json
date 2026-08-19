@@ -1,0 +1,172 @@
+{
+  "id": "feat-cvm-apply-subnet-available-ip",
+  "title": "海垒申领界面及修改界面增加子网网段\"可用IP\"数量显示",
+  "currentStage": "done",
+  "createdAt": "2026-08-14T08:19:04.250Z",
+  "updatedAt": "2026-08-17T01:36:44.704Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-apply-subnet-available-ip/prd.md",
+        "kind": "file",
+        "addedAt": "2026-08-14T08:22:27.084Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-apply-subnet-available-ip/design.md",
+        "kind": "file",
+        "addedAt": "2026-08-14T08:51:32.698Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-apply-subnet-available-ip/api.md",
+        "kind": "file",
+        "addedAt": "2026-08-14T09:05:22.710Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-apply-subnet-available-ip/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-14T09:20:25.454Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-apply-subnet-available-ip/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-14T09:37:24.428Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-08-14T09:15:52.319Z",
+      "note": "用户确认回改后的 PRD 可作为 Design 阶段唯一执行依据（已接受后端现状，不区分查询失败与可用IP=0）"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-08-14T09:17:32.517Z",
+      "note": "用户确认回改后的 Design 可作为 API 阶段唯一执行依据"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-08-14T09:19:29.590Z",
+      "note": "用户确认 API 可作为 Coding 阶段唯一执行依据"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-14T09:36:54.418Z",
+      "note": "用户确认编码完成，推进到 Test 阶段"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-17T01:36:27.161Z",
+      "note": "用户确认测试通过（2026-08-17），P0/P1 全部 PASS，推进到 done"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-08-14T08:19:04.250Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-08-14T08:49:52.987Z",
+      "note": "用户确认 PRD 可作为 Design 阶段唯一执行依据"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-08-14T09:04:17.119Z",
+      "note": "用户确认 Design 可作为 API 阶段唯一执行依据，并指定参考工蜂 MR 3341 的接口修改"
+    },
+    {
+      "from": "api",
+      "to": "prd",
+      "at": "2026-08-14T09:13:04.750Z",
+      "note": "API 阶段发现前后端契约矛盾，用户决策接受后端现状（available_ip_count 失败/0 不区分），回改 PRD 的 F-002/R-005/AC-003/AC-006 及 design.md 相关章节，需回退重新审批"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-08-14T09:15:52.319Z",
+      "note": "用户确认回改后的 PRD 可作为 Design 阶段唯一执行依据（已接受后端现状，不区分查询失败与可用IP=0）"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-08-14T09:17:32.517Z",
+      "note": "用户确认回改后的 Design 可作为 API 阶段唯一执行依据"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-08-14T09:19:29.590Z",
+      "note": "用户确认 API 可作为 Coding 阶段唯一执行依据"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-14T09:36:54.418Z",
+      "note": "用户确认编码完成，推进到 Test 阶段"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-17T01:36:27.161Z",
+      "note": "用户确认测试通过（2026-08-17），P0/P1 全部 PASS，推进到 done"
+    }
+  ],
+  "branch": "feat-cvm-apply-subnet-available-ip",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137153583"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "skipped",
+      "at": "2026-08-14T08:21:19.366Z",
+      "note": "单据 1069995598137153583 已含完整澄清记录（2轮）、RICE 评分（价值规模38）及两张原型图 AI 解析，澄清+评估+全量解读均已完成，属幂等豁免不重跑。用户确认跳过。"
+    },
+    "hcm-design-icon-intake": {
+      "status": "skipped",
+      "at": "2026-08-14T09:00:08.093Z",
+      "note": "本需求无图标（仅文本追加展示），无图标回填目标，用户确认跳过。"
+    },
+    "hcm-design-comp-intake": {
+      "status": "skipped",
+      "at": "2026-08-14T09:00:09.115Z",
+      "note": "落码入口已明确为 CvmSubnetSelector（无设计稿版 design.md 无 §3.y 表结构），用户确认跳过。"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-14T09:38:17.242Z",
+      "note": "docs_status: touchedModules=[ziyan-scr]，ziyan-scr 为 drafted 且 hasDrift=false，gaps 为空，收口无缺口，无需更新模块正文。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-17T01:36:44.704Z",
+      "note": "story 1069995598137153583 按 forward-only 追平：for_test(status_12) → tested(status_13) → done(status_14)，最终 status key=status_14，未改 owner。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "cvm-subnet-selector/index.vue",
+        "src/views/ziyanScr/components/cvm-subnet-selector/index.vue",
+        "src/views/ziyanScr/hostApplication/components/network-info-collapse-panel/index.vue",
+        "network-info-collapse-panel/index.vue"
+      ],
+      "contentFingerprint": "f026613cc6ee323f103cbea1d675882afcce896e",
+      "codeBaseline": "38aa1b16c5abd6e68122df6298d943e783f3877e",
+      "seatedAt": "2026-08-14T09:26:12.754Z"
+    }
+  }
+}

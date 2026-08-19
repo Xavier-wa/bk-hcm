@@ -13,6 +13,7 @@ export interface ICvmSubnet {
   subnet_name: string;
   enable: boolean;
   comment: string;
+  available_ip_count: number | null;
 }
 export type ICvmSubnetList = Array<ICvmSubnet>;
 
@@ -77,10 +78,15 @@ defineExpose({ findCvmSubnetBySubnetId });
 <template>
   <Select class="w600" v-model="selectedId" :disabled="props.disabled" filterable>
     <Option
-      v-for="{ id, subnet_id: subnetId, subnet_name: subnetName } in filteredOptionList"
+      v-for="{
+        id,
+        subnet_id: subnetId,
+        subnet_name: subnetName,
+        available_ip_count: availableIpCount,
+      } in filteredOptionList"
       :key="id"
       :id="id"
-      :name="`${subnetId} | ${subnetName}`"
+      :name="`${subnetId} | ${subnetName} | 可用IP: ${availableIpCount ?? '?'}`"
     />
   </Select>
 </template>

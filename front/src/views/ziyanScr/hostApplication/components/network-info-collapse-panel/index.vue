@@ -264,6 +264,7 @@ defineExpose({ handleToggle });
             v-if="/(BCS|OVERLAY)/.test(selectedCvmSubnet?.subnet_name)"
             :desc="t('所选择的子网为容器子网')"
           />
+          <div class="subnet-available-ip-tip">{{ t('可用IP 为云厂商未分配可用 IP 数') }}</div>
         </bk-form-item>
 
         <!-- tips -->
@@ -341,6 +342,12 @@ defineExpose({ handleToggle });
 
   .tips {
     font-size: 12px;
+  }
+
+  .subnet-available-ip-tip {
+    font-size: 12px;
+    color: #979ba5;
+    line-height: 20px;
   }
 }
 </style>
