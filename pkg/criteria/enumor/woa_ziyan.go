@@ -78,23 +78,26 @@ func (o ObsProject) Validate() error {
 	return nil
 }
 
-// ValidateResPlan validate obs project used in resource plan.
+var (
+	resPlanSpringFormRegexp   = regexp.MustCompile(`^\d{4}春节保障$`)
+	resPlanDissolveFormRegexp = regexp.MustCompile(`^\d{4}机房裁撤$`)
+)
+
+// ValidateResPlan validates obs project used in resource plan by known shape.
+// 给用户选择时仍用 GetObsProjectMembersForResPlan 卡当前时间窗口；校验只认形态，不卡年份。
+// 已知形态：常规项目 / 滚服项目 / 改造复用 / 轻量云徙 / 短租项目 / YYYY春节保障 / YYYY机房裁撤。
 func (o ObsProject) ValidateResPlan() error {
-	// TODO 临时 支持同步短租项目到本地。待后续正式支持短租项目时去除此独立逻辑
-	if o == ObsProjectShortLease {
+	switch o {
+	case ObsProjectNormal, ObsProjectReuse, ObsProjectMigrate, ObsProjectRollServer, ObsProjectShortLease:
 		return nil
 	}
 
-	obsProjects := GetObsProjectMembersForResPlan()
-	obsProjectMap := converter.SliceToMap(obsProjects, func(obj ObsProject) (ObsProject, struct{}) {
-		return obj, struct{}{}
-	})
-
-	if _, ok := obsProjectMap[o]; !ok {
-		return fmt.Errorf("unsupported obs project: %s", o)
+	name := string(o)
+	if resPlanSpringFormRegexp.MatchString(name) || resPlanDissolveFormRegexp.MatchString(name) {
+		return nil
 	}
 
-	return nil
+	return fmt.Errorf("unsupported obs project: %s", o)
 }
 
 // getSpringObsProject get spring obs project.

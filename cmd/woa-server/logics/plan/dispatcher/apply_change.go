@@ -600,11 +600,6 @@ func convOrderChangeInfoFromCrpRespItem(kt *kit.Kit, orderID string, item *cvmap
 		return nil, err
 	}
 
-	if err := item.ProjectName.ValidateResPlan(); err != nil {
-		logs.Errorf("crp project name invalid, err: %v, project name: %s, rid: %s", err, item.ProjectName, kt.Rid)
-		return nil, err
-	}
-
 	resModeCode, err := item.ResourceMode.Code()
 	if err != nil {
 		logs.Errorf("crp resource mode invalid, err: %v, resource mode: %s, rid: %s", err, item.ResourceMode, kt.Rid)

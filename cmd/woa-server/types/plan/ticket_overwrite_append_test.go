@@ -166,6 +166,45 @@ func TestOverwriteAppendResPlanTicketReq_Validate(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "filter future spring form is ok",
+			req: &OverwriteAppendResPlanTicketReq{
+				Type:      enumor.RPTicketTypeAdjust,
+				Overwrite: true,
+				OverwriteFilter: &ResPlanOverwriteFilter{
+					ObsProjects:     []enumor.ObsProject{"2099春节保障"},
+					ExpectTimeRange: &times.DateRange{Start: "2024-09-01", End: "2024-12-31"},
+				},
+				Applicant: "zhangsan",
+			},
+			wantErr: false,
+		},
+		{
+			name: "filter future dissolve form is ok",
+			req: &OverwriteAppendResPlanTicketReq{
+				Type:      enumor.RPTicketTypeAdjust,
+				Overwrite: true,
+				OverwriteFilter: &ResPlanOverwriteFilter{
+					ObsProjects:     []enumor.ObsProject{"2098机房裁撤"},
+					ExpectTimeRange: &times.DateRange{Start: "2024-09-01", End: "2024-12-31"},
+				},
+				Applicant: "zhangsan",
+			},
+			wantErr: false,
+		},
+		{
+			name: "filter illegal obs project is invalid",
+			req: &OverwriteAppendResPlanTicketReq{
+				Type:      enumor.RPTicketTypeAdjust,
+				Overwrite: true,
+				OverwriteFilter: &ResPlanOverwriteFilter{
+					ObsProjects:     []enumor.ObsProject{"2029春保"},
+					ExpectTimeRange: &times.DateRange{Start: "2024-09-01", End: "2024-12-31"},
+				},
+				Applicant: "zhangsan",
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tc := range testCases {

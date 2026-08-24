@@ -25,8 +25,46 @@ import (
 	"hcm/pkg/api/core"
 	"hcm/pkg/criteria/enumor"
 
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 )
+
+func validCreateDemand(obs enumor.ObsProject) CreateResPlanDemandReq {
+	os := decimal.NewFromInt(1)
+	cpu := int64(8)
+	mem := int64(16)
+	return CreateResPlanDemandReq{
+		ObsProject:     obs,
+		ExpectTime:     "2026-09-01",
+		RegionID:       "ap-shanghai",
+		DemandResTypes: []enumor.DemandResType{enumor.DemandResTypeCVM},
+		Cvm: &struct {
+			ResMode    enumor.ResMode   `json:"res_mode"`
+			DeviceType string           `json:"device_type"`
+			Os         *decimal.Decimal `json:"os"`
+			CpuCore    *int64           `json:"cpu_core"`
+			Memory     *int64           `json:"memory"`
+		}{
+			ResMode:    enumor.ResModeByDeviceType,
+			DeviceType: "SA2.LARGE8",
+			Os:         &os,
+			CpuCore:    &cpu,
+			Memory:     &mem,
+		},
+	}
+}
+
+// TestCreateResPlanDemandReq_ValidateObsProjectForm 提单校验只认形态，不卡当前时间窗口。
+func TestCreateResPlanDemandReq_ValidateObsProjectForm(t *testing.T) {
+	normal := validCreateDemand(enumor.ObsProjectNormal)
+	futureSpring := validCreateDemand("2099春节保障")
+	futureDissolve := validCreateDemand("2098机房裁撤")
+	illegal := validCreateDemand("2029春保")
+	assert.NoError(t, normal.Validate())
+	assert.NoError(t, futureSpring.Validate())
+	assert.NoError(t, futureDissolve.Validate())
+	assert.Error(t, illegal.Validate())
+}
 
 // TestListResPlanTicketReq_ValidateBudgetDeclareType 列表筛选 ticket_types 接受 budget_declare。
 func TestListResPlanTicketReq_ValidateBudgetDeclareType(t *testing.T) {

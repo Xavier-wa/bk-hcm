@@ -239,7 +239,7 @@ type ListReturnReasonClassReq struct {
 
 // Validate validates ListReturnReasonClassReq.
 func (r *ListReturnReasonClassReq) Validate() error {
-	if err := r.ObsProject.Validate(); err != nil {
+	if err := r.ObsProject.ValidateResPlan(); err != nil {
 		return err
 	}
 	return validator.Validate.Struct(r)

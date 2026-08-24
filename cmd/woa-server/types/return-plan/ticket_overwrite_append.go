@@ -117,7 +117,7 @@ func (f *ReturnPlanOverwriteFilter) Validate() error {
 		return errors.New("obs_projects is required in overwrite_filter")
 	}
 	for _, obsProject := range f.ObsProjects {
-		if err := obsProject.Validate(); err != nil {
+		if err := obsProject.ValidateResPlan(); err != nil {
 			return err
 		}
 	}
@@ -130,7 +130,7 @@ func (f *ReturnPlanOverwriteFilter) Validate() error {
 
 // Validate validates AppendReturnPlanDetail.
 func (d *AppendReturnPlanDetail) Validate() error {
-	if err := d.ObsProject.Validate(); err != nil {
+	if err := d.ObsProject.ValidateResPlan(); err != nil {
 		return err
 	}
 

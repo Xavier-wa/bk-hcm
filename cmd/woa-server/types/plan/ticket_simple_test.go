@@ -141,6 +141,25 @@ func TestDeriveCvmScaleFromSimple_ZeroCpuCoreInMeta(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestCreateResPlanDemandSimpleReq_ValidateObsProjectForm 简易提单校验只认形态，不卡当前时间窗口。
+func TestCreateResPlanDemandSimpleReq_ValidateObsProjectForm(t *testing.T) {
+	future := CreateResPlanDemandSimpleReq{
+		ObsProject: "2099春节保障",
+		ExpectTime: "2026-09-01",
+		RegionID:   "ap-shanghai",
+		Cvm:        &CvmSimpleInput{DeviceType: "SA2.LARGE8", Os: decimalPtr("1")},
+	}
+	require.NoError(t, future.Validate())
+
+	illegal := CreateResPlanDemandSimpleReq{
+		ObsProject: "2029春保",
+		ExpectTime: "2026-09-01",
+		RegionID:   "ap-shanghai",
+		Cvm:        &CvmSimpleInput{DeviceType: "SA2.LARGE8", Os: decimalPtr("1")},
+	}
+	require.Error(t, illegal.Validate())
+}
+
 func TestToCreateResPlanTicketReq_DeviceTypeNotFound(t *testing.T) {
 	r := &CreateResPlanTicketSimpleReq{
 		DemandClass: enumor.DemandClassCVM,

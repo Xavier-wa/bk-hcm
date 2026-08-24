@@ -68,6 +68,47 @@ func TestGetRPTicketTypeMembersContainsBudgetDeclare(t *testing.T) {
 	assert.Contains(t, members, RPTicketTypeDelete)
 }
 
+// TestValidateResPlan 校验只认形态、不卡当前时间窗口；非法形态失败。
+func TestValidateResPlan(t *testing.T) {
+	tests := []struct {
+		name    string
+		obs     ObsProject
+		wantErr bool
+	}{
+		{"常规项目", ObsProjectNormal, false},
+		{"滚服项目", ObsProjectRollServer, false},
+		{"改造复用", ObsProjectReuse, false},
+		{"轻量云徙", ObsProjectMigrate, false},
+		{"短租项目", ObsProjectShortLease, false},
+		{"窗口外春保", ObsProject("2099春节保障"), false},
+		{"窗口外裁撤", ObsProject("2098机房裁撤"), false},
+		{"错写春保", ObsProject("2029春保"), true},
+		{"未知文案", ObsProject("foobar"), true},
+		{"空值", ObsProject(""), true},
+		{"年份不足四位", ObsProject("99春节保障"), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.obs.ValidateResPlan()
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
+// TestGetObsProjectMembersForResPlanYearWindow 下拉枚举仍按当前时间窗口，不含远期年份。
+func TestGetObsProjectMembersForResPlanYearWindow(t *testing.T) {
+	members := GetObsProjectMembersForResPlan()
+	assert.NotEmpty(t, members)
+	assert.Contains(t, members, getSpringObsProjectForResPlan()[0])
+	assert.NotContains(t, members, ObsProject("2099春节保障"))
+	assert.NotContains(t, members, ObsProject("2098机房裁撤"))
+}
+
 // TestValidateAndSubTicketMembersExcludeBudgetDeclare 子单 Validate/成员集合不含 budget_declare。
 func TestValidateAndSubTicketMembersExcludeBudgetDeclare(t *testing.T) {
 	assert.Error(t, RPTicketTypeBudgetDeclare.Validate())

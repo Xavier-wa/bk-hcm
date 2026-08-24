@@ -107,6 +107,18 @@ func TestOverwriteAppendReturnPlanTicketReq_Validate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "filter future spring form is ok",
+			req: &OverwriteAppendReturnPlanTicketReq{
+				Overwrite: true,
+				OverwriteFilter: &ReturnPlanOverwriteFilter{
+					ObsProjects:   []enumor.ObsProject{"2099春节保障"},
+					PlanTimeRange: &times.DateRange{Start: "2024-09-01", End: "2024-12-31"},
+				},
+				Applicant: "zhangsan",
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -186,6 +198,39 @@ func TestAppendReturnPlanDetail_Validate(t *testing.T) {
 				RegionID:     "ap-shanghai",
 				InstanceType: "标准型SA2",
 				CoreAmount:   80,
+			},
+			wantErr: true,
+		},
+		{
+			name: "future spring form is ok",
+			detail: AppendReturnPlanDetail{
+				ObsProject:    "2099春节保障",
+				PlanTime:      "2024-11-12",
+				RegionID:      "ap-shanghai",
+				InstanceModel: "SA2.LARGE8",
+				CvmAmount:     10,
+			},
+			wantErr: false,
+		},
+		{
+			name: "future dissolve form is ok",
+			detail: AppendReturnPlanDetail{
+				ObsProject:    "2098机房裁撤",
+				PlanTime:      "2024-11-12",
+				RegionID:      "ap-shanghai",
+				InstanceModel: "SA2.LARGE8",
+				CvmAmount:     10,
+			},
+			wantErr: false,
+		},
+		{
+			name: "illegal obs project is invalid",
+			detail: AppendReturnPlanDetail{
+				ObsProject:    "2029春保",
+				PlanTime:      "2024-11-12",
+				RegionID:      "ap-shanghai",
+				InstanceModel: "SA2.LARGE8",
+				CvmAmount:     10,
 			},
 			wantErr: true,
 		},
