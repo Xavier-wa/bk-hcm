@@ -2,7 +2,7 @@
   "id": "req-aiagent-host-apply-chatbot",
   "title": "aiagent - 主机申领场景 chatbot",
   "createdAt": "2026-06-21T10:16:37.530Z",
-  "updatedAt": "2026-08-06T12:31:12.955Z",
+  "updatedAt": "2026-08-26T07:25:53.280Z",
   "external": {
     "tapd": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598134649532"
   },
@@ -24,10 +24,17 @@
     },
     {
       "wfId": "fix-chatbot-history-focus-flash",
-      "status": "coding",
+      "status": "done",
       "branch": "fix-chatbot-history-focus-flash",
       "title": "aiagent chatbot - 页面获焦拉 history 覆盖卡片操作态闪烁",
       "createdAt": "2026-08-06T12:31:12.896Z"
+    },
+    {
+      "wfId": "feat-aiagent-host-apply-data-disk",
+      "status": "coding",
+      "branch": "feat-aiagent-host-apply-data-disk",
+      "title": "aiagent-主机申领条件允许不挂数据盘",
+      "createdAt": "2026-08-26T07:25:53.228Z"
     }
   ],
   "aggregatedArtifacts": {

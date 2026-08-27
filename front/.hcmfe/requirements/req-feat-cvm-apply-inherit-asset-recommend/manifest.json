@@ -2,7 +2,7 @@
   "id": "req-feat-cvm-apply-inherit-asset-recommend",
   "title": "主机申领-滚服项目-继承固资号选择推荐-前端",
   "createdAt": "2026-08-12T06:34:35.827Z",
-  "updatedAt": "2026-08-12T06:34:41.758Z",
+  "updatedAt": "2026-08-26T07:04:00.738Z",
   "external": {
     "tapdParent": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598136066256",
     "tapdStory": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598136963986"
@@ -10,7 +10,7 @@
   "iterations": [
     {
       "wfId": "feat-cvm-apply-inherit-asset-recommend",
-      "status": "prd",
+      "status": "done",
       "branch": "feat-cvm-apply-inherit-asset-recommend",
       "title": "主机申领-滚服项目-继承固资号选择推荐-前端",
       "createdAt": "2026-08-12T06:34:41.325Z"

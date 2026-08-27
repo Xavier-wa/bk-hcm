@@ -15,7 +15,13 @@
 - **菜单与路由** → [menu-route](menu-route.md)：`src/router/**`、`src/constants/menu-symbol.ts`。
 - **权限控制** → [auth](auth.md)：`src/common/auth-service.ts`、`src/constants/auth-symbols.ts`、`src/components/auth|permission/**`。
 
-其中 menu-route/auth 的部分文件物理上仍落在 `common/constants/components/hooks/store/views` 下，属概念分层（glob 与 base 宽 glob 有意重叠）。命中 `src/store/common.ts`、`src/hooks/useVerify.ts` 或 `src/views/error-pages/403.tsx` 的鉴权改动，优先阅读并更新 [auth](auth.md)；命中 `src/components/ai-assistant/**` 的业务行为优先归 [chatbot](chatbot.md)，base 只记录共享层边界。
+其中 menu-route/auth 的部分文件物理上仍落在 `common/constants/components/hooks/store/views` 下，属概念分层（glob 与 base 宽 glob 有意重叠）。命中 `src/store/common.ts`、`src/hooks/useVerify.ts` 或 `src/views/error-pages/403.tsx` 的鉴权改动，优先阅读并更新 [auth](auth.md)；命中 `src/components/chatbot/**`、`src/components/ai-assistant/**`、`src/hooks/chatbot/**`、`src/store/chatbot/**` 的业务行为优先归 [chatbot](chatbot.md)，base 只记录共享层边界。
+
+## 共享层边界（踩过的坑，动这些文件前先读）
+
+base 的 `src/components/**` 宽 glob 会把各业务模块的组件一并命中，判断归属见上一节。真正属于共享层、且有**非直觉约束**的接缝记录在此：
+
+- **选项类通用组件的 `list` / `list-generator` 必须传稳定函数引用**（`src/components/form/list.vue` = `hcm-form-list`，`src/components/search/list.vue` 转发到它）。组件内部用 `watchEffect` 追踪该 prop 的**函数身份**，模板里写内联箭头函数会导致任意重渲染（改同表单的无关输入框、窗口 resize）都重新拉一次接口。完整机理、正确写法与「为何不会破坏级联刷新」见 [model](model.md) 的「关键约定（务必遵守）」。
 
 ## 架构北极星（目标形态）
 

@@ -2,7 +2,7 @@
   "id": "req-aiagent-biz-index-chatbot",
   "title": "aiagent - 资源管理首页chatbot",
   "createdAt": "2026-05-27T08:46:44.523Z",
-  "updatedAt": "2026-08-05T08:01:04.818Z",
+  "updatedAt": "2026-08-26T07:04:00.737Z",
   "external": {
     "tapd": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598134643064",
     "tapd_parent_id": "1069995598134643064"
@@ -37,7 +37,7 @@
     },
     {
       "wfId": "feat-session-tag-switch",
-      "status": "prd",
+      "status": "done",
       "branch": "feat-session-tag-switch",
       "title": "aiagent-同会话内动态切换场景标签",
       "createdAt": "2026-08-05T08:01:04.784Z"

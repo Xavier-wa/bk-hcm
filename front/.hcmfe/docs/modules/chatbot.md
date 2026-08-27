@@ -46,6 +46,7 @@
 - **输入框占位**：`ChatInputBox` 覆盖 `@blueking/chat-x` 默认四行引导，仅展示「通过 Shift + Enter 进行换行输入」（Skill / Prompt / 工具与 MCP 能力未开放，不在占位中提示）。
 - **首页大卡片连点**：`handleBigCardClick` 用同步 `isBigCardSending` 互斥（`isChatting` 有 createSession/streamChat 异步窗口），模板以 `is-disabled` class + `pointer-events: none` 禁用（`div` 上 `:disabled` 无效）。
 - **浮窗权限**：`AiAssistant` 与业务「首页」菜单一致，校验 `biz_agent_assistant`；无权限不渲染 teleport 浮窗入口，`show` / `toggle` / 深链 `initSessions` 亦早退。
+- **数据盘可为空**：主机申领的数据盘是可选项——后端 `ResourceSpec.ValidateDisk()` 允许总块数为 0，`data_disk` 列可为 NULL，下发 CRP 与云 API 前均有 `len()` 守卫。但 woa-server `recommend.go` 的推荐方案会固定塞 1 块 500G 高性能云盘，因此 C 调整弹窗（`host-apply-adjust-dialog.vue`）必须提供增删行能力，否则用户无法申领不挂盘的机器。总块数上限 20（对齐后端 `constant.DataDiskTotalNum`）。空数组在预提单表格 / 确认提交卡 / 规格展示（`host-apply-display.ts`）均渲染为 `--` 或隐藏该行。**注意「零块」与「空行」是两件事**：零块合法，但已存在的行三个字段都不能为空——输入框清空后 `Number('')` 会静默变成 0，而后端逐行按 `[DataDiskMinSize, DataDiskMaxSize] = [10, 32000]` 且必须是 10 的倍数校验（`len(DataDisk)==0` 时才跳过逐行检查），因此弹窗必须带 `rules.data_disk` 前置拦截，否则用户要走到「确认方案」之后才看到后端拒单。该校验与容量上下限、标签说明文案统一复用自研云申领表单的既有规则与常量（`CVM_DATA_DISK_INFO`），不另造一份以免上下限漂移。
 
 ## 关键文件
 

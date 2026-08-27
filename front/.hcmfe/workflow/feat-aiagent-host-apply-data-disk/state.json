@@ -1,0 +1,91 @@
+{
+  "id": "feat-aiagent-host-apply-data-disk",
+  "title": "aiagent-主机申领条件允许不挂数据盘",
+  "currentStage": "done",
+  "createdAt": "2026-08-26T07:25:53.228Z",
+  "updatedAt": "2026-08-26T09:38:04.056Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-host-apply-data-disk/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-26T07:51:25.545Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-aiagent-host-apply-data-disk/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-26T09:23:36.630Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-26T09:22:05.072Z"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-26T09:36:41.229Z"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-08-26T07:25:53.228Z",
+      "gitHead": "686f0738714c0289fd2fb8b73270153a1eee308d"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-26T09:22:05.072Z"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-26T09:36:41.229Z"
+    }
+  ],
+  "requirementId": "req-aiagent-host-apply-chatbot",
+  "branch": "feat-aiagent-host-apply-data-disk",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137366343"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "completed",
+      "at": "2026-08-26T07:47:45.683Z",
+      "note": "澄清 + 评估已完成（单张单据）。澄清：第 1 轮 4 个问题全部确认（覆盖范围仅 B 卡、新增行默认 500G、上限 20 块置灰+hover 提示、agent 不补默认盘），无遗留待确认项。规范需求文档落地 front/docs/reqs/主机申领数据盘可选.md 并已全量回写 TAPD description；回写前已过 tapd-clarification-desc-preserve 闸口（快照原文完整粘贴在「原需求描述」章节，含截图引用，已逐段比对）。评估：拆分结论为无需拆分（1 个用户故事）；工时 8 人时（高级）/ 11 人时（中级）；RICE = (20 × 5 × 1.0) / 1 = 100；已回写 TAPD effort=8。本节点未改动单据状态（仍为 backlog），状态追平留给 transition_plan 驱动；owner 未变更。"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-26T09:35:31.094Z",
+      "note": "gaps=[base, chatbot]，均已补正文并 deepen 归零：base 新增「共享层边界」小节（宽 glob 归属判断 + hcm-form-list 稳定引用坑，正文指向 model.md 不复制）；chatbot 补「零块合法 vs 空行非法」的前后端校验边界与复用 ziyanScr 常量的取舍。另单独 deepen model（本轮热写入了 hcm-form-list 约定但不在 touched 集合）。剩余 stale 模块 resource/business/service/ticket 与本次改动无关，不处理。经验捕获：触发器已在中途 promote（hcm-form-list 稳定引用，pending=1），补漏询问用户选择不再新增；promotions-review 用户选择稍后再走。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-26T09:38:04.056Z",
+      "note": "单绑定（objectType=story，1 张单）。先读真实状态 status_12(for test)，由 transition_plan 规划路径 [status_13, status_14]，按真实 key 逐跳 forward-only 推进：status_12 → status_13(tested) → status_14(done)，未跳级、未绕过 planner。改后回读校验：最终 status_14（done/已上线）。owner 未变更。无 parentId，无需 roll-up。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/components/chatbot/host-apply-adjust-dialog.vue"
+      ],
+      "contentFingerprint": "9e581a9cfc0d843ff96345f7ba6cb2dbb6298bfe",
+      "codeBaseline": "97e7f546a40ab5efe35955b5de049b3cd36c8da8",
+      "seatedAt": "2026-08-26T08:47:07.211Z"
+    }
+  }
+}

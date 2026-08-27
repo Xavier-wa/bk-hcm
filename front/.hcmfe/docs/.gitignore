@@ -1,2 +1,4 @@
 # Regenerable fingerprint detail (bkdevbuddy docs); recomputed by `docs deepen`, not for review.
 blueprint.lock.json
+# Ephemeral full body for experience-promotion update ships (bkdevbuddy); must not enter git.
+promotions/*/SHIP_BODY.md

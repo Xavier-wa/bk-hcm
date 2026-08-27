@@ -2,14 +2,14 @@
   "id": "req-dissolve-restructure",
   "title": "机房裁撤-功能优化重构-前端",
   "createdAt": "2026-06-18T09:13:55.191Z",
-  "updatedAt": "2026-06-18T09:13:59.588Z",
+  "updatedAt": "2026-08-26T07:04:00.738Z",
   "external": {
     "tapdParentRequirementId": "1069995598135335699"
   },
   "iterations": [
     {
       "wfId": "feat-dissolve-restructure",
-      "status": "prd",
+      "status": "coding",
       "branch": "feat-dissolve-restructure",
       "title": "机房裁撤-功能优化重构-前端",
       "createdAt": "2026-06-18T09:13:59.279Z"

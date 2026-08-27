@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { nextTick, reactive, ref, watch } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { cloneDeep } from 'lodash';
 import { Message } from 'bkui-vue';
+import { Plus } from 'bkui-vue/lib/icon';
 
 import { VendorEnum } from '@/common/constant';
 import { ChargeTypeMap } from '@/typings/plan';
-import { type HostApplySuborder } from '@/hooks/chatbot/types';
+import { type HostApplyDisk, type HostApplySuborder } from '@/hooks/chatbot/types';
+import { CVM_DATA_DISK_INFO, type CvmDataDiskType } from '@/views/ziyanScr/components/cvm-data-disk/constants';
 import {
   getRegionOptions,
   getDeviceTypeOptions,
@@ -50,6 +52,39 @@ const createState = (suborder: HostApplySuborder) => ({
 
 const formModel = reactive(createState(props.suborder));
 
+// 下拉选项工厂固化在 setup 作用域：hcm-form-list 内部用 watchEffect 追踪 list prop，
+// 写成内联箭头函数会因每次重渲染都是新引用而重复拉取接口（改容量/数量即触发）。
+// 函数体内对 formModel 的读取仍在 watchEffect 的同步追踪范围内，级联刷新不受影响。
+const requireTypeList = () => getRequireTypeOptions();
+const regionList = () => getRegionOptions(props.vendor);
+const deviceTypeList = () => getDeviceTypeOptions({ vendor: props.vendor, region: formModel.region });
+const imageList = () => getImageOptions(formModel.region);
+const diskTypeList = () => getDiskTypeOptions();
+const resAssignList = getResAssignOptions();
+
+// 数据盘总块数上限，与后端 constant.DataDiskTotalNum 保持一致
+const MAX_DATA_DISK_NUM = 20;
+
+// 新增行沿用推荐方案的数据盘默认值，删除后再添加可还原成初始配置
+const createDataDisk = (): HostApplyDisk => ({ disk_type: 'CLOUD_PREMIUM', disk_size: 500, disk_num: 1 });
+
+const dataDiskTotalNum = computed(() =>
+  formModel.data_disk.reduce((total, disk) => total + Number(disk.disk_num || 0), 0),
+);
+
+const handleAddDataDisk = () => {
+  formModel.data_disk.push(createDataDisk());
+};
+
+const handleRemoveDataDisk = (index: number) => {
+  formModel.data_disk.splice(index, 1);
+};
+
+// 容量取值范围随磁盘类型而变（如 SSD 云硬盘下限 20G、高性能云盘 10G），与 ziyanScr 数据盘编辑器同一份常量；
+// 本地盘类型无区间配置，回退到后端 DataDiskMinSize / DataDiskMaxSize 的兜底值
+const getDiskSizeMin = (diskType?: string) => CVM_DATA_DISK_INFO[diskType as CvmDataDiskType]?.min ?? 0;
+const getDiskSizeMax = (diskType?: string) => CVM_DATA_DISK_INFO[diskType as CvmDataDiskType]?.max ?? 32000;
+
 // 回填期间置位，避免回填触发地域 watch 误清空依赖字段
 let isHydrating = false;
 
@@ -79,6 +114,18 @@ const rules = {
   replicas: [{ required: true, message: '请输入申请数量', trigger: 'blur' }],
   region: [{ required: true, message: '请选择地域', trigger: 'change' }],
   device_type: [{ required: true, message: '请选择机型', trigger: 'change' }],
+  // 数据盘整体非必填（零块合法），但已存在的行三个字段都不能为空——与 ziyanScr 申领表单同一条规则。
+  // 空容量/空数量经 Number('') 会静默变成 0，后端按 [10, 32000] 拒单，故必须在前端先拦住
+  data_disk: [
+    {
+      validator: (value: HostApplyDisk[]) => {
+        if (value.length === 0) return true;
+        return value.every((item) => item.disk_type && item.disk_size && item.disk_num);
+      },
+      message: '数据盘信息不能为空',
+      trigger: 'change',
+    },
+  ],
 };
 
 const handleCancel = () => {
@@ -119,7 +166,7 @@ const handleSave = async () => {
 </script>
 
 <template>
-  <bk-dialog v-model:is-show="visible" title="调整配置" :width="640" :quick-close="false" :z-index="zIndex">
+  <bk-dialog v-model:is-show="visible" title="调整配置" :width="800" :quick-close="false" :z-index="zIndex">
     <bk-form ref="formRef" class="ha-form" :model="formModel" :rules="rules" form-type="default" :label-width="120">
       <bk-form-item label="申请数量" property="replicas" required>
         <bk-input v-model="formModel.replicas" type="number" :min="1" />
@@ -127,7 +174,7 @@ const handleSave = async () => {
       <bk-form-item label="需求类型" property="require_type">
         <hcm-form-list
           v-model="formModel.require_type"
-          :list="() => getRequireTypeOptions()"
+          :list="requireTypeList"
           :id-key="'id'"
           :display-key="'name'"
           placeholder="请选择需求类型"
@@ -136,7 +183,7 @@ const handleSave = async () => {
       <bk-form-item label="地域" property="region" required>
         <hcm-form-list
           v-model="formModel.region"
-          :list="() => getRegionOptions(vendor)"
+          :list="regionList"
           :id-key="'id'"
           :display-key="'name'"
           placeholder="请选择地域"
@@ -145,7 +192,7 @@ const handleSave = async () => {
       <bk-form-item label="机型" property="device_type" required>
         <hcm-form-list
           v-model="formModel.device_type"
-          :list="() => getDeviceTypeOptions({ vendor, region: formModel.region })"
+          :list="deviceTypeList"
           :id-key="'id'"
           :display-key="'name'"
           placeholder="请先选择地域"
@@ -154,7 +201,7 @@ const handleSave = async () => {
       <bk-form-item label="操作系统" property="image_id">
         <hcm-form-list
           v-model="formModel.image_id"
-          :list="() => getImageOptions(formModel.region)"
+          :list="imageList"
           :id-key="'id'"
           :display-key="'name'"
           placeholder="请选择操作系统"
@@ -163,7 +210,7 @@ const handleSave = async () => {
       <bk-form-item label="资源分配方式" property="res_assign">
         <hcm-form-list
           v-model="formModel.res_assign"
-          :list="getResAssignOptions()"
+          :list="resAssignList"
           :id-key="'id'"
           :display-key="'name'"
           placeholder="请选择资源分配方式"
@@ -178,7 +225,7 @@ const handleSave = async () => {
           <hcm-form-list
             v-model="formModel.system_disk.disk_type"
             class="ha-disk-type"
-            :list="() => getDiskTypeOptions()"
+            :list="diskTypeList"
             :id-key="'id'"
             :display-key="'name'"
           />
@@ -187,21 +234,60 @@ const handleSave = async () => {
           </bk-input>
         </div>
       </bk-form-item>
-      <bk-form-item label="数据盘">
+      <bk-form-item property="data_disk">
+        <template #label>
+          数据盘
+          <i
+            v-bk-tooltips="{ content: '数据盘大小范围为20G-32000G，且为10的倍数' }"
+            class="hcm-icon bkhcm-icon-prompt text-gray cursor ha-label-tip"
+          ></i>
+        </template>
+        <bk-button v-if="formModel.data_disk.length === 0" @click="handleAddDataDisk">
+          <plus class="ha-disk-add-icon" />
+        </bk-button>
         <div v-for="(disk, index) in formModel.data_disk" :key="index" class="ha-disk-row ha-data-disk">
           <hcm-form-list
             v-model="disk.disk_type"
             class="ha-disk-type"
-            :list="() => getDiskTypeOptions()"
+            :list="diskTypeList"
             :id-key="'id'"
             :display-key="'name'"
           />
-          <bk-input v-model="disk.disk_size" class="ha-disk-size" type="number" :min="1" suffix="GB">
+          <bk-input
+            v-model="disk.disk_size"
+            class="ha-disk-size"
+            type="number"
+            :step="10"
+            :min="getDiskSizeMin(disk.disk_type)"
+            :max="getDiskSizeMax(disk.disk_type)"
+            suffix="GB"
+          >
             <template #prefix><span class="ha-input-affix">容量</span></template>
           </bk-input>
-          <bk-input v-model="disk.disk_num" class="ha-disk-num" type="number" :min="1">
+          <bk-input
+            v-model="disk.disk_num"
+            class="ha-disk-num"
+            type="number"
+            :min="1"
+            :max="MAX_DATA_DISK_NUM - dataDiskTotalNum + Number(disk.disk_num || 0)"
+          >
             <template #prefix><span class="ha-input-affix">数量</span></template>
           </bk-input>
+          <bk-button
+            v-bk-tooltips="{
+              content: `数据盘总块数最多 ${MAX_DATA_DISK_NUM} 块`,
+              disabled: dataDiskTotalNum < MAX_DATA_DISK_NUM,
+            }"
+            class="ha-disk-action"
+            text
+            :disabled="dataDiskTotalNum >= MAX_DATA_DISK_NUM"
+            @click="handleAddDataDisk"
+          >
+            <i class="hcm-icon bkhcm-icon-plus-circle-shape"></i>
+          </bk-button>
+          <bk-button class="ha-disk-action" text @click="handleRemoveDataDisk(index)">
+            <i class="hcm-icon bkhcm-icon-minus-circle-shape"></i>
+          </bk-button>
         </div>
       </bk-form-item>
     </bk-form>
@@ -257,9 +343,10 @@ const handleSave = async () => {
     flex: 0 0 140px;
   }
 
+  // 容量框留出下限：数据盘行还要放数量框与增删按钮，仅靠 flex 收缩会把数值挤没
   .ha-disk-size {
     flex: 1;
-    min-width: 0;
+    min-width: 160px;
   }
 
   .ha-disk-num {
@@ -282,6 +369,30 @@ const handleSave = async () => {
 
 .ha-data-disk {
   margin-bottom: 8px;
+}
+
+// 行内增删按钮：与 ziyanScr 数据盘编辑器一致的浅灰圆形加减号
+.ha-disk-action {
+  flex: 0 0 auto;
+
+  .hcm-icon {
+    font-size: 16px;
+    color: #c4c6cc;
+  }
+
+  &.is-disabled .hcm-icon {
+    color: #eaebf0;
+  }
+}
+
+// 数据盘删空后行内按钮一并消失，用大加号按钮兜住空态入口
+.ha-disk-add-icon {
+  font-size: 24px;
+}
+
+// 表单项标签后的说明图标（项目里常配的 ml4 工具类实际未定义，此处自带间距）
+.ha-label-tip {
+  margin-left: 4px;
 }
 
 .ha-dialog-footer-cancel {

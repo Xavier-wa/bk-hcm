@@ -113,6 +113,7 @@ views/<模块>/
 - 操作按钮（新建/编辑/删除）必须用 `hcm-auth` 包裹并按行数据控 `disabled`（见 auth 模块）。
 - 详情特殊字段：`display-value` 不满足时用 `<template>` 覆盖 `<grid-item>`；`extension.xxx` 字段的 `value` 需传整个 `data`。
 - 模块内闭环：`typings.ts`/`utils.ts`/字段定义只在模块内引用，跨模块复用抽到 `common/`、`utils/`。
+- **选项类组件的 `list` / `list-generator` 必须传稳定引用**。`hcm-form-list`（`components/form/list.vue`，`hcm-search-list` 亦转发到它）内部用 `watchEffect` 追踪该 prop（`localList.value = await props.list()`），追踪的是**函数身份**而非返回值：模板里写 `:list="() => getXxx()"` 或 `:list-generator="getGen(row)"` 时，父组件每次重渲染都产生新引用，effect 判定依赖变化即重新拉一次接口。触发源是任意重渲染——同表单里敲一下输入框、窗口 resize 引起布局重算都算，症状是「改无关字段却狂打下拉接口」。正确写法是把工厂提到 `<script setup>` 作用域（或用 `computed`）固化引用；**级联刷新不会因此失效**，因为 `props.list()` 是在 effect 内同步调用的，函数体对响应式数据的读取仍落在追踪窗口内（首个 `await` 之前），如 `const deviceTypeList = () => getDeviceTypeOptions({ region: formModel.region })` 仍会随地域变更重拉。传数组（含 `ModelProperty.list` 的数组形态）不受影响，重渲染最多是重新赋值、无网络开销。
 
 ## 注意事项
 
