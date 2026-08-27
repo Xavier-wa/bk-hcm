@@ -834,6 +834,13 @@ accountserver:
     fromCurrency:
       - USD
       - EUR
+  billSettle:
+    # 锁定日，账期次月该日整日仍可覆盖，跨过次日零点（Asia/Shanghai）后该账期锁定
+    lockDay: 8
+    # 扫描间隔，单位分钟。锁定精度等于扫描周期，最坏有一个周期的误差
+    intervalMinute: 60
+    # 调账表账期回溯窗口，单位月。超出窗口的未定账条目不再被扫描
+    lookbackMonth: 3
   # [内部版] OBS侧接口配置
   obs:
     # 通知obs的api地址

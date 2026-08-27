@@ -25,6 +25,7 @@ import (
 
 	"hcm/pkg/api/core"
 	dsbill "hcm/pkg/api/data-service/bill"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/orm"
 	tablebill "hcm/pkg/dal/table/bill"
@@ -48,27 +49,41 @@ func (svc *service) CreateBillAdjustmentItem(cts *rest.Contexts) (interface{}, e
 	idList, err := svc.dao.Txn().AutoTxn(cts.Kit, func(txn *sqlx.Tx, opt *orm.TxnOption) (interface{}, error) {
 		var itemList []tablebill.AccountBillAdjustmentItem
 		for _, item := range req.Items {
-			item := tablebill.AccountBillAdjustmentItem{
-				RootAccountID: item.RootAccountID,
-				MainAccountID: item.MainAccountID,
-				Vendor:        item.Vendor,
-				ProductID:     item.ProductID,
-				BkBizID:       item.BkBizID,
-				BillYear:      item.BillYear,
-				BillMonth:     item.BillMonth,
-				BillDay:       item.BillDay,
-				Type:          string(item.Type),
-				ResClass:      item.ResClass,
-				ResSubClass:   cvt.ValToPtr(item.ResSubClass),
-				Memo:          item.Memo,
-				Currency:      item.Currency,
-				Cost:          &types.Decimal{Decimal: item.Cost},
-				RMBCost:       &types.Decimal{Decimal: item.RMBCost},
-				State:         item.State,
-				Creator:       cts.Kit.User,
-				Operator:      cts.Kit.User,
+			adjItem := tablebill.AccountBillAdjustmentItem{
+				RootAccountID:  item.RootAccountID,
+				MainAccountID:  item.MainAccountID,
+				Vendor:         item.Vendor,
+				ProductID:      item.ProductID,
+				BkBizID:        item.BkBizID,
+				BillYear:       item.BillYear,
+				BillMonth:      item.BillMonth,
+				BillDay:        item.BillDay,
+				Type:           string(item.Type),
+				ResClass:       item.ResClass,
+				ResSubClass:    cvt.ValToPtr(item.ResSubClass),
+				Memo:           item.Memo,
+				Currency:       item.Currency,
+				Cost:           &types.Decimal{Decimal: item.Cost},
+				RMBCost:        &types.Decimal{Decimal: item.RMBCost},
+				State:          item.State,
+				Source:         item.Source,
+				SourceID:       item.SourceID,
+				PushStatus:     item.PushStatus,
+				PushFailReason: cvt.ValToPtr(""),
+				SettleState:    item.SettleState,
+				Creator:        cts.Kit.User,
+				Operator:       cts.Kit.User,
 			}
-			itemList = append(itemList, item)
+			if len(adjItem.Source) == 0 {
+				adjItem.Source = enumor.BillAdjustmentSourceManual
+			}
+			if len(adjItem.PushStatus) == 0 {
+				adjItem.PushStatus = enumor.BillAdjustmentPushStatusUnpushed
+			}
+			if len(adjItem.SettleState) == 0 {
+				adjItem.SettleState = enumor.BillSettleStateUnsettled
+			}
+			itemList = append(itemList, adjItem)
 		}
 
 		ids, err := svc.dao.AccountBillAdjustmentItem().CreateWithTx(

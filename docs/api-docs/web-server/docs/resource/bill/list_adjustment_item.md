@@ -52,6 +52,11 @@ POST /api/v1/account/bills/adjustment_items/list
 | cost            | string | 原币种消费（元）                       |
 | rmb_cost        | string | 人民币消费                          |
 | state           | string | 未确定、已确定                        |
+| source          | string | 调账来源 manual/prepaid|
+| source_id       | string | 来源单据 ID，prepaid 来源时为预付费账单 ID，人工录入为空 |
+| push_status     | string | 推送状态 unpushed/pushing/pushed/failed |
+| push_fail_reason | string | 推送失败原因，非失败态为空 |
+| settle_state    | string | 定账状态 unsettled/settled |
 | creator         | string | 创建者                            |
 | created_at      | string | 创建时间，标准格式：2006-01-02T15:04:05Z |
 | updated_at      | string | 修改时间，标准格式：2006-01-02T15:04:05Z |
@@ -98,6 +103,11 @@ POST /api/v1/account/bills/adjustment_items/list
         "cost": "42.67512105",
         "rmb_cost": "42.67512105",
         "state": "confirmed",
+        "source": "manual",
+        "source_id": "",
+        "push_status": "unpushed",
+        "push_fail_reason": "",
+        "settle_state": "unsettled",
         "creator": "admin",
         "created_at": "2024-06-18T13:09:34Z",
         "updated_at": "2024-06-18T13:09:34Z"
@@ -136,6 +146,11 @@ POST /api/v1/account/bills/adjustment_items/list
 | cost            | string | 原币种消费（元）                       |
 | rmb_cost        | string | 人民币消费                          |
 | state           | string | 未确定、已确定                        |
+| source          | string | 调账来源 manual/prepaid |
+| source_id       | string | 来源单据 ID，prepaid 来源时为预付费账单 ID，人工录入为空|
+| push_status     | string | 推送状态 unpushed/pushing/pushed/failed |
+| push_fail_reason | string | 推送失败原因，非失败态为空 |
+| settle_state    | string | 定账状态 unsettled/settled |
 | creator         | string | 创建者                            |
 | created_at      | string | 创建时间，标准格式：2006-01-02T15:04:05Z |
 | updated_at      | string | 修改时间，标准格式：2006-01-02T15:04:05Z |

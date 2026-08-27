@@ -129,6 +129,52 @@ func (b *BillClient) BatchConfirmBillAdjustmentItem(kt *kit.Kit, req *core.Batch
 		"/bills/adjustment_items/confirm")
 }
 
+// BatchUpdateBillAdjustmentItemState 批量更新调账的推送态与定账态
+func (b *BillClient) BatchUpdateBillAdjustmentItemState(kt *kit.Kit,
+	req *billproto.BillAdjustmentItemStateUpdateReq) error {
+
+	return common.RequestNoResp[billproto.BillAdjustmentItemStateUpdateReq](
+		b.client, rest.PATCH, kt, req, "/bills/adjustment_items/state")
+}
+
+// --- bill prepaid item ---
+
+// CreateBillPrepaidItem create bill prepaid item
+func (b *BillClient) CreateBillPrepaidItem(kt *kit.Kit, req *billproto.PrepaidItemCreateReq) (
+	*core.CreateResult, error) {
+
+	return common.Request[billproto.PrepaidItemCreateReq, core.CreateResult](
+		b.client, rest.POST, kt, req, "/bills/prepaid_items/create")
+}
+
+// UpdateBillPrepaidItem update bill prepaid item
+func (b *BillClient) UpdateBillPrepaidItem(kt *kit.Kit, req *billproto.PrepaidItemUpdateReq) error {
+	return common.RequestNoResp[billproto.PrepaidItemUpdateReq](
+		b.client, rest.PATCH, kt, req, "/bills/prepaid_items")
+}
+
+// ListBillPrepaidItem list bill prepaid item
+func (b *BillClient) ListBillPrepaidItem(kt *kit.Kit, req *billproto.PrepaidItemListReq) (
+	*billproto.PrepaidItemListResult, error) {
+
+	return common.Request[billproto.PrepaidItemListReq, billproto.PrepaidItemListResult](
+		b.client, rest.POST, kt, req, "/bills/prepaid_items/list")
+}
+
+// BatchDeleteBillPrepaidItem delete bill prepaid item
+func (b *BillClient) BatchDeleteBillPrepaidItem(kt *kit.Kit, req *dataservice.BatchDeleteReq) error {
+	return common.RequestNoResp[dataservice.BatchDeleteReq](
+		b.client, rest.DELETE, kt, req, "/bills/prepaid_items")
+}
+
+// SyncBillPrepaidItem 在 data-service 单事务内落库预付费主单与 N+1 调账
+func (b *BillClient) SyncBillPrepaidItem(kt *kit.Kit, req *billproto.PrepaidItemSyncReq) (
+	*billproto.PrepaidItemSyncResult, error) {
+
+	return common.Request[billproto.PrepaidItemSyncReq, billproto.PrepaidItemSyncResult](
+		b.client, rest.POST, kt, req, "/bills/prepaid_items/sync")
+}
+
 // --- bill item ---
 
 // BatchDeleteBillItem delete bill item

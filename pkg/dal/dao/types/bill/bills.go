@@ -69,6 +69,12 @@ type ListAccountBillAdjustmentItemDetails struct {
 	Details []tablebill.AccountBillAdjustmentItem `json:"details,omitempty"`
 }
 
+// ListAccountBillPrepaidItemDetails list account bill prepaid item details
+type ListAccountBillPrepaidItemDetails struct {
+	Count   uint64                             `json:"count,omitempty"`
+	Details []tablebill.AccountBillPrepaidItem `json:"details,omitempty"`
+}
+
 // ListAccountBillSummaryRootDetails list account bill adjustment item details
 type ListAccountBillSummaryRootDetails struct {
 	Count   uint64                             `json:"count,omitempty"`

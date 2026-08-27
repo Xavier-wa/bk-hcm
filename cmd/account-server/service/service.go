@@ -35,6 +35,7 @@ import (
 	aideductconfig "hcm/cmd/account-server/service/bill/ai-deduct-config"
 	"hcm/cmd/account-server/service/bill/billadjustment"
 	"hcm/cmd/account-server/service/bill/billitem"
+	"hcm/cmd/account-server/service/bill/billprepaid"
 	"hcm/cmd/account-server/service/bill/billsummarybiz"
 	"hcm/cmd/account-server/service/bill/billsummarymain"
 	"hcm/cmd/account-server/service/bill/billsummaryproduct"
@@ -44,9 +45,13 @@ import (
 	savingsplans "hcm/cmd/account-server/service/bill/savings-plans"
 	"hcm/cmd/account-server/service/capability"
 	"hcm/cmd/account-server/service/finops"
+	crontask "hcm/cmd/account-server/task"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
+	"hcm/pkg/cron"
+	croncore "hcm/pkg/cron/core"
 	"hcm/pkg/cryptography"
 	"hcm/pkg/handler"
 	"hcm/pkg/iam/auth"
@@ -80,6 +85,7 @@ type Service struct {
 	audit       logicaudit.Interface
 	billManager *bill.BillManager
 	cmdbClient  cmdb.Client
+	tasks       map[enumor.CronTask]croncore.Task
 }
 
 // NewService create a service instance.
@@ -189,7 +195,37 @@ func NewService(sd serviced.ServiceDiscover) (*Service, error) {
 		cmdbClient:  cmdbCli,
 	}
 
+	if err = svr.initCronTask(sd); err != nil {
+		logs.Errorf("init cron task failed, err: %v", err)
+		return nil, err
+	}
+
 	return svr, nil
+}
+
+// initCronTask 初始化定时任务。account-server 此前没有任何 cron 任务，本函数是该服务的调度入口。
+func (s *Service) initCronTask(sd serviced.ServiceDiscover) error {
+	if err := cron.Init(context.Background(), metrics.Register()); err != nil {
+		logs.Errorf("init cron scheduler failed, err: %v", err)
+		return err
+	}
+	s.tasks = make(map[enumor.CronTask]croncore.Task)
+
+	billSettleTask, err := crontask.NewBillSettleTask(s.clientSet, sd)
+	if err != nil {
+		logs.Errorf("init bill settle task failed, err: %v", err)
+		return err
+	}
+	s.tasks[enumor.CronTaskBillSettle] = billSettleTask
+
+	if err = cron.Register([]croncore.Task{billSettleTask}); err != nil {
+		logs.Errorf("register cron tasks failed, err: %v", err)
+		return err
+	}
+
+	logs.Infof("init cron task success, task_num: %d", len(s.tasks))
+
+	return nil
 }
 
 // newCipherFromConfig 根据配置文件里的加密配置，选择配置的算法并生成对应的加解密器
@@ -281,6 +317,7 @@ func (s *Service) apiSet() *restful.Container {
 		Authorizer: s.authorizer,
 		Audit:      s.audit,
 		CmdbClient: s.cmdbClient,
+		CronTasks:  s.tasks,
 	}
 
 	mainaccount.InitService(c)
@@ -291,6 +328,7 @@ func (s *Service) apiSet() *restful.Container {
 	billitem.InitBillItemService(c)
 	billsummarybiz.InitService(c)
 	billadjustment.InitBillAdjustmentService(c)
+	billprepaid.InitBillPrepaidService(c)
 	billsyncrecord.InitService(c)
 	exchangerate.InitService(c)
 	savingsplans.InitService(c)

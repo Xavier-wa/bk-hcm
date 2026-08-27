@@ -137,6 +137,9 @@ const (
 	// AccountBillThirdParty 第三方账单拉取
 	AccountBillThirdParty ResourceType = "account_bill_third_party"
 
+	// AccountBillPrepaid 预付费账单
+	AccountBillPrepaid ResourceType = "account_bill_prepaid"
+
 	// Image 镜像
 	Image ResourceType = "image"
 
@@ -208,6 +211,7 @@ var resourceTypes = map[ResourceType]struct{}{
 	AccountBill:              {},
 	Application:              {},
 	AccountBillThirdParty:    {},
+	AccountBillPrepaid:       {},
 	Image:                    {},
 	TaskManagement:           {},
 	CosBucket:                {},

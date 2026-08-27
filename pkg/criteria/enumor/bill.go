@@ -123,6 +123,16 @@ func (b BillDayNumber) Validate() error {
 // CurrencyCode 货币代码
 type CurrencyCode string
 
+// Validate the CurrencyCode is valid or not
+func (c CurrencyCode) Validate() error {
+	switch c {
+	case CurrencyUSD, CurrencyCNY:
+	default:
+		return fmt.Errorf("unsupported currency code: %s", c)
+	}
+	return nil
+}
+
 const (
 	// CurrencyUSD usd currency
 	CurrencyUSD CurrencyCode = "USD"
@@ -130,6 +140,72 @@ const (
 	CurrencyCNY CurrencyCode = "CNY"
 	// CurrencyRMB rmb currency
 	CurrencyRMB = CurrencyCNY
+)
+
+// BillAdjustmentSource 调账明细来源
+type BillAdjustmentSource string
+
+// Validate the BillAdjustmentSource is valid or not
+func (b BillAdjustmentSource) Validate() error {
+	switch b {
+	case BillAdjustmentSourceManual, BillAdjustmentSourcePrepaid:
+	default:
+		return fmt.Errorf("unsupported bill adjustment source: %s", b)
+	}
+	return nil
+}
+
+const (
+	// BillAdjustmentSourceManual 人工录入
+	BillAdjustmentSourceManual BillAdjustmentSource = "manual"
+	// BillAdjustmentSourcePrepaid 预付费账单同步生成
+	BillAdjustmentSourcePrepaid BillAdjustmentSource = "prepaid"
+)
+
+// BillAdjustmentPushStatus 调账明细推送状态。
+type BillAdjustmentPushStatus string
+
+// Validate the BillAdjustmentPushStatus is valid or not
+func (b BillAdjustmentPushStatus) Validate() error {
+	switch b {
+	case BillAdjustmentPushStatusUnpushed, BillAdjustmentPushStatusPushing,
+		BillAdjustmentPushStatusPushed, BillAdjustmentPushStatusFailed:
+	default:
+		return fmt.Errorf("unsupported bill adjustment push status: %s", b)
+	}
+	return nil
+}
+
+const (
+	// BillAdjustmentPushStatusUnpushed 未推送
+	BillAdjustmentPushStatusUnpushed BillAdjustmentPushStatus = "unpushed"
+	// BillAdjustmentPushStatusPushing 推送中
+	BillAdjustmentPushStatusPushing BillAdjustmentPushStatus = "pushing"
+	// BillAdjustmentPushStatusPushed 已推送
+	BillAdjustmentPushStatusPushed BillAdjustmentPushStatus = "pushed"
+	// BillAdjustmentPushStatusFailed 推送失败
+	BillAdjustmentPushStatusFailed BillAdjustmentPushStatus = "failed"
+)
+
+// BillSettleState 定账状态。预付费主表与调账明细表共用本定义，
+// 但两表各自独立判定：主表按订单月份，调账明细按各自账期。
+type BillSettleState string
+
+// Validate the BillSettleState is valid or not
+func (b BillSettleState) Validate() error {
+	switch b {
+	case BillSettleStateUnsettled, BillSettleStateSettled:
+	default:
+		return fmt.Errorf("unsupported bill settle state: %s", b)
+	}
+	return nil
+}
+
+const (
+	// BillSettleStateUnsettled 未定账
+	BillSettleStateUnsettled BillSettleState = "unsettled"
+	// BillSettleStateSettled 已定账，单向不可逆
+	BillSettleStateSettled BillSettleState = "settled"
 )
 
 // BillAdjustmentType 调账类型

@@ -864,6 +864,31 @@ func genMainAccountRuleResource(a *meta.ResourceAttribute) (client.ActionID, []c
 
 }
 
+// genAccountBillPrepaidRuleResource 预付费账单按二级账号实例鉴权，资源类型复用 sys.MainAccount。
+func genAccountBillPrepaidRuleResource(a *meta.ResourceAttribute) (client.ActionID, []client.Resource, error) {
+	res := client.Resource{
+		System: sys.SystemIDHCM,
+		Type:   sys.MainAccount,
+	}
+	if len(a.ResourceID) > 0 {
+		res.ID = a.ResourceID
+	}
+
+	switch a.Basic.Action {
+	case meta.Create:
+		// 单实例写入必须带 ResourceID，避免空实例规则被误放行。
+		if len(a.ResourceID) == 0 {
+			return "", nil, errf.New(errf.InvalidParameter, "account bill prepaid auth resource id is required")
+		}
+		return sys.AccountBillPrepaidCreate, []client.Resource{res}, nil
+	case meta.Delete:
+		// ResourceID 可为空：ListAuthorizedInstances 按 action 拉已授权实例，本身不带实例 ID。
+		return sys.AccountBillPrepaidDelete, []client.Resource{res}, nil
+	default:
+		return "", nil, errf.Newf(errf.InvalidParameter, "unsupported hcm action: %s", a.Basic.Action)
+	}
+}
+
 func genRootAccountRuleResource(a *meta.ResourceAttribute) (client.ActionID, []client.Resource, error) {
 	switch a.Basic.Action {
 	case meta.Find, meta.Create, meta.Update:

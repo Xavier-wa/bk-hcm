@@ -45,8 +45,13 @@ type AccountBillAdjustmentItem interface {
 	CreateWithTx(kt *kit.Kit, tx *sqlx.Tx, regions []tablebill.AccountBillAdjustmentItem) ([]string, error)
 	List(kt *kit.Kit, opt *types.ListOption) (*typesbill.ListAccountBillAdjustmentItemDetails, error)
 	UpdateByIDWithTx(kt *kit.Kit, tx *sqlx.Tx, billID string, updateData *tablebill.AccountBillAdjustmentItem) error
+	UpdateWithTx(kt *kit.Kit, tx *sqlx.Tx, filterExpr *filter.Expression,
+		updateData *tablebill.AccountBillAdjustmentItem) error
 	DeleteWithTx(kt *kit.Kit, tx *sqlx.Tx, filterExpr *filter.Expression) error
 }
+
+// adjustmentItemBlankedFields 调账允许被显式置空的字段。
+var adjustmentItemBlankedFields = []string{"memo", "res_sub_class", "push_fail_reason"}
 
 // AccountBillAdjustmentItemDao account bill adjustment item dao
 type AccountBillAdjustmentItemDao struct {
@@ -140,12 +145,15 @@ func (a AccountBillAdjustmentItemDao) List(kt *kit.Kit, opt *types.ListOption) (
 func (a AccountBillAdjustmentItemDao) UpdateByIDWithTx(kt *kit.Kit, tx *sqlx.Tx, id string,
 	updateData *tablebill.AccountBillAdjustmentItem) error {
 
+	if len(id) == 0 {
+		return errf.New(errf.InvalidParameter, "id is required")
+	}
 	if err := updateData.UpdateValidate(); err != nil {
-		return err
+		return errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	opts := utils.NewFieldOptions().AddIgnoredFields(types.DefaultIgnoredFields...).AddBlankedFields("memo",
-		"res_sub_class")
+	opts := utils.NewFieldOptions().AddIgnoredFields(types.DefaultIgnoredFields...).
+		AddBlankedFields(adjustmentItemBlankedFields...)
 	setExpr, toUpdate, err := utils.RearrangeSQLDataWithOption(updateData, opts)
 	if err != nil {
 		return fmt.Errorf("prepare parsed sql set filter expr failed, err: %v", err)
@@ -157,6 +165,40 @@ func (a AccountBillAdjustmentItemDao) UpdateByIDWithTx(kt *kit.Kit, tx *sqlx.Tx,
 	_, err = a.Orm.Txn(tx).Update(kt.Ctx, sql, toUpdate)
 	if err != nil {
 		logs.ErrorJson("update account bill adjustment item failed, err: %v, id: %s, rid: %v", err, id, kt.Rid)
+		return err
+	}
+
+	return nil
+}
+
+// UpdateWithTx update account bill adjustment item by the given filter expression.
+func (a AccountBillAdjustmentItemDao) UpdateWithTx(kt *kit.Kit, tx *sqlx.Tx, expr *filter.Expression,
+	updateData *tablebill.AccountBillAdjustmentItem) error {
+
+	if expr == nil {
+		return errf.New(errf.InvalidParameter, "filter expr is required")
+	}
+	if err := updateData.UpdateValidate(); err != nil {
+		return errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	whereExpr, whereValue, err := expr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		return err
+	}
+
+	opts := utils.NewFieldOptions().AddIgnoredFields(types.DefaultIgnoredFields...).
+		AddBlankedFields(adjustmentItemBlankedFields...)
+	setExpr, toUpdate, err := utils.RearrangeSQLDataWithOption(updateData, opts)
+	if err != nil {
+		return fmt.Errorf("prepare parsed sql set filter expr failed, err: %v", err)
+	}
+
+	sql := fmt.Sprintf(`UPDATE %s %s %s`, table.AccountBillAdjustmentItemTable, setExpr, whereExpr)
+
+	if _, err = a.Orm.Txn(tx).Update(kt.Ctx, sql, tools.MapMerge(toUpdate, whereValue)); err != nil {
+		logs.ErrorJson("update account bill adjustment item by filter failed, err: %v, filter: %s, rid: %s",
+			err, expr, kt.Rid)
 		return err
 	}
 

@@ -510,6 +510,11 @@ func (sc *SyncController) createSyncBillItemFlow(kt *kit.Kit, syncDetail *SyncRe
 
 func (sc *SyncController) createSyncAdjustmentFlow(kt *kit.Kit, record *billcore.SyncRecord) (string, error) {
 
+	// 建 Flow 前先把本账期已确认的调账整体置为推送中，未确认的不参与本次推送因此不置位。
+	if err := sc.markAdjustmentPushing(kt, record); err != nil {
+		return "", err
+	}
+
 	memo := fmt.Sprintf("obs adjustment:%s %d-%d", record.Vendor, record.BillYear, record.BillMonth)
 	flowReq := &taskserver.AddCustomFlowReq{
 		Name: enumor.FlowObsSyncAdjustment,
@@ -540,7 +545,12 @@ func (sc *SyncController) handleAdjustment(kt *kit.Kit, record *billcore.SyncRec
 	}
 	switch flow.State {
 	case enumor.FlowCancel, enumor.FlowFailed:
-		// retry
+		// Flow 失败或取消时先把本账期推送中的调账落为失败态并记录原因，再决定是否重建 Flow。
+		reason := fmt.Sprintf("obs adjustment sync flow %s state: %s", flowID, flow.State)
+		if err = sc.markAdjustmentPushFailed(kt, record, reason); err != nil {
+			return false, err
+		}
+
 		return sc.resetAdjustmentFlowId(kt, record)
 	case enumor.FlowSuccess:
 		// 	success

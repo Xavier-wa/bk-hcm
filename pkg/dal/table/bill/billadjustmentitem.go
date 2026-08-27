@@ -55,6 +55,11 @@ var AccountBillAdjustmentItemColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "cost", NamedC: "cost", Type: enumor.Numeric},
 	{Column: "rmb_cost", NamedC: "rmb_cost", Type: enumor.Numeric},
 	{Column: "state", NamedC: "state", Type: enumor.String},
+	{Column: "source", NamedC: "source", Type: enumor.String},
+	{Column: "source_id", NamedC: "source_id", Type: enumor.String},
+	{Column: "push_status", NamedC: "push_status", Type: enumor.String},
+	{Column: "push_fail_reason", NamedC: "push_fail_reason", Type: enumor.String},
+	{Column: "settle_state", NamedC: "settle_state", Type: enumor.String},
 	{Column: "creator", NamedC: "creator", Type: enumor.String},
 	{Column: "created_at", NamedC: "created_at", Type: enumor.Time},
 	{Column: "updated_at", NamedC: "updated_at", Type: enumor.Time},
@@ -98,6 +103,16 @@ type AccountBillAdjustmentItem struct {
 	RMBCost *types.Decimal `db:"rmb_cost" json:"rmb_cost"`
 	// State 状态，未确定、已确定
 	State enumor.BillAdjustmentState `db:"state" json:"string"`
+	// Source 来源
+	Source enumor.BillAdjustmentSource `db:"source" json:"source"`
+	// SourceID 预付费账单 ID，人工录入来源为空
+	SourceID string `db:"source_id" validate:"omitempty,max=64" json:"source_id"`
+	// PushStatus 推送状态
+	PushStatus enumor.BillAdjustmentPushStatus `db:"push_status" json:"push_status"`
+	// PushFailReason 推送失败原因
+	PushFailReason *string `db:"push_fail_reason" validate:"omitempty,max=255" json:"push_fail_reason"`
+	// SettleState 定账状态
+	SettleState enumor.BillSettleState `db:"settle_state" json:"settle_state"`
 
 	// Creator 创建者
 	Creator string `db:"creator" validate:"max=64" json:"creator"`
@@ -144,16 +159,31 @@ func (abs *AccountBillAdjustmentItem) InsertValidate() error {
 	if len(abs.State) == 0 {
 		return errors.New("state is required")
 	}
+	if abs.PushFailReason == nil {
+		return errors.New("push_fail_reason cannot be null")
+	}
 	if err := validator.Validate.Struct(abs); err != nil {
 		return err
 	}
 	return nil
 }
 
-// UpdateValidate validate account bill item on update
+// UpdateValidate validate account bill item on update.
 func (abs *AccountBillAdjustmentItem) UpdateValidate() error {
-	if len(abs.ID) == 0 {
-		return errors.New("id is required")
+	if len(abs.Source) != 0 {
+		if err := abs.Source.Validate(); err != nil {
+			return err
+		}
+	}
+	if len(abs.PushStatus) != 0 {
+		if err := abs.PushStatus.Validate(); err != nil {
+			return err
+		}
+	}
+	if len(abs.SettleState) != 0 {
+		if err := abs.SettleState.Validate(); err != nil {
+			return err
+		}
 	}
 
 	return validator.Validate.Struct(abs)

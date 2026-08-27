@@ -123,6 +123,7 @@ func (act SyncAdjustmentAction) Run(kt run.ExecuteKit, params interface{}) (inte
 		),
 		Page: page,
 	}
+	pushedIDs := make([]string, 0)
 	for {
 		adjustmentResp, err := actcli.GetDataService().Global.Bill.ListBillAdjustmentItem(kt.Kit(), listReq)
 		if err != nil {
@@ -130,13 +131,16 @@ func (act SyncAdjustmentAction) Run(kt run.ExecuteKit, params interface{}) (inte
 			return "fail to list bill adjustment sync obs", err
 		}
 		if len(adjustmentResp.Details) == 0 {
-			return nil, nil
+			break
 		}
 
 		if err := operator.insert(kt.Kit(), adjustmentResp.Details); err != nil {
 			logs.Errorf("fail to convert adjustment to obs bill, err: %v, vendor: %s, start: %d, rid: %s",
 				err, opt.Vendor, page.Start, kt.Kit().Rid)
 			return nil, err
+		}
+		for _, adj := range adjustmentResp.Details {
+			pushedIDs = append(pushedIDs, adj.ID)
 		}
 		logs.Infof("[%s] create obs adjustment bill for successfully, time: %d-%d, offset: %d, count: %d, rid: %s",
 			opt.Vendor, opt.BillYear, opt.BillMonth, page.Start, len(adjustmentResp.Details), kt.Kit().Rid)
@@ -145,6 +149,10 @@ func (act SyncAdjustmentAction) Run(kt run.ExecuteKit, params interface{}) (inte
 			break
 		}
 		page.Start += uint32(core.DefaultMaxPageLimit)
+	}
+
+	if err = markAdjustmentPushed(kt.Kit(), opt, pushedIDs); err != nil {
+		return nil, err
 	}
 
 	logs.Infof("sync obs adjustment for %s %d-%d done, rid: %s", opt.Vendor, opt.BillYear, opt.BillMonth, kt.Kit().Rid)

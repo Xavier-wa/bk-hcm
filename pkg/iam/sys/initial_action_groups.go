@@ -308,6 +308,8 @@ func genPlatformManageActionGroups() client.ActionGroup {
 					{ID: AccountBillPull},
 					{ID: AccountBillManage},
 					{ID: AwsSavingsPlansCostQuery},
+					{ID: AccountBillPrepaidCreate},
+					{ID: AccountBillPrepaidDelete},
 				},
 			},
 			{

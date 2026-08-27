@@ -137,6 +137,7 @@ type Set interface {
 	AccountBillSummaryVersion() bill.AccountBillSummaryVersion
 	AccountBillItem() bill.AccountBillItem
 	AccountBillAdjustmentItem() bill.AccountBillAdjustmentItem
+	AccountBillPrepaidItem() bill.AccountBillPrepaidItem
 	AccountBillSummaryRoot() bill.AccountBillSummaryRoot
 	OBSBillItemHuawei() obs.OBSBillItemHuawei
 	OBSBillItemZenlayer() obs.OBSBillItemZenlayer
@@ -700,6 +701,14 @@ func (s *set) AccountBillItem() bill.AccountBillItem {
 // AccountBillAdjustmentItem returns AccountBillAdjustmentItem dao.
 func (s *set) AccountBillAdjustmentItem() bill.AccountBillAdjustmentItem {
 	return &bill.AccountBillAdjustmentItemDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+	}
+}
+
+// AccountBillPrepaidItem returns AccountBillPrepaidItem dao.
+func (s *set) AccountBillPrepaidItem() bill.AccountBillPrepaidItem {
+	return &bill.AccountBillPrepaidItemDao{
 		Orm:   s.orm,
 		IDGen: s.idGen,
 	}

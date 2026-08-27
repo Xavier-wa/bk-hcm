@@ -25,6 +25,7 @@ import (
 
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/runtime/filter"
+	"hcm/pkg/tools/slice"
 	"hcm/pkg/tools/times"
 )
 
@@ -242,4 +243,20 @@ func ExpressionOr(rules ...*filter.AtomRule) *filter.Expression {
 		Op:    filter.Or,
 		Rules: factories,
 	}
+}
+
+// CombineOrRules 把多条规则用 OR 组合。单层规则数超过 DefaultMaxRuleLimit 时分层嵌套，避免表达式校验失败。
+func CombineOrRules(rules []filter.RuleFactory) filter.RuleFactory {
+	if len(rules) == 1 {
+		return rules[0]
+	}
+	if len(rules) <= int(filter.DefaultMaxRuleLimit) {
+		return &filter.Expression{Op: filter.Or, Rules: rules}
+	}
+
+	grouped := make([]filter.RuleFactory, 0)
+	for _, part := range slice.Split(rules, int(filter.DefaultMaxRuleLimit)) {
+		grouped = append(grouped, CombineOrRules(part))
+	}
+	return CombineOrRules(grouped)
 }

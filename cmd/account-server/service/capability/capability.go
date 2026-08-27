@@ -23,6 +23,8 @@ package capability
 import (
 	"hcm/cmd/account-server/logics/audit"
 	"hcm/pkg/client"
+	"hcm/pkg/criteria/enumor"
+	croncore "hcm/pkg/cron/core"
 	"hcm/pkg/iam/auth"
 	"hcm/pkg/thirdparty/api-gateway/cmdb"
 	"hcm/pkg/thirdparty/api-gateway/finops"
@@ -41,4 +43,6 @@ type Capability struct {
 	Authorizer auth.Authorizer
 	Audit      audit.Interface
 	CmdbClient cmdb.Client
+	// CronTasks 已注册的定时任务，供手动触发接口按 GetURL 注册路由
+	CronTasks map[enumor.CronTask]croncore.Task
 }

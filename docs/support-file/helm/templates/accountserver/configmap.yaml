@@ -27,6 +27,8 @@ data:
       {{- toYaml .Values.accountserver.jarvis | nindent 6 }}
     exchangeRate:
       {{- toYaml .Values.accountserver.exchangeRate | nindent 6 }}
+    billSettle:
+      {{- toYaml .Values.accountserver.billSettle | nindent 6 }}
     obs:
       {{- toYaml .Values.accountserver.obs | nindent 6 }}
     finops:

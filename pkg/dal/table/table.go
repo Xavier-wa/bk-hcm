@@ -237,6 +237,8 @@ const (
 	AccountBillItemTable = "account_bill_item"
 	// AccountBillAdjustmentItemTable 手动调账表
 	AccountBillAdjustmentItemTable = "account_bill_adjustment_item"
+	// AccountBillPrepaidItemTable 预付费账单主表
+	AccountBillPrepaidItemTable = "account_bill_prepaid_item"
 	// AccountBillMonthTaskTable 月度任务表
 	AccountBillMonthTaskTable = "account_bill_month_task"
 	// AccountBillDailyPullTaskTable 日账单拉取任务表
@@ -430,6 +432,7 @@ var TableMap = map[Name]TableConfig{
 	AccountBillSummaryDailyTable:    {},
 	AccountBillItemTable:            {},
 	AccountBillAdjustmentItemTable:  {},
+	AccountBillPrepaidItemTable:     {},
 	AccountBillSummaryRootTable:     {},
 	RootAccountBillConfigTable:      {EnableTenant: true},
 	AccountBillExchangeRateTable:    {EnableTenant: true},

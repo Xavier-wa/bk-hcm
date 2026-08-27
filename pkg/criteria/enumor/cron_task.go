@@ -33,6 +33,8 @@ const (
 	CronTaskApplyRecommendOffline CronTask = "apply_recommend_offline"
 	// CronTaskAsyncFlowAndTaskCleanup 异步任务历史数据清理
 	CronTaskAsyncFlowAndTaskCleanup CronTask = "async_flow_and_task_cleanup"
+	// CronTaskBillSettle 预付费账单与调账定账
+	CronTaskBillSettle CronTask = "bill_settle"
 
 	// CronTaskSyncAgentSkills syncs agent-server skills from BKAIDev.
 	CronTaskSyncAgentSkills CronTask = "sync_agent_skills"

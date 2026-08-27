@@ -759,7 +759,41 @@ type AccountServerSetting struct {
 	TmpFileDir     string               `yaml:"tmpFileDir"`
 	Tenant         TenantConfig         `yaml:"tenant"`
 	Cmdb           ApiGateway           `yaml:"cmdb"`
+	BillSettle     BillSettleOption     `yaml:"billSettle"`
 }
+
+// BillSettleOption 预付费与调账定账任务配置。
+type BillSettleOption struct {
+	// LockDay 锁定日，账期次月的该日 00:00:00（Asia/Shanghai）起该账期不再可覆盖，默认 8。
+	// 该日整日仍可覆盖，锁定时点为 LockDay+1 日零点。
+	LockDay int `yaml:"lockDay"`
+	// IntervalMinute 扫描间隔（分钟），默认 60。锁定精度等于扫描周期。
+	IntervalMinute int `yaml:"intervalMinute"`
+	// LookbackMonth 调账表账期回溯窗口（月），默认 3，超窗口的 unsettled 条目不再被扫描。
+	LookbackMonth int `yaml:"lookbackMonth"`
+}
+
+// trySetDefault 设置定账任务的默认配置。
+func (b *BillSettleOption) trySetDefault() {
+	if b.LockDay <= 0 {
+		b.LockDay = defaultBillSettleLockDay
+	}
+	if b.IntervalMinute <= 0 {
+		b.IntervalMinute = defaultBillSettleIntervalMinute
+	}
+	if b.LookbackMonth <= 0 {
+		b.LookbackMonth = defaultBillSettleLookbackMonth
+	}
+}
+
+const (
+	// defaultBillSettleLockDay 默认锁定日
+	defaultBillSettleLockDay = 8
+	// defaultBillSettleIntervalMinute 默认扫描间隔（分钟）
+	defaultBillSettleIntervalMinute = 60
+	// defaultBillSettleLookbackMonth 默认账期回溯窗口（月）
+	defaultBillSettleLookbackMonth = 3
+)
 
 // trySetFlagBindIP try set flag bind ip.
 func (s *AccountServerSetting) trySetFlagBindIP(ip net.IP) error {
@@ -778,6 +812,7 @@ func (s *AccountServerSetting) trySetDefault() {
 
 	//  内部版配置
 	s.ExchangeRate.trySetDefault()
+	s.BillSettle.trySetDefault()
 }
 
 // Validate TaskServerSetting option.

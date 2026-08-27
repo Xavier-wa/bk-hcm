@@ -56,45 +56,48 @@ const (
 	RootAccountAuditResType             AuditResourceType = "root_account"
 	PermissionTemplateAuditResType      AuditResourceType = "permission_template"
 	PermissionPolicyLibraryAuditResType AuditResourceType = "permission_policy_library"
-	RsAppliedRecordAuditResType   AuditResourceType = "rolling_server_applied_record"
+	RsAppliedRecordAuditResType         AuditResourceType = "rolling_server_applied_record"
 	// CloudCvmAuditResType 自研云-云上主机
 	CloudCvmAuditResType AuditResourceType = "cloud_cvm"
 	// ResPlanGPUDemandsOrderAuditResType 自研云-GPU需求主订单
 	ResPlanGPUDemandsOrderAuditResType AuditResourceType = "res_plan_gpu_demands_order"
 	// ResPlanGPUDemandsSuborderAuditResType 自研云-GPU需求子订单
 	ResPlanGPUDemandsSuborderAuditResType AuditResourceType = "res_plan_gpu_demands_suborder"
+	// AccountBillPrepaidItemAuditResType 预付费账单
+	AccountBillPrepaidItemAuditResType AuditResourceType = "account_bill_prepaid_item"
 )
 
 // AuditResourceTypeEnums resource type map.
 var AuditResourceTypeEnums = map[AuditResourceType]struct{}{
-	SubAccountAuditResType:              {},
-	SubAccountSecretAuditResType:        {},
-	AccountSecretAuditResType:           {},
-	AccountAuditResType:                 {},
-	SecurityGroupAuditResType:           {},
-	SecurityGroupRuleAuditResType:       {},
-	VpcCloudAuditResType:                {},
-	SubnetAuditResType:                  {},
-	DiskAuditResType:                    {},
-	CvmAuditResType:                     {},
-	RouteTableAuditResType:              {},
-	EipAuditResType:                     {},
-	GcpFirewallRuleAuditResType:         {},
-	NetworkInterfaceAuditResType:        {},
-	ArgumentTemplateAuditResType:        {},
-	SslCertAuditResType:                 {},
-	LoadBalancerAuditResType:            {},
-	TargetGroupAuditResType:             {},
-	ListenerAuditResType:                {},
-	UrlRuleAuditResType:                 {},
-	UrlRuleDomainAuditResType:           {},
-	MainAccountAuditResType:             {},
-	RootAccountAuditResType:             {},
-	PermissionTemplateAuditResType:      {},
-	PermissionPolicyLibraryAuditResType: {},
+	SubAccountAuditResType:                {},
+	SubAccountSecretAuditResType:          {},
+	AccountSecretAuditResType:             {},
+	AccountAuditResType:                   {},
+	SecurityGroupAuditResType:             {},
+	SecurityGroupRuleAuditResType:         {},
+	VpcCloudAuditResType:                  {},
+	SubnetAuditResType:                    {},
+	DiskAuditResType:                      {},
+	CvmAuditResType:                       {},
+	RouteTableAuditResType:                {},
+	EipAuditResType:                       {},
+	GcpFirewallRuleAuditResType:           {},
+	NetworkInterfaceAuditResType:          {},
+	ArgumentTemplateAuditResType:          {},
+	SslCertAuditResType:                   {},
+	LoadBalancerAuditResType:              {},
+	TargetGroupAuditResType:               {},
+	ListenerAuditResType:                  {},
+	UrlRuleAuditResType:                   {},
+	UrlRuleDomainAuditResType:             {},
+	MainAccountAuditResType:               {},
+	RootAccountAuditResType:               {},
+	PermissionTemplateAuditResType:        {},
+	PermissionPolicyLibraryAuditResType:   {},
 	RsAppliedRecordAuditResType:           {},
 	ResPlanGPUDemandsOrderAuditResType:    {},
 	ResPlanGPUDemandsSuborderAuditResType: {},
+	AccountBillPrepaidItemAuditResType:    {},
 }
 
 // Exist judge enum value exist.

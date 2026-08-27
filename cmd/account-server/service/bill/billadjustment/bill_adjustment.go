@@ -22,7 +22,6 @@ package billadjustment
 import (
 	"fmt"
 	"io"
-	"strings"
 
 	"hcm/pkg/api/account-server/bill"
 	"hcm/pkg/api/core"
@@ -248,7 +247,7 @@ func (b *billAdjustmentSvc) UpdateBillAdjustmentItem(cts *rest.Contexts) (any, e
 		return nil, err
 	}
 
-	records, err := b.checkAdjustmentUnconfirmed(cts, []string{id})
+	records, err := b.checkAdjustmentEditable(cts, []string{id})
 	if err != nil {
 		return nil, err
 	}
@@ -257,16 +256,21 @@ func (b *billAdjustmentSvc) UpdateBillAdjustmentItem(cts *rest.Contexts) (any, e
 		return nil, err
 	}
 
+	// 编辑已确认调账后必须回退状态：条目内容变了，之前的确认与推送结论都不再成立，
+	// 需要重新走确认与整月同步流程。push_fail_reason 一并清空，避免留下与 unpushed 矛盾的历史失败原因。
 	dsReq := &dsbill.BillAdjustmentItemUpdateReq{
-		ID:            id,
-		MainAccountID: req.MainAccountID,
-		ProductID:     req.ProductID,
-		BkBizID:       req.BkBizID,
-		Type:          req.Type,
-		ResClass:      req.ResClass,
-		ResSubClass:   req.ResSubClass,
-		Memo:          req.Memo,
-		Cost:          req.Cost,
+		ID:             id,
+		MainAccountID:  req.MainAccountID,
+		ProductID:      req.ProductID,
+		BkBizID:        req.BkBizID,
+		Type:           req.Type,
+		ResClass:       req.ResClass,
+		ResSubClass:    req.ResSubClass,
+		Memo:           req.Memo,
+		Cost:           req.Cost,
+		State:          enumor.BillAdjustmentStateUnconfirmed,
+		PushStatus:     enumor.BillAdjustmentPushStatusUnpushed,
+		PushFailReason: cvt.ValToPtr(""),
 	}
 
 	err = b.client.DataService().Global.Bill.UpdateBillAdjustmentItem(cts.Kit, dsReq)
@@ -294,7 +298,7 @@ func (b *billAdjustmentSvc) BatchConfirmBillAdjustmentItem(cts *rest.Contexts) (
 		return nil, err
 	}
 
-	if _, err := b.checkAdjustmentUnconfirmed(cts, req.IDs); err != nil {
+	if _, err := b.checkAdjustmentConfirmable(cts, req.IDs); err != nil {
 		return nil, err
 	}
 
@@ -319,7 +323,7 @@ func (b *billAdjustmentSvc) DeleteBillAdjustmentItem(cts *rest.Contexts) (any, e
 		return nil, err
 	}
 
-	if _, err := b.checkAdjustmentUnconfirmed(cts, []string{id}); err != nil {
+	if _, err := b.checkAdjustmentEditable(cts, []string{id}); err != nil {
 		return nil, err
 	}
 
@@ -352,7 +356,7 @@ func (b *billAdjustmentSvc) BatchDeleteBillAdjustmentItem(cts *rest.Contexts) (a
 		return nil, err
 	}
 
-	if _, err := b.checkAdjustmentUnconfirmed(cts, req.Ids); err != nil {
+	if _, err := b.checkAdjustmentEditable(cts, req.Ids); err != nil {
 		return nil, err
 	}
 
@@ -365,40 +369,6 @@ func (b *billAdjustmentSvc) BatchDeleteBillAdjustmentItem(cts *rest.Contexts) (a
 		return nil, err
 	}
 	return nil, nil
-}
-
-// 检查给定的调整明细是否都是未确认调账条目，如果存在已确定条目会返回错误。
-// 同时返回读出的记录，供更新路径复用其云厂商与资源类别做校验，避免新增查询轮次。
-func (b *billAdjustmentSvc) checkAdjustmentUnconfirmed(cts *rest.Contexts, ids []string) (
-	[]*billcore.AdjustmentItem, error) {
-
-	// 检查是否已确认调账明细
-	listReq := &core.ListReq{
-		Filter: tools.ContainersExpression("id", ids),
-		Page:   core.NewDefaultBasePage(),
-		Fields: []string{"id", "state", "vendor", "res_class", "res_sub_class"},
-	}
-	itemResp, err := b.client.DataService().Global.Bill.ListBillAdjustmentItem(cts.Kit, listReq)
-	if err != nil {
-		logs.Errorf("fail to query bill adjustment for check unconfirmed, err: %v, ids: %v, rid: %s",
-			err, ids, cts.Kit.Rid)
-		return nil, err
-	}
-
-	if len(itemResp.Details) != len(ids) {
-		return nil, errf.New(errf.RecordNotFound, "item not found")
-	}
-	confirmed := make([]string, 0)
-	for _, detail := range itemResp.Details {
-		if detail.State == enumor.BillAdjustmentStateConfirmed {
-			confirmed = append(confirmed, detail.ID)
-		}
-	}
-	if len(confirmed) > 0 {
-		return nil, errf.New(errf.InvalidParameter, "confirmed items can not be modified, ids: "+
-			strings.Join(confirmed, ","))
-	}
-	return itemResp.Details, nil
 }
 
 // ImportBillAdjustment 导入账单明细

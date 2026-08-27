@@ -243,6 +243,11 @@ const (
 	// AccountBillPull account bill pull action id to register iam.
 	AccountBillPull client.ActionID = "account_bill_pull"
 
+	// AccountBillPrepaidCreate account bill prepaid create action id to register iam.
+	AccountBillPrepaidCreate client.ActionID = "account_bill_prepaid_create"
+	// AccountBillPrepaidDelete account bill prepaid delete action id to register iam.
+	AccountBillPrepaidDelete client.ActionID = "account_bill_prepaid_delete"
+
 	// ApplicationManage application manage action id to register iam.
 	ApplicationManage client.ActionID = "application_manage"
 
@@ -360,6 +365,9 @@ var ActionIDNameMap = map[client.ActionID]string{
 	RollingServerManage:    "滚服管理",
 	GreenChannel:           "小额绿通",
 	AgentAssistant:         "平台-智能体助手",
+
+	AccountBillPrepaidCreate: "云账单-预付费账单写入",
+	AccountBillPrepaidDelete: "云账单-预付费账单删除",
 
 	MainAccountFind:   "账号-二级账号查看",
 	MainAccountCreate: "账号-二级账号创建",

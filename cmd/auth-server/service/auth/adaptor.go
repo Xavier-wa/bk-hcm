@@ -85,6 +85,7 @@ var genResourceFuncMap = map[meta.ResourceType]genResourceFunc{
 	meta.AccountBill:              genAccountBillResource,
 	meta.Application:              genApplicationResources,
 	meta.AccountBillThirdParty:    genAccountBillThirdPartyResource,
+	meta.AccountBillPrepaid:       genAccountBillPrepaidRuleResource,
 	meta.AwsSavingsPlansCost:      genAwsSavingsPlansCostResource,
 	meta.Image:                    genImageResource,
 	meta.TaskManagement:           genTaskManagementResource,

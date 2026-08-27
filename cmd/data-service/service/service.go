@@ -30,6 +30,7 @@ import (
 
 	mainaccount "hcm/cmd/data-service/service/account-set/main-account"
 	rootaccount "hcm/cmd/data-service/service/account-set/root-account"
+	dsaiagent "hcm/cmd/data-service/service/aiagent"
 	"hcm/cmd/data-service/service/application"
 	"hcm/cmd/data-service/service/audit"
 	"hcm/cmd/data-service/service/auth"
@@ -38,6 +39,7 @@ import (
 	"hcm/cmd/data-service/service/bill/billexchangerate"
 	"hcm/cmd/data-service/service/bill/billitem"
 	"hcm/cmd/data-service/service/bill/billmonthtask"
+	"hcm/cmd/data-service/service/bill/billprepaiditem"
 	"hcm/cmd/data-service/service/bill/billregioncityrel"
 	"hcm/cmd/data-service/service/bill/billsummarydaily"
 	"hcm/cmd/data-service/service/bill/billsummarymain"
@@ -103,7 +105,6 @@ import (
 	rollingbill "hcm/cmd/data-service/service/rolling-server/rolling-bill"
 	rollingfinedetail "hcm/cmd/data-service/service/rolling-server/rolling-fine-detail"
 	"hcm/cmd/data-service/service/rolling-server/rolling-returned"
-	dsaiagent "hcm/cmd/data-service/service/aiagent"
 	"hcm/cmd/data-service/service/task"
 	tcloudziyanpmdevicetype "hcm/cmd/data-service/service/tcloud-ziyan-pm-device-type"
 	"hcm/cmd/data-service/service/tenant"
@@ -303,6 +304,7 @@ func (s *Service) apiSet() *restful.Container {
 	billitem.InitService(capability)
 	billdailytask.InitService(capability)
 	billadjustmentitem.InitService(capability)
+	billprepaiditem.InitService(capability)
 	billsummaryroot.InitService(capability)
 	billsummarydaily.InitService(capability)
 	rootaccountbillconfig.InitService(capability)

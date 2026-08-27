@@ -20,10 +20,13 @@
 package bill
 
 import (
+	"errors"
+
 	"hcm/pkg/api/core"
 	"hcm/pkg/api/core/bill"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
+	"hcm/pkg/runtime/filter"
 
 	"github.com/shopspring/decimal"
 )
@@ -40,23 +43,27 @@ func (r *BatchBillAdjustmentItemCreateReq) Validate() error {
 
 // BillAdjustmentItemCreateReq create request
 type BillAdjustmentItemCreateReq struct {
-	RootAccountID string                        `json:"root_account_id" validate:"omitempty"`
-	MainAccountID string                        `json:"main_account_id" validate:"required"`
-	Vendor        enumor.Vendor                 `json:"vendor" validate:"required"`
-	ProductID     int64                         `json:"product_id" validate:"omitempty"`
-	BkBizID       int64                         `json:"bk_biz_id" validate:"omitempty"`
-	BillYear      int                           `json:"bill_year" validate:"required"`
-	BillMonth     int                           `json:"bill_month" validate:"required"`
-	BillDay       int                           `json:"bill_day" validate:"required"`
-	Type          enumor.BillAdjustmentType     `json:"type" validate:"required"`
-	ResClass      enumor.BillAdjustmentResClass `json:"res_class" validate:"required"`
-	ResSubClass   string                        `json:"res_sub_class" validate:"omitempty,max=64"`
-	Operator      string                        `json:"operator"`
-	Memo          *string                       `json:"memo"`
-	Currency      enumor.CurrencyCode           `json:"currency" validate:"required"`
-	Cost          decimal.Decimal               `json:"cost" validate:"required"`
-	RMBCost       decimal.Decimal               `json:"rmb_cost" validate:"omitempty"`
-	State         enumor.BillAdjustmentState    `json:"state" validate:"omitempty"`
+	RootAccountID string                          `json:"root_account_id" validate:"omitempty"`
+	MainAccountID string                          `json:"main_account_id" validate:"required"`
+	Vendor        enumor.Vendor                   `json:"vendor" validate:"required"`
+	ProductID     int64                           `json:"product_id" validate:"omitempty"`
+	BkBizID       int64                           `json:"bk_biz_id" validate:"omitempty"`
+	BillYear      int                             `json:"bill_year" validate:"required"`
+	BillMonth     int                             `json:"bill_month" validate:"required"`
+	BillDay       int                             `json:"bill_day" validate:"required"`
+	Type          enumor.BillAdjustmentType       `json:"type" validate:"required"`
+	ResClass      enumor.BillAdjustmentResClass   `json:"res_class" validate:"required"`
+	ResSubClass   string                          `json:"res_sub_class" validate:"omitempty,max=64"`
+	Operator      string                          `json:"operator"`
+	Memo          *string                         `json:"memo"`
+	Currency      enumor.CurrencyCode             `json:"currency" validate:"required"`
+	Cost          decimal.Decimal                 `json:"cost" validate:"required"`
+	RMBCost       decimal.Decimal                 `json:"rmb_cost" validate:"omitempty"`
+	State         enumor.BillAdjustmentState      `json:"state" validate:"omitempty"`
+	Source        enumor.BillAdjustmentSource     `json:"source" validate:"omitempty"`
+	SourceID      string                          `json:"source_id" validate:"omitempty,max=64"`
+	PushStatus    enumor.BillAdjustmentPushStatus `json:"push_status" validate:"omitempty"`
+	SettleState   enumor.BillSettleState          `json:"settle_state" validate:"omitempty"`
 }
 
 // Validate ...
@@ -80,23 +87,54 @@ type BillAdjustmentItemListResult = core.ListResultT[*bill.AdjustmentItem]
 
 // BillAdjustmentItemUpdateReq update request
 type BillAdjustmentItemUpdateReq struct {
-	ID            string                        `json:"id"`
-	RootAccountID string                        `json:"root_account_id"`
-	MainAccountID string                        `json:"main_account_id"`
-	ProductID     int64                         `json:"product_id" validate:"omitempty"`
-	BkBizID       int64                         `json:"bk_biz_id" validate:"omitempty"`
-	BillYear      int                           `json:"bill_year"`
-	BillMonth     int                           `json:"bill_month"`
-	BillDay       int                           `json:"bill_day" `
-	Type          enumor.BillAdjustmentType     `json:"type"`
-	ResClass      enumor.BillAdjustmentResClass `json:"res_class"`
-	ResSubClass   *string                       `json:"res_sub_class" validate:"omitempty,max=64"`
-	Operator      string                        `json:"operator"`
-	Currency      enumor.CurrencyCode           `json:"currency"`
-	Cost          *decimal.Decimal              `json:"cost" `
-	RMBCost       *decimal.Decimal              `json:"rmb_cost" `
-	Memo          *string                       `json:"memo"`
-	State         enumor.BillAdjustmentState    `json:"state" `
+	ID             string                          `json:"id"`
+	RootAccountID  string                          `json:"root_account_id"`
+	MainAccountID  string                          `json:"main_account_id"`
+	ProductID      int64                           `json:"product_id" validate:"omitempty"`
+	BkBizID        int64                           `json:"bk_biz_id" validate:"omitempty"`
+	BillYear       int                             `json:"bill_year"`
+	BillMonth      int                             `json:"bill_month"`
+	BillDay        int                             `json:"bill_day" `
+	Type           enumor.BillAdjustmentType       `json:"type"`
+	ResClass       enumor.BillAdjustmentResClass   `json:"res_class"`
+	ResSubClass    *string                         `json:"res_sub_class" validate:"omitempty,max=64"`
+	Operator       string                          `json:"operator"`
+	Currency       enumor.CurrencyCode             `json:"currency"`
+	Cost           *decimal.Decimal                `json:"cost" `
+	RMBCost        *decimal.Decimal                `json:"rmb_cost" `
+	Memo           *string                         `json:"memo"`
+	State          enumor.BillAdjustmentState      `json:"state" `
+	PushStatus     enumor.BillAdjustmentPushStatus `json:"push_status" validate:"omitempty"`
+	PushFailReason *string                         `json:"push_fail_reason" validate:"omitempty,max=255"`
+	SettleState    enumor.BillSettleState          `json:"settle_state" validate:"omitempty"`
+}
+
+// BillAdjustmentItemStateUpdateReq 批量更新调账的推送态与定账态。
+type BillAdjustmentItemStateUpdateReq struct {
+	Filter         *filter.Expression              `json:"filter" validate:"required"`
+	PushStatus     enumor.BillAdjustmentPushStatus `json:"push_status" validate:"omitempty"`
+	PushFailReason *string                         `json:"push_fail_reason" validate:"omitempty"`
+	SettleState    enumor.BillSettleState          `json:"settle_state" validate:"omitempty"`
+}
+
+// Validate 校验批量状态更新请求。
+func (req *BillAdjustmentItemStateUpdateReq) Validate() error {
+	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+	if len(req.PushStatus) == 0 && len(req.SettleState) == 0 && req.PushFailReason == nil {
+		return errors.New("nothing to update")
+	}
+	if len(req.PushStatus) != 0 {
+		if err := req.PushStatus.Validate(); err != nil {
+			return err
+		}
+	}
+	if len(req.SettleState) != 0 {
+		return req.SettleState.Validate()
+	}
+
+	return nil
 }
 
 // Validate ...
