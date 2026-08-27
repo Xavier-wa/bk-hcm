@@ -528,12 +528,18 @@ const handleZoneCheckChange = (checked: boolean, zone: string) => {
 const handleZoneSelect = (zone: string) => {
   zoneSelected.value = [zone];
   selectedRowKeys.value = [];
+  condition.deviceType = [];
+  condition.cpu = [];
+  condition.mem = [];
   getDeviceTypeList();
 };
 
 const handleDeviceGroupChange = (items: IDeviceFamilyItem[]) => {
   selectedRowKeys.value = [];
   selectedDeviceFamily.value = items?.[0];
+  condition.deviceType = [];
+  condition.cpu = [];
+  condition.mem = [];
   getDeviceTypeList();
 };
 
@@ -787,9 +793,9 @@ provide('isInheritPackage', isInheritPackage);
               @change="handleDeviceTypeChange"
             >
               <bk-option
-                v-for="(item, index) in option.deviceTypeList"
+                v-for="item in option.deviceTypeList"
                 :id="item.device_type"
-                :key="index"
+                :key="item.device_type"
                 :name="item.device_type"
               />
             </bk-select>

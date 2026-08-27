@@ -1,0 +1,104 @@
+{
+  "id": "fix-cvm-apply-device-type-mismatch",
+  "title": "修复 CVM 申领弹窗可用区切换后机型下拉与选项不一致",
+  "currentStage": "done",
+  "createdAt": "2026-08-11T09:01:05.988Z",
+  "updatedAt": "2026-08-12T01:34:29.527Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/fix-cvm-apply-device-type-mismatch/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-11T09:24:51.878Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/fix-cvm-apply-device-type-mismatch/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-11T10:03:29.085Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-11T10:03:40.084Z",
+      "note": "coding 阶段完成两处改动（清空 condition + 修复 bk-option :key），lint 无新错误，drift check 无漂移，freshness 已重新 align，推进到 test 阶段"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-12T01:34:21.388Z",
+      "note": "手测全部通过（P0+P1+P2），TC-001 核心场景验证 trigger 文本与所选机型一致，TAPD action 已清除，推进到 done 阶段"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-08-11T09:01:05.988Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-11T10:03:40.084Z",
+      "note": "coding 阶段完成两处改动（清空 condition + 修复 bk-option :key），lint 无新错误，drift check 无漂移，freshness 已重新 align，推进到 test 阶段"
+    },
+    {
+      "from": "test",
+      "to": "test",
+      "at": "2026-08-12T01:34:18.524Z",
+      "note": "tapd_action_complete owner:1069995598162077646:reassign_to_reporter: 已将 current_owner 改回 reporter laswelldai（bugs_update 2026-08-11 18:04:07），状态 resolved(for_test)"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-12T01:34:21.388Z",
+      "note": "手测全部通过（P0+P1+P2），TC-001 核心场景验证 trigger 文本与所选机型一致，TAPD action 已清除，推进到 done 阶段"
+    }
+  ],
+  "branch": "fix-cvm-apply-device-type-mismatch",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "bug",
+    "itemId": "1069995598162077646"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "completed",
+      "at": "2026-08-11T09:23:29.610Z",
+      "note": "已完成 tapd-story-clarification（澄清回写 TAPD bug description，含原需求描述快照 4 张截图）+ tapd-story-evaluation（无需拆分，RICE=1600，紧急，预估 0.5 人天）"
+    },
+    "hcm-docs-closeout": {
+      "status": "skipped",
+      "at": "2026-08-11T10:05:36.507Z",
+      "note": "本次为 bugfix（device-type-dialog.vue 组件内部 key 修复 + condition 清空），不影响模块级架构。base 模块 hasDrift 是历史积累（baselineAt 2026-07-23），changes 为空，无文档缺口需补写。"
+    },
+    "hcm-verify-e2e": {
+      "status": "skipped",
+      "at": "2026-08-11T10:05:37.271Z",
+      "note": "本次修复涉及 bk-select 下拉交互，需手动验证 trigger 文本与选项勾选一致性，E2E 难以覆盖下拉渲染细节。已提供 test.md 手测清单。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-12T01:34:29.527Z",
+      "note": "bug 1069995598162077646 收口完成：status=resolved(for_test)，current_owner=laswelldai(reporter)，已回交。bug 最高停在 for_test，未强推 done。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/components/device-type-selector/cvm-apply/children/device-type-dialog.vue"
+      ],
+      "contentFingerprint": "1da4388efa8aa52a895874f54720ef5b2c6f7eda",
+      "codeBaseline": "941fa9de4a36d33f0385ee94b5f45c89bf6c4551",
+      "seatedAt": "2026-08-11T10:03:36.751Z"
+    }
+  }
+}
