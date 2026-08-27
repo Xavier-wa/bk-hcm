@@ -46,6 +46,7 @@ import (
 	configsvc "hcm/cmd/agent-server/service/config"
 	"hcm/cmd/agent-server/service/memory"
 	promptsvc "hcm/cmd/agent-server/service/prompt"
+	"hcm/cmd/agent-server/service/runobserve"
 	"hcm/cmd/agent-server/service/session"
 	skillsvc "hcm/cmd/agent-server/service/skill"
 	"hcm/cmd/agent-server/types/readiness"
@@ -76,6 +77,7 @@ import (
 	"trpc.group/trpc-go/trpc-agent-go/server/agui"
 	"trpc.group/trpc-go/trpc-agent-go/server/agui/adapter"
 	aguirunner "trpc.group/trpc-go/trpc-agent-go/server/agui/runner"
+	aguitranslator "trpc.group/trpc-go/trpc-agent-go/server/agui/translator"
 	agentsession "trpc.group/trpc-go/trpc-agent-go/session"
 	"trpc.group/trpc-go/trpc-agent-go/tool"
 )
@@ -292,6 +294,10 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 				makeRunOptionResolver(s.runTime.CheckpointSaver(), s.runTime.SessionSvc(), svcCfg.AppName,
 					svcCfg.AllowedModelNames(), s.runTime.DynamicToolFilter())),
 			aguirunner.WithTranslatorFactory(aguievent.NewCustomTranslator),
+			// RUN_STARTED 由 emitEvent 直接发出，不经过 Translate；在 AfterTranslate 才能看到。
+			aguirunner.WithTranslateCallbacks(
+				aguitranslator.NewCallbacks().RegisterAfterTranslate(runobserve.AfterTranslate),
+			),
 			// Auto-cancel the LLM call when the SSE connection drops (client disconnects).
 			// NOTE: When ctx ends, the request stops immediately, so recorded conversation events may be incomplete.
 			// aguirunner.WithCancelOnContextDoneEnabled(true),
@@ -523,11 +529,22 @@ func (s *Service) sessionCodeMiddleware(next http.Handler) http.Handler {
 		r.ContentLength = int64(len(newBody))
 
 		isAGUI := strings.HasSuffix(r.URL.Path, "/agui")
+		isCancel := strings.HasSuffix(r.URL.Path, "/cancel")
+		scene := runobserve.NormalizeScene(sessionMeta.SessionTag)
 		if isAGUI {
 			go s.asyncIncrContentCount(kt, sessionCode)
 			if sessionMeta.BkBizID > 0 {
 				r = r.WithContext(authlogic.WithBkBizID(r.Context(), sessionMeta.BkBizID))
 			}
+			// 仅真实 /agui 挂本轮元数据；/history 不挂，避免重放被计成新 run。
+			r = r.WithContext(runobserve.WithRunMeta(r.Context(), runobserve.NewRunMeta(
+				sessionMeta.BkBizID, scene, time.Now())))
+			// STARTED 由 AfterTranslate 持有 inflight；SSE 结束若未见终态则在此释放。
+			defer runobserve.EndRun(r.Context())
+		}
+		if isCancel {
+			// 鉴权与 session 解析已通过，立刻计 cancel；不减 inflight。
+			metrics.IncAiagentRunCancel(sessionMeta.BkBizID, string(scene))
 		}
 		next.ServeHTTP(w, r)
 

@@ -192,8 +192,8 @@ func TestIntentType_IsSupportedScene(t *testing.T) {
 		{enumor.IntentTypeResourceQuery, true},
 		{enumor.IntentTypeChat, false},
 		{enumor.IntentTypeUnsupported, false},
-		{"", false},
 		{"unknown", false},
+		{"", false},
 	}
 	for _, tc := range tests {
 		if got := tc.in.IsSupportedScene(); got != tc.want {

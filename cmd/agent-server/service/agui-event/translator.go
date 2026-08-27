@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"strings"
 
+	"hcm/cmd/agent-server/service/runobserve"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/logs"
@@ -64,6 +65,12 @@ func (t *customTranslator) Translate(ctx context.Context, evt *event.Event) ([]a
 	if customEvt, ok := buildInterruptCustomEvent(ctx, evt); ok {
 		out = append(out, customEvt)
 	}
+	// 用 graph 最终 session_tag 覆盖本轮 Scene，必须在 return 之前完成：
+	// runner 随后就会 emit RUN_FINISHED，AfterTranslate 打点时才能用到最终场景。
+	if evt != nil {
+		runobserve.RefreshScene(ctx, evt.StateDelta)
+	}
+	// 打点改到 AfterTranslate：RUN_STARTED 由 emitEvent 直接发出，不经过 Translate。
 	return out, nil
 }
 

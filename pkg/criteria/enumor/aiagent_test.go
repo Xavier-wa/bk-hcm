@@ -85,6 +85,29 @@ func TestIntentTypesExcludeUnsupported(t *testing.T) {
 	}
 }
 
+func TestAiagentRunState_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		state   AiagentRunState
+		wantErr bool
+	}{
+		{name: "running is valid", state: AiagentRunStateRunning, wantErr: false},
+		{name: "finished is valid", state: AiagentRunStateFinished, wantErr: false},
+		{name: "error is valid", state: AiagentRunStateError, wantErr: false},
+		{name: "unknown is valid", state: AiagentRunStateUnknown, wantErr: false},
+		{name: "cancel is invalid", state: AiagentRunState("cancel"), wantErr: true},
+		{name: "empty is invalid", state: AiagentRunState(""), wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.state.Validate()
+			if (err != nil) != tc.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestIsSubgraphAgentNode(t *testing.T) {
 	tests := []struct {
 		nodeID string

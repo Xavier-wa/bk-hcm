@@ -87,6 +87,9 @@ const (
 	// CCWatchSubSys defines the cc watch consumer related sub system. Used for
 	// cloud-server watch batch metrics, e.g. hcm_cc_watch_events_total.
 	CCWatchSubSys = "cc_watch"
+	// AiagentSubSys defines agent-server run observation sub system.
+	// Used for hcm_aiagent_run_* metrics.
+	AiagentSubSys = "aiagent"
 )
 
 // labels
@@ -102,6 +105,8 @@ const (
 	LabelOperation = "operation"
 	// LabelState state标签
 	LabelState = "state"
+	// LabelScene scene标签，取值对齐 enumor.IntentType（未分类/非法 tag 留空）
+	LabelScene = "scene"
 	// LabelErrType errType标签
 	LabelErrType = "err_type"
 	// LabelFlowName flowName标签

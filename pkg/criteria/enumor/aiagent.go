@@ -360,3 +360,28 @@ func (n DeclarativeToolName) Validate() error {
 		return fmt.Errorf("unsupported declarative tool name: %s", n)
 	}
 }
+
+// AiagentRunState is the lifecycle state of an AI agent run used as metric labels.
+type AiagentRunState string
+
+const (
+	// AiagentRunStateRunning is the in-flight run status. It is not a run_total
+	// state; in-progress runs are exposed by run_inflight.
+	AiagentRunStateRunning AiagentRunState = "running"
+	// AiagentRunStateFinished is the run_total state when AG-UI emits RUN_FINISHED.
+	AiagentRunStateFinished AiagentRunState = "finished"
+	// AiagentRunStateError is the run_total state when AG-UI emits RUN_ERROR.
+	AiagentRunStateError AiagentRunState = "error"
+	// AiagentRunStateUnknown is the run_total state written only by orphan sweep.
+	AiagentRunStateUnknown AiagentRunState = "unknown"
+)
+
+// Validate checks whether the run state is one of the declared values.
+func (s AiagentRunState) Validate() error {
+	switch s {
+	case AiagentRunStateRunning, AiagentRunStateFinished, AiagentRunStateError, AiagentRunStateUnknown:
+		return nil
+	default:
+		return fmt.Errorf("unsupported aiagent run state: %s", s)
+	}
+}

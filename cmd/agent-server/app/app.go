@@ -83,6 +83,7 @@ func (s *agentServer) prepare(opt *options.Option) error {
 	// init metrics
 	network := cc.AgentServer().Network
 	metrics.InitMetrics(net.JoinHostPort(network.BindIP, strconv.Itoa(int(network.Port))))
+	metrics.EnsureAiagentMetric()
 
 	// 桥接 OTel metrics 到 Prometheus
 	if err := metrics.InitOTelMetrics(metrics.Register()); err != nil {
