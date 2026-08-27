@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, useTemplateRef } from 'vue';
 import {
   Ediatable,
   HeadColumn,
@@ -30,13 +30,13 @@ onMounted(async () => {
   }
 });
 
-// 每个 project 行的组件引用（用于校验）
-// 使用 Record 避免接口中 InstanceType 泛型导致的 VLS 类型推断问题
-const entryRefsList = ref<Record<string, any>[]>([]);
+// 每行 project 的列组件引用（v-for 集合引用，Vue 自动随挂载/卸载维护）
+const typeRefs = useTemplateRef<InstanceType<typeof SelectColumn>[]>('typeRefs');
+const memoRefs = useTemplateRef<InstanceType<typeof InputColumn>[]>('memoRefs');
 
 // DateTimePickerColumn 引用（日期范围校验用）
-// 使用数组存储，因为每个 TimePeriodBlock 都有一个 datePickerRef
-const datePickerRef = ref<InstanceType<typeof DateTimePickerColumn> | null>(null);
+// 该 ref 位于 v-for 行内，Vue 会将其收集为数组，取值时取首个实例
+const datePickerRef = useTemplateRef<InstanceType<typeof DateTimePickerColumn>[]>('datePickerRef');
 
 // ---- 日期范围双向绑定 ----
 
@@ -69,7 +69,6 @@ const createEmptyProject = (): IDissolveProject => ({
 const ensureProjects = () => {
   if (!model.value.projects?.length) {
     model.value.projects = [createEmptyProject()];
-    entryRefsList.value = [];
   }
 };
 
@@ -82,7 +81,6 @@ const addEntry = () => {
 
 const removeEntry = (entryIndex: number) => {
   model.value.projects.splice(entryIndex, 1);
-  entryRefsList.value.splice(entryIndex, 1);
 };
 
 // ---- 校验 ----
@@ -92,13 +90,15 @@ const getValue = async () => {
     const allRefs: Promise<any>[] = [];
 
     // 日期范围校验
-    if (datePickerRef.value) {
-      allRefs.push(datePickerRef.value.getValue());
+    const datePicker = datePickerRef.value?.[0];
+    if (datePicker) {
+      allRefs.push(datePicker.getValue());
     }
 
-    // 每行 project 的校验（仅校验项目类型）
-    entryRefsList.value.forEach((refs) => {
-      if (refs.typeRef) allRefs.push(refs.typeRef.getValue());
+    // 每行 project 的校验（仅校验项目类型；集合引用由 Vue 维护，卸载行自动移除）
+    const rowCount = model.value.projects?.length ?? 0;
+    (typeRefs.value ?? []).slice(0, rowCount).forEach((ref) => {
+      if (ref) allRefs.push(ref.getValue());
     });
 
     await Promise.all(allRefs);
@@ -137,7 +137,7 @@ defineExpose({ getValue });
           <!-- 裁撤时间列：仅第一行显示，跨所有行 -->
           <td v-if="entryIndex === 0" :rowspan="model.projects.length" class="col-time">
             <DateTimePickerColumn
-              :ref="(el: any) => datePickerRef = el"
+              ref="datePickerRef"
               type="daterange"
               v-model="dateRange"
               placeholder="请选择"
@@ -150,7 +150,7 @@ defineExpose({ getValue });
           <!-- 项目类型列 -->
           <td class="col-type">
             <SelectColumn
-              :ref="(el: any) => el && ((entryRefsList[entryIndex] ||= {}).typeRef = el)"
+              ref="typeRefs"
               v-model="project.id"
               :list="projectTypeOptions"
               :rules="[{ validator: (val: number) => Boolean(val) && val > 0, message: '请选择项目类型' }]"
@@ -161,11 +161,7 @@ defineExpose({ getValue });
 
           <!-- 备注列 -->
           <td class="col-memo">
-            <InputColumn
-              :ref="(el: any) => el && ((entryRefsList[entryIndex] ||= {}).memoRef = el)"
-              v-model="project.memo"
-              placeholder="请填写与配置理由"
-            />
+            <InputColumn ref="memoRefs" v-model="project.memo" placeholder="请填写与配置理由" />
           </td>
 
           <!-- 操作列 -->

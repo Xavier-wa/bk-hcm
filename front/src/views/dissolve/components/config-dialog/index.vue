@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, watch, computed, nextTick } from 'vue';
+import { ref, reactive, watch, computed, nextTick, useTemplateRef } from 'vue';
 import { Form, Message } from 'bkui-vue';
 import { InfoLine, Plus } from 'bkui-vue/lib/icon';
 import { useDissolveQuotaStore, type IDissolveConfig } from '@/store/dissolve/quota';
@@ -17,7 +17,7 @@ const businessGlobalStore = useBusinessGlobalStore();
 
 const loading = ref(false);
 const quotaOffsetTableRef = ref<InstanceType<typeof QuotaOffsetTable>>();
-const timePeriodBlockRefs = ref<InstanceType<typeof TimePeriodBlock>[]>([]);
+const timePeriodBlockRefs = useTemplateRef<InstanceType<typeof TimePeriodBlock>[]>('timePeriodBlockRefs');
 const formRef = ref<InstanceType<typeof Form>>();
 
 const initialState: IDissolveConfig = {
@@ -65,7 +65,6 @@ const addTimePeriod = () => {
 
 const removeTimePeriod = (index: number) => {
   formData.dissolve_projects.splice(index, 1);
-  timePeriodBlockRefs.value.splice(index, 1);
 };
 
 const handleValidate = async (hint = true): Promise<boolean> => {
@@ -78,9 +77,10 @@ const handleValidate = async (hint = true): Promise<boolean> => {
       quotaOffsetTableRef.value?.validate?.(),
     ]);
 
-    // 校验所有时间段配置块
-    if (timePeriodBlockRefs.value.length > 0) {
-      await Promise.all(timePeriodBlockRefs.value.map((block) => block?.getValue()));
+    // 校验所有时间段配置块（集合引用由 Vue 维护，仅包含当前挂载的块）
+    const blocks = timePeriodBlockRefs.value ?? [];
+    if (blocks.length > 0) {
+      await Promise.all(blocks.map((block) => block?.getValue()));
     }
 
     if (!duplicateValid) {
@@ -296,7 +296,7 @@ const handleAdd = () => {
           <div class="time-period-list">
             <template v-for="(_, index) in formData.dissolve_projects" :key="index">
               <TimePeriodBlock
-                :ref="(el: any) => el && (timePeriodBlockRefs[index] = el)"
+                ref="timePeriodBlockRefs"
                 :index="index"
                 v-model="formData.dissolve_projects[index]"
                 @remove="removeTimePeriod(index)"
