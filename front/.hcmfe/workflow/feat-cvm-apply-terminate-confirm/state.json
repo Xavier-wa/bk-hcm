@@ -1,0 +1,101 @@
+{
+  "id": "feat-cvm-apply-terminate-confirm",
+  "title": "主机申领终止二次确认",
+  "currentStage": "done",
+  "createdAt": "2026-08-11T06:42:48.602Z",
+  "updatedAt": "2026-08-11T07:17:50.826Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-apply-terminate-confirm/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-11T06:51:56.008Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-apply-terminate-confirm/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-11T07:03:45.327Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-11T07:02:50.012Z",
+      "note": "用户确认 coding 完成，推进到 test。两个文件已加 InfoBox 二次确认，lint 无错误，freshness 已 align。"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-11T07:17:19.409Z",
+      "note": "用户手测全部通过（P0×6 + P1×3 均 PASS）。图标修复后验证通过，推进到 done。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-08-11T06:42:48.602Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-11T07:02:50.012Z",
+      "note": "用户确认 coding 完成，推进到 test。两个文件已加 InfoBox 二次确认，lint 无错误，freshness 已 align。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-11T07:17:19.409Z",
+      "note": "用户手测全部通过（P0×6 + P1×3 均 PASS）。图标修复后验证通过，推进到 done。"
+    }
+  ],
+  "branch": "feat-cvm-apply-terminate-confirm",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598136385833"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "completed",
+      "at": "2026-08-11T06:49:15.564Z",
+      "note": "clarification 已完成（TAPD 正文含澄清产出与第1轮澄清记录）；evaluation 已执行：无需拆分（1个用户故事），RICE=100（高），预估1人天"
+    },
+    "hcm-docs-closeout": {
+      "status": "skipped",
+      "at": "2026-08-11T07:07:14.618Z",
+      "note": "用户确认跳过。本次为小改动（加终止确认弹窗），触及的 ticket.md 缺失、ziyan-scr.md 为 stub 属历史遗留，本次改动不产生模块级结构知识。"
+    },
+    "hcm-verify-e2e": {
+      "status": "skipped",
+      "at": "2026-08-11T07:07:15.462Z",
+      "note": "用户确认跳过。本次是纯前端弹窗交互，手测验证清单已足够，跳过自动化 E2E。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-11T07:17:50.826Z",
+      "note": "story 1069995598136385833 已逐级追平：for_test(status_12)→tested(status_13)→done(status_14)。无父需求，无需 rollup。未改 owner。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/views/ziyanScr/hostApplication/components/application-list/index.tsx",
+        "src/views/ticket/children/host-apply/applications/index.tsx",
+        "views/resource-plan/gpu/hooks/use-terminate-confirm.ts",
+        "ziyanScr/.../application-list/index.tsx"
+      ],
+      "contentFingerprint": "bacfa1907ea01418c232eb6a0767b0e70886622e",
+      "codeBaseline": "e61233713bc91ff566abe1a9ff3ec8ecc842e41e",
+      "seatedAt": "2026-08-11T07:14:42.688Z"
+    }
+  }
+}

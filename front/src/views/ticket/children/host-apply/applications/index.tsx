@@ -1,9 +1,9 @@
-import { defineComponent, ref, watch, onMounted, reactive } from 'vue';
+import { defineComponent, ref, watch, onMounted, reactive, h } from 'vue';
 import { RouteLocationRaw, useRoute, useRouter } from 'vue-router';
 import routerAction from '@/router/utils/action';
 import cssModule from './index.module.scss';
 
-import { Button, Message } from 'bkui-vue';
+import { Button, Message, InfoBox } from 'bkui-vue';
 import { Copy, DataShape, HelpDocumentFill } from 'bkui-vue/lib/icon';
 import GridContainer from '@/components/layout/grid-container/grid-container.vue';
 import GridItemFormElement from '@/components/layout/grid-container/grid-item-form-element.vue';
@@ -489,10 +489,44 @@ export default defineComponent({
                     theme={'primary'}
                     class='mr8'
                     disabled={opBtnDisabled(row)}
-                    onClick={async () => {
-                      await scrStore.stopOrder({ suborder_id: [row.suborder_id] });
-                      Message({ theme: 'success', message: t('终止成功') });
-                      getListData();
+                    onClick={() => {
+                      InfoBox({
+                        title: t('确认需要终止该单据？'),
+                        type: 'warning',
+                        theme: 'danger',
+                        confirmText: t('终止'),
+                        cancelText: t('取消'),
+                        headerAlign: 'center',
+                        contentAlign: 'left',
+                        footerAlign: 'center',
+                        quickClose: false,
+                        content: () =>
+                          h('div', [
+                            h(
+                              'div',
+                              { style: { fontSize: '14px', marginBottom: '12px' } },
+                              `${t('待交付设备')}：${row.pending_num} ${t('台')}`,
+                            ),
+                            h(
+                              'div',
+                              {
+                                style: {
+                                  background: '#f5f7f9',
+                                  padding: '12px 16px',
+                                  borderRadius: '4px',
+                                  color: '#4d4d4d',
+                                  fontSize: '14px',
+                                },
+                              },
+                              t('终止后将停止交付剩余设备，且该操作不可恢复，请谨慎操作！'),
+                            ),
+                          ]),
+                        async onConfirm() {
+                          await scrStore.stopOrder({ suborder_id: [row.suborder_id] });
+                          Message({ theme: 'success', message: t('终止成功') });
+                          getListData();
+                        },
+                      });
                     }}>
                     {t('终止')}
                   </Button>
