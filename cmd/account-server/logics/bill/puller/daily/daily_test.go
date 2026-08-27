@@ -39,7 +39,7 @@ func TestGetBillDays(t *testing.T) {
 			billMonth: 5,
 			delay:     2,
 			nowStr:    "2024-05-02 13:33:37",
-			result:    nil,
+			result:    []int{},
 		},
 		{
 			billYear:  2024,
@@ -63,7 +63,7 @@ func TestGetBillDays(t *testing.T) {
 			break
 		}
 		result := getBillDays(test.billYear, test.billMonth, test.delay, now)
-		assert.Equal(t, result, test.result, "result should be equal")
+		assert.Equal(t, test.result, result)
 	}
 }
 
@@ -129,6 +129,16 @@ func Test_getBillDays(t *testing.T) {
 				now:       time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
 			},
 			want: genIntSlice(1, 0),
+		},
+		{
+			name: "last month full days after beijing 16:00 on the 1st",
+			args: args{
+				billYear:  2026,
+				billMonth: 7,
+				billDelay: 1,
+				now:       time.Date(2026, 8, 1, 8, 0, 0, 0, time.UTC),
+			},
+			want: genIntSlice(1, 31),
 		},
 	}
 	for _, tt := range tests {

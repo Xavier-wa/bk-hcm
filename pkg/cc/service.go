@@ -746,14 +746,15 @@ func (s *WoaServerSetting) TenantEnable() bool {
 // AccountServerSetting defines task server used setting options.
 type AccountServerSetting struct {
 	// 自研云增加的配置写在这里
-	FinOps         ApiGateway           `yaml:"finops"`
-	Jarvis         Jarvis               `yaml:"jarvis"`
-	ExchangeRate   ExchangeRate         `yaml:"exchangeRate"`
-	IEGObsOption   IEGObsOption         `yaml:"obs"`
-	Esb            Esb                  `yaml:"esb"`
-	Network        Network              `yaml:"network"`
-	Service        Service              `yaml:"service"`
-	Controller     BillControllerOption `yaml:"controller"`
+	FinOps       ApiGateway           `yaml:"finops"`
+	Jarvis       Jarvis               `yaml:"jarvis"`
+	ExchangeRate ExchangeRate         `yaml:"exchangeRate"`
+	IEGObsOption IEGObsOption         `yaml:"obs"`
+	Esb          Esb                  `yaml:"esb"`
+	Network      Network              `yaml:"network"`
+	Service      Service              `yaml:"service"`
+	Controller   BillControllerOption `yaml:"controller"`
+	LocalTimezone  string               `yaml:"localTimezone"`
 	Log            LogOption            `yaml:"log"`
 	BillAllocation BillAllocationOption `yaml:"billAllocation"`
 	TmpFileDir     string               `yaml:"tmpFileDir"`

@@ -36,6 +36,7 @@ data:
     cmsi:
       {{- toYaml .Values.cmsi | nindent 6 }}
     tmpFileDir: {{ .Values.tmpFileDir }}
+    localTimezone: {{ .Values.localTimezone }}
     esb:
       endpoints:
         - {{ .Values.bkComponentApiUrl }}

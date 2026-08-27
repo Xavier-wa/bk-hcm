@@ -29,6 +29,7 @@ import (
 	"hcm/pkg/api/core"
 	"hcm/pkg/api/data-service/bill"
 	taskserver "hcm/pkg/api/task-server"
+	"hcm/pkg/cc"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
@@ -83,7 +84,22 @@ func (dp *DailyPuller) getFilter(billDay int) *filter.Expression {
 
 // EnsurePullTask 检查拉取任务，不存在或失败则新建
 func (dp *DailyPuller) EnsurePullTask(kt *kit.Kit) error {
-	dayList := getBillDays(dp.BillYear, dp.BillMonth, dp.BillDelay, time.Now())
+	now := time.Now()
+	dayList := getBillDays(dp.BillYear, dp.BillMonth, dp.BillDelay, now)
+	// 为保障账单拉取质量，仅在次月创建该账单月的日拉取任务
+	// 未到达拉取窗口时，只拦自动新建日任务 stub，已有任务仍续跑（补 FlowID / 失败重建）
+	loc, err := time.LoadLocation(cc.AccountServer().LocalTimezone)
+	if err != nil {
+		logs.Errorf("load location failed, err: %v, timezone: %s, rid: %s",
+			err, cc.AccountServer().LocalTimezone, kt.Rid)
+		return err
+	}
+	if !times.ShouldAutoPullBillPeriod(now, loc, dp.BillYear, dp.BillMonth) {
+		logs.Infof("skip create new daily pull task stub, window closed, vendor: %s, period: %d-%02d, "+
+			"main account: %s(%s), rid: %s",
+			dp.Vendor, dp.BillYear, dp.BillMonth, dp.MainAccountCloudID, dp.MainAccountID, kt.Rid)
+		dayList = nil
+	}
 	if err := dp.ensureDailyPulling(kt, dayList); err != nil {
 		return err
 	}

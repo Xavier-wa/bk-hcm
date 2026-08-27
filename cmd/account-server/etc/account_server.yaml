@@ -63,6 +63,9 @@ log:
   verbosity: 0
 
 
+# IANA timezone for the bill first-pull window (16:00 on the 1st).
+localTimezone: Asia/Shanghai
+
 # bill controller
 controller:
   # 关闭账单拉取
