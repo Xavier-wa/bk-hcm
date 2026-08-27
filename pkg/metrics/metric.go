@@ -83,6 +83,10 @@ const (
 	// CLBSubSys defines clb business related sub system. Used for
 	// CLB submit entry metrics, e.g. hcm_clb_submit_*.
 	CLBSubSys = "clb"
+
+	// CCWatchSubSys defines the cc watch consumer related sub system. Used for
+	// cloud-server watch batch metrics, e.g. hcm_cc_watch_events_total.
+	CCWatchSubSys = "cc_watch"
 )
 
 // labels

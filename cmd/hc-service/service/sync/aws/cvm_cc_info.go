@@ -21,6 +21,7 @@ package aws
 
 import (
 	"hcm/cmd/hc-service/logics/res-sync/aws"
+	"hcm/cmd/hc-service/logics/res-sync/common"
 	"hcm/pkg/api/core"
 	"hcm/pkg/api/core/cloud/cvm"
 	"hcm/pkg/api/hc-service/sync"
@@ -44,7 +45,10 @@ func (svc *service) SyncCvmCCInfo(cts *rest.Contexts) (interface{}, error) {
 	if err := req.Validate(); err != nil {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
-	syncCli, err := svc.syncCli.Aws(cts.Kit, req.AccountID)
+
+	// this entry bypasses the ResourceSync framework; mark the full source manually.
+	kt := common.MarkFullSyncSource(cts.Kit)
+	syncCli, err := svc.syncCli.Aws(kt, req.AccountID)
 	if err != nil {
 		logs.Errorf("init aws sync client failed for account %s, err: %v, rid: %s", req.AccountID, err, cts.Kit.Rid)
 		return nil, err
@@ -56,7 +60,7 @@ func (svc *service) SyncCvmCCInfo(cts *rest.Contexts) (interface{}, error) {
 		syncCli:   syncCli,
 	}
 
-	return nil, hd.Sync(cts.Kit)
+	return nil, hd.Sync(kt)
 }
 
 // SyncCvmCCInfoByCond sync cvm cc info by condition.

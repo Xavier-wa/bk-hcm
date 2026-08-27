@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"hcm/pkg/api/core"
 	"hcm/pkg/api/core/cloud/cvm"
@@ -63,6 +64,7 @@ func (w *Watcher) watchCCEvent(ctx context.Context, tenantID string, resType cmd
 		}
 
 		kt := core.NewTenantBackendKit(tenantID)
+		kt, tr := newWatchBatchTrace(kt, resType)
 
 		// check reset flag before reading cursor, so the reset takes effect from this round.
 		if w.needResetCursor(kt, resType) {
@@ -81,31 +83,29 @@ func (w *Watcher) watchCCEvent(ctx context.Context, tenantID string, resType cmd
 			continue
 		}
 		param.Cursor = cursor
+		localCursor := cmdb.DecodeCursor(kt, cursor)
 
+		fetchStart := time.Now()
 		result, err := cmdb.CmdbClient().ResourceWatch(kt, param)
+		fetchCost := time.Since(fetchStart)
+
+		tr.AddStep(enumor.CCWatchStepCCWatch, fetchCost)
+
 		if err != nil {
-			logs.Errorf("watch cmdb host resource failed, err: %v, req: %+v, tenant: %s, rid: %s", err, param,
-				tenantID, kt.Rid)
-			// 如果事件节点不存在，cc会返回该错误码，此时需要将cursor设置为""，从当前时间开始监听事件
-			if strings.Contains(err.Error(), cmdb.CCErrEventChainNodeNotExist) {
-				if err = w.setEventCursor(kt, resType, ""); err != nil {
-					logs.Errorf("set event cursor failed, err: %v, resource type: %v, val: %s, tenant: %s, rid: %s",
-						err, resType, "", tenantID, kt.Rid)
-				}
-			}
+			w.handleWatchError(kt, err, param, localCursor, tenantID, resType)
 			continue
 		}
 
 		if !result.Watched {
 			if len(result.Events) != 0 {
-				newCursor := result.Events[0].Cursor
-				if err = w.setEventCursor(kt, resType, newCursor); err != nil {
-					logs.Errorf("set event cursor failed, err: %v, resource type: %v, val: %s, tenant: %s, rid: %s",
-						err, resType, newCursor, tenantID, kt.Rid)
-				}
+				w.commitEventCursor(kt, resType, result.Events[0].Cursor)
 			}
 			continue
 		}
+
+		tr.SetFetchResult(result.Events)
+		logs.Infof("watch cc event batch start, type: %s, tenant: %s, %s, fetch cost: %s, rid: %s", resType,
+			tenantID, tr.FetchedSummary(), fetchCost, kt.Rid)
 
 		if err = consumeFunc(kt, result.Events); err != nil {
 			logs.Errorf("consume event failed, err: %+v, type: %s, tenant: %s, res: %+v, rid: %s", err, resType,
@@ -113,13 +113,37 @@ func (w *Watcher) watchCCEvent(ctx context.Context, tenantID string, resType cmd
 		}
 
 		if len(result.Events) != 0 {
-			newCursor := result.Events[len(result.Events)-1].Cursor
-			if err = w.setEventCursor(kt, resType, newCursor); err != nil {
-				logs.Errorf("set event cursor failed, err: %v, resource type: %v, val: %s, tenant: %s, rid: %s",
-					err, resType, newCursor, tenantID, kt.Rid)
-			}
+			w.commitEventCursor(kt, resType, result.Events[len(result.Events)-1].Cursor)
 		}
+
+		logs.Infof("watch cc event batch end, type: %s, tenant: %s, %s, rid: %s", resType, tenantID,
+			tr.ConsumedSummary(),
+			kt.Rid)
+		tr.flushMetrics()
 	}
+}
+
+// commitEventCursor 提交事件游标
+func (w *Watcher) commitEventCursor(kt *kit.Kit, resType cmdb.CursorType, cursor string) {
+	if err := w.setEventCursor(kt, resType, cursor); err != nil {
+		logs.Errorf("set event cursor failed, err: %v, resource type: %v, val: %s, tenant: %s, rid: %s",
+			err, resType, cursor, kt.TenantID, kt.Rid)
+	}
+}
+
+// handleWatchError 处理 ResourceWatch 失败：事件节点不存在时将游标置空，从当前时间重新监听。
+func (w *Watcher) handleWatchError(kt *kit.Kit, err error, param *cmdb.WatchEventParams,
+	localCursor *cmdb.CursorDetail, tenantID string, resType cmdb.CursorType) {
+
+	logs.Errorf("watch cmdb host resource failed, err: %v, local cursor event time: %s, req: %+v, tenant: %s, "+
+		"rid: %s", err, localCursor.EventTimeString(), param, tenantID, kt.Rid)
+	// 如果事件节点不存在，cc会返回该错误码，此时需要将cursor设置为""，从当前时间开始监听事件
+	if !strings.Contains(err.Error(), cmdb.CCErrEventChainNodeNotExist) {
+		return
+	}
+	logs.Warnf("reset cc event cursor to empty, reason: event chain node not exist, old cursor: %s, "+
+		"type: %s, tenant: %s, rid: %s", localCursor.Raw, resType, tenantID, kt.Rid)
+	w.commitEventCursor(kt, resType, "")
 }
 
 // WatchHostEvent 监听主机事件，增量同步主机
@@ -133,13 +157,18 @@ func (w *Watcher) consumeHostEvent(kt *kit.Kit, events []cmdb.WatchEventDetail) 
 		return nil
 	}
 
+	tr := watchTraceFromCtx(kt.Ctx)
+	defer tr.TrackConsume()()
+
 	idHostMap := make(map[int64]cmdb.Host)
 	deleteHosts := make([]cmdb.Host, 0)
+	parseFailed := 0
 
 	// 1. 获取需要创建、更新、删除的主机
 	for _, event := range events {
 		host, err := convertHost(kt, event.Detail)
 		if err != nil {
+			parseFailed++
 			logs.Errorf("convert host failed, err: %v, event: %+v, rid: %s", err, event, kt.Rid)
 			continue
 		}
@@ -158,6 +187,11 @@ func (w *Watcher) consumeHostEvent(kt *kit.Kit, events []cmdb.WatchEventDetail) 
 	for _, host := range idHostMap {
 		upsertHosts = append(upsertHosts, host)
 	}
+
+	tr.SetHostCount(len(upsertHosts), len(deleteHosts), parseFailed)
+	logs.Infof("consume cc host event, events: %d, upsert hosts: %d, delete hosts: %d, parse failed: %d, "+
+		"tenant: %s, rid: %s", len(events), len(upsertHosts), len(deleteHosts), parseFailed, kt.TenantID, kt.Rid)
+
 	if len(upsertHosts) != 0 {
 		if err := w.upsertHost(kt, upsertHosts); err != nil {
 			logs.Errorf("upsert host failed, err: %v, hostIDs: %v, rid: %s", err, upsertHosts, kt.Rid)
@@ -195,6 +229,9 @@ func (w *Watcher) upsertHost(kt *kit.Kit, upsertHosts []cmdb.Host) error {
 		return err
 	}
 
+	tr := watchTraceFromCtx(kt.Ctx)
+	defer tr.Track(enumor.CCWatchStepUpsert)()
+
 	w.upsertHostByVendor(kt, vendorSpaceHostIDsMap)
 
 	return nil
@@ -207,7 +244,14 @@ func (w *Watcher) upsertHostByVendor(kt *kit.Kit, vendorSpaceHostIDsMap map[enum
 }
 
 func (w *Watcher) upsertHostByDiffSpace(kt *kit.Kit, vendor enumor.Vendor, spaceHostIDsMap map[any][]int64) {
+	tr := watchTraceFromCtx(kt.Ctx)
+
 	for space, hostIDs := range spaceHostIDsMap {
+		tr.BeginPatch(vendor, space, len(hostIDs), len(slice.Split(hostIDs, constant.BatchOperationMaxLimit)))
+		// 批内进度只在日志里可见，卡住时最后一条 start 就是当前正在处理的批
+		logs.Infof("upsert host patch start, vendor: %s, space: %v, hosts: %d, tenant: %s, rid: %s", vendor, space,
+			len(hostIDs), kt.TenantID, kt.Rid)
+
 		switch vendor {
 		case enumor.Aws:
 			w.updateAwsHost(kt, space, hostIDs)
@@ -227,11 +271,15 @@ func (w *Watcher) upsertHostByDiffSpace(kt *kit.Kit, vendor enumor.Vendor, space
 		default:
 			logs.Errorf("not support vendor: %s, ids: %v, rid: %s", vendor, hostIDs, kt.Rid)
 		}
+		tr.FinishPatch(vendor, space)
+		logs.Infof("upsert host patch done, %s, tenant: %s, rid: %s", tr.PatchSummary(vendor, space),
+			kt.TenantID, kt.Rid)
 	}
 }
 
 func (w *Watcher) updateAwsHost(kt *kit.Kit, space any, hostIDs []int64) {
 	vendor := enumor.Aws
+	tr := watchTraceFromCtx(kt.Ctx)
 	accountID, ok := space.(string)
 	if !ok {
 		logs.Errorf("convert space to string failed, space: %v, vendor: %s, rid: %s", space, vendor, kt.Rid)
@@ -242,13 +290,16 @@ func (w *Watcher) updateAwsHost(kt *kit.Kit, space any, hostIDs []int64) {
 		err := w.CliSet.HCService().Aws.Cvm.SyncCCInfoByCond(kt, req)
 		if err != nil {
 			logs.Errorf("upsert host failed, err: %v, hostIDs: %v, vendor: %s, rid: %s", err, batch, vendor, kt.Rid)
+			tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultFailed, len(batch))
 			return
 		}
+		tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultSuccess, len(batch))
 	}
 }
 
 func (w *Watcher) updateAzureHost(kt *kit.Kit, space any, hostIDs []int64) {
 	vendor := enumor.Azure
+	tr := watchTraceFromCtx(kt.Ctx)
 	accountID, ok := space.(string)
 	if !ok {
 		logs.Errorf("convert space to string failed, space: %v, vendor: %s, rid: %s", space, vendor, kt.Rid)
@@ -259,13 +310,16 @@ func (w *Watcher) updateAzureHost(kt *kit.Kit, space any, hostIDs []int64) {
 		err := w.CliSet.HCService().Azure.Cvm.SyncCCInfoByCond(kt, req)
 		if err != nil {
 			logs.Errorf("upsert host failed, err: %v, hostIDs: %v, vendor: %s, rid: %s", err, batch, vendor, kt.Rid)
+			tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultFailed, len(batch))
 			return
 		}
+		tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultSuccess, len(batch))
 	}
 }
 
 func (w *Watcher) updateGcpHost(kt *kit.Kit, space any, hostIDs []int64) {
 	vendor := enumor.Gcp
+	tr := watchTraceFromCtx(kt.Ctx)
 	accountID, ok := space.(string)
 	if !ok {
 		logs.Errorf("convert space to string failed, space: %v, vendor: %s, rid: %s", space, vendor, kt.Rid)
@@ -276,13 +330,16 @@ func (w *Watcher) updateGcpHost(kt *kit.Kit, space any, hostIDs []int64) {
 		err := w.CliSet.HCService().Gcp.Cvm.SyncCCInfoByCond(kt, req)
 		if err != nil {
 			logs.Errorf("upsert host failed, err: %v, hostIDs: %v, vendor: %s, rid: %s", err, batch, vendor, kt.Rid)
+			tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultFailed, len(batch))
 			return
 		}
+		tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultSuccess, len(batch))
 	}
 }
 
 func (w *Watcher) updateHuaWeiHost(kt *kit.Kit, space any, hostIDs []int64) {
 	vendor := enumor.HuaWei
+	tr := watchTraceFromCtx(kt.Ctx)
 	accountID, ok := space.(string)
 	if !ok {
 		logs.Errorf("convert space to string failed, space: %v, vendor: %s, rid: %s", space, vendor, kt.Rid)
@@ -293,13 +350,16 @@ func (w *Watcher) updateHuaWeiHost(kt *kit.Kit, space any, hostIDs []int64) {
 		err := w.CliSet.HCService().HuaWei.Cvm.SyncCCInfoByCond(kt, req)
 		if err != nil {
 			logs.Errorf("upsert host failed, err: %v, hostIDs: %v, vendor: %s, rid: %s", err, batch, vendor, kt.Rid)
+			tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultFailed, len(batch))
 			return
 		}
+		tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultSuccess, len(batch))
 	}
 }
 
 func (w *Watcher) updateTCloudHost(kt *kit.Kit, space any, hostIDs []int64) {
 	vendor := enumor.TCloud
+	tr := watchTraceFromCtx(kt.Ctx)
 	accountID, ok := space.(string)
 	if !ok {
 		logs.Errorf("convert space to string failed, space: %v, vendor: %s, rid: %s", space, vendor, kt.Rid)
@@ -310,21 +370,26 @@ func (w *Watcher) updateTCloudHost(kt *kit.Kit, space any, hostIDs []int64) {
 		err := w.CliSet.HCService().TCloud.Cvm.SyncCCInfoByCond(kt, req)
 		if err != nil {
 			logs.Errorf("upsert host failed, err: %v, hostIDs: %v, vendor: %s, rid: %s", err, batch, vendor, kt.Rid)
+			tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultFailed, len(batch))
 			return
 		}
+		tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultSuccess, len(batch))
 	}
 }
 
 func (w *Watcher) upsertOtherHost(kt *kit.Kit, space any, hostIDs []int64) {
 	vendor := enumor.Other
+	tr := watchTraceFromCtx(kt.Ctx)
 	vendorAccountIDMap, err := w.getVendorAccountID(kt, []enumor.Vendor{vendor})
 	if err != nil {
-		logs.Errorf("get vendor account id failed, err: %v, vendor: %s, rid: %s", err, vendor, kt.Rid)
+		logs.Errorf("get vendor account id failed, err: %v, ids: %v, vendor: %s, rid: %s",
+			err, hostIDs, vendor, kt.Rid)
 		return
 	}
 	accountID, ok := vendorAccountIDMap[vendor]
 	if !ok {
-		logs.Errorf("get vendor account id failed, err: %v, vendor: %s, rid: %s", err, vendor, kt.Rid)
+		logs.Errorf("get vendor account id failed, err: %v, ids: %v, vendor: %s, rid: %s",
+			err, hostIDs, vendor, kt.Rid)
 		return
 	}
 
@@ -339,21 +404,26 @@ func (w *Watcher) upsertOtherHost(kt *kit.Kit, space any, hostIDs []int64) {
 		err := w.CliSet.HCService().Other.Host.SyncHostWithRelResByCond(kt.Ctx, kt.Header(), req)
 		if err != nil {
 			logs.Errorf("upsert host failed, err: %v, ids: %v, vendor: %s, rid: %s", err, batch, vendor, kt.Rid)
+			tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultFailed, len(batch))
 			continue
 		}
+		tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultSuccess, len(batch))
 	}
 }
 
 func (w *Watcher) upsertTCloudZiyanHost(kt *kit.Kit, space any, hostIDs []int64) {
 	vendor := enumor.TCloudZiyan
+	tr := watchTraceFromCtx(kt.Ctx)
 	vendorAccountIDMap, err := w.getVendorAccountID(kt, []enumor.Vendor{vendor})
 	if err != nil {
-		logs.Errorf("get vendor account id failed, err: %v, vendor: %s, rid: %s", err, vendor, kt.Rid)
+		logs.Errorf("get vendor account id failed, err: %v, ids: %v, vendor: %s, rid: %s",
+			err, hostIDs, vendor, kt.Rid)
 		return
 	}
 	accountID, ok := vendorAccountIDMap[vendor]
 	if !ok {
-		logs.Errorf("get vendor account id failed, err: %v, vendor: %s, rid: %s", err, vendor, kt.Rid)
+		logs.Errorf("get vendor account id failed, err: %v, ids: %v, vendor: %s, rid: %s",
+			err, hostIDs, vendor, kt.Rid)
 		return
 	}
 
@@ -368,8 +438,11 @@ func (w *Watcher) upsertTCloudZiyanHost(kt *kit.Kit, space any, hostIDs []int64)
 		err := w.CliSet.HCService().TCloudZiyan.Cvm.SyncHostWithRelResByCond(kt.Ctx, kt.Header(), req)
 		if err != nil {
 			logs.Errorf("upsert host failed, err: %v, ids: %v, vendor: %s, rid: %s", err, batch, vendor, kt.Rid)
+			tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultFailed, len(batch))
 			continue
 		}
+		tr.IncrPatchSubBatch(vendor, space)
+		tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultSuccess, len(batch))
 	}
 }
 
@@ -526,6 +599,9 @@ func (w *Watcher) deleteHost(kt *kit.Kit, deleteHosts []cmdb.Host) error {
 		return err
 	}
 
+	tr := watchTraceFromCtx(kt.Ctx)
+	defer tr.Track(enumor.CCWatchStepDelete)()
+
 	for vendor, spaceHostIDsMap := range vendorSpaceHostIDsMap {
 		hostIDs, ok := spaceHostIDsMap[ignoreSpace]
 		if !ok {
@@ -546,8 +622,10 @@ func (w *Watcher) deleteHost(kt *kit.Kit, deleteHosts []cmdb.Host) error {
 				if err = w.CliSet.HCService().Other.Host.DeleteHostByCond(kt.Ctx, kt.Header(), req); err != nil {
 					logs.Errorf("delete host failed, err: %v, account id: %s, ids: %+v, rid: %s", err, accountID, batch,
 						kt.Rid)
+					tr.AddSyncResult(enumor.CCWatchOpDelete, enumor.CCWatchResultFailed, len(batch))
 					continue
 				}
+				tr.AddSyncResult(enumor.CCWatchOpDelete, enumor.CCWatchResultSuccess, len(batch))
 			}
 		case enumor.TCloudZiyan:
 			for _, batch := range slice.Split(hostIDs, constant.BatchOperationMaxLimit) {
@@ -555,8 +633,10 @@ func (w *Watcher) deleteHost(kt *kit.Kit, deleteHosts []cmdb.Host) error {
 				if err = w.CliSet.HCService().TCloudZiyan.Cvm.DeleteHostByCond(kt.Ctx, kt.Header(), req); err != nil {
 					logs.Errorf("delete host failed, err: %v, vendor: %s, accountID: %s, ids: %+v, rid: %s", err,
 						enumor.TCloudZiyan, accountID, batch, kt.Rid)
+					tr.AddSyncResult(enumor.CCWatchOpDelete, enumor.CCWatchResultFailed, len(batch))
 					continue
 				}
+				tr.AddSyncResult(enumor.CCWatchOpDelete, enumor.CCWatchResultSuccess, len(batch))
 			}
 		default:
 			logs.Errorf("not support vendor: %s, hostIDs: %v, rid: %s", vendor, hostIDs, kt.Rid)
@@ -632,11 +712,16 @@ func (w *Watcher) consumeHostRelationEvent(kt *kit.Kit, events []cmdb.WatchEvent
 		return nil
 	}
 
+	tr := watchTraceFromCtx(kt.Ctx)
+	defer tr.TrackConsume()()
+
 	hostBizIDMap := make(map[int64]int64)
 	hostIDs := make([]int64, 0)
+	parseFailed := 0
 	for _, event := range events {
 		relation, err := convertHostRelation(kt, event.Detail)
 		if err != nil {
+			parseFailed++
 			logs.Errorf("convert host relation failed, err: %v, event: %+v, rid: %s", err, event, kt.Rid)
 			continue
 		}
@@ -662,6 +747,10 @@ func (w *Watcher) consumeHostRelationEvent(kt *kit.Kit, events []cmdb.WatchEvent
 
 		updateHostIDs = append(updateHostIDs, host.BkHostID)
 	}
+
+	tr.SetHostCount(len(updateHostIDs), 0, parseFailed)
+	logs.Infof("consume cc host relation event, events: %d, changed hosts: %d, parse failed: %d, tenant: %s, "+
+		"rid: %s", len(events), len(updateHostIDs), parseFailed, kt.TenantID, kt.Rid)
 
 	if len(updateHostIDs) == 0 {
 		return nil

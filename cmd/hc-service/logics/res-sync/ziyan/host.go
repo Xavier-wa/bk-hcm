@@ -54,6 +54,10 @@ func (cli *client) Host(kt *kit.Kit, params *SyncHostParams) (*SyncResult, error
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
+	// timing lives inside the function to cover both the normal and host_only fallback paths.
+	tr := syncHostTraceFromCtx(kt.Ctx)
+	defer tr.Track(string(enumor.ResSyncStepHost))()
+
 	// 需要不带业务id去查询主机，防止在前面耗时过程中，主机已被转移到其他业务，这里查不到主机导致把db里的数据误删的问题
 	ccHosts, err := cli.getHostFromCCByHostIDs(kt, params.HostIDs, cmdb.HostFields)
 	if err != nil {
@@ -82,6 +86,7 @@ func (cli *client) Host(kt *kit.Kit, params *SyncHostParams) (*SyncResult, error
 
 	addSlice, updateMap, delCloudIDs := common.Diff[cvm.Cvm[cvm.TCloudZiyanHostExtension],
 		cvm.Cvm[cvm.TCloudZiyanHostExtension]](cloudHosts, dbHosts, isHostChange)
+	syncHostTraceFromCtx(kt.Ctx).SetHostWrite(len(addSlice), len(updateMap), len(delCloudIDs))
 
 	if len(delCloudIDs) > 0 {
 		if err = cli.deleteHost(kt, delCloudIDs); err != nil {
@@ -111,6 +116,9 @@ func (cli *client) getCloudHost(kt *kit.Kit, accountID string, ccHosts []cmdb.Ho
 	if len(ccHosts) == 0 {
 		return make([]cvm.Cvm[cvm.TCloudZiyanHostExtension], 0), nil
 	}
+
+	// 含云上 ListCvm 与 vpc/subnet 映射查询，与流水线第二段 list_cloud_cvm 存在重复拉取
+	defer syncHostTraceFromCtx(kt.Ctx).Track(stepFillCloudField)()
 
 	hostIDs := make([]int64, 0, len(ccHosts))
 	for _, host := range ccHosts {
@@ -572,6 +580,9 @@ func (cli *client) getHostFromCCByBizID(kt *kit.Kit, bizID int64, fields []strin
 }
 
 func (cli *client) getHostFromCCByHostIDs(kt *kit.Kit, hostIDs []int64, fields []string) ([]cmdb.Host, error) {
+	// Host 内部不带 bizID 的重查，与流水线第一段 list_biz_host（带 bizID）区分开
+	defer syncHostTraceFromCtx(kt.Ctx).Track(stepListCCHost)()
+
 	res := make([]cmdb.Host, 0)
 	for _, batch := range slice.Split(hostIDs, int(core.DefaultMaxPageLimit)) {
 		params := &cmdb.ListHostReq{
@@ -604,6 +615,9 @@ func (cli *client) getHostFromCCByHostIDs(kt *kit.Kit, hostIDs []int64, fields [
 
 func (cli *client) getBizHostFromCCByHostIDs(kt *kit.Kit, bizID int64, hostIDs []int64, fields []string) ([]cmdb.Host,
 	error) {
+
+	tr := syncHostTraceFromCtx(kt.Ctx)
+	defer tr.Track(stepListBizHost)()
 
 	res := make([]cmdb.Host, 0)
 	for _, batch := range slice.Split(hostIDs, int(core.DefaultMaxPageLimit)) {
@@ -672,6 +686,8 @@ func (cli *client) listHostFromDBByBizID(kt *kit.Kit, bizID int64,
 
 func (cli *client) listHostFromDBByHostIDs(kt *kit.Kit, hostIDs []int64) ([]cvm.Cvm[cvm.TCloudZiyanHostExtension],
 	error) {
+
+	defer syncHostTraceFromCtx(kt.Ctx).Track(stepReadHostDB)()
 
 	res := make([]cvm.Cvm[cvm.TCloudZiyanHostExtension], 0)
 	for _, batch := range slice.Split(hostIDs, constant.BatchOperationMaxLimit) {
@@ -788,6 +804,8 @@ func (cli *client) deleteHost(kt *kit.Kit, cloudIDs []string) error {
 		return nil
 	}
 
+	defer syncHostTraceFromCtx(kt.Ctx).Track(stepDeleteHostDB)()
+
 	for _, batch := range slice.Split(cloudIDs, constant.BatchOperationMaxLimit) {
 		deleteReq := &cloud.CvmBatchDeleteReq{
 			Filter: tools.ExpressionAnd(tools.RuleIn("cloud_id", batch), tools.RuleEqual("vendor", enumor.TCloudZiyan)),
@@ -847,6 +865,8 @@ func (cli *client) createHost(kt *kit.Kit, hosts []cloud.CvmBatchCreate[cvm.TClo
 		return nil
 	}
 
+	defer syncHostTraceFromCtx(kt.Ctx).Track(stepCreateHostDB)()
+
 	for _, batch := range slice.Split(hosts, constant.BatchOperationMaxLimit) {
 		createReq := &cloud.CvmBatchCreateReq[cvm.TCloudZiyanHostExtension]{Cvms: batch}
 		_, err := cli.dbCli.TCloudZiyan.Cvm.BatchCreateCvm(kt.Ctx, kt.Header(), createReq)
@@ -905,6 +925,8 @@ func (cli *client) updateHost(kt *kit.Kit,
 	if len(hosts) == 0 {
 		return nil
 	}
+
+	defer syncHostTraceFromCtx(kt.Ctx).Track(stepUpdateHostDB)()
 
 	for _, batch := range slice.Split(hosts, constant.BatchOperationMaxLimit) {
 		updateReq := &cloud.CvmBatchUpdateReq[cvm.TCloudZiyanHostExtension]{Cvms: batch}

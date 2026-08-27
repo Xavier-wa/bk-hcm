@@ -22,7 +22,9 @@ package huawei
 
 import (
 	ccinfo "hcm/cmd/hc-service/logics/res-sync/cc-info"
+	"hcm/cmd/hc-service/logics/res-sync/common"
 	"hcm/pkg/api/core/cloud/cvm"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 )
@@ -33,10 +35,14 @@ type SyncCvmCCInfoParams struct {
 }
 
 // CvmCCInfo ...
-func (cli *client) CvmCCInfo(kt *kit.Kit, params *SyncCvmCCInfoParams) error {
+func (cli *client) CvmCCInfo(kt *kit.Kit, params *SyncCvmCCInfoParams) (err error) {
+	// report total only; resource cvm_cc_info is used to distinguish from cloud image sync (cvm).
+	tr := common.NewResSyncTrace(kt, enumor.HuaWei, enumor.CvmCCInfoResType, nil)
+	defer func() { tr.FlushMetrics(err) }()
+
 	mgr := ccinfo.NewCvmCCInfoRelManager(cli.dbCli)
 
-	if err := mgr.SyncCvmCCInfo(kt, params.Cvms); err != nil {
+	if err = mgr.SyncCvmCCInfo(kt, params.Cvms); err != nil {
 		logs.Errorf("sync huawei cvm cc info failed, err: %v, cvms: %+v, rid: %s", err, params.Cvms, kt.Rid)
 		return err
 	}

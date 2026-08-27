@@ -92,6 +92,9 @@ func (cli *client) getCVM(kt *kit.Kit, ccHosts []cmdb.Host) (map[string][]typesc
 		return map[string][]typescvm.TCloudCvm{}, nil
 	}
 
+	tr := syncHostTraceFromCtx(kt.Ctx)
+	defer tr.Track(stepListCloudCvm)()
+
 	regionCloudIDMap := make(map[string][]string)
 	for _, ccHost := range ccHosts {
 		if ccHost.SvrSourceTypeID != cmdb.SvrSourceTypeIDCVM {
@@ -156,6 +159,12 @@ func (cli *client) getCVM(kt *kit.Kit, ccHosts []cmdb.Host) (map[string][]typesc
 	if err := eg.Wait(); err != nil {
 		return nil, err
 	}
+
+	cvmCount := 0
+	for _, cvms := range regionCVMap {
+		cvmCount += len(cvms)
+	}
+	tr.SetCloudResult(cvmCount, len(regionCVMap))
 
 	return regionCVMap, nil
 }

@@ -21,6 +21,7 @@ package ziyan
 
 import (
 	"fmt"
+	"time"
 
 	cvmrelmgr "hcm/cmd/hc-service/logics/res-sync/cvm-rel-manager"
 	typecvm "hcm/pkg/adaptor/types/cvm"
@@ -34,7 +35,7 @@ import (
 )
 
 // HostWithRelRes ...
-func (cli *client) HostWithRelRes(kt *kit.Kit, params *SyncHostParams) (*SyncResult, error) {
+func (cli *client) HostWithRelRes(kt *kit.Kit, params *SyncHostParams) (result *SyncResult, err error) {
 	if params == nil {
 		logs.Errorf("params is nil, rid: %s", kt.Rid)
 		return nil, fmt.Errorf("params is nil")
@@ -45,11 +46,18 @@ func (cli *client) HostWithRelRes(kt *kit.Kit, params *SyncHostParams) (*SyncRes
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
+	kt, tr := newSyncHostTrace(kt, params)
+	defer func() {
+		tr.logSummary(kt, err)
+		tr.FlushMetrics(err)
+	}()
+
 	ccHosts, err := cli.getBizHostFromCCByHostIDs(kt, params.BizID, params.HostIDs, cmdb.HostFields)
 	if err != nil {
 		logs.Errorf("get host from cc by host id failed, err: %v, ids: %v, rid: %s", err, params.HostIDs, kt.Rid)
 		return nil, err
 	}
+	tr.SetCCResult(len(ccHosts))
 
 	// 如果cvm全部不存在，仅同步主机即可，有可能主机被从云上删除
 	if len(ccHosts) == 0 {
@@ -80,7 +88,6 @@ func (cli *client) HostWithRelRes(kt *kit.Kit, params *SyncHostParams) (*SyncRes
 		logs.Errorf("sync cvm relation failed, err: %v, rid: %s", err, kt.Rid)
 		return nil, err
 	}
-
 	return new(SyncResult), nil
 }
 
@@ -92,20 +99,27 @@ func (cli *client) syncCvmRelRes(kt *kit.Kit, params *SyncHostParams,
 		return nil
 	}
 
+	tr := syncHostTraceFromCtx(kt.Ctx)
+	defer tr.Track(string(enumor.ResSyncStepRelRes))()
+
 	var eg, _ = errgroup.WithContext(kt.Ctx)
 	pipeline := make(chan struct{}, 20)
-	doFunc := func(relMgr *cvmrelmgr.CvmRelManger, resType enumor.CloudResourceType,
+	doFunc := func(region string, relMgr *cvmrelmgr.CvmRelManger, resType enumor.CloudResourceType,
 		syncFunc func(kt *kit.Kit, cloudIDs []string) error) error {
 
 		defer func() {
 			<-pipeline
 		}()
 
+		start := time.Now()
 		err := relMgr.Sync(kt, resType, syncFunc)
 		if err != nil {
 			logs.Errorf("[%s] sync cvm associate %s failed, err: %v, rid: %s", enumor.TCloudZiyan, resType, err, kt.Rid)
 			return err
 		}
+
+		logs.Infof("sync ziyan rel res done, region: %s, res: %s, cost: %s, rid: %s", region, resType,
+			time.Since(start), kt.Rid)
 
 		return nil
 	}
@@ -165,7 +179,7 @@ func (cli *client) syncCvmRelRes(kt *kit.Kit, params *SyncHostParams,
 			curSyncFunc := syncFunc
 
 			eg.Go(func() error {
-				return doFunc(curMgr, curResType, curSyncFunc)
+				return doFunc(regionVal, curMgr, curResType, curSyncFunc)
 			})
 		}
 	}
@@ -179,6 +193,9 @@ func (cli *client) syncCvmRelRes(kt *kit.Kit, params *SyncHostParams,
 
 // syncCvmRel 同步cvm与关联资源的关系
 func (cli *client) syncCvmRel(kt *kit.Kit, regionCVMMap map[string][]typecvm.TCloudCvm) error {
+	tr := syncHostTraceFromCtx(kt.Ctx)
+	defer tr.Track(string(enumor.ResSyncStepHostRel))()
+
 	for region, cvms := range regionCVMMap {
 		// 获取cvm和关联资源的关联关系
 		mgr, err := cli.buildCvmRelManger(kt, region, cvms)
@@ -197,6 +214,8 @@ func (cli *client) syncCvmRel(kt *kit.Kit, regionCVMMap map[string][]typecvm.TCl
 			logs.Errorf("[%s] sync host_securityGroup_rel failed, err: %v, rid: %s", enumor.TCloudZiyan, err, kt.Rid)
 			return err
 		}
+
+		logs.Infof("sync ziyan cvm rel done, region: %s, cvms: %d, rid: %s", region, len(cvms), kt.Rid)
 	}
 
 	return nil

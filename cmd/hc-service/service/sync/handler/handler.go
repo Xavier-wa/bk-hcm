@@ -51,7 +51,7 @@ type Handler interface {
 
 // ResourceSync 资源同步流程。
 func ResourceSync(cts *rest.Contexts, handler Handler) error {
-	kt := cts.Kit
+	kt := common.MarkFullSyncSource(cts.Kit)
 
 	// 解析请求参数到handler实现中，构建同步需要的客户端
 	if err := handler.Prepare(cts); err != nil {
@@ -120,7 +120,7 @@ const (
 // ResourceSyncV2 资源同步，包含三个流程：1. 准备请求 2. 获取云上实例列表 3. 清理云上已删除实例 4. 同步实例详情
 func ResourceSyncV2[T common.CloudResType](cts *rest.Contexts, handler HandlerV2[T]) error {
 
-	kt := cts.Kit
+	kt := common.MarkFullSyncSource(cts.Kit)
 
 	// 1. 解析请求参数到handler实现中，构建同步需要的客户端
 	if err := handler.Prepare(cts); err != nil {

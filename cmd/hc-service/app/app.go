@@ -76,6 +76,7 @@ func (ds *hcService) prepare(opt *options.Option) error {
 	// init metrics
 	network := cc.HCService().Network
 	metrics.InitMetrics(net.JoinHostPort(network.BindIP, strconv.Itoa(int(network.Port))))
+	metrics.EnsureResSyncMetric()
 	adptmetric.InitCloudApiMetrics(metrics.Register())
 
 	// register hc service.

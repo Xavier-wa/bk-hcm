@@ -22,7 +22,9 @@ package tcloud
 import (
 	"fmt"
 	"strings"
+	"time"
 
+	"hcm/cmd/hc-service/logics/res-sync/common"
 	cvmrelmgr "hcm/cmd/hc-service/logics/res-sync/cvm-rel-manager"
 	adcore "hcm/pkg/adaptor/types/core"
 	typecvm "hcm/pkg/adaptor/types/cvm"
@@ -60,7 +62,11 @@ func (opt SyncCvmWithRelResOption) Validate() error {
 		step11: sync cvm_eip_rel
 */
 func (cli *client) CvmWithRelRes(kt *kit.Kit, params *SyncBaseParams, opt *SyncCvmWithRelResOption) (
-	*SyncResult, error) {
+	result *SyncResult, err error) {
+
+	tr := common.NewResSyncTrace(kt, enumor.TCloud, enumor.CvmCloudResType,
+		[]enumor.ResSyncStep{enumor.ResSyncStepHost, enumor.ResSyncStepRelRes, enumor.ResSyncStepHostRel})
+	defer func() { tr.FlushMetrics(err) }()
 
 	cvmFromCloud, err := cli.listCvmFromCloud(kt, params)
 	if err != nil {
@@ -82,6 +88,9 @@ func (cli *client) CvmWithRelRes(kt *kit.Kit, params *SyncBaseParams, opt *SyncC
 		logs.Errorf("[%s] build cvm rel manager failed, err: %v, rid: %s", enumor.TCloud, err, kt.Rid)
 		return nil, err
 	}
+
+	// steps 3-7 are timed as one rel_res stage; a mid-stage failure skips it (total is reported by defer).
+	start := time.Now()
 
 	// step3: sync vpc
 	if err = mgr.Sync(kt, enumor.VpcCloudResType, func(kt *kit.Kit, cloudIDs []string) error {
@@ -167,8 +176,10 @@ func (cli *client) CvmWithRelRes(kt *kit.Kit, params *SyncBaseParams, opt *SyncC
 		logs.Errorf("[%s] sync cvm associate eip failed, err: %v, rid: %s", enumor.TCloud, err, kt.Rid)
 		return nil, err
 	}
+	tr.AddStep(string(enumor.ResSyncStepRelRes), time.Since(start))
 
 	// step8: sync cvm
+	start = time.Now()
 	if err = mgr.Sync(kt, enumor.CvmCloudResType, func(kt *kit.Kit, cloudIDs []string) error {
 		assResParams := &SyncBaseParams{
 			AccountID: params.AccountID,
@@ -184,10 +195,14 @@ func (cli *client) CvmWithRelRes(kt *kit.Kit, params *SyncBaseParams, opt *SyncC
 		logs.Errorf("[%s] sync cvm failed, err: %v, rid: %s", enumor.TCloud, err, kt.Rid)
 		return nil, err
 	}
+	tr.AddStep(string(enumor.ResSyncStepHost), time.Since(start))
 
 	syncRelOpt := &cvmrelmgr.SyncRelOption{
 		Vendor: enumor.TCloud,
 	}
+
+	// steps 9-11 are timed as one host_rel stage.
+	start = time.Now()
 
 	// step9: sync cvm_sg_rel
 	syncRelOpt.ResType = enumor.SecurityGroupCloudResType
@@ -209,6 +224,7 @@ func (cli *client) CvmWithRelRes(kt *kit.Kit, params *SyncBaseParams, opt *SyncC
 		logs.Errorf("[%s] sync cvm_eip_rel failed, err: %v, rid: %s", enumor.TCloud, err, kt.Rid)
 		return nil, err
 	}
+	tr.AddStep(string(enumor.ResSyncStepHostRel), time.Since(start))
 
 	return new(SyncResult), nil
 }

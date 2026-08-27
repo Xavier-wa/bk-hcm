@@ -20,6 +20,7 @@
 package gcp
 
 import (
+	"hcm/cmd/hc-service/logics/res-sync/common"
 	"hcm/cmd/hc-service/logics/res-sync/gcp"
 	"hcm/pkg/api/core"
 	"hcm/pkg/api/core/cloud/cvm"
@@ -44,7 +45,10 @@ func (svc *service) SyncCvmCCInfo(cts *rest.Contexts) (interface{}, error) {
 	if err := req.Validate(); err != nil {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
-	syncCli, err := svc.syncCli.Gcp(cts.Kit, req.AccountID)
+
+	// this entry bypasses the ResourceSync framework; mark the full source manually.
+	kt := common.MarkFullSyncSource(cts.Kit)
+	syncCli, err := svc.syncCli.Gcp(kt, req.AccountID)
 	if err != nil {
 		logs.Errorf("init gcp sync client failed for account %s, err: %v, rid: %s", req.AccountID, err, cts.Kit.Rid)
 		return nil, err
@@ -56,7 +60,7 @@ func (svc *service) SyncCvmCCInfo(cts *rest.Contexts) (interface{}, error) {
 		syncCli:   syncCli,
 	}
 
-	return nil, hd.Sync(cts.Kit)
+	return nil, hd.Sync(kt)
 }
 
 // SyncCvmCCInfoByCond sync cvm cc info by condition.

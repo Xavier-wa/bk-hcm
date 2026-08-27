@@ -81,6 +81,7 @@ func (ds *cloudServer) prepare(opt *options.Option) error {
 	// # HELP/# TYPE 元信息，避免依赖首次 Observe 的惰性注册导致的 metric 短暂缺失。
 	metrics.EnsureCLBSubmitMetric()
 	metrics.EnsureTaskProgressMetric()
+	metrics.EnsureCCWatchMetric()
 
 	// init service discovery.
 	svcOpt := serviced.NewServiceOption(cc.CloudServerName, cc.CloudServer().Network, opt.Sys)
