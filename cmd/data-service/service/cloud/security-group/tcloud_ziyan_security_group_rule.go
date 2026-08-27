@@ -187,7 +187,7 @@ func (svc *tcloudZiyanSGRuleSvc) BatchUpdateTCloudZiyanRule(cts *rest.Contexts) 
 			}
 			if err := svc.dao.TCloudZiyanSGRule().UpdateWithTx(cts.Kit, txn, flt, rule); err != nil {
 				logs.Errorf("update tcloud ziyan security group rule failed, err: %v, rid: %s", err, cts.Kit.Rid)
-				return nil, fmt.Errorf("update tcloud ziyan security group rule failed, err: %v", err)
+				return nil, err
 			}
 		}
 
