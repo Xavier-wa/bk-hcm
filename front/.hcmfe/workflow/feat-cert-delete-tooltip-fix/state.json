@@ -1,0 +1,78 @@
+{
+  "id": "feat-cert-delete-tooltip-fix",
+  "title": "证书-删除按钮tips错误",
+  "currentStage": "done",
+  "createdAt": "2026-08-19T01:24:24.958Z",
+  "updatedAt": "2026-08-19T01:27:23.180Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-cert-delete-tooltip-fix/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-19T01:26:28.925Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-cert-delete-tooltip-fix/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-19T01:26:44.381Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-19T01:26:32.390Z",
+      "note": "coding 产物已登记，推进到 test 阶段"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-19T01:27:23.179Z",
+      "note": "test 清单已登记，hcm-docs-closeout 已收口无缺口，推进到 done 阶段"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-08-19T01:24:24.958Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-19T01:26:32.390Z",
+      "note": "coding 产物已登记，推进到 test 阶段"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-19T01:27:23.179Z",
+      "note": "test 清单已登记，hcm-docs-closeout 已收口无缺口，推进到 done 阶段"
+    }
+  ],
+  "branch": "feat-cert-delete-tooltip-fix",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "front/src/views/business/cert-manager/index.tsx"
+      ],
+      "contentFingerprint": "43e30564a34bbe0a2598bfbfad8009dd829da0c3",
+      "codeBaseline": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+      "seatedAt": "2026-08-19T01:26:28.928Z"
+    }
+  },
+  "nodeRuns": {
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-19T01:27:19.674Z",
+      "note": "docs_status 对 changedFiles=[front/src/views/business/cert-manager/index.tsx] 返回 touchedModules=[]，本 workflow 改动未命中任何模块 globs，无文档缺口；promotionQueue.totalOpen=0，无需晋升评审。收口无缺口。"
+    }
+  }
+}

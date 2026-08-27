@@ -73,17 +73,19 @@ export default defineComponent({
             <hcm-auth sign={{ type: authTypeMap.value.delete, relation: [currentBusinessId.value] }}>
               {{
                 default: ({ noPerm }: { noPerm: boolean }) => (
-                  <Button
-                    text
-                    theme='primary'
-                    onClick={() => handleDeleteCert(data)}
-                    disabled={noPerm || (isResourcePage && data.bk_biz_id !== -1)}
+                  <span
                     v-bk-tooltips={{
                       content: '该证书已分配业务, 仅可在业务下操作',
-                      disabled: isResourcePage && data.bk_biz_id !== -1,
+                      disabled: !(isResourcePage && data.bk_biz_id !== -1),
                     }}>
-                    删除
-                  </Button>
+                    <Button
+                      text
+                      theme='primary'
+                      onClick={() => handleDeleteCert(data)}
+                      disabled={noPerm || (isResourcePage && data.bk_biz_id !== -1)}>
+                      删除
+                    </Button>
+                  </span>
                 ),
               }}
             </hcm-auth>
