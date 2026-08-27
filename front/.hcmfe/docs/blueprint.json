@@ -2,7 +2,7 @@
   "version": 1,
   "project": "hcm",
   "generatedAt": "2026-07-14T09:49:59.375Z",
-  "updatedAt": "2026-08-18T03:16:48.979Z",
+  "updatedAt": "2026-08-19T08:43:32.068Z",
   "modules": [
     {
       "id": "base",
@@ -196,8 +196,11 @@
         "rolling-server",
         "resource"
       ],
-      "fingerprint": null,
-      "updatedAt": "2026-07-15T04:01:35.107Z"
+      "fingerprint": {
+        "computedAt": "2026-08-19T08:43:32.068Z",
+        "rootHash": "cfa0134f216a5885ee6aff5f3b01040f412f4139"
+      },
+      "updatedAt": "2026-08-19T08:43:32.068Z"
     },
     {
       "id": "service",

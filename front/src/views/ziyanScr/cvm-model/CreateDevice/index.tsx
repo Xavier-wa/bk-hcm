@@ -20,6 +20,8 @@ export interface ICvmDeviceCreateModel {
   region: string;
   generation_type: '存量' | '采购';
   gpu_amount?: number;
+  gpu_type?: string;
+  tech_class_res_amt?: number;
 }
 
 export default defineComponent({
@@ -66,7 +68,23 @@ export default defineComponent({
       technical_class: '',
       generation_type: '存量',
       gpu_amount: undefined,
+      gpu_type: '',
+      tech_class_res_amt: undefined,
     });
+    const gpuTypeOptions = ref<Record<string, string>>({});
+    const loadGpuTypes = async () => {
+      try {
+        const res = await apiService.getGpuTypeList();
+        const list: string[] = res?.details || [];
+        gpuTypeOptions.value = list.reduce((acc, item) => {
+          acc[item] = item;
+          return acc;
+        }, {});
+      } catch (e) {
+        gpuTypeOptions.value = {};
+      }
+    };
+    loadGpuTypes();
     const selectedZones = ref<Array<{ value: string; label: string; region: string }>>([]);
 
     const handleRegionChange = () => {
@@ -116,6 +134,8 @@ export default defineComponent({
               zone: z,
               generation_type: formModel.generation_type,
               gpu_amount: formModel.gpu_amount,
+              gpu_type: formModel.gpu_type?.trim(),
+              tech_class_res_amt: formModel.tech_class_res_amt,
             });
           }
         }
@@ -212,6 +232,24 @@ export default defineComponent({
                 <hcm-form-number
                   type='number'
                   v-model={formModel.gpu_amount}
+                  min={0}
+                  precision={3}
+                  class='i-form-control'
+                />
+              </bk-form-item>
+              <bk-form-item label='GPU卡类型' property='gpu_type'>
+                <hcm-form-enum
+                  v-model={formModel.gpu_type}
+                  option={gpuTypeOptions.value}
+                  allowCreate={true}
+                  placeholder='请选择，如手动输入请在完成后按回车确定'
+                  class='i-form-control'
+                />
+              </bk-form-item>
+              <bk-form-item label='技术分类资源量' property='tech_class_res_amt' required>
+                <hcm-form-number
+                  type='number'
+                  v-model={formModel.tech_class_res_amt}
                   min={0}
                   precision={3}
                   class='i-form-control'

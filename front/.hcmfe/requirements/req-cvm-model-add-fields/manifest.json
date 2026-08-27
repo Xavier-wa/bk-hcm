@@ -1,0 +1,20 @@
+{
+  "id": "req-cvm-model-add-fields",
+  "title": "CVM机型-机型追加页面增加两个新字段",
+  "createdAt": "2026-08-19T08:38:00.304Z",
+  "updatedAt": "2026-08-19T08:38:08.518Z",
+  "iterations": [
+    {
+      "wfId": "feat-cvm-model-add-fields",
+      "status": "coding",
+      "branch": "feat-cvm-model-add-fields",
+      "title": "CVM机型-机型追加页面增加两个新字段",
+      "createdAt": "2026-08-19T08:38:08.331Z"
+    }
+  ],
+  "aggregatedArtifacts": {},
+  "codeScope": {
+    "globs": [],
+    "autoLearned": true
+  }
+}

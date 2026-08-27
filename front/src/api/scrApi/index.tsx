@@ -59,6 +59,14 @@ const getImages = async (region: string[]) => {
   return data;
 };
 /**
+ * 获取 GPU 卡类型枚举列表
+ * @returns {Promise<string[]>} GPU 卡类型列表
+ */
+const getGpuTypeList = async () => {
+  const { data } = await http.get(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/meta/gpu_type/list`);
+  return data;
+};
+/**
  * 获取数据盘类型列表
  */
 const getDiskTypes = async () => {
@@ -346,4 +354,5 @@ export default {
   getAvailDevices,
   getCvmApplyAuthBizList,
   getCvmRecycleAuthBizList,
+  getGpuTypeList,
 };

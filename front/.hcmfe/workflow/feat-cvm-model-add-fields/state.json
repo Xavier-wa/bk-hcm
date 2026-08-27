@@ -1,0 +1,96 @@
+{
+  "id": "feat-cvm-model-add-fields",
+  "title": "CVM机型-机型追加页面增加两个新字段",
+  "currentStage": "done",
+  "createdAt": "2026-08-19T08:38:08.331Z",
+  "updatedAt": "2026-08-19T08:44:21.852Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-model-add-fields/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-19T08:41:44.824Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-cvm-model-add-fields/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-19T08:42:28.457Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-19T08:41:53.295Z",
+      "note": "自动化任务自主推进：coding 阶段完成，代码已实现并通过 lint/prettier 验证，drift check 通过"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-19T08:43:47.331Z",
+      "note": "自动化任务自主推进：test 阶段完成，手测清单已生成（验证结论标待 QA 验证），docs-closeout 已收口"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-08-19T08:38:08.331Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-19T08:41:53.295Z",
+      "note": "自动化任务自主推进：coding 阶段完成，代码已实现并通过 lint/prettier 验证，drift check 通过"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-19T08:43:47.331Z",
+      "note": "自动化任务自主推进：test 阶段完成，手测清单已生成（验证结论标待 QA 验证），docs-closeout 已收口"
+    }
+  ],
+  "requirementId": "req-cvm-model-add-fields",
+  "branch": "feat-cvm-model-add-fields",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137202147"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "skipped",
+      "at": "2026-08-19T08:39:31.248Z",
+      "note": "自动化任务自主决策：lite 模式小改动（新增两个表单字段），TAPD 需求描述已完整明确（含接口文档 MR 链接），无需澄清；评估价值有限，跳过以保持 lite 轻量化。此决策记入最终报告。"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-19T08:43:42.459Z",
+      "note": "文档收口完成：touched 模块 ziyan-scr 已更新 modules/ziyan-scr.md（补充 CVM 机型创建表单 GPU卡类型/技术分类资源量字段说明）并 deepen 到 drafted；base 模块为通用基础模块，本次改动无实质影响。promotionQueue 无待评审项。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-19T08:44:21.852Z",
+      "note": "TAPD 收口完成：story 1069995598137202147 已按 tapdSync forward-only 追平到 done（for_test→tested→done，最终 status_14）。未改 owner。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/api/scrApi/index.tsx",
+        "src/views/ziyanScr/cvm-model/CreateDevice/index.tsx",
+        "CreateDevice/index.tsx"
+      ],
+      "contentFingerprint": "a4ff154303e15f0354444c4bc0710feab620da75",
+      "codeBaseline": "22a2a19fefc512e6d47e4ca512202d3ce93c4dec",
+      "seatedAt": "2026-08-19T08:41:44.826Z"
+    }
+  }
+}
