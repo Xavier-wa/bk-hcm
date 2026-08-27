@@ -58,6 +58,17 @@ const { messageGroups } = useMessageGroup({
 
 const messageStatus = computed(() => (isChatting.value ? MessageStatus.Streaming : MessageStatus.Complete));
 
+// 组件内置工具按钮里只保留「复制」「重新生成」，其余能力（引用/分享/点赞/不满意/删除）暂未支持
+const messageTools: IToolBtn[] = [
+  { id: 'cite', hidden: true },
+  { id: 'share', hidden: true },
+];
+const updateTools: IToolBtn[] = [
+  { id: 'like', hidden: true },
+  { id: 'unlike', hidden: true },
+  { id: 'delete', hidden: true },
+];
+
 const { isHitlInterruptMessage, getHitlContent, getHitlReadonlyState } = useHitl(messages);
 const { isAccountSelectMessage, getAccountSelectContent, getAccountSelectReadonlyState, selectedAccountId } =
   useAccountSelect(messages);
@@ -163,6 +174,8 @@ const handleStopSending = () => {
     :messages="messages"
     :message-groups="messageGroups"
     :message-status="messageStatus"
+    :message-tools="messageTools"
+    :update-tools="updateTools"
     :on-agent-action="handleAgentAction"
     :on-user-input-confirm="handleUserInputConfirm"
     @stop-streaming="handleStopSending"
@@ -223,32 +236,15 @@ const handleStopSending = () => {
     margin-right: auto;
     margin-left: auto;
   }
-}
 
-:deep(.message-wrapper) {
-  .message-tools-hover {
-    opacity: 0;
-    transition: opacity 0.2s ease-in-out;
-  }
-
-  &:hover .message-tools-hover {
-    opacity: 1;
-  }
-}
-
-:deep(.message-tools-container:not(.ai-user-message-tools)) {
-  .message-tools > *:has(.ai-cite-icon),
-  .message-tools > *:has(.ai-share-icon),
-  .ai-divider,
-  .message-tools:last-child {
-    display: none;
-  }
-}
-
-:deep(.ai-user-message-tools) {
-  .message-tools > *:has(.ai-cite-icon),
-  .message-tools > *:has(.ai-delete-icon) {
-    display: none;
+  // 用户消息的工具栏在组件内写死为 CONST_USER_MESSAGE_TOOLS（复制/引用/编辑/删除），未暴露配置项，
+  // 且按钮根节点统一为 .ai-tool-btn 无法按 id 区分，只能按位置隐藏未支持的「引用」和「删除」。
+  // 组件若调整该列表顺序，此处需同步修改。
+  :deep(.ai-user-message-tools .message-tools:first-child) {
+    > *:nth-child(2),
+    > *:nth-child(4) {
+      display: none;
+    }
   }
 }
 </style>

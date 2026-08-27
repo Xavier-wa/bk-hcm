@@ -89,7 +89,7 @@
     "hcm-tapd-sync-done": {
       "status": "completed",
       "at": "2026-07-28T11:56:14.643Z",
-      "note": "story 1069995598136566294（objectType=story）：status_12(for test) → status_13(tested) → status_14(done/已上线)，forward-only 逐级追平，stories_get 复核 v_status=done(已上线)。owner 未变更（yunyaoyang）；无 parent_id，无需 rollup。"
+      "note": "story 1069995598136566294（objectType=story）：status_12(for test) → status_13(tested) → status_14(done/已上线)，forward-only 逐级追平，stories_get 复核 v_status=done(已上线)。owner 未变更；无 parent_id，无需 rollup。"
     }
   },
   "artifactFreshness": {

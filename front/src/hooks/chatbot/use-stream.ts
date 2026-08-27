@@ -356,10 +356,23 @@ export function useStream(msg: MessageModule, event: EventModule) {
       ? (role as MessageRole)
       : MessageRole.Assistant;
 
+    // 历史思考记录默认折叠：chat-x ReasoningMessage 把 message 整包当 props，collapsed 缺省为 false；
+    // history 快照通常不带 duration，无法走组件「有 duration 则自动折叠」的路径。
+    const reasoningProps =
+      normalizedRole === MessageRole.Reasoning
+        ? {
+            collapsed: true,
+            ...(typeof raw.duration === 'number' && Number.isFinite(raw.duration) && raw.duration > 0
+              ? { duration: raw.duration }
+              : {}),
+          }
+        : {};
+
     return {
       role: normalizedRole,
       content: (raw.content as Message['content']) ?? '',
       ...base,
+      ...reasoningProps,
     } as Message;
   };
 

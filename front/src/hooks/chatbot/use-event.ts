@@ -43,6 +43,40 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
         (m as { toolCalls?: ToolCall[] }).toolCalls?.some((tc) => tc.id === toolCallId),
     );
 
+  // 当前进行中的推理消息。一轮对话可能有多个推理阶段，每次 REASONING_START 新建、结算后复位。
+  // 不用 getCurrentStreamingMessage 定位：推理与正文可能同时处于 streaming，最后一条不一定是推理。
+  let currentReasoning: Message | null = null;
+  let reasoningStartedAt = 0;
+
+  const startReasoning = () => {
+    const messageId = genId();
+    msg.messages.value.push({
+      role: MessageRole.Reasoning,
+      content: [],
+      id: genId(),
+      messageId,
+      status: MessageStatus.Streaming,
+    } as unknown as Message);
+    // 数组里存的是原始对象，必须回查取到响应式代理再持有，否则后续改动不触发视图更新
+    const message = msg.getMessageByMessageId(messageId) as Message;
+    currentReasoning = message;
+    reasoningStartedAt = Date.now();
+    return message;
+  };
+
+  // 结算当前推理消息。耗时优先取事件下发值，缺失或非法时用前端计时兜底。
+  // 供 REASONING_END 与 RUN_FINISHED / RUN_ERROR 收尾复用，保证缺 END 事件时不卡在「思考中」。
+  const finalizeReasoning = (eventDuration?: unknown) => {
+    if (!currentReasoning) return;
+    const fromEvent = typeof eventDuration === 'number' && Number.isFinite(eventDuration) && eventDuration >= 0;
+    (currentReasoning as unknown as { duration: number }).duration = fromEvent
+      ? (eventDuration as number)
+      : Date.now() - reasoningStartedAt;
+    currentReasoning.status = MessageStatus.Complete;
+    currentReasoning = null;
+    reasoningStartedAt = 0;
+  };
+
   const handleEvent = (event: Record<string, unknown>) => {
     switch (event.type) {
       // ---- 文本消息 ----
@@ -67,7 +101,8 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
       }
       case EventType.TextMessageChunk: {
         const m = msg.getCurrentStreamingMessage();
-        if (m) {
+        // 推理消息的 content 是数组，不能被当作正文续写；此时另起一条 assistant 消息
+        if (m && m.role !== MessageRole.Reasoning) {
           (m as { content: string }).content += (event.delta as string) || '';
         } else {
           msg.messages.value.push({
@@ -81,42 +116,41 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
         break;
       }
 
-      // ---- 思考 ----
-      case EventType.ThinkingStart: {
-        msg.messages.value.push({
-          role: MessageRole.Reasoning,
-          content: [],
-          id: genId(),
-          messageId: genId(),
-          status: MessageStatus.Streaming,
-        } as unknown as Message);
+      // ---- 推理（思维链） ----
+      case EventType.ReasoningStart: {
+        startReasoning();
         break;
       }
-      case EventType.ThinkingTextMessageStart: {
-        const m = msg.getCurrentStreamingMessage();
-        if (m && m.role === MessageRole.Reasoning) {
-          (m.content as string[]).push('');
-        }
+      case EventType.ReasoningMessageStart: {
+        // 一次推理阶段内可能有多段正文，每段独立成条 MarkdownContent
+        if (currentReasoning) (currentReasoning.content as string[]).push('');
         break;
       }
-      case EventType.ThinkingTextMessageContent: {
-        const m = msg.getCurrentStreamingMessage();
-        if (m && m.role === MessageRole.Reasoning) {
-          const arr = m.content as string[];
-          arr[arr.length - 1] += event.delta as string;
-        }
+      case EventType.ReasoningMessageContent: {
+        // 事件顺序异常（无进行中推理或未开段）时忽略该增量，不新建记录、不报错
+        if (!currentReasoning || typeof event.delta !== 'string') break;
+        const segments = currentReasoning.content as string[];
+        if (segments.length === 0) break;
+        segments[segments.length - 1] += event.delta;
         break;
       }
-      case EventType.ThinkingTextMessageEnd:
+      case EventType.ReasoningMessageEnd:
+        // 段落边界由下一次 REASONING_MESSAGE_START 划分，无需处理
         break;
-      case EventType.ThinkingEnd: {
-        const m = msg.getCurrentStreamingMessage();
-        if (m && m.role === MessageRole.Reasoning) {
-          (m as unknown as { duration: number }).duration = (event.duration as number) || 0;
-          m.status = MessageStatus.Complete;
-        }
+      case EventType.ReasoningEnd: {
+        finalizeReasoning(event.duration);
         break;
       }
+      case EventType.ReasoningMessageChunk: {
+        // 便捷事件自成一段完整正文，无进行中推理时新建一条承载
+        if (typeof event.delta !== 'string') break;
+        const message = currentReasoning ?? startReasoning();
+        (message.content as string[]).push(event.delta);
+        break;
+      }
+      case EventType.ReasoningEncryptedValue:
+        // 加密思维链一律不解密、不展示
+        break;
 
       // ---- 工具调用 ----
       case EventType.ToolCallStart: {
@@ -179,6 +213,8 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
       case EventType.RunStarted:
         break;
       case EventType.RunError: {
+        // 已产出的推理正文仍然有效，按完成收尾；错误由随后的 assistant 气泡承载
+        finalizeReasoning();
         const streaming = msg.getCurrentStreamingMessage();
         if (streaming) streaming.status = MessageStatus.Complete;
         msg.messages.value.push({
@@ -191,6 +227,7 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
         break;
       }
       case EventType.RunFinished: {
+        finalizeReasoning();
         const streaming = msg.getCurrentStreamingMessage();
         if (streaming) streaming.status = MessageStatus.Complete;
         break;

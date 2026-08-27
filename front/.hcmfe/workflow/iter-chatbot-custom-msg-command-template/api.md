@@ -114,7 +114,7 @@
 {
   "data": {
     "body_param": {
-      "bk_username": "yunyaoyang",
+      "bk_username": "<USER_ID>",
       "expect_time": "2026-06-18 00:00:00",
       "require_type": 1,
       "suborders": [

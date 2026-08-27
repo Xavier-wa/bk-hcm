@@ -214,11 +214,16 @@ export enum EventType {
   TextMessageContent = 'TEXT_MESSAGE_CONTENT',
   TextMessageEnd = 'TEXT_MESSAGE_END',
   TextMessageChunk = 'TEXT_MESSAGE_CHUNK',
-  ThinkingStart = 'THINKING_START',
-  ThinkingTextMessageStart = 'THINKING_TEXT_MESSAGE_START',
-  ThinkingTextMessageContent = 'THINKING_TEXT_MESSAGE_CONTENT',
-  ThinkingTextMessageEnd = 'THINKING_TEXT_MESSAGE_END',
-  ThinkingEnd = 'THINKING_END',
+  // 推理（思维链）。AG-UI 已废弃 THINKING_* 系列，一一对应替换为 REASONING_*
+  ReasoningStart = 'REASONING_START',
+  ReasoningMessageStart = 'REASONING_MESSAGE_START',
+  ReasoningMessageContent = 'REASONING_MESSAGE_CONTENT',
+  ReasoningMessageEnd = 'REASONING_MESSAGE_END',
+  ReasoningEnd = 'REASONING_END',
+  // 便捷事件：一条即代表一段完整推理正文
+  ReasoningMessageChunk = 'REASONING_MESSAGE_CHUNK',
+  // 加密思维链，不解密不展示
+  ReasoningEncryptedValue = 'REASONING_ENCRYPTED_VALUE',
   ToolCallStart = 'TOOL_CALL_START',
   ToolCallArgs = 'TOOL_CALL_ARGS',
   ToolCallEnd = 'TOOL_CALL_END',

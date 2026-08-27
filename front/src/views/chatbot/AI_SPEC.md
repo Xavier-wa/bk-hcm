@@ -202,19 +202,21 @@ interface ChatSession {
 |------|------|
 | **运行生命周期** | |
 | `RUN_STARTED` | 无特殊处理 |
-| `RUN_ERROR` | 创建错误消息 |
-| `RUN_FINISHED` | 兜底设置 streaming 消息为 Complete |
+| `RUN_ERROR` | 创建错误消息；兜底结算未完结的 reasoning 消息 |
+| `RUN_FINISHED` | 兜底设置 streaming 消息为 Complete；兜底结算未完结的 reasoning 消息 |
 | **文本消息** | |
 | `TEXT_MESSAGE_START` | 创建 assistant 消息（status=Streaming） |
 | `TEXT_MESSAGE_CONTENT` | delta 直接追加到消息内容 |
 | `TEXT_MESSAGE_END` | 设 status=Complete |
 | `TEXT_MESSAGE_CHUNK` | 兼容旧协议，直接追加内容 |
-| **思考** | |
-| `THINKING_START` | 创建 reasoning 消息（content=[]） |
-| `THINKING_TEXT_MESSAGE_START` | content 数组 push 空字符串 |
-| `THINKING_TEXT_MESSAGE_CONTENT` | delta 追加到最后一个 content 项 |
-| `THINKING_TEXT_MESSAGE_END` | 无特殊处理 |
-| `THINKING_END` | 设置 duration + Complete |
+| **推理（思维链）** | AG-UI 已废弃 `THINKING_*`，替换为 `REASONING_*` |
+| `REASONING_START` | 创建 reasoning 消息（content=[]）并开始计时 |
+| `REASONING_MESSAGE_START` | content 数组 push 空字符串，开启新一段正文 |
+| `REASONING_MESSAGE_CONTENT` | delta 追加到最后一个 content 项 |
+| `REASONING_MESSAGE_END` | 无特殊处理 |
+| `REASONING_END` | 结算 duration + Complete；协议不带 duration 时用前端计时兜底 |
+| `REASONING_MESSAGE_CHUNK` | 便捷事件，一条即一整段正文；无进行中推理时新建消息承载 |
+| `REASONING_ENCRYPTED_VALUE` | 加密思维链，显式忽略不展示 |
 | **工具调用** | |
 | `TOOL_CALL_START` | 创建带 toolCalls 的 assistant 消息 |
 | `TOOL_CALL_ARGS` | 追加 function.arguments |
