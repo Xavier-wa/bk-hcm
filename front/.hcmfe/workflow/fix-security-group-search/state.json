@@ -1,0 +1,98 @@
+{
+  "id": "fix-security-group-search",
+  "title": "安全组搜索条件问题",
+  "currentStage": "done",
+  "createdAt": "2026-08-20T03:13:13.584Z",
+  "updatedAt": "2026-08-20T11:42:11.064Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/fix-security-group-search/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-20T03:38:00.691Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/fix-security-group-search/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-20T11:38:25.221Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-20T11:36:57.592Z",
+      "note": "编码完成：三个 tab 走 ResourceSearchSelect；业务视角 exclude 使用业务/管理业务；不再依赖 searchData/accountList。用户确认推进 test。"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-20T11:41:20.858Z",
+      "note": "用户自测 OK；test.md 全部 PASS。文档收口 gaps 空。推进 done。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-08-20T03:13:13.584Z",
+      "gitHead": "29544c089974fe5ee0bdfe0371aeece655cf7abd"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-20T11:36:57.592Z",
+      "note": "编码完成：三个 tab 走 ResourceSearchSelect；业务视角 exclude 使用业务/管理业务；不再依赖 searchData/accountList。用户确认推进 test。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-20T11:41:20.858Z",
+      "note": "用户自测 OK；test.md 全部 PASS。文档收口 gaps 空。推进 done。"
+    }
+  ],
+  "branch": "fix-security-group-search",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137336978"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "completed",
+      "at": "2026-08-20T03:33:58.217Z",
+      "note": "clarification written to TAPD 1069995598137336978 (approved, 原需求描述 preserved); evaluation: no split (≤2 stories); RICE 200, effort 8h"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-20T11:41:13.115Z",
+      "note": "gaps 空：命中 base/resource 均 drafted 且 hasDrift=false；中途已沉淀 ResourceSearchSelect 与 security-manage 约定，收口无缺口。promotionQueue.totalOpen=0。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-20T11:42:11.064Z",
+      "note": "story 1069995598137336978: status_12(for_test) → status_13(tested) → status_14(done)；未改 owner；无 parent_id 无需 rollup。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/common/resource-constant.ts",
+        "src/components/resource-search-select/index.vue",
+        "src/components/resource-search-select/option-common.ts",
+        "src/views/resource/resource-manage/children/manage/security-manage.vue",
+        "security-manage.vue"
+      ],
+      "contentFingerprint": "cd04c860c770d99173097790ca6eab23524015a5",
+      "codeBaseline": "9fb5cb102cac0235920cf21127d77a9048ad55cc",
+      "seatedAt": "2026-08-20T09:55:42.893Z"
+    }
+  }
+}

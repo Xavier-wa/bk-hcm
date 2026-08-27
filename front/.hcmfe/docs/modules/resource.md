@@ -9,6 +9,7 @@
 - `accountmanage/` — 账号管理 → 应拆为账号管理原子模块。
 - `recyclebin-manager/` — 回收站 → 应拆为 recyclebin 原子模块。
 - `resource-manage/` — 资源纳管：内部含 host/vpc/subnet/安全组/cvm 等**多种 IaaS 资源类型**（`resource-manage/children/detail/*`），每种资源类型都是一个潜在原子模块。
+- 安全组列表页 `resource-manage/children/manage/security-manage.vue` 由业务视角与资源接入共用。三个 tab 都用 `ResourceSearchSelect`（`option-common.ts` 只登记字段和 children）；`type` / `filterRules` 与默认回填由页面挂到 URL `filter` + `useSearchQs`。业务视角安全组 tab 通过 `exclude` 去掉使用业务/管理业务。GCP 防火墙条件不含云厂商，与资源接入一致。
 - `NoPermission.tsx` — 旧无权限页（已废弃，见 auth 模块，改用路由守卫 + 权限页）。
 
 ## 目标形态

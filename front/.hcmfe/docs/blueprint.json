@@ -156,10 +156,10 @@
       "doc": "modules/resource.md",
       "status": "drafted",
       "fingerprint": {
-        "computedAt": "2026-07-14T12:38:37.063Z",
-        "rootHash": "a472254f9f1a04613d849e96812e33576c1708c4"
+        "computedAt": "2026-08-20T09:55:42.306Z",
+        "rootHash": "de53fcfc5f0f9105646f440fcc5f83b7f27b5099"
       },
-      "updatedAt": "2026-07-15T04:01:34.915Z"
+      "updatedAt": "2026-08-20T09:55:42.306Z"
     },
     {
       "id": "business",

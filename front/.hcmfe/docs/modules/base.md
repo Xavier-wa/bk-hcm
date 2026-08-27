@@ -55,6 +55,10 @@ base 的 `src/components/**` 宽 glob 会把各业务模块的组件一并命中
 
 > 映射表随迁移进展更新；物理合并完成后，从表中移除对应行并精简相关模块 glob。
 
+## 资源综合搜索（ResourceSearchSelect）
+
+入口：`src/components/resource-search-select/`。组件只提供条件项与异步下拉（`getOptionMenu` 拉 children），不负责 URL 与列表 filter。`option-common.ts` 按 `ResourceTypeEnum` 只登记字段和 children（与 CVM 相同，`optionMap.set`）；`type` / `filterRules` / 默认回填由各资源列表页自己挂到 `searchQs`。使用方可通过 `exclude` 按场景剔除条件（如业务视角去掉使用业务/管理业务）。主机列表另走 `useFilterHost` 的 v-model 拼装，不要默认套到安全组。
+
 ## 业务上下文接缝（`useWhereAmI` / 业务相关常量）
 
 业务视角下的接口路径统一由 `src/hooks/useWhereAmI.ts` 的 `getBusinessApiPath(bizId?)` 拼出（非业务视角返回空串）。它有两种用法，选错会导致跨业务请求：

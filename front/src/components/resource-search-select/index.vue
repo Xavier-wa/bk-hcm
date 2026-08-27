@@ -12,6 +12,7 @@ defineOptions({ name: 'ResourceSearchSelect' });
 const props = withDefaults(defineProps<IResourceSelectProps>(), {
   clearable: true,
   valueBehavior: 'need-key',
+  exclude: () => [],
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -22,6 +23,8 @@ export interface IResourceSelectProps {
   clearable?: boolean;
   valueBehavior?: 'all' | 'need-key';
   validateValues?: ValidateValuesFunc;
+  // 使用方按场景剔除不需要的条件，例如业务视角去掉使用业务/管理业务
+  exclude?: string[];
 }
 
 const resourceAccountStore = useResourceAccountStore();
@@ -29,7 +32,11 @@ const { selectedAccountId, vendorInResourcePage } = storeToRefs(resourceAccountS
 
 const { getOptionData, getOptionMenu } = optionFactory();
 const searchOptions = computed(() => {
-  let data = getOptionData(props.resourceType);
+  let data = getOptionData(props.resourceType) ?? [];
+  if (props.exclude.length) {
+    const omit = new Set(props.exclude);
+    data = data.filter((item) => !omit.has(item.id));
+  }
   // 如果当前选定了某个云账号筛选条件就剔除云厂商
   if (vendorInResourcePage.value) {
     data = data.filter((item) => item.id !== 'vendor');

@@ -1,6 +1,43 @@
 {
   "version": 2,
-  "criteria": {},
+  "criteria": {
+    "no-private-component-internals": {
+      "hits": 0,
+      "accepted": 1,
+      "rejected": 0,
+      "waived": 0,
+      "firstHitAt": "2026-08-20T02:58:51.908Z",
+      "lastHitAt": "2026-08-20T02:58:51.908Z",
+      "contexts": []
+    },
+    "sync-derived-filter-state": {
+      "hits": 0,
+      "accepted": 1,
+      "rejected": 0,
+      "waived": 0,
+      "firstHitAt": "2026-08-20T02:58:51.908Z",
+      "lastHitAt": "2026-08-20T02:58:51.908Z",
+      "contexts": []
+    },
+    "no-nested-v-model-same-binding": {
+      "hits": 0,
+      "accepted": 1,
+      "rejected": 0,
+      "waived": 0,
+      "firstHitAt": "2026-08-20T02:58:51.908Z",
+      "lastHitAt": "2026-08-20T02:58:51.908Z",
+      "contexts": []
+    },
+    "use-project-time-formatter": {
+      "hits": 0,
+      "accepted": 1,
+      "rejected": 0,
+      "waived": 0,
+      "firstHitAt": "2026-08-20T02:58:51.908Z",
+      "lastHitAt": "2026-08-20T02:58:51.908Z",
+      "contexts": []
+    }
+  },
   "proposals": {
     "sync-derived-filter-state": {
       "title": "同步筛选条件时必须带上派生状态",
@@ -63,6 +100,15 @@
       "lastProposedAt": "2026-08-18T09:30:41.569Z",
       "contexts": [
         "mr-3328"
+      ]
+    },
+    "no-dual-write-search-filter": {
+      "title": "列表 filter 只能有一个写入方",
+      "times": 1,
+      "firstProposedAt": "2026-08-20T11:54:04.750Z",
+      "lastProposedAt": "2026-08-20T11:54:04.750Z",
+      "contexts": [
+        "29544c089974fe5ee0bdfe0371aeece655cf7abd"
       ]
     }
   }
