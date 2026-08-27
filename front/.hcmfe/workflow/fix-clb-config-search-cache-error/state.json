@@ -1,0 +1,78 @@
+{
+  "id": "fix-clb-config-search-cache-error",
+  "title": "负载均衡设备页 RS 搜索报错修复",
+  "currentStage": "done",
+  "createdAt": "2026-07-22T07:02:06.835Z",
+  "updatedAt": "2026-07-22T07:31:23.653Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/fix-clb-config-search-cache-error/coding.md",
+        "kind": "file",
+        "addedAt": "2026-07-22T07:18:17.654Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/fix-clb-config-search-cache-error/test.md",
+        "kind": "file",
+        "addedAt": "2026-07-22T07:26:24.474Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-07-22T07:25:34.454Z",
+      "note": "用户确认 coding.md 4 项改动技术方案准确，可进入 test 阶段"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-07-22T07:30:57.018Z",
+      "note": "全部 9 条用例 PASS，测试通过，可合入"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-07-22T07:02:06.835Z"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-07-22T07:25:34.454Z",
+      "note": "用户确认 coding.md 4 项改动技术方案准确，可进入 test 阶段"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-07-22T07:30:57.018Z",
+      "note": "全部 9 条用例 PASS，测试通过，可合入"
+    }
+  ],
+  "branch": "fix-clb-config-search-cache-error",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598136369282"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "completed",
+      "at": "2026-07-22T07:17:40.478Z",
+      "note": "已完成：tapd-story-clarification 产出 docs/reqs/配置检索缓存数据错乱.md 并回写 TAPD；tapd-story-evaluation RICE 评分 400（Reach=20,Impact=10,Confidence=100%,Effort=0.5人天），无需拆分子需求"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-07-22T07:31:23.653Z",
+      "note": "TAPD story 1069995598136369282 已逐级推进 for_test(status_12)→tested(status_13)→done(status_14)，最终状态 verified: done(已上线)"
+    }
+  }
+}
