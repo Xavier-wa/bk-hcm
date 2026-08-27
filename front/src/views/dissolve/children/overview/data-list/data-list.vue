@@ -3,7 +3,7 @@ import type { PaginationType } from '@/typings';
 import type { ModelPropertyColumn } from '@/model/typings';
 import type { IDissolveOverview } from '@/store/dissolve/quota';
 import { useBusinessGlobalStore } from '@/store/business-global';
-import { ref, computed } from 'vue';
+import { ref, computed, h } from 'vue';
 import usePage from '@/hooks/use-page';
 import useTableSettings from '@/hooks/use-table-settings';
 
@@ -88,6 +88,26 @@ const getFieldValue = (row: Record<string, any>, fieldId: string) => {
 
 // 禁用 bk-table 的自动排序，让排序完全由 sortedList 控制
 const noopSortFn = () => 0;
+
+// 待裁撤分组下需要高亮背景的列 id
+const HIGHLIGHT_COLUMN_IDS = ['current_host_count', 'current_cpu_core'];
+
+// 单元格 class：汇总行附加 summary-cell，待裁撤下两列附加 highlight-cell 或 highlight-summary-cell
+// 注意：bk-table 的 class-name 会同时作用于表头(th)和表体(td)，
+// 这里仅对真实数据行（含 bk_biz_id）施加高亮，避免表头被染色
+const getColumnClassName = (row: Record<string, any>, columnId: string) => {
+  const classes: string[] = [];
+  if (!row || typeof row.bk_biz_id === 'undefined') {
+    return classes.join(' ');
+  }
+  if (isSummaryRow(row)) {
+    classes.push('summary-cell');
+  }
+  if (HIGHLIGHT_COLUMN_IDS.includes(columnId)) {
+    classes.push(isSummaryRow(row) ? 'highlight-summary-cell' : 'highlight-cell');
+  }
+  return classes.join(' ');
+};
 </script>
 
 <template>
@@ -108,15 +128,26 @@ const noopSortFn = () => 0;
     >
       <template v-for="col in props.groupedColumns" :key="col.id ?? col.group">
         <!-- 分组列（多级表头父级） -->
-        <bk-table-column v-if="col.children" :label="col.group">
+        <bk-table-column
+          v-if="col.children"
+          :label="
+            col.group === '待裁撤'
+              ? () => h('span', { style: 'font-weight:700;color:#313238' }, col.group)
+              : () => h('span', { style: 'color:#313238' }, col.group)
+          "
+        >
           <bk-table-column
             v-for="child in col.children"
             :key="child.id"
             :prop="child.id"
-            :label="child.name"
+            :label="
+              HIGHLIGHT_COLUMN_IDS.includes(child.id)
+                ? () => h('span', { style: 'font-weight:700' }, child.name)
+                : child.name
+            "
             :min-width="child.minWidth"
             :sort="child.sort ? { sortFn: noopSortFn } : false"
-            :class-name="(row: Record<string, any>) => (isSummaryRow(row) ? 'summary-cell' : '')"
+            :class-name="(row: Record<string, any>) => getColumnClassName(row, child.id)"
           >
             <template #default="{ row }">
               <display-value :property="child" :value="getFieldValue(row, child.id)" :display="child?.meta?.display" />
@@ -194,6 +225,15 @@ const noopSortFn = () => 0;
 
 :deep(.summary-cell) {
   background-color: #fdf4e8 !important;
+  font-weight: 600;
+}
+
+:deep(.highlight-cell) {
+  background-color: #ffebec !important;
+}
+
+:deep(.highlight-summary-cell) {
+  background-color: #ffdfdf !important;
   font-weight: 600;
 }
 </style>
