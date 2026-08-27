@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useAttrs, useSlots, watchEffect } from 'vue';
+import { computed, ref, useAttrs, useSlots, watch } from 'vue';
 import { ModelProperty } from '@/model/typings';
 import { SelectColumn } from '@blueking/ediatable';
 import { DisplayType } from './typings';
@@ -65,7 +65,7 @@ const appendSelectedItems = async () => {
   }
 };
 
-watchEffect(async () => {
+const reloadList = async () => {
   if (isGeneratorMode.value) {
     loading.value = true;
     pinnedIds.value = new Set();
@@ -76,15 +76,33 @@ watchEffect(async () => {
     } finally {
       loading.value = false;
     }
-  } else if (typeof props.list === 'function') {
+    return;
+  }
+  if (typeof props.list === 'function') {
     loading.value = true;
     try {
       localList.value = await props.list();
     } finally {
       loading.value = false;
     }
-  } else {
-    localList.value = props.list ?? [];
+    return;
+  }
+  localList.value = props.list ?? [];
+};
+
+// 不能用 watchEffect：赋值 loading / pinnedIds 会被当成依赖，触发「Maximum recursive updates」。
+watch(() => props.listGenerator, reloadList, { immediate: true });
+watch(
+  () => props.list,
+  () => {
+    if (!props.listGenerator) {
+      reloadList();
+    }
+  },
+);
+watch(model, () => {
+  if (isGeneratorMode.value) {
+    appendSelectedItems();
   }
 });
 

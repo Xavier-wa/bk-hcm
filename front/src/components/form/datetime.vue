@@ -24,13 +24,14 @@ const props = withDefaults(defineProps<IProps>(), {
 
 const emits = defineEmits<IEmits>();
 
+const isRange = computed(() => ['daterange', 'datetimerange', 'monthrange'].includes(props.type));
 const rangeType = computed(() => ['daterange', 'datetimerange'].includes(props.type));
 const shortcutsRange = computed(() => (rangeType.value ? getDateShortcutRange(props.type !== 'daterange') : []));
 
 const localModel = computed({
   get: () => {
     if (!model.value) {
-      return rangeType.value ? [] : ('' as unknown);
+      return isRange.value ? [] : ('' as unknown);
     }
     if (Array.isArray(model.value) && !model.value.filter((item) => Boolean(item)).length) {
       return [] as unknown;

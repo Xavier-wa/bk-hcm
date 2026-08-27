@@ -1,0 +1,106 @@
+{
+  "id": "req-third-party-prepaid-bill",
+  "title": "三方云预付费账单管理-前端",
+  "createdAt": "2026-08-21T02:25:44.806Z",
+  "updatedAt": "2026-08-27T09:38:03.603Z",
+  "external": {
+    "tapd": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598137371319"
+  },
+  "iterations": [
+    {
+      "wfId": "feat-third-party-prepaid-bill",
+      "status": "coding",
+      "branch": "feat-third-party-prepaid-bill",
+      "title": "预付费账单列表查询展示",
+      "createdAt": "2026-08-21T02:25:51.774Z"
+    },
+    {
+      "wfId": "feat-prepaid-bill-detail",
+      "status": "prd",
+      "branch": "feat-third-party-prepaid-bill",
+      "title": "预付费账单详情与分摊明细",
+      "createdAt": "2026-08-24T07:14:32.952Z"
+    },
+    {
+      "wfId": "feat-prepaid-bill-export",
+      "status": "prd",
+      "branch": "feat-third-party-prepaid-bill",
+      "title": "预付费账单查询结果导出",
+      "createdAt": "2026-08-24T11:17:06.843Z"
+    },
+    {
+      "wfId": "feat-bill-adjust-guard",
+      "status": "prd",
+      "branch": "feat-third-party-prepaid-bill",
+      "title": "账单调整列表状态与守卫",
+      "createdAt": "2026-08-24T12:16:59.308Z"
+    },
+    {
+      "wfId": "fix-prepaid-bill-search-params",
+      "status": "done",
+      "branch": "feat-third-party-prepaid-bill",
+      "title": "预付费账单-搜索条件-传参问题",
+      "createdAt": "2026-08-27T06:30:08.000Z",
+      "mergedCommit": "c47b274bfd9e6f5a782c56a828e75021ac883084"
+    }
+  ],
+  "aggregatedArtifacts": {},
+  "codeScope": {
+    "globs": [
+      ".bkui-knowledge.json/**",
+      ".ci/**",
+      ".codebuddy/**",
+      ".cursor/**",
+      ".gitignore/**",
+      "Makefile/**",
+      "bkcodeai.json/**",
+      "cmd/**",
+      "docs/api-docs/api-server/api/**",
+      "docs/api-docs/api-server/bin/**",
+      "docs/api-docs/api-server/docs/zh/**",
+      "docs/api-docs/auth-server/bin/**",
+      "docs/api-docs/task-server/**",
+      "docs/api-docs/web-server/api/**",
+      "docs/api-docs/web-server/docs/biz/**",
+      "docs/api-docs/web-server/docs/resource/**",
+      "docs/api-docs/web-server/docs/scr/**",
+      "docs/api-docs/web-server/docs/service/**",
+      "docs/api-docs/web-server/docs/zh/**",
+      "docs/overview/**",
+      "docs/resource/img/**",
+      "docs/support-file/changelog/ch/**",
+      "docs/support-file/changelog/en/**",
+      "docs/support-file/docker/bk-hcm-accountserver/**",
+      "docs/support-file/docker/bk-hcm-agentserver/**",
+      "docs/support-file/docker/bk-hcm-apigwregister/**",
+      "docs/support-file/docker/bk-hcm-apiserver/**",
+      "docs/support-file/docker/bk-hcm-authregister/**",
+      "docs/support-file/docker/bk-hcm-authserver/**",
+      "docs/support-file/docker/bk-hcm-base/**",
+      "docs/support-file/docker/bk-hcm-cloudserver/**",
+      "docs/support-file/docker/bk-hcm-dataservice/**",
+      "docs/support-file/docker/bk-hcm-hcservice/**",
+      "docs/support-file/docker/bk-hcm-taskserver/**",
+      "docs/support-file/docker/bk-hcm-webserver/**",
+      "docs/support-file/docker/bk-hcm-woaserver/**",
+      "docs/support-file/helm/**",
+      "docs/support-file/template/**",
+      "front/**",
+      "go.mod/**",
+      "go.sum/**",
+      "openspec/**",
+      "pkg/**",
+      "readme.md/**",
+      "readme_en.md/**",
+      "scripts/**",
+      "specs/stories/13641767/**",
+      "test/suite/**"
+    ],
+    "autoLearned": true
+  },
+  "codeFingerprint": {
+    "computedAt": "2026-08-27T09:38:03.573Z",
+    "files": {},
+    "rootHash": "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+  }
+}

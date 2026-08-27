@@ -13,7 +13,7 @@ import {
   MENU_PLATFORM_MANAGEMENT,
   MENU_ROLLING_SERVER_MANAGEMENT,
 } from '@/constants/menu-symbol';
-import { businessViews, serviceViews, platformManagementViews } from '@/views';
+import { businessViews, serviceViews, platformManagementViews, billViews } from '@/views';
 import common from './module/common';
 import resource from './module/resource';
 import resourceInside from './module/resource-inside';
@@ -22,7 +22,6 @@ import resourcePlan from './module/resource-plan';
 import serviceInside from './module/service-inside';
 // import business from './module/business';
 import scheme from './module/scheme';
-import bill from './module/bill';
 import { useCommonStore } from '@/store';
 import { useVerify } from '@/hooks';
 import { GLOBAL_BIZS_KEY } from '@/common/constant';
@@ -37,7 +36,7 @@ const routes: RouteRecordRaw[] = [
   // ...service,
   ...serviceInside,
   ...scheme,
-  ...bill,
+  ...billViews,
   {
     name: MENU_PLATFORM_MANAGEMENT,
     path: '/platform',

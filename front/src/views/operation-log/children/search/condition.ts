@@ -1,5 +1,6 @@
 import { Model, Column } from '@/decorator';
 import { QueryRuleOPEnum } from '@/typings';
+import { buildFilterRulesWithSearchSelect } from '@/utils/search';
 import {
   OPERATION_LOG_RESOURCE_TYPE_NAME,
   OPERATION_LOG_RES_TYPES,
@@ -16,18 +17,8 @@ export class SearchCondition {
     name: '资源名称',
     meta: {
       search: {
-        filterRules(value: string | string[]) {
-          if (Array.isArray(value) && value.length > 1) {
-            return {
-              op: QueryRuleOPEnum.OR,
-              rules: value.map((val) => ({ field: 'res_name', op: QueryRuleOPEnum.CS, value: val })),
-            };
-          }
-          if (Array.isArray(value) && value.length === 1) {
-            return { field: 'res_name', op: QueryRuleOPEnum.CS, value: value[0] };
-          }
-          return { field: 'res_name', op: QueryRuleOPEnum.CS, value };
-        },
+        filterRules: (value: string | string[]) =>
+          buildFilterRulesWithSearchSelect(value, 'res_name', QueryRuleOPEnum.CS),
       },
     },
     index: 3,

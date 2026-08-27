@@ -32,6 +32,32 @@ export const BILL_ADJUSTMENT_STATE__MAP = {
   confirmed: '已确认',
 };
 
+// 调账推送状态（list.push_status）
+export const BILL_ADJUSTMENT_PUSH_STATUS_MAP = {
+  unpushed: '未推送',
+  pushing: '推送中',
+  pushed: '已推送',
+  failed: '失败',
+};
+
+export const BILL_ADJUSTMENT_PUSH_STATUS_THEME: Record<string, 'info' | 'success' | 'danger' | undefined> = {
+  unpushed: undefined,
+  pushing: 'info',
+  pushed: 'success',
+  failed: 'danger',
+};
+
+// 调账定账状态（list.settle_state）
+export const BILL_ADJUSTMENT_SETTLE_STATE_MAP = {
+  unsettled: '未定账',
+  settled: '已定账',
+};
+
+export const BILL_ADJUSTMENT_SETTLE_STATE_THEME: Record<string, 'success' | undefined> = {
+  unsettled: undefined,
+  settled: 'success',
+};
+
 // 调账类型
 export const BILL_ADJUSTMENT_TYPE__MAP = {
   increase: '增加',

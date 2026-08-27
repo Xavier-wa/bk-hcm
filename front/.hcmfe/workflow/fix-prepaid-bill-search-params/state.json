@@ -1,0 +1,103 @@
+{
+  "id": "fix-prepaid-bill-search-params",
+  "title": "预付费账单-搜索条件-传参问题",
+  "currentStage": "done",
+  "createdAt": "2026-08-27T06:30:08.000Z",
+  "updatedAt": "2026-08-27T09:37:57.876Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/fix-prepaid-bill-search-params/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-27T06:44:31.586Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/fix-prepaid-bill-search-params/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-27T09:37:02.613Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-27T09:36:20.588Z",
+      "note": "执行人确认编码完成且测试通过，推进 test"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-27T09:37:25.111Z",
+      "note": "执行人确认测试通过，清单已回写 PASS，推进 done"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-08-27T06:30:08.000Z",
+      "gitHead": "c47b274bfd9e6f5a782c56a828e75021ac883084"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-27T09:36:20.588Z",
+      "note": "执行人确认编码完成且测试通过，推进 test"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-27T09:37:25.111Z",
+      "note": "执行人确认测试通过，清单已回写 PASS，推进 done"
+    }
+  ],
+  "requirementId": "req-third-party-prepaid-bill",
+  "branch": "feat-third-party-prepaid-bill",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137607072"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "completed",
+      "at": "2026-08-27T06:43:34.913Z",
+      "note": "澄清已回写 TAPD description（含完整「原需求描述」）；评估无需拆分；工时 4 人时；RICE 400（Reach=20, Impact=10, Confidence=100%, Effort=0.5人天）。owner 未变更。"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-27T09:37:19.620Z",
+      "note": "gaps: base（touched 且 hasDrift）。已在 modules/base.md 补搜索 filter 共享链说明并 deepen。bill / operation-log 中途已沉淀、无缺口。promotionQueue 为空。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-27T09:37:57.876Z",
+      "note": "story 1069995598137607072 最终 status_14（done）；owner 未变更；无 parent_id，不需 rollup"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/utils/search.ts",
+        "src/views/operation-log/children/search/condition.ts",
+        "src/views/prepaid-bill/children/list/search/condition.ts",
+        "src/views/prepaid-bill/utils.ts",
+        "src/views/prepaid-bill/index.vue",
+        "entry-biz.vue",
+        "entry-rsc.vue",
+        "index.vue",
+        "search.vue"
+      ],
+      "contentFingerprint": "1c56618339aeb1d94fb7f286c6a304e1003357a9",
+      "codeBaseline": "0585f9c6d856e788f2c68bfcc0fcd3a9aee7a995",
+      "seatedAt": "2026-08-27T09:08:48.691Z"
+    }
+  }
+}

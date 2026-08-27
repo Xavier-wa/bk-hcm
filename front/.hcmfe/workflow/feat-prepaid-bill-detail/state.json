@@ -1,0 +1,168 @@
+{
+  "id": "feat-prepaid-bill-detail",
+  "title": "预付费账单详情与分摊明细",
+  "currentStage": "done",
+  "createdAt": "2026-08-24T07:14:32.952Z",
+  "updatedAt": "2026-08-25T02:27:22.424Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-prepaid-bill-detail/prd.md",
+        "kind": "file",
+        "addedAt": "2026-08-24T07:26:43.507Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": "https://www.figma.com/design/un9Rys4jsWtSSjrW1TJkOO/%E8%B5%84%E6%BA%90%E8%BF%90%E8%90%A5?node-id=708-13053",
+        "kind": "url",
+        "addedAt": "2026-08-24T07:58:05.270Z"
+      },
+      {
+        "ref": ".hcmfe/workflow/feat-prepaid-bill-detail/design.md",
+        "kind": "file",
+        "addedAt": "2026-08-24T07:58:05.424Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-prepaid-bill-detail/api.md",
+        "kind": "file",
+        "addedAt": "2026-08-24T08:01:54.852Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-prepaid-bill-detail/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-24T08:12:44.638Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-prepaid-bill-detail/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-25T01:54:51.707Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-08-24T07:54:35.096Z",
+      "note": "用户确认 PRD（含 Q-D01 详情未定账遮蔽、Q-D02 预付费 ID 须可见、Q-D03 主表两态）。"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-08-24T08:01:16.622Z",
+      "note": "用户确认 Design；调账金额跟稿面绝对值，正负由调账类型表达。"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-08-24T08:12:22.521Z",
+      "note": "用户确认 api.md；主数据 list 用 onePageParams + enableCount(false)，详情页按 page-detail 落地。"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-25T01:53:11.833Z",
+      "note": "用户确认推进全部 4 个需求：coding 完成，进入 test。"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-25T02:26:03.816Z",
+      "note": "用户确认继续推进工作流：文档已收口，test.md 已登记，进入 done。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-08-24T07:14:32.952Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-08-24T07:54:35.096Z",
+      "note": "用户确认 PRD（含 Q-D01 详情未定账遮蔽、Q-D02 预付费 ID 须可见、Q-D03 主表两态）。"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-08-24T08:01:16.622Z",
+      "note": "用户确认 Design；调账金额跟稿面绝对值，正负由调账类型表达。"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-08-24T08:12:22.521Z",
+      "gitHead": "29544c089974fe5ee0bdfe0371aeece655cf7abd",
+      "note": "用户确认 api.md；主数据 list 用 onePageParams + enableCount(false)，详情页按 page-detail 落地。"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-25T01:53:11.833Z",
+      "note": "用户确认推进全部 4 个需求：coding 完成，进入 test。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-25T02:26:03.816Z",
+      "note": "用户确认继续推进工作流：文档已收口，test.md 已登记，进入 done。"
+    }
+  ],
+  "requirementId": "req-third-party-prepaid-bill",
+  "branch": "feat-third-party-prepaid-bill",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137371365",
+    "parentId": "1069995598137371319"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "completed",
+      "at": "2026-08-24T07:24:15.732Z",
+      "note": "用户确认拆单时已完成澄清与评估，本轮跳过前两步、只跑 tapd-analyst 校对 PRD。解读结论：正文无图、评论为空；净需求为只读详情（22 列主信息 + 整单核算摘要遮蔽规则 + 分摊/调账整合表）。"
+    },
+    "hcm-design-comp-intake": {
+      "status": "completed",
+      "at": "2026-08-24T07:58:10.300Z",
+      "note": "已回填 design.md §3.y 项目三列：page-detail 填空详情页；comp-detail 基本信息；comp-data-list 分摊表；Tag/状态圆点 adjacent 复用列表 appearance。"
+    },
+    "hcm-design-icon-intake": {
+      "status": "completed",
+      "at": "2026-08-24T07:58:10.418Z",
+      "note": "已回填 design.md §3.x 项目候选：返回用面包屑/bkhcm-icon-arrows--left-line；已定账圆标 bkhcm-icon-circle-correct-filled；行级核算复用 dynamic-status 圆点；表头排序走 Table 内置。"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-25T02:25:57.349Z",
+      "note": "收口无缺口：详情改动已写入 bill.md；touched 模块无 stub/drift。用户本轮明确不走 promotions-review。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-25T02:27:22.424Z",
+      "note": "story 1069995598137371365 final status_14; owner 未变更; parent 1069995598137371319 rollup status_14"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/views/prepaid-bill/details/index.vue",
+        "src/views/prepaid-bill/details/children/basic-info/basic-info.vue",
+        "src/views/prepaid-bill/details/children/basic-info/field.ts",
+        "src/views/prepaid-bill/details/children/split-list/column.ts",
+        "src/views/prepaid-bill/details/children/split-list/data-list.vue",
+        "src/views/prepaid-bill/route-config.ts",
+        "src/store/prepaid-bill/index.ts",
+        "src/views/prepaid-bill/typings.ts",
+        "src/views/prepaid-bill/constants.ts",
+        "src/views/prepaid-bill/utils.ts"
+      ],
+      "contentFingerprint": "a87af88531e674f940c290ff148ca27ba2818b6a",
+      "codeBaseline": "b3cb3a267a7601a6ffbba6b9850c46f4c10b23b7",
+      "seatedAt": "2026-08-24T16:52:34.879Z"
+    }
+  }
+}

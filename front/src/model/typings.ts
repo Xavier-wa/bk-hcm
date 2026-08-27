@@ -33,6 +33,7 @@ export type AppearanceType =
   | 'clb-status'
   | 'business-assign-tag'
   | 'dynamic-status'
+  | 'dynamic-tag-status'
   | 'link-button'
   | 'radio'
   | 'link-popover';

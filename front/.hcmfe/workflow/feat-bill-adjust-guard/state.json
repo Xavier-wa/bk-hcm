@@ -1,0 +1,159 @@
+{
+  "id": "feat-bill-adjust-guard",
+  "title": "账单调整列表状态与守卫",
+  "currentStage": "done",
+  "createdAt": "2026-08-24T12:16:59.308Z",
+  "updatedAt": "2026-08-25T02:27:22.978Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-bill-adjust-guard/prd.md",
+        "kind": "file",
+        "addedAt": "2026-08-24T12:21:15.339Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-bill-adjust-guard/design.md",
+        "kind": "file",
+        "addedAt": "2026-08-24T12:23:48.450Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-bill-adjust-guard/api.md",
+        "kind": "file",
+        "addedAt": "2026-08-24T12:36:27.941Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-bill-adjust-guard/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-24T12:41:16.870Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-bill-adjust-guard/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-25T01:54:52.717Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-08-24T12:23:17.228Z",
+      "note": "用户确认 PRD，进入 design；无独立稿走豁免；推送状态、定账状态两列用 Tag 展示。"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-08-24T12:34:45.423Z",
+      "note": "用户确认 Design 进 API"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-08-24T12:38:17.822Z",
+      "note": "用户确认 API，进入 coding"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-25T01:53:12.910Z",
+      "note": "用户确认推进全部 4 个需求：coding 完成，进入 test。"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-25T02:26:04.724Z",
+      "note": "用户确认继续推进工作流：文档已收口，test.md 已登记，进入 done。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-08-24T12:16:59.308Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-08-24T12:23:17.228Z",
+      "note": "用户确认 PRD，进入 design；无独立稿走豁免；推送状态、定账状态两列用 Tag 展示。"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-08-24T12:34:45.423Z",
+      "note": "用户确认 Design 进 API"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-08-24T12:38:17.822Z",
+      "gitHead": "29544c089974fe5ee0bdfe0371aeece655cf7abd",
+      "note": "用户确认 API，进入 coding"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-25T01:53:12.910Z",
+      "note": "用户确认推进全部 4 个需求：coding 完成，进入 test。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-25T02:26:04.724Z",
+      "note": "用户确认继续推进工作流：文档已收口，test.md 已登记，进入 done。"
+    }
+  ],
+  "requirementId": "req-third-party-prepaid-bill",
+  "branch": "feat-third-party-prepaid-bill",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137371364",
+    "parentId": "1069995598137371319"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "skipped",
+      "at": "2026-08-24T12:20:55.987Z",
+      "note": "用户选 3：拆单时已完成澄清与评估（含后端 Q-005 B 守卫矩阵与 RICE 75），评论为空，整段跳过前置节点，直接按 TAPD 正文写 PRD。"
+    },
+    "hcm-design-comp-intake": {
+      "status": "completed",
+      "at": "2026-08-24T12:23:49.969Z",
+      "note": "§3.y 已回填：现网 adjust/index.tsx adjacent；状态列 bk-tag；不走 page-list。"
+    },
+    "hcm-design-icon-intake": {
+      "status": "skipped",
+      "at": "2026-08-24T12:23:50.245Z",
+      "note": "无独立稿且无新增图标：推送/定账用 bk-tag，操作沿用文字按钮。"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-25T02:24:43.388Z",
+      "note": "收口无缺口：调整列表守卫已写入 bill.md；touched 模块无 stub/drift。用户本轮明确不走 promotions-review。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-25T02:27:22.978Z",
+      "note": "story 1069995598137371364 final status_14; owner 未变更; parent 1069995598137371319 rollup status_14"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/constants/bill.ts",
+        "src/typings/bill.ts",
+        "src/views/bill/bill/adjust/row-guard.ts",
+        "src/views/bill/bill/adjust/index.tsx",
+        "row-guard.ts",
+        "index.tsx"
+      ],
+      "contentFingerprint": "31c4a48c982caa2ea273c2f015ba31b309f9fb82",
+      "codeBaseline": "b9a40761959e751fdd84143f0ea669444ba121c5",
+      "seatedAt": "2026-08-25T01:53:04.233Z"
+    }
+  }
+}

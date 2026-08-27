@@ -15,7 +15,7 @@
 - **菜单与路由** → [menu-route](menu-route.md)：`src/router/**`、`src/constants/menu-symbol.ts`。
 - **权限控制** → [auth](auth.md)：`src/common/auth-service.ts`、`src/constants/auth-symbols.ts`、`src/components/auth|permission/**`。
 
-其中 menu-route/auth 的部分文件物理上仍落在 `common/constants/components/hooks/store/views` 下，属概念分层（glob 与 base 宽 glob 有意重叠）。命中 `src/store/common.ts`、`src/hooks/useVerify.ts` 或 `src/views/error-pages/403.tsx` 的鉴权改动，优先阅读并更新 [auth](auth.md)；命中 `src/components/chatbot/**`、`src/components/ai-assistant/**`、`src/hooks/chatbot/**`、`src/store/chatbot/**` 的业务行为优先归 [chatbot](chatbot.md)，base 只记录共享层边界。
+其中 menu-route/auth 的部分文件物理上仍落在 `common/constants/components/hooks/store/views` 下，属概念分层（glob 与 base 宽 glob 有意重叠）。命中 `src/store/common.ts`、`src/hooks/useVerify.ts` 或 `src/views/error-pages/403.tsx` 的鉴权改动，优先阅读并更新 [auth](auth.md)；命中 `src/components/chatbot/**`、`src/components/ai-assistant/**`、`src/hooks/chatbot/**`、`src/store/chatbot/**` 的业务行为优先归 [chatbot](chatbot.md)；命中 `src/store/prepaid-bill/**` 或 `src/views/prepaid-bill/**` 优先归 [bill](bill.md)，base 只记录共享层边界。
 
 ## 共享层边界（踩过的坑，动这些文件前先读）
 
@@ -73,4 +73,5 @@ base 的 `src/components/**` 宽 glob 会把各业务模块的组件一并命中
 ## 注意事项
 
 - `src/router/**` 已整体划入 menu-route 模块（不再属于 base）。
+- 列表搜索 filter 组装在 `src/utils/search.ts`：`transformSimpleCondition` 只组外层 `and`。`hcm-search-string` 默认 tag 多值；算子要求标量 value（`cs` / `json_contains`）时，由字段 `filterRules` 调 `buildFilterRulesWithSearchSelect`（嵌套 `or` 在字段侧生成）。业务页不要再包一层 flatten。细则见 skill `comp-data-list` → `references/search-pattern.md`。
 - 由 workflow 在首次改动 base 相关文件时继续深化各共享子层（api/store/components/utils 等）的职责说明。

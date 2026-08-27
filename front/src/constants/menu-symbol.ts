@@ -122,3 +122,9 @@ export const MENU_BUSINESS_CLOUD_ACCOUNT_DETAILS = 'menu_business_cloud_account_
  * 权限策略库管理
  */
 export const MENU_SERVICE_PERMISSION_POLICY = 'menu_service_permission_policy';
+
+/**
+ * 预付费账单
+ */
+export const MENU_BILL_PREPAID = 'menu_bill_prepaid';
+export const MENU_BILL_PREPAID_DETAIL = 'menu_bill_prepaid_detail';

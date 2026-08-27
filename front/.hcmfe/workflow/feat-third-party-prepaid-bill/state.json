@@ -1,0 +1,199 @@
+{
+  "id": "feat-third-party-prepaid-bill",
+  "title": "预付费账单列表查询展示",
+  "currentStage": "done",
+  "createdAt": "2026-08-21T02:25:51.774Z",
+  "updatedAt": "2026-08-25T02:27:22.014Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-third-party-prepaid-bill/prd.md",
+        "kind": "file",
+        "addedAt": "2026-08-21T04:05:07.918Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-third-party-prepaid-bill/design.md",
+        "kind": "file",
+        "addedAt": "2026-08-21T06:14:09.609Z"
+      },
+      {
+        "ref": "https://www.figma.com/design/un9Rys4jsWtSSjrW1TJkOO/%E8%B5%84%E6%BA%90%E8%BF%90%E8%90%A5?node-id=707-3299",
+        "kind": "url",
+        "addedAt": "2026-08-21T07:00:51.071Z"
+      },
+      {
+        "ref": "https://www.figma.com/design/un9Rys4jsWtSSjrW1TJkOO/%E8%B5%84%E6%BA%90%E8%BF%90%E8%90%A5?node-id=708-10421",
+        "kind": "url",
+        "addedAt": "2026-08-21T07:00:52.806Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-third-party-prepaid-bill/api.md",
+        "kind": "file",
+        "addedAt": "2026-08-21T07:18:10.869Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-third-party-prepaid-bill/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-21T08:04:27.899Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-third-party-prepaid-bill/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-25T01:54:52.717Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-08-21T06:12:58.917Z",
+      "note": "用户确认 PRD 可作为下一阶段依据，进入 design。"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-08-21T07:15:41.344Z",
+      "note": "用户确认 Design 可作为下一阶段依据：搜索跟需求单+现网 Search；表头排序/漏斗跟稿且 UI 先做。图标与组件落码入口已回填。"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-08-21T08:02:47.165Z",
+      "note": "用户确认 API 可作为 coding 依据；coding 必须遵循 page-list 模块目录（children/list/search + children/list/data-list）。"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-25T01:53:10.635Z",
+      "note": "用户确认推进全部 4 个需求：coding 完成，进入 test。"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-25T02:26:03.817Z",
+      "note": "用户确认继续推进工作流：文档已收口，test.md 已登记，进入 done。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-08-21T02:25:51.774Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-08-21T06:12:58.917Z",
+      "note": "用户确认 PRD 可作为下一阶段依据，进入 design。"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-08-21T07:15:41.344Z",
+      "note": "用户确认 Design 可作为下一阶段依据：搜索跟需求单+现网 Search；表头排序/漏斗跟稿且 UI 先做。图标与组件落码入口已回填。"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-08-21T08:02:47.165Z",
+      "gitHead": "29544c089974fe5ee0bdfe0371aeece655cf7abd",
+      "note": "用户确认 API 可作为 coding 依据；coding 必须遵循 page-list 模块目录（children/list/search + children/list/data-list）。"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-25T01:53:10.635Z",
+      "note": "用户确认推进全部 4 个需求：coding 完成，进入 test。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-25T02:26:03.817Z",
+      "note": "用户确认继续推进工作流：文档已收口，test.md 已登记，进入 done。"
+    }
+  ],
+  "requirementId": "req-third-party-prepaid-bill",
+  "branch": "feat-third-party-prepaid-bill",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137371362",
+    "parentId": "1069995598137371319"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "completed",
+      "at": "2026-08-21T04:01:44.972Z",
+      "note": "澄清已回写 TAPD description（含原需求描述）；评估无需拆分且保留已有 RICE 56 / 23 人时；全量解读完成（正文无图、评论为空）。"
+    },
+    "hcm-design-icon-intake": {
+      "status": "completed",
+      "at": "2026-08-21T07:15:09.648Z",
+      "note": "已回填 design.md §3.x 项目候选：iconfont 优先（bill-manage / shezhi / export / shengxu / jiangxu / success / jiazai / default / check-circle-fill / close-circle-fill）；漏斗无 iconfont，走 Table 列 filter，兜底 Funnel。"
+    },
+    "hcm-design-comp-intake": {
+      "status": "completed",
+      "at": "2026-08-21T07:15:12.112Z",
+      "note": "已回填 design.md §3.y：整页 page-list 新建 src/views/bill/prepaid/；Search/表格/分页走 comp-data-list + comp-field-model；菜单/账号/状态/链接为 adjacent；导出 none。"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-25T02:25:43.985Z",
+      "note": "收口无缺口：touched=base/menu-route/bill/app-shell 均 drafted 且无 drift。中途已沉淀；账单 glob 扩到 prepaid-bill 视图与 store。用户本轮明确不走 promotions-review。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-25T02:27:22.014Z",
+      "note": "story 1069995598137371362 final status_14; owner 未变更; parent 1069995598137371319 rollup status_14"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/views/index.ts",
+        "src/router/index.ts",
+        "src/views/home/hooks/useChangeHeaderTab.ts",
+        "src/views/prepaid-bill/route-config.ts",
+        "src/constants/menu-symbol.ts",
+        "router/index.ts",
+        "src/store/common.ts",
+        "src/api/bill/index.ts",
+        "src/router/module/bill.ts",
+        "data-list.vue",
+        "main-account-value.vue",
+        "root-account-value.vue",
+        "operation-product-value.vue",
+        "use-id-name-value.ts",
+        "common.ts",
+        "403.tsx",
+        "search.vue",
+        "constants.ts",
+        "typings.ts",
+        "index.vue",
+        "src/store/index.ts",
+        "src/views/prepaid-bill/index.vue",
+        "src/views/prepaid-bill/typings.ts",
+        "src/views/prepaid-bill/constants.ts",
+        "src/views/prepaid-bill/utils.ts",
+        "src/views/prepaid-bill/components/use-id-name-value.ts",
+        "src/views/prepaid-bill/components/main-account-value.vue",
+        "src/views/prepaid-bill/components/root-account-value.vue",
+        "src/views/prepaid-bill/components/operation-product-value.vue",
+        "src/views/prepaid-bill/children/list/search/search.vue",
+        "src/views/prepaid-bill/children/list/search/condition.ts",
+        "src/views/prepaid-bill/children/list/data-list/data-list.vue",
+        "src/views/prepaid-bill/children/list/data-list/column.ts",
+        "src/views/prepaid-bill/children/details/index.vue",
+        "src/store/prepaid-bill/index.ts",
+        "src/views/home/index.tsx"
+      ],
+      "contentFingerprint": "8a4e64e345bb7091107a88bcc998784e9c258cc7",
+      "codeBaseline": "3cf8f3028b44f48ad12b609539d704653b94c0c1",
+      "seatedAt": "2026-08-25T02:06:58.119Z"
+    }
+  }
+}

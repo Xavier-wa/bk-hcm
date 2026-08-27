@@ -3,7 +3,7 @@
 > status: drafted · kind: module
 > globs: `src/views/home/**`, `src/views/error-pages/**`, `src/views/notice/**`, `src/views/index.ts`
 
-应用外壳与通用页面：顶部导航与全局业务选择器、错误页、全局通知、views 根入口。
+应用外壳与通用页面：顶部导航与全局业务选择器、错误页、全局通知、views 根入口。账号管理顶栏左侧菜单由 `src/views/home/hooks/useChangeHeaderTab.ts` 按 header id 切换；`bill` 时用 `views/index.ts` 的 `billViews`（现网 `bill` 插入预付费 route-config）。
 
 ## 职责
 

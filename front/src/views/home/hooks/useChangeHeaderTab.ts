@@ -4,10 +4,9 @@ import { useRoute, type RouteRecordRaw } from 'vue-router';
 import resource from '@/router/module/resource';
 import resourcePlan from '@/router/module/resource-plan';
 import service from '@/router/module/service';
-import { businessViews, platformManagementViews } from '@/views';
+import { businessViews, platformManagementViews, billViews } from '@/views';
 
 import scheme from '@/router/module/scheme';
-import bill from '@/router/module/bill';
 // import stores
 import { useAccountStore } from '@/store';
 import { useResourceAccountStore } from '@/store/useResourceAccountStore';
@@ -65,7 +64,7 @@ export default () => {
         accountStore.updateBizsId(0); // 初始化业务ID
         break;
       case 'bill':
-        menus.value = bill;
+        menus.value = billViews;
         break;
       case 'platform':
         menus.value = platformManagementViews;

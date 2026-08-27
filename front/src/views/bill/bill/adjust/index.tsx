@@ -16,12 +16,22 @@ import { useTable } from '@/hooks/useTable/useTable';
 import useSelection from '@/views/resource/resource-manage/hooks/use-selection';
 import { deleteBillsAdjustment, exportBillsAdjustmentItems, reqBillsAdjustmentList } from '@/api/bill';
 import { timeFormatter } from '@/common/util';
-import { BILL_ADJUSTMENT_STATE__MAP, BILL_ADJUSTMENT_TYPE__MAP, CURRENCY_MAP, RES_CLASS_MAP } from '@/constants';
+import {
+  BILL_ADJUSTMENT_STATE__MAP,
+  BILL_ADJUSTMENT_TYPE__MAP,
+  CURRENCY_MAP,
+  RES_CLASS_MAP,
+  BILL_ADJUSTMENT_PUSH_STATUS_MAP,
+  BILL_ADJUSTMENT_PUSH_STATUS_THEME,
+  BILL_ADJUSTMENT_SETTLE_STATE_MAP,
+  BILL_ADJUSTMENT_SETTLE_STATE_THEME,
+} from '@/constants';
 import { DoublePlainObject, QueryRuleOPEnum, RulesItem } from '@/typings';
 import useBillStore from '@/store/useBillStore';
 import { formatBillCost } from '@/utils';
 import { useRoute } from 'vue-router';
 import pluginHandler from '@pluginHandler/bill-manage';
+import { canMutateAdjustmentRow, canSelectAdjustmentRow, getAdjustmentMutateDisableTip } from './row-guard';
 
 export default defineComponent({
   name: 'BillAdjust',
@@ -45,7 +55,7 @@ export default defineComponent({
       if (isCheckAll) return true;
       return isCurRowSelectEnable(row);
     };
-    const isCurRowSelectEnable = (row: any) => row.state === 'unconfirmed';
+    const isCurRowSelectEnable = (row: any) => canSelectAdjustmentRow(row);
     const { selections, handleSelectionChange, resetSelections } = useSelection();
 
     const handleDelete = (id: string) => {
@@ -58,39 +68,45 @@ export default defineComponent({
     };
 
     const columns = [
-      { type: 'selection', width: 30, minWidth: 30 },
+      { type: 'selection', width: 30, minWidth: 30, fixed: 'left' },
       {
         label: t('更新时间'),
         field: 'updated_at',
         width: 160,
+        fixed: 'left',
         render: ({ cell }: any) => timeFormatter(cell),
       },
       {
         label: t('调账ID'),
         field: 'id',
+        width: 110,
       },
       {
         label: t('运营产品'),
         field: 'product_name',
+        width: 160,
       },
       {
         label: t('二级账号名称'),
         field: 'main_account_cloud_id',
-        width: 300,
+        width: 160,
       },
       {
         label: t('资源类别'),
         field: 'res_class',
+        width: 110,
         render: ({ cell }: any) => RES_CLASS_MAP[cell] || '--',
       },
       {
         label: t('资源子类'),
         field: 'res_sub_class',
+        width: 110,
         render: ({ cell }: any) => cell || '--',
       },
       {
         label: t('调账类型'),
         field: 'type',
+        width: 110,
         render: ({ cell }: any) => (
           <bk-tag theme={cell === 'increase' ? 'success' : 'danger'}>{BILL_ADJUSTMENT_TYPE__MAP[cell]}</bk-tag>
         ),
@@ -98,15 +114,18 @@ export default defineComponent({
       {
         label: t('操作人'),
         field: 'operator',
+        width: 160,
       },
       {
         label: t('金额'),
         field: 'cost',
+        width: 110,
         render: ({ cell }: any) => formatBillCost(cell),
       },
       {
         label: t('币种'),
         field: 'currency',
+        width: 90,
         render: ({ cell }: any) => CURRENCY_MAP[cell] || '--',
       },
       { label: t('备注'), field: 'memo', width: 200 },
@@ -114,39 +133,78 @@ export default defineComponent({
         label: t('调账状态'),
         field: 'state',
         width: 100,
+        fixed: 'right',
         render: ({ cell }: any) => (
           <bk-tag theme={cell === 'confirmed' ? 'success' : undefined}>{BILL_ADJUSTMENT_STATE__MAP[cell]}</bk-tag>
         ),
       },
       {
+        label: t('推送状态'),
+        field: 'push_status',
+        width: 100,
+        fixed: 'right',
+        render: ({ cell, data }: any) => {
+          const text = BILL_ADJUSTMENT_PUSH_STATUS_MAP[cell];
+          if (!text) return '--';
+          const failReason = cell === 'failed' ? data.push_fail_reason : '';
+          return (
+            <bk-tag
+              theme={BILL_ADJUSTMENT_PUSH_STATUS_THEME[cell]}
+              v-bk-tooltips={{ content: failReason, disabled: !failReason }}>
+              {text}
+            </bk-tag>
+          );
+        },
+      },
+      {
+        label: t('定账状态'),
+        field: 'settle_state',
+        width: 100,
+        fixed: 'right',
+        render: ({ cell }: any) => {
+          const text = BILL_ADJUSTMENT_SETTLE_STATE_MAP[cell];
+          if (!text) return '--';
+          return <bk-tag theme={BILL_ADJUSTMENT_SETTLE_STATE_THEME[cell]}>{text}</bk-tag>;
+        },
+      },
+      {
         label: t('操作'),
         width: 120,
         fixed: 'right',
-        render: ({ data }: any) => (
-          <>
-            <Button
-              text
-              theme='primary'
-              class='mr8'
-              onClick={() => {
-                createAdjustSideSliderRef.value.triggerShow(true);
-                isEdit.value = true;
-                editData.value = data;
-              }}
-              disabled={data.state !== 'unconfirmed'}
-              v-bk-tooltips={{ content: t('当前调账单已确认，无法编辑'), disabled: data.state === 'unconfirmed' }}>
-              {t('编辑')}
-            </Button>
-            <Button
-              text
-              theme='primary'
-              onClick={() => handleDelete(data.id)}
-              disabled={data.state !== 'unconfirmed'}
-              v-bk-tooltips={{ content: t('当前调账单已确认，无法删除'), disabled: data.state === 'unconfirmed' }}>
-              {t('删除')}
-            </Button>
-          </>
-        ),
+        render: ({ data }: any) => {
+          const mutateDisabled = !canMutateAdjustmentRow(data);
+          return (
+            <>
+              <Button
+                text
+                theme='primary'
+                class='mr8'
+                onClick={() => {
+                  createAdjustSideSliderRef.value.triggerShow(true);
+                  isEdit.value = true;
+                  editData.value = data;
+                }}
+                disabled={mutateDisabled}
+                v-bk-tooltips={{
+                  content: getAdjustmentMutateDisableTip(data, 'edit'),
+                  disabled: !mutateDisabled,
+                }}>
+                {t('编辑')}
+              </Button>
+              <Button
+                text
+                theme='primary'
+                onClick={() => handleDelete(data.id)}
+                disabled={mutateDisabled}
+                v-bk-tooltips={{
+                  content: getAdjustmentMutateDisableTip(data, 'delete'),
+                  disabled: !mutateDisabled,
+                }}>
+                {t('删除')}
+              </Button>
+            </>
+          );
+        },
       },
     ];
 

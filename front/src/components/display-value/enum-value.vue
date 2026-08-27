@@ -6,6 +6,7 @@ import Status from './appearance/status.vue';
 import CvmStatus from './appearance/cvm-status.vue';
 import ClbStatus from './appearance/clb-status.vue';
 import DynamicStatus from './appearance/dynamic-status.vue';
+import DynamicTagStatus from './appearance/dynamic-tag-status.vue';
 
 const props = defineProps<{
   value: string | number | string[] | number[];
@@ -37,6 +38,7 @@ const appearanceComps: Partial<Record<AppearanceType, any>> = {
   'cvm-status': CvmStatus,
   'clb-status': ClbStatus,
   'dynamic-status': DynamicStatus,
+  'dynamic-tag-status': DynamicTagStatus,
 };
 </script>
 
@@ -49,6 +51,10 @@ const appearanceComps: Partial<Record<AppearanceType, any>> = {
     :value="value"
     :option="option"
     v-bind="appearanceProps"
-  />
+  >
+    <template v-for="(_, slot) of $slots" #[slot]="scope">
+      <slot :name="slot" v-bind="scope" />
+    </template>
+  </component>
   <span v-else>{{ displayValue }}</span>
 </template>

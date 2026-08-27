@@ -21,12 +21,12 @@
 ## 关键文件
 
 - `src/constants/menu-symbol.ts` — 所有菜单/路由的 Symbol 常量（导航一律用 Symbol，禁止硬编码路径字符串）。
-- `src/router/index.ts` — 路由实例、全局守卫（`beforeEach` 内含视图级鉴权，见 auth 模块）。`/business/chatbot` 命中平台权限 `agent_assistant`（比 `biz_access` 的 `/^\/business/` 更具体）。无 `agent_assistant` 时：有 `biz_access` 则进 `/403/agent_assistant`；无 `biz_access` 则先进入 `/403/biz_access`。默认首页分流：`/` → `/business`，由**全局守卫**在 verify 就绪后按 `agent_assistant` 落到 chatbot 或 host；直链 `/business/host` 不拦截。`/business` 节点不能用 `redirect`（匹配阶段鉴权未回）也不能用 `beforeEnter`（站内跳转记录复用会被跳过，停在无组件的 `/business`）。守卫会归一化尾斜杠，避免 `/business/` 放行到无组件路由。`/403/:id` 仅在该权限确实缺失时停留，已具备时才弹回 `/` 并保留 query。
+- `src/router/index.ts` — 路由实例、全局守卫（`beforeEach` 内含视图级鉴权，见 auth 模块）。`/business/chatbot` 命中平台权限 `agent_assistant`（比 `biz_access` 的 `/^\/business/` 更具体）。无 `agent_assistant` 时：有 `biz_access` 则进 `/403/agent_assistant`；无 `biz_access` 则先进入 `/403/biz_access`。默认首页分流：`/` → `/business`，由**全局守卫**在 verify 就绪后按 `agent_assistant` 落到 chatbot 或 host；直链 `/business/host` 不拦截。`/business` 节点不能用 `redirect`（匹配阶段鉴权未回）也不能用 `beforeEnter`（站内跳转记录复用会被跳过，停在无组件的 `/business`）。守卫会归一化尾斜杠，避免 `/business/` 放行到无组件路由。`/403/:id` 仅在该权限确实缺失时停留，已具备时才弹回 `/` 并保留 query。账号管理顶栏的账单集合在 `src/views/index.ts` 汇总为 `billViews = [...bill, ...prepaidBill]`（对齐 `businessViews`）；`router/index.ts` 注册 `...billViews`。预付费 route-config 用绝对路径 `/bill/prepaid`。
 - `src/router/meta.ts` — 路由 meta 配置类 `Meta`；面包屑用 `layout.breadcrumb.show`。
 - `src/router/utils/action.ts` — `routerAction`（跳转唯一入口，见下）。
 - `src/router/utils/history-storage.ts` — 自定义历史栈，支撑 `history`/`back` 智能返回。
-- `src/router/module/*` — **老路由配置，已废弃**，迁移到各 `views/<模块>/route-config.ts`，待整体删除。
-- `views/<模块>/route-config.ts` — 去中心化的模块路由定义（当前仓库 11 处）。
+- `src/router/module/*` — **老路由配置，已废弃**，迁移到各 `views/<模块>/route-config.ts`，待整体删除。账号管理顶栏的云账单/旧云账号仍挂在 `module/bill.ts`。
+- `views/<模块>/route-config.ts` — 去中心化的模块路由定义。预付费因与现网 `/bill/*` 并列，path 用绝对路径 `/bill/prepaid`，不是一级视图下的相对 path。
 - `common/menu-service.ts` / `components/layout/menu.vue` — 规则描述的目标菜单方案，**当前仓库尚未落地**（还没有该文件）；菜单是否展示应由此独立控制，而非路由 meta。
 
 ## 关键约定

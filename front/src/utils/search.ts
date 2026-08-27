@@ -348,17 +348,26 @@ export const buildSearchSelectValueBySearchQsCondition = (
  * @param value search-select组件的model值
  * @param field 字段名
  * @param op 查询操作符
- * @returns {RulesItem} 构建search-select场景下的filter-rules，一般用于解决CS、JSON_CONTAINS等查询，保证value的准确性
+ * @returns {RulesItem | null} 多值拆成 or + 多条单值规则；空值返回 null。用于 CS / JSON_CONTAINS 等不能把数组塞进单条 value 的算子。
  */
-export const buildFilterRulesWithSearchSelect = (value: string | string[], field: string, op: QueryRuleOPEnum) => {
-  let filterRules: RulesItem = { field, op, value };
-  if (Array.isArray(value) && value.length > 1) {
-    filterRules = { op: QueryRuleOPEnum.OR, rules: value.map((val) => ({ field, op, value: val })) };
+export const buildFilterRulesWithSearchSelect = (
+  value: string | string[],
+  field: string,
+  op: QueryRuleOPEnum,
+): RulesItem | null => {
+  const keywords = (Array.isArray(value) ? value : [value])
+    .map((val) => (typeof val === 'string' ? val.trim() : val))
+    .filter((val) => val !== '' && val !== undefined && val !== null);
+  if (!keywords.length) {
+    return null;
   }
-  if (Array.isArray(value) && value.length === 1) {
-    filterRules = { field, op, value: value[0] };
+  if (keywords.length === 1) {
+    return { field, op, value: keywords[0] };
   }
-  return filterRules;
+  return {
+    op: QueryRuleOPEnum.OR,
+    rules: keywords.map((val) => ({ field, op, value: val })),
+  };
 };
 
 /**

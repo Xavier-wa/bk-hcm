@@ -138,6 +138,18 @@ export interface AdjustmentItem {
   memo?: string; // 备注信息
 }
 
+// AdjustmentListRow is the list-row overlay of source / push / settle fields.
+// Create/update bodies must not send these fields.
+export interface AdjustmentListRow {
+  id?: string;
+  state?: string;
+  source?: string;
+  source_id?: string;
+  push_status?: string;
+  push_fail_reason?: string;
+  settle_state?: string;
+}
+
 // 账单汇总总金额
 export interface BillsSummarySum {
   count: number;

@@ -2,7 +2,7 @@
   "version": 1,
   "project": "hcm",
   "generatedAt": "2026-07-14T09:49:59.375Z",
-  "updatedAt": "2026-08-26T09:32:35.456Z",
+  "updatedAt": "2026-08-27T09:37:09.988Z",
   "modules": [
     {
       "id": "base",
@@ -35,10 +35,10 @@
       "doc": "modules/base.md",
       "status": "drafted",
       "fingerprint": {
-        "computedAt": "2026-08-26T09:32:17.888Z",
-        "rootHash": "07e0d32295e301b9001f67b136dcbafb473e7983"
+        "computedAt": "2026-08-27T09:37:09.988Z",
+        "rootHash": "01a84ce83e1febc8c39490bcc27596e823d29372"
       },
-      "updatedAt": "2026-08-26T09:32:17.888Z"
+      "updatedAt": "2026-08-27T09:37:09.988Z"
     },
     {
       "id": "component-variant",
@@ -101,10 +101,10 @@
         "auth"
       ],
       "fingerprint": {
-        "computedAt": "2026-08-18T03:15:07.800Z",
-        "rootHash": "62e93c34dbeb5d2e5492e7421016f611b723af76"
+        "computedAt": "2026-08-25T02:07:20.497Z",
+        "rootHash": "100aca3c29abd8a9ab50703187b87d90b36d0783"
       },
-      "updatedAt": "2026-08-18T03:15:07.801Z"
+      "updatedAt": "2026-08-25T02:07:20.497Z"
     },
     {
       "id": "auth",
@@ -142,8 +142,11 @@
       ],
       "doc": "modules/operation-log.md",
       "status": "drafted",
-      "fingerprint": null,
-      "updatedAt": "2026-07-15T04:01:34.819Z"
+      "fingerprint": {
+        "computedAt": "2026-08-27T08:50:53.694Z",
+        "rootHash": "828aa78483ed313e00494055a7ff3a87b5e5fbbc"
+      },
+      "updatedAt": "2026-08-27T08:50:53.694Z"
     },
     {
       "id": "resource",
@@ -256,12 +259,17 @@
       "title": "账单",
       "summary": "账单与账号账单视图。",
       "globs": [
-        "src/views/bill/**"
+        "src/views/bill/**",
+        "src/views/prepaid-bill/**",
+        "src/store/prepaid-bill/**"
       ],
       "doc": "modules/bill.md",
       "status": "drafted",
-      "fingerprint": null,
-      "updatedAt": "2026-07-15T04:01:35.499Z"
+      "fingerprint": {
+        "computedAt": "2026-08-27T08:50:53.753Z",
+        "rootHash": "56ce9c2ea38d51a97cf268e2964039726e61cfed"
+      },
+      "updatedAt": "2026-08-27T08:50:53.753Z"
     },
     {
       "id": "ticket",

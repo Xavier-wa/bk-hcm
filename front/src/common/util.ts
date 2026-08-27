@@ -321,6 +321,14 @@ export function toArray<T>(value: T | T[]): T[] {
   return Array.of(value);
 }
 
+/** 搜索 filter 时间值：RFC3339 带本地偏移，对齐后端 TimeStdFormat（`2006-01-02T15:04:05Z07:00`）。给 `@Column` 的 format / filterRules 用，不要手写 `YYYY-MM-DD HH:mm:ss`。 */
+export function toFilterDateTime(value: unknown) {
+  if (value === null || value === undefined || value === '') return undefined;
+  const parsed = dayjs(value as dayjs.ConfigType);
+  if (!parsed.isValid()) return undefined;
+  return parsed.format('YYYY-MM-DDTHH:mm:ssZ');
+}
+
 export const resolveApiPathByBusinessId = (prefix: string, suffix: string, businessId?: number) => {
   return businessId ? `${prefix}/bizs/${businessId}/${suffix}` : `${prefix}/${suffix}`;
 };

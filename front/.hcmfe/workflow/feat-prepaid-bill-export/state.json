@@ -1,0 +1,161 @@
+{
+  "id": "feat-prepaid-bill-export",
+  "title": "预付费账单查询结果导出",
+  "currentStage": "done",
+  "createdAt": "2026-08-24T11:17:06.843Z",
+  "updatedAt": "2026-08-25T02:27:23.208Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-prepaid-bill-export/prd.md",
+        "kind": "file",
+        "addedAt": "2026-08-24T11:40:52.959Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-prepaid-bill-export/design.md",
+        "kind": "file",
+        "addedAt": "2026-08-24T11:48:07.126Z"
+      },
+      {
+        "ref": "https://www.figma.com/design/un9Rys4jsWtSSjrW1TJkOO/%E8%B5%84%E6%BA%90%E8%BF%90%E8%90%A5?node-id=708-10423",
+        "kind": "url",
+        "addedAt": "2026-08-24T11:48:07.126Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-prepaid-bill-export/api.md",
+        "kind": "file",
+        "addedAt": "2026-08-24T11:55:04.747Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-prepaid-bill-export/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-24T11:59:26.734Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-prepaid-bill-export/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-25T01:54:52.373Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-08-24T11:46:57.036Z",
+      "note": "用户确认 PRD：核算列跟列表不遮蔽；不设 1000 条上限；按钮文案「导出」；使用 ExportToExcelBatchButton。"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-08-24T11:54:09.535Z",
+      "note": "用户确认 Design：用 ExportToExcelBatchButton；按当前筛选导出全部；不设 1000 条上限；核算列不遮蔽；图标 bkhcm-icon-download；文件名「预付费账单」。"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-08-24T11:58:12.241Z",
+      "note": "用户确认 API：复用 prepaid_items/list；limit=500 分页拼装；漏斗不进导出；名称走 store 缓存；不新开导出接口。"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-25T01:53:12.314Z",
+      "note": "用户确认推进全部 4 个需求：coding 完成，进入 test。"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-25T02:26:04.722Z",
+      "note": "用户确认继续推进工作流：文档已收口，test.md 已登记，进入 done。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-08-24T11:17:06.843Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-08-24T11:46:57.036Z",
+      "note": "用户确认 PRD：核算列跟列表不遮蔽；不设 1000 条上限；按钮文案「导出」；使用 ExportToExcelBatchButton。"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-08-24T11:54:09.535Z",
+      "note": "用户确认 Design：用 ExportToExcelBatchButton；按当前筛选导出全部；不设 1000 条上限；核算列不遮蔽；图标 bkhcm-icon-download；文件名「预付费账单」。"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-08-24T11:58:12.241Z",
+      "gitHead": "29544c089974fe5ee0bdfe0371aeece655cf7abd",
+      "note": "用户确认 API：复用 prepaid_items/list；limit=500 分页拼装；漏斗不进导出；名称走 store 缓存；不新开导出接口。"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-25T01:53:12.314Z",
+      "note": "用户确认推进全部 4 个需求：coding 完成，进入 test。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-25T02:26:04.722Z",
+      "note": "用户确认继续推进工作流：文档已收口，test.md 已登记，进入 done。"
+    }
+  ],
+  "requirementId": "req-third-party-prepaid-bill",
+  "branch": "feat-third-party-prepaid-bill",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137371363",
+    "parentId": "1069995598137371319"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "skipped",
+      "at": "2026-08-24T11:39:33.412Z",
+      "note": "用户选 3：拆单时已完成澄清与评估，整段跳过前置节点，直接按 TAPD 正文写 PRD。并确认：列表核算列不遮蔽则导出一致；不设 1000 条上限；使用 ExportToExcelBatchButton。"
+    },
+    "hcm-design-icon-intake": {
+      "status": "completed",
+      "at": "2026-08-24T11:49:10.608Z",
+      "note": "§3.x 已回填：导出按钮用 bkhcm-icon-download（与 ExportToExcelBatchButton showIcon 一致）；bkhcm-icon-export 为备选。"
+    },
+    "hcm-design-comp-intake": {
+      "status": "completed",
+      "at": "2026-08-24T11:49:14.015Z",
+      "note": "§3.y 已回填：导出按钮 adjacent 用 ExportToExcelBatchButton；挂载 page-list 替换 prepaid-bill/index.vue 占位；列从 column.ts 投影为 ExportColumn。"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-25T02:24:41.598Z",
+      "note": "收口无缺口：导出落点已写入 bill.md；touched 模块无 stub/drift。用户本轮明确不走 promotions-review。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-25T02:27:23.208Z",
+      "note": "story 1069995598137371363 final status_14; owner 未变更; parent 1069995598137371319 rollup status_14"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/store/prepaid-bill/index.ts",
+        "src/views/prepaid-bill/children/list/data-list/export-column.ts",
+        "src/views/prepaid-bill/index.vue"
+      ],
+      "contentFingerprint": "16d2a34e498899b57945b3a8df8fe4b503746c20",
+      "codeBaseline": "8dc1f819846ae4a2df21e88f5c79ca1ef5930869",
+      "seatedAt": "2026-08-24T16:52:26.181Z"
+    }
+  }
+}
