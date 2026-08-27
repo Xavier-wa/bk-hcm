@@ -3,6 +3,8 @@
  */
 import type { RouteRecordRaw } from 'vue-router';
 
+export const RESOURCE_ACCOUNT_DETAIL = 'accountDetail';
+
 const resourceInside: RouteRecordRaw[] = [
   {
     path: '/resource/account/add',
@@ -16,7 +18,7 @@ const resourceInside: RouteRecordRaw[] = [
   },
   {
     path: '/resource/account/detail',
-    name: 'accountDetail',
+    name: RESOURCE_ACCOUNT_DETAIL,
     component: () => import('@/views/resource/accountmanage/account-detail'),
     meta: {
       backRouter: -1,

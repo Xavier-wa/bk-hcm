@@ -1,6 +1,6 @@
 import { Form, Input, Select, Button, Radio, Message } from 'bkui-vue';
 import { reactive, defineComponent, ref, watch, onMounted, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
+import routerAction from '@/router/utils/action';
 import { ProjectModel, FormItems } from '@/typings';
 import { CLOUD_TYPE, ACCOUNT_TYPE, BUSINESS_TYPE, SITE_TYPE, DESC_ACCOUNT } from '@/constants';
 import { VendorEnum } from '@/common/constant';
@@ -10,6 +10,7 @@ import { useAccountStore } from '@/store';
 import './index.scss';
 import { ACCOUNT_TYPE_ENUM } from '@/constants/account';
 import { MENU_SERVICE_TICKET_MANAGEMENT } from '@/constants/menu-symbol';
+import { RESOURCE_ACCOUNT_DETAIL } from '@/router/module/resource-inside';
 
 const { FormItem } = Form;
 const { Option } = Select;
@@ -19,7 +20,6 @@ export default defineComponent({
   setup() {
     const { t } = useI18n();
     const accountStore = useAccountStore();
-    const router = useRouter();
 
     const initProjectModel: ProjectModel = {
       id: 0,
@@ -201,16 +201,36 @@ export default defineComponent({
           });
         }
 
-        await accountStore.applyAccount(params);
-        Message({
-          message: t('提交申请成功'),
-          theme: 'success',
-        });
-        // router.go(-1);
-        router.push({
-          name: MENU_SERVICE_TICKET_MANAGEMENT, // 返回审批列表
-        });
+        const result = await accountStore.applyAccount(params);
+        // 登记账号类型直接创建账号，不生成审批单，跳转到详情页
+        if (projectModel.type === 'registration') {
+          Message({
+            message: t('创建账号成功'),
+            theme: 'success',
+          });
+          routerAction.redirect({
+            name: RESOURCE_ACCOUNT_DETAIL,
+            query: {
+              accountId: result.data.id,
+              isDetail: 'true',
+            },
+          });
+        } else {
+          Message({
+            message: t('提交申请成功'),
+            theme: 'success',
+          });
+          routerAction.redirect({
+            name: MENU_SERVICE_TICKET_MANAGEMENT, // 返回审批列表
+          });
+        }
       } catch (error: any) {
+        if (projectModel.type === 'registration') {
+          Message({
+            message: t('创建账号失败'),
+            theme: 'error',
+          });
+        }
         console.error(error);
       } finally {
         submitLoading.value = false;
@@ -643,49 +663,6 @@ export default defineComponent({
       ],
     };
 
-    watch(
-      () => projectModel.type,
-      (val, oldValue) => {
-        formRef.value?.clearValidate(); // 切换清除表单检验
-        if (val === 'registration') {
-          // 登记账号
-          formList?.forEach((e) => {
-            if (optionalRequired.includes(e.property)) {
-              e.required = true;
-            }
-            if (projectModel.vendor === 'aws' && ['secretId', 'secretKey'].includes(e.property)) {
-              e.hidden = true;
-            }
-          });
-        } else if (val === 'resource') {
-          // 资源账号
-          formList?.forEach((e) => {
-            if (e.label && requiredData.includes(e.property)) {
-              // 资源账号必填项
-              e.required = true;
-            }
-          });
-        } else {
-          formList?.forEach((e) => {
-            if (projectModel.vendor === 'aws' && ['secretId', 'secretKey'].includes(e.property)) {
-              e.hidden = false;
-            }
-          });
-        }
-
-        // 安全审计账号暂不支持腾讯云
-        if (val === ACCOUNT_TYPE_ENUM.SECURITY_AUDIT && projectModel.vendor === VendorEnum.TCLOUD) {
-          projectModel.vendor = VendorEnum.AWS;
-        }
-
-        // 触发一次云厂商变更，因展示字段需要更新
-        if (oldValue !== undefined && val !== oldValue) {
-          changeCloud(projectModel.vendor);
-        }
-      },
-      { immediate: true },
-    );
-
     const formList = reactive<FormItems[]>([
       {
         label: t('账号类型'),
@@ -815,6 +792,49 @@ export default defineComponent({
         ),
       },
     ]);
+
+    watch(
+      () => projectModel.type,
+      (val, oldValue) => {
+        formRef.value?.clearValidate(); // 切换清除表单检验
+        if (val === 'registration') {
+          // 登记账号
+          formList?.forEach((e) => {
+            if (optionalRequired.includes(e.property)) {
+              e.required = true;
+            }
+            if (projectModel.vendor === 'aws' && ['secretId', 'secretKey'].includes(e.property)) {
+              e.hidden = true;
+            }
+          });
+        } else if (val === 'resource') {
+          // 资源账号
+          formList?.forEach((e) => {
+            if (e.label && requiredData.includes(e.property)) {
+              // 资源账号必填项
+              e.required = true;
+            }
+          });
+        } else {
+          formList?.forEach((e) => {
+            if (projectModel.vendor === 'aws' && ['secretId', 'secretKey'].includes(e.property)) {
+              e.hidden = false;
+            }
+          });
+        }
+
+        // 安全审计账号暂不支持腾讯云
+        if (val === ACCOUNT_TYPE_ENUM.SECURITY_AUDIT && projectModel.vendor === VendorEnum.TCLOUD) {
+          projectModel.vendor = VendorEnum.AWS;
+        }
+
+        // 触发一次云厂商变更，因展示字段需要更新
+        if (oldValue !== undefined && val !== oldValue) {
+          changeCloud(projectModel.vendor);
+        }
+      },
+      { immediate: true },
+    );
 
     return () => (
       <div class='form-container flex-row justify-content-between'>
