@@ -11,7 +11,7 @@ export const useWhereAmI = (): {
   isServicePage: boolean;
   isSchemePage: boolean;
   isZiyanscr: boolean;
-  getBusinessApiPath: () => string;
+  getBusinessApiPath: (bizId?: number | string) => string;
   getBizsId: () => number;
 } => {
   const route = useRoute();
@@ -36,10 +36,18 @@ export const useWhereAmI = (): {
   };
 
   /**
+   * 页面数据自带业务归属时（如单据详情页的单据所属业务），必须传入 bizId。
+   * 全局业务由业务选择器异步初始化，页面挂载阶段读取会因时序竞态拿到其它业务，导致跨业务操作。
+   * 传入的 bizId 取不到有效值时（如 URL 未携带对应参数）回退到全局业务，避免拼出非法路径。
+   *
+   * The bizId parameter specifies which business the API path belongs to, defaults to the global business.
    * @returns 业务下需要拼接的 API 路径
    */
-  const getBusinessApiPath = () => {
-    return senario.value === Senarios.business ? `bizs/${getBizsId()}/` : '';
+  const getBusinessApiPath = (bizId?: number | string) => {
+    if (senario.value !== Senarios.business) return '';
+    const pageBizId = Number(bizId);
+    const validBizId = Number.isFinite(pageBizId) && pageBizId > 0 ? pageBizId : getBizsId();
+    return `bizs/${validBizId}/`;
   };
 
   return {

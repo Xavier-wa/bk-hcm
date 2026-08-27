@@ -9,7 +9,7 @@ import { useAccountStore } from '@/store';
 import { localStorageActions } from '@/common/util';
 import { getFavoriteList, useFavorite } from '@/hooks/useFavorite';
 import { Button, Dialog, Exception } from 'bkui-vue';
-import { GLOBAL_BIZS_KEY, GLOBAL_BIZS_VERSION, GLOBAL_BIZS_VERSION_KEY } from '@/common/constant';
+import { GLOBAL_BIZS_KEY, PAGE_BIZ_KEY } from '@/common/constant';
 
 export default defineComponent({
   name: 'BusinessSelector',
@@ -44,30 +44,32 @@ export default defineComponent({
       // @ts-ignore
       // 如果当前页面为详情页, 则当业务id切换时, 跳转至对应资源的列表页
       const isBusinessDetail = route.name?.includes?.('BusinessDetail');
-      const query = { ...route.query, ...globalBizsQueryParams };
+      // 声明了页面业务的页面（如单据详情），其业务由页面数据决定，与切换后的业务必然冲突，需离开该页面回到所属列表页
+      const activeKey = route.meta.activeKey as string;
+      const isPageBizConflict = Boolean(route.query[PAGE_BIZ_KEY]) && Boolean(activeKey);
+      const query: Record<string, any> = { ...route.query, ...globalBizsQueryParams };
+      // 页面业务属于原页面数据的身份，不应带到新业务的列表页
+      if (isPageBizConflict) delete query[PAGE_BIZ_KEY];
+
       if (isBusinessDetail) {
         router.push({ path: route.path.split('/detail')[0], query });
+      } else if (isPageBizConflict) {
+        router.push({ name: activeKey, query });
       } else {
         await router.push({ path: (route.meta.rootRoutePath as string) || route.path, query });
         props.reload();
       }
     };
 
-    // 获取上一次存储的全局业务id（先从url中获取全局业务id, 如果没有, 则从localStorage中获取, 如果还是没有, 则返回undefined）
+    // 获取本次应生效的全局业务id
+    // 优先级：页面自身声明的业务 > url 中的业务 > localStorage 中的业务，都取不到时返回 undefined
     const getGlobalBizsId = () => {
-      // 获取local storage中的全局业务id版本号，如果版本号不一致，则清空url、local storage中的全局业务id，并更新版本号
-      const lastBizsVersion = localStorageActions.get(GLOBAL_BIZS_VERSION_KEY, (value) => value);
-
-      if (GLOBAL_BIZS_VERSION !== lastBizsVersion) {
-        localStorageActions.remove(GLOBAL_BIZS_KEY);
-        localStorageActions.set(GLOBAL_BIZS_VERSION_KEY, GLOBAL_BIZS_VERSION);
-        return;
-      }
-
+      // 页面业务是页面数据的固有身份（如单据所属业务），优先级最高，避免外链进入时顶部业务与页面数据不一致
+      const pageBizs = +route.query[PAGE_BIZ_KEY];
       const lastUrlBizs = +route.query[GLOBAL_BIZS_KEY];
       const lastLocalBizs = +localStorageActions.get(GLOBAL_BIZS_KEY, (value) => value);
 
-      return lastUrlBizs || lastLocalBizs;
+      return pageBizs || lastUrlBizs || lastLocalBizs;
     };
 
     const fetchBusinessList = async () => {

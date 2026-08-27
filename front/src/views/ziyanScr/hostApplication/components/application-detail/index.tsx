@@ -1,9 +1,9 @@
 import { Ref, defineComponent, ref, computed, onUnmounted, reactive, onBeforeMount, provide, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import './index.scss';
 
 import { isEqual } from 'lodash';
-import { Senarios, useWhereAmI } from '@/hooks/useWhereAmI';
+import { useWhereAmI } from '@/hooks/useWhereAmI';
 import { useCvmDeviceStore, type ICvmDevicetypeItem } from '@/store/cvm/device';
 import { useRequireTypes } from '@/views/ziyanScr/hooks/use-require-types';
 import useColumns from '@/views/resource/resource-manage/hooks/use-scr-columns';
@@ -11,8 +11,7 @@ import useSelection from '@/views/resource/resource-manage/hooks/use-selection';
 import { useUserStore } from '@/store';
 import { timeFormatter } from '@/common/util';
 import { getBusinessNameById } from '@/views/ziyanScr/host-recycle/field-dictionary';
-import { GLOBAL_BIZS_KEY, VendorEnum } from '@/common/constant';
-import { MENU_SERVICE_HOST_APPLICATION, MENU_BUSINESS_TICKET_MANAGEMENT } from '@/constants/menu-symbol';
+import { PAGE_BIZ_KEY, VendorEnum } from '@/common/constant';
 import http from '@/http';
 
 import { Button, Table, Message, PopConfirm, OverflowTitle } from 'bkui-vue';
@@ -44,23 +43,17 @@ export default defineComponent({
   },
   setup() {
     const route = useRoute();
-    const router = useRouter();
     const userStore = useUserStore();
     const dissolveQuotaStore = useDissolveQuotaStore();
 
-    const { whereAmI, getBusinessApiPath, getBizsId, isBusinessPage } = useWhereAmI();
+    const { getBusinessApiPath, getBizsId, isBusinessPage } = useWhereAmI();
 
     const cvmDeviceStore = useCvmDeviceStore();
 
-    const backRoute = computed(() => {
-      if (whereAmI.value === Senarios.business) {
-        return {
-          name: MENU_BUSINESS_TICKET_MANAGEMENT,
-          query: { [GLOBAL_BIZS_KEY]: detail.value?.bk_biz_id, type: 'host_apply' },
-        };
-      }
-      return { name: MENU_SERVICE_HOST_APPLICATION };
-    });
+    // 单据所属业务，是本页面唯一可信的业务身份，页面内所有接口都以它为准；
+    // 存量入口未携带该参数时回退到全局业务，保持改动前的行为
+    const orderBizId = computed(() => Number(route.query[PAGE_BIZ_KEY]) || getBizsId());
+    const getOrderApiPath = () => getBusinessApiPath(orderBizId.value);
 
     const isUpgradeCvm = computed(() => route.query.resource_type === ScrResourceType.UPGRADECVM);
 
@@ -267,14 +260,11 @@ export default defineComponent({
     const getDemandDetail = async () => {
       if (detail.value.stage === 'AUDIT') return;
       const orderId = route.params.id;
-      const { data } = await http.post(
-        `${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/${getBusinessApiPath()}task/findmany/apply`,
-        {
-          order_id: [+orderId],
-          bk_biz_id: [detail.value.bk_biz_id],
-          page: { start: 0, limit: 500 },
-        },
-      );
+      const { data } = await http.post(`${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/${getOrderApiPath()}task/findmany/apply`, {
+        order_id: [+orderId],
+        bk_biz_id: [detail.value.bk_biz_id],
+        page: { start: 0, limit: 500 },
+      });
       detail.value.info = data.info;
       const list = data?.info || [];
       list.forEach((item: any) => {
@@ -300,7 +290,7 @@ export default defineComponent({
     const getOrderDetail = async (orderId: string) => {
       orderId = orderId || (route.params.id as string);
       const { data } = await http.post(
-        `${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/${getBusinessApiPath()}task/get/apply/ticket`,
+        `${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/${getOrderApiPath()}task/get/apply/ticket`,
         { order_id: +orderId },
       );
       detail.value = data;
@@ -318,7 +308,7 @@ export default defineComponent({
         page: { start: 0, limit: 500, count: false },
       };
       const { data } = await http.post(
-        `${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/${getBusinessApiPath()}task/findmany/apply/device`,
+        `${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/${getOrderApiPath()}task/findmany/apply/device`,
         params,
       );
       return Promise.resolve().then(() => {
@@ -333,10 +323,9 @@ export default defineComponent({
       itsmTicketAuditOptions.isLoading = true;
       try {
         const order_id = Number(route.params.id);
-        const bk_biz_id = Number(route.query.bkBizId);
         const res: IQueryResData<IItsmTicketAudit> = await http.post(
-          `/api/v1/woa/${getBusinessApiPath()}task/get/apply/ticket/audit`,
-          { order_id, bk_biz_id },
+          `/api/v1/woa/${getOrderApiPath()}task/get/apply/ticket/audit`,
+          { order_id, bk_biz_id: orderBizId.value },
         );
         itsmTicketAuditOptions.data = res.data;
       } catch (error) {
@@ -361,7 +350,7 @@ export default defineComponent({
       const { order_id } = itsmTicketAuditOptions.data;
       isCancelItsmTicketLoading.value = true;
       try {
-        await http.post(`/api/v1/woa/${getBusinessApiPath()}task/apply/ticket/itsm_audit/cancel`, { order_id });
+        await http.post(`/api/v1/woa/${getOrderApiPath()}task/apply/ticket/itsm_audit/cancel`, { order_id });
         Message({ theme: 'success', message: '撤单成功' });
         getItsmTicketAudit();
       } catch (error) {
@@ -371,17 +360,7 @@ export default defineComponent({
       }
     };
 
-    const validateBizId = () => {
-      const globalBizId = getBizsId();
-      const orderBizId = Number(route.query.bkBizId);
-      return globalBizId === orderBizId;
-    };
-
     onBeforeMount(async () => {
-      if (whereAmI.value === Senarios.business && !validateBizId()) {
-        router.replace(backRoute.value);
-        return;
-      }
       await getOrderDetail(route.params.id as string);
       if (!isUpgradeCvm.value) {
         getDemandDetail();
@@ -389,9 +368,8 @@ export default defineComponent({
       }
 
       if (isDissolve.value) {
-        const orderBizId = Number(route.query.bkBizId);
-        dissolveSummary.value = await dissolveQuotaStore.getCpuCoreSummary(orderBizId, {
-          bk_biz_id: isBusinessPage ? undefined : orderBizId,
+        dissolveSummary.value = await dissolveQuotaStore.getCpuCoreSummary(orderBizId.value, {
+          bk_biz_id: isBusinessPage ? undefined : orderBizId.value,
         });
       }
     });

@@ -1,9 +1,9 @@
 import { ConstantMapRecord } from '@/typings';
 
-// 全局业务id
+// 全局业务id，表示用户当前所处业务，随业务选择器变化
 export const GLOBAL_BIZS_KEY = 'bizs';
-export const GLOBAL_BIZS_VERSION = '1.6.3';
-export const GLOBAL_BIZS_VERSION_KEY = 'bizs_version';
+// 页面业务id，表示页面数据自身所属业务（如单据所属业务），是页面的固有身份，不随业务选择器变化
+export const PAGE_BIZ_KEY = 'bkBizId';
 
 // 账号校验接口类型
 export enum AccountVerifyEnum {

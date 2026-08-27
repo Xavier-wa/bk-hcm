@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { h, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, h, onUnmounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 
 import { useUserStore } from '@/store';
 import { useWhereAmI } from '@/hooks/useWhereAmI';
+import { PAGE_BIZ_KEY } from '@/common/constant';
 import useTimeoutPoll from '@/hooks/use-timeout-poll';
 import { type ITimelineItem, ITimelineNodeType } from '@/views/ziyanScr/components/ticket-audit/typings';
 import http from '@/http';
@@ -42,26 +44,30 @@ const props = defineProps<{ data: IItsmTicketAudit; isLoading: boolean; refreshA
 
 const userStore = useUserStore();
 const { t } = useI18n();
+const route = useRoute();
 const { getBusinessApiPath } = useWhereAmI();
 
+// 审批必须落在单据所属业务下，不能取顶部业务选择器的全局业务，否则会出现跨业务审批
+const orderBizId = computed(() => Number(route.query[PAGE_BIZ_KEY]));
+
 const getDefaultData = (): Partial<IItsmTicketAudit> => ({ itsm_ticket_link: '', logs: [], current_steps: [] });
-const data = reactive(getDefaultData());
+const auditData = reactive(getDefaultData());
 const renderLogs = ref<ITimelineItem[]>([]);
 
 // 审批操作
 const approvalLoading = ref(false);
 let approvalLoadingTimer: ReturnType<typeof setTimeout> | null = null;
 const approvalItsmAudit = async ({ approval, remark }: { approval: boolean; remark: string }) => {
-  const { order_id } = data;
-  const { state_id } = data.current_steps[0];
+  const { order_id } = auditData;
+  const { state_id } = auditData.current_steps[0];
   const params = { order_id, state_id, approval, remark };
 
-  await http.post(`/api/v1/woa/${getBusinessApiPath()}task/audit/apply/ticket`, params);
+  await http.post(`/api/v1/woa/${getBusinessApiPath(orderBizId.value)}task/audit/apply/ticket`, params);
 
   Message({ theme: 'success', message: t('请求已提交，5s后自动刷新') });
   // 5s后刷新itsm审批流信息
   approvalLoading.value = true;
-  renderLogs.value = getRenderLogs(data as IItsmTicketAudit); // 重新渲染timeline
+  renderLogs.value = getRenderLogs(auditData as IItsmTicketAudit); // 重新渲染timeline
   approvalLoadingTimer = setTimeout(() => {
     approvalLoading.value = false;
     props.refreshApi();
@@ -125,7 +131,7 @@ watch(
   () => props.data,
   (val) => {
     if (val) {
-      Object.assign(data, val);
+      Object.assign(auditData, val);
       // 构建timeline节点
       renderLogs.value = getRenderLogs(val);
       // 如果单据处于处理中(RUNNING)状态, 创建定时任务(30s刷新一次, 最多刷新60次)
@@ -133,7 +139,7 @@ watch(
         refreshTask.resume();
       }
     } else {
-      Object.assign(data, getDefaultData());
+      Object.assign(auditData, getDefaultData());
     }
   },
 );
@@ -157,16 +163,16 @@ onUnmounted(() => {
     class="itsm-ticket-audit"
     :title="t('ITSM平台审批')"
     :loading="isLoading"
-    :ticket-link="data.itsm_ticket_link"
+    :ticket-link="auditData.itsm_ticket_link"
     :logs="renderLogs"
     :copy-text="t('复制ITSM审批单')"
   >
     <template #tools>
       <bk-popover
         v-if="
-          data.status === 'RUNNING' &&
-          data.current_steps?.[0]?.processors.includes(userStore.username) &&
-          !data.current_steps?.[0]?.processors_auth[userStore.username]
+          auditData.status === 'RUNNING' &&
+          auditData.current_steps?.[0]?.processors.includes(userStore.username) &&
+          !auditData.current_steps?.[0]?.processors_auth[userStore.username]
         "
         max-width="270"
         placement="top"

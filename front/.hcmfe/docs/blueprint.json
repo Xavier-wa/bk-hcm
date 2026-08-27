@@ -197,10 +197,10 @@
         "resource"
       ],
       "fingerprint": {
-        "computedAt": "2026-08-19T08:43:32.068Z",
-        "rootHash": "cfa0134f216a5885ee6aff5f3b01040f412f4139"
+        "computedAt": "2026-08-26T02:49:01.209Z",
+        "rootHash": "c5c6efc949992273c735f8d0b7a31551da5c88fd"
       },
-      "updatedAt": "2026-08-19T08:43:32.068Z"
+      "updatedAt": "2026-08-26T02:49:01.209Z"
     },
     {
       "id": "service",
@@ -398,8 +398,11 @@
       ],
       "doc": "modules/app-shell.md",
       "status": "drafted",
-      "fingerprint": null,
-      "updatedAt": "2026-07-15T04:01:36.391Z"
+      "fingerprint": {
+        "computedAt": "2026-08-26T02:49:01.258Z",
+        "rootHash": "60dc935543baf3fca15e3057c00b26542442fa01"
+      },
+      "updatedAt": "2026-08-26T02:49:01.258Z"
     },
     {
       "id": "model",

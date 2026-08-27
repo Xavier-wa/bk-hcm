@@ -14,6 +14,7 @@ import { Message } from 'bkui-vue';
 import http from '@/http';
 import { useWhereAmI } from '@/hooks/useWhereAmI';
 import { timeFormatter } from '@/common/util';
+import { PAGE_BIZ_KEY } from '@/common/constant';
 
 export default defineComponent({
   components: {
@@ -21,16 +22,20 @@ export default defineComponent({
   },
   setup() {
     const route = useRoute();
-    const { getBusinessApiPath } = useWhereAmI();
+    const { getBusinessApiPath, getBizsId } = useWhereAmI();
     const billBaseInfo = ref<any>({});
     const page = ref({
       start: 0,
       limit: 10,
       enable_count: false,
     });
+    // 单据所属业务，是本页面唯一可信的业务身份，页面内所有接口都以它为准；
+    // 存量入口未携带该参数时回退到全局业务，保持改动前的行为
+    const orderBizId = computed(() => Number(route.query[PAGE_BIZ_KEY]) || getBizsId());
+    const getOrderApiPath = () => getBusinessApiPath(orderBizId.value);
     const requestParams = computed(() => {
       return {
-        bk_biz_id: [+route.query.bkBizId],
+        bk_biz_id: [orderBizId.value],
         suborder_id: [route.query.suborderId],
         page: page.value,
       };
@@ -40,7 +45,7 @@ export default defineComponent({
     const loadOrders = async () => {
       try {
         const data = await http
-          .post(getEntirePath(`${getBusinessApiPath()}task/findmany/recycle/order`), requestParams.value)
+          .post(getEntirePath(`${getOrderApiPath()}task/findmany/recycle/order`), requestParams.value)
           .then((res: any) => res.data);
 
         const orders = data?.info || [{}];
@@ -70,7 +75,7 @@ export default defineComponent({
       });
     };
     const fetchRetryOrder = async () => {
-      const res = await http.post(getEntirePath(`${getBusinessApiPath()}task/start/recycle/order`), {
+      const res = await http.post(getEntirePath(`${getOrderApiPath()}task/start/recycle/order`), {
         suborder_id: requestParams.value.suborder_id,
       });
 
@@ -80,7 +85,7 @@ export default defineComponent({
       }
     };
     const fetchStopOrder = async () => {
-      const res = await http.post(getEntirePath(`${getBusinessApiPath()}task/terminate/recycle/order`), {
+      const res = await http.post(getEntirePath(`${getOrderApiPath()}task/terminate/recycle/order`), {
         suborder_id: requestParams.value.suborder_id,
       });
 
@@ -90,7 +95,7 @@ export default defineComponent({
       }
     };
     const fetchSubmitOrder = async () => {
-      const res = await http.post(getEntirePath(`${getBusinessApiPath()}task/revise/recycle/order`), {
+      const res = await http.post(getEntirePath(`${getOrderApiPath()}task/revise/recycle/order`), {
         suborder_id: requestParams.value.suborder_id,
       });
 
@@ -157,7 +162,7 @@ export default defineComponent({
     const remark = ref('');
     const admins = ref(['dommyzhang', 'forestchen']);
     const fetchAuditOrder = async (approval: boolean) => {
-      const res = await http.post(getEntirePath(`${getBusinessApiPath()}task/audit/recycle/order`), {
+      const res = await http.post(getEntirePath(`${getOrderApiPath()}task/audit/recycle/order`), {
         suborder_id: requestParams.value.suborder_id,
         approval,
         remark,
@@ -218,7 +223,7 @@ export default defineComponent({
       },
       scrConfig: () => {
         return {
-          url: `/api/v1/woa/${getBusinessApiPath()}task/findmany/recycle/host`,
+          url: `/api/v1/woa/${getOrderApiPath()}task/findmany/recycle/host`,
           payload: {
             ...requestParams.value,
           },
@@ -229,7 +234,7 @@ export default defineComponent({
       return selections.value.map((item) => item.ip).join('\n');
     });
     const exportToExcel = async () => {
-      const res = await http.post(getEntirePath(`${getBusinessApiPath()}task/findmany/recycle/host`), {
+      const res = await http.post(getEntirePath(`${getOrderApiPath()}task/findmany/recycle/host`), {
         bk_biz_id: requestParams.value.bk_biz_id,
         suborder_id: requestParams.value.suborder_id,
         page: {

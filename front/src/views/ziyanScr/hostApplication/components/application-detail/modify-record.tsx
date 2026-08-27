@@ -122,7 +122,9 @@ export default defineComponent({
     };
     const fetchRecord = async () => {
       const res = await http.post(
-        `${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/${getBusinessApiPath()}task/find/apply/record/modify`,
+        `${BK_HCM_AJAX_URL_PREFIX}/api/v1/woa/${getBusinessApiPath(
+          props.showObj.bkBizId,
+        )}task/find/apply/record/modify`,
         {
           suborder_id: [props.showObj.suborderId],
           status: isBusinessPage ? [1] : undefined,

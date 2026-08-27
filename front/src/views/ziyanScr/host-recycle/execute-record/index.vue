@@ -32,7 +32,8 @@ const { CommonTable, getListData } = useTable({
       payload: {
         ...requestParams.value,
       },
-      url: `/api/v1/woa/${getBusinessApiPath()}task/findmany/recycle/detect/step`,
+      // 以数据自身所属业务为准，避免顶部业务与单据业务不一致时查到其它业务的数据
+      url: `/api/v1/woa/${getBusinessApiPath(props.dataInfo.bk_biz_id)}task/findmany/recycle/detect/step`,
     };
   },
 });
