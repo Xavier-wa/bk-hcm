@@ -3,6 +3,7 @@ import type { PaginationType } from '@/typings';
 import type { ModelPropertyColumn } from '@/model/typings';
 import type { IDissolveOverview } from '@/store/dissolve/quota';
 import { useBusinessGlobalStore } from '@/store/business-global';
+import { UNKNOWN_BIZ_ID } from '@/views/dissolve/common/unknown-biz';
 import { ref, computed, h } from 'vue';
 import usePage from '@/hooks/use-page';
 import useTableSettings from '@/hooks/use-table-settings';
@@ -76,6 +77,10 @@ const sortedList = computed(() => {
 const isSummaryRow = (row?: Record<string, any>) => row?.bk_biz_id === -1;
 
 const isBizClickable = (row: IDissolveOverview) => {
+  if (isSummaryRow(row)) return false;
+  // "未知"业务（bk_biz_id === 0）可点击，在 businessFullList 中的正常业务可点击
+  // 不在列表中且非 0 的行（显示 --）不可点击
+  if (row.bk_biz_id === UNKNOWN_BIZ_ID) return true;
   return businessGlobalStore.businessFullList.some((item) => item.id === row.bk_biz_id);
 };
 

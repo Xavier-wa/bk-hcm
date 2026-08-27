@@ -1,0 +1,23 @@
+{
+  "id": "req-feat-recycle-biz-unknown-detail",
+  "title": "机房裁撤总览-业务名称未知数据支持显示及明细跳转",
+  "createdAt": "2026-07-28T08:35:47.314Z",
+  "updatedAt": "2026-07-28T08:35:55.636Z",
+  "external": {
+    "tapd": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598136403677"
+  },
+  "iterations": [
+    {
+      "wfId": "feat-recycle-biz-unknown-detail",
+      "status": "prd",
+      "branch": "feat-recycle-biz-unknown-detail",
+      "title": "机房裁撤总览-业务名称未知数据支持显示及明细跳转",
+      "createdAt": "2026-07-28T08:35:55.274Z"
+    }
+  ],
+  "aggregatedArtifacts": {},
+  "codeScope": {
+    "globs": [],
+    "autoLearned": true
+  }
+}

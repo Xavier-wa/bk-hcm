@@ -2,6 +2,8 @@
 import { ref, computed, inject, type Ref, watch } from 'vue';
 import type { ModelPropertySearch } from '@/model/typings';
 import type { IDissolveProjectCycle } from '@/store/dissolve/quota';
+import { useBusinessGlobalStore } from '@/store/business-global';
+import { UNKNOWN_BIZ_OPTION } from '@/views/dissolve/common/unknown-biz';
 import GridContainer from '@/components/layout/grid-container/grid-container.vue';
 import GridItemFormElement from '@/components/layout/grid-container/grid-item-form-element.vue';
 import GridItem from '@/components/layout/grid-container/grid-item.vue';
@@ -24,6 +26,11 @@ const formValues = ref<Record<string, any>>({});
 // 从父组件注入裁撤配置和项目类型列表
 const dissolveProjects = inject<Ref<IDissolveProjectCycle[]>>('dissolveProjects', ref([]));
 const projectTypeList = inject<Ref<Array<{ value: number; label: string }>>>('projectTypeList', ref([]));
+
+const businessGlobalStore = useBusinessGlobalStore();
+
+// 业务名称下拉选项：授权业务 + "未知"（bk_biz_id === 0 的数据行）
+const bizOptions = computed(() => [...businessGlobalStore.businessAuthorizedList, UNKNOWN_BIZ_OPTION]);
 
 // 从裁撤配置中聚合所有已配置的项目（去重），不再和裁撤时间联动
 const projectTypeOptions = computed(() => {
@@ -87,6 +94,7 @@ watch(
           show-all
           all-option-id="all"
         />
+        <hcm-search-business v-else-if="field.id === 'bk_biz_ids'" v-model="formValues[field.id]" :data="bizOptions" />
         <component
           :is="`hcm-search-${field.type}`"
           v-else

@@ -77,33 +77,6 @@ const emit = defineEmits<{
   border-radius: 4px;
   transition: background 0.15s;
 
-  &:hover {
-    background: var(--sidebar-item-hover);
-
-    .session-actions {
-      display: flex;
-    }
-
-    &.is-pinned-area .session-pin-icon {
-      display: none;
-    }
-  }
-
-  &.active {
-    background: var(--sidebar-item-hover);
-  }
-
-  &.is-pinned-area .session-pin-icon {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    font-size: 14px;
-    color: var(--sidebar-text-secondary);
-  }
-
   .session-actions {
     display: none;
     flex-shrink: 0;
@@ -122,6 +95,33 @@ const emit = defineEmits<{
     &:hover {
       background: var(--sidebar-actions-hover);
     }
+  }
+
+  &.is-pinned-area .session-pin-icon {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+    color: var(--sidebar-text-secondary);
+  }
+
+  &:hover {
+    background: var(--sidebar-item-hover);
+
+    .session-actions {
+      display: flex;
+    }
+
+    &.is-pinned-area .session-pin-icon {
+      display: none;
+    }
+  }
+
+  &.active {
+    background: var(--sidebar-item-hover);
   }
 
   // 非编辑态：标题前的小圆点（纯样式，避免额外 DOM 节点）

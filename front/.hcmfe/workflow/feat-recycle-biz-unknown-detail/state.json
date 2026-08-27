@@ -1,0 +1,122 @@
+{
+  "id": "feat-recycle-biz-unknown-detail",
+  "title": "机房裁撤总览-业务名称未知数据支持显示及明细跳转",
+  "currentStage": "done",
+  "createdAt": "2026-07-28T08:35:55.274Z",
+  "updatedAt": "2026-07-28T09:08:21.632Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-recycle-biz-unknown-detail/prd.md",
+        "kind": "file",
+        "addedAt": "2026-07-28T08:45:11.999Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-recycle-biz-unknown-detail/design.md",
+        "kind": "file",
+        "addedAt": "2026-07-28T08:45:44.463Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-recycle-biz-unknown-detail/api.md",
+        "kind": "file",
+        "addedAt": "2026-07-28T08:46:11.501Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-recycle-biz-unknown-detail/coding.md",
+        "kind": "file",
+        "addedAt": "2026-07-28T08:49:34.432Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-recycle-biz-unknown-detail/test.md",
+        "kind": "file",
+        "addedAt": "2026-07-28T08:50:27.758Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-07-28T08:45:18.989Z",
+      "note": "PRD 已完成，包含完整的用户故事、验收标准和业务规则。需求已澄清并回写 TAPD。"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-07-28T08:45:48.929Z",
+      "note": "Design 已完成（精简豁免版）。无新设计稿、无新图标、无新组件。两个 post-node icon-intake 和 comp-intake 均 skip。"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-07-28T08:46:17.012Z",
+      "note": "API 已完成。不新增接口，仅约定 bk_biz_id=0 作为未知业务标识。"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-07-28T08:49:49.214Z",
+      "note": "Coding 已完成。修改了 5 个文件：business-value.vue(显示未知)、data-list.vue(可点击)、index.vue(传bk_biz_id=0)、condition.ts(extraOptions)、business-selector.vue(支持extraOptions)。Lint 全部通过。Drift check 无问题。"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-07-28T09:07:55.007Z",
+      "note": "Test 已完成。编写了 P0/P1/P2 共 12 个测试用例 + 回归测试清单 + 已知风险说明。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-07-28T08:35:55.274Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-07-28T08:45:18.989Z",
+      "note": "PRD 已完成，包含完整的用户故事、验收标准和业务规则。需求已澄清并回写 TAPD。"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-07-28T08:45:48.929Z",
+      "note": "Design 已完成（精简豁免版）。无新设计稿、无新图标、无新组件。两个 post-node icon-intake 和 comp-intake 均 skip。"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-07-28T08:46:17.012Z",
+      "note": "API 已完成。不新增接口，仅约定 bk_biz_id=0 作为未知业务标识。"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-07-28T08:49:49.214Z",
+      "note": "Coding 已完成。修改了 5 个文件：business-value.vue(显示未知)、data-list.vue(可点击)、index.vue(传bk_biz_id=0)、condition.ts(extraOptions)、business-selector.vue(支持extraOptions)。Lint 全部通过。Drift check 无问题。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-07-28T09:07:55.007Z",
+      "note": "Test 已完成。编写了 P0/P1/P2 共 12 个测试用例 + 回归测试清单 + 已知风险说明。"
+    }
+  ],
+  "requirementId": "req-feat-recycle-biz-unknown-detail",
+  "branch": "feat-recycle-biz-unknown-detail",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598136403677"
+  },
+  "nodeRuns": {
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-07-28T09:08:21.631Z",
+      "note": "TAPD 收口完成。单据 1069995598136403677 已从 for_test(status_12) → tested(status_13) → done(status_14)。未改过 owner。"
+    }
+  }
+}
