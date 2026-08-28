@@ -18,7 +18,7 @@
  */
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9
+    SQLVER=0088,HCMVER=v1.9.2.16
 
     Notes:
     1. 新增预付费账单主表 account_bill_prepaid_item
@@ -90,4 +90,4 @@ WHERE `source` = 'manual'
 COMMIT;
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9' AS `hcm_ver`, '9999' AS `sql_ver`;
+SELECT 'v1.9.2.16' AS `hcm_ver`, '0088' AS `sql_ver`;
