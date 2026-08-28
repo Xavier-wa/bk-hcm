@@ -32,6 +32,7 @@ import (
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/validator"
 	mtypes "hcm/pkg/dal/dao/types/meta"
+	cvt "hcm/pkg/tools/converter"
 	"hcm/pkg/tools/times"
 
 	"github.com/shopspring/decimal"
@@ -542,7 +543,9 @@ func (r AdjustAbleDemandsReq) Validate() error {
 
 // AdjustRPDemandReq is adjust resource plan demand request.
 type AdjustRPDemandReq struct {
-	Adjusts []AdjustRPDemandReqElem `json:"adjusts" validate:"required,max=100"`
+	// DemandClass is required when all adjusts are add type without demand_id.
+	DemandClass enumor.DemandClass      `json:"demand_class" validate:"omitempty"`
+	Adjusts     []AdjustRPDemandReqElem `json:"adjusts" validate:"required,max=100"`
 }
 
 // Validate whether AdjustRPDemandReq is valid.
@@ -557,19 +560,43 @@ func (r *AdjustRPDemandReq) Validate() error {
 		}
 	}
 
-	return nil
+	return r.validateDemandClassForAllAdd()
+}
+
+// validateDemandClassForAllAdd 校验整批均为纯新增时，请求级 demand_class 必填。
+func (r *AdjustRPDemandReq) validateDemandClassForAllAdd() error {
+	if len(r.Adjusts) == 0 {
+		return nil
+	}
+
+	allAdd := true
+	for _, adjust := range r.Adjusts {
+		if adjust.AdjustType != enumor.RPDemandAdjustTypeAdd {
+			allAdd = false
+			break
+		}
+	}
+	if !allAdd {
+		return nil
+	}
+
+	if r.DemandClass == "" {
+		return errors.New("demand_class is required when all adjusts are add")
+	}
+
+	return r.DemandClass.Validate()
 }
 
 // AdjustRPDemandReqElem is adjust resource plan demand request element.
 type AdjustRPDemandReqElem struct {
-	DemandID     string                    `json:"demand_id" validate:"required"`
+	DemandID     string                    `json:"demand_id" validate:"omitempty"`
 	CrpDemandID  int64                     `json:"crp_demand_id" validate:"omitempty"`
 	AdjustType   enumor.RPDemandAdjustType `json:"adjust_type" validate:"required"`
 	DemandSource enumor.DemandSource       `json:"demand_source" validate:"omitempty"`
 	OriginalInfo *CreateResPlanDemandReq   `json:"original_info" validate:"omitempty"`
 	UpdatedInfo  *CreateResPlanDemandReq   `json:"updated_info" validate:"omitempty"`
 	ExpectTime   string                    `json:"expect_time" validate:"omitempty"`
-	// DelayOs 用于部分延期，此时仅指定部分的 OS 会被调整
+	// DelayOs 部分延期 OS 数量；本期接口已不再支持通过 delay_os 进行部分延期，字段保留以便后续启用或兼容旧调用。
 	DelayOs *string `json:"delay_os" validate:"omitempty"`
 }
 
@@ -579,45 +606,86 @@ func (e *AdjustRPDemandReqElem) Validate() error {
 		return err
 	}
 
-	if len(e.DemandID) <= 0 {
-		return errors.New("invalid demand id, should be > 0")
-	}
+	return e.validateAdjustTypeFields()
+}
 
-	// 常规修改和加急延期的通用参数校验
-	if e.OriginalInfo == nil {
-		return errors.New("original info of update demand can not be empty")
-	}
-
-	if err := e.OriginalInfo.Validate(); err != nil {
-		return err
-	}
-
-	if e.UpdatedInfo == nil {
-		return errors.New("updated info of update demand can not be empty")
-	}
-
-	if err := e.UpdatedInfo.Validate(); err != nil {
-		return err
-	}
-
+func (e *AdjustRPDemandReqElem) validateAdjustTypeFields() error {
 	switch e.AdjustType {
+	case enumor.RPDemandAdjustTypeAdd:
+		return e.validateAddAdjustFields()
 	case enumor.RPDemandAdjustTypeUpdate:
-		if e.DemandSource != "" {
-			if err := e.DemandSource.Validate(); err != nil {
-				return err
-			}
-		}
+		return e.validateUpdateAdjustFields()
 	case enumor.RPDemandAdjustTypeDelay:
-		if len(e.ExpectTime) == 0 {
-			return errors.New("expect time of delay demand can not be empty")
-		}
-
-		// 全部延期时不需要指定DelayOs，因此不对DelayOs做校验
+		return e.validateDelayAdjustFields()
 	default:
 		return fmt.Errorf("unsupported resource plan demand adjust type: %s", e.AdjustType)
 	}
+}
 
+func (e *AdjustRPDemandReqElem) validateAddAdjustFields() error {
+	if len(e.DemandID) > 0 {
+		return errors.New("demand_id must be empty when adjust_type is add")
+	}
+	if e.OriginalInfo != nil {
+		return errors.New("original_info must be empty when adjust_type is add")
+	}
+	if e.UpdatedInfo == nil {
+		return errors.New("updated info of add demand can not be empty")
+	}
+	if err := e.UpdatedInfo.Validate(); err != nil {
+		return err
+	}
+	return validateRequiredAdjustDemandSource(e.DemandSource)
+}
+
+func (e *AdjustRPDemandReqElem) validateUpdateAdjustFields() error {
+	if len(e.DemandID) == 0 {
+		return errors.New("demand_id is required when adjust_type is update")
+	}
+	if e.OriginalInfo == nil {
+		return errors.New("original info of update demand can not be empty")
+	}
+	if err := e.OriginalInfo.Validate(); err != nil {
+		return err
+	}
+	if e.UpdatedInfo == nil {
+		return errors.New("updated info of update demand can not be empty")
+	}
+	if err := e.UpdatedInfo.Validate(); err != nil {
+		return err
+	}
+	if err := validateRequiredAdjustDemandSource(e.DemandSource); err != nil {
+		return err
+	}
+	return e.validateUpdateAdjustSemantic()
+}
+
+func (e *AdjustRPDemandReqElem) validateDelayAdjustFields() error {
+	if len(e.DemandID) == 0 {
+		return errors.New("demand_id is required when adjust_type is delay")
+	}
+	if len(e.ExpectTime) == 0 {
+		return errors.New("expect time of delay demand can not be empty")
+	}
+	if e.UpdatedInfo != nil {
+		return errors.New("updated_info must be empty when adjust_type is delay")
+	}
+	if e.DelayOs != nil && cvt.PtrToVal(e.DelayOs) != "" {
+		return errors.New("delay_os is not supported")
+	}
+	if e.OriginalInfo != nil {
+		return errors.New("original_info must be empty when adjust_type is delay")
+	}
 	return nil
+}
+
+// validateRequiredAdjustDemandSource validates elem-level demand_source for add/update adjust.
+// Elem-level value is used as default when updated_info.demand_source is omitted.
+func validateRequiredAdjustDemandSource(elemSource enumor.DemandSource) error {
+	if elemSource == "" {
+		return errors.New("demand_source is required when adjust_type is add or update")
+	}
+	return elemSource.Validate()
 }
 
 // CancelRPDemandReq is cancel resource plan demand request.
@@ -692,9 +760,9 @@ func (s SyncCRPDemandReq) Validate() error {
 
 // CalcPenaltyBaseReq is request of calc penalty base.
 type CalcPenaltyBaseReq struct {
-	BkBizIDs []int64                    `json:"bk_biz_ids" validate:"omitempty,max=100"`
+	BkBizIDs []int64 `json:"bk_biz_ids" validate:"omitempty,max=100"`
 	// PenaltyBaseDay is any day of the penalty base week. Format is YYYY-MM-DD.
-	PenaltyBaseDay string                  `json:"penalty_base_day" validate:"required"`
+	PenaltyBaseDay string `json:"penalty_base_day" validate:"required"`
 	// SourceMode 数据源模式: "ticket" / "res_plan_demand"，必填
 	SourceMode enumor.CalcPenaltyBaseSourceMode `json:"source_mode" validate:"required"`
 }
@@ -998,4 +1066,94 @@ func (r *ConfirmBizResPlanDemandsReq) Validate() error {
 type ConfirmResPlanDemandsResp struct {
 	SuccessIDs []string `json:"success_ids"`
 	FailedIDs  []string `json:"failed_ids"`
+}
+
+// validateUpdateAdjustSemantic validates update adjust_type matches actual field changes.
+func (e *AdjustRPDemandReqElem) validateUpdateAdjustSemantic() error {
+	hasTimeChange := hasCreateReqExpectTimeChange(e.OriginalInfo, e.UpdatedInfo)
+	hasResourceChange := hasCreateReqResourceChange(e.OriginalInfo, e.UpdatedInfo)
+
+	if !hasTimeChange && !hasResourceChange {
+		return errors.New("no change detected between original_info and updated_info")
+	}
+	if hasTimeChange && !hasResourceChange {
+		return errors.New("only expect time changed, adjust_type should be delay")
+	}
+	return nil
+}
+
+func hasCreateReqExpectTimeChange(original, updated *CreateResPlanDemandReq) bool {
+	if original == nil || updated == nil {
+		return false
+	}
+	return original.ExpectTime != updated.ExpectTime || original.ReturnPlanTime != updated.ReturnPlanTime
+}
+
+func hasCreateReqResourceChange(original, updated *CreateResPlanDemandReq) bool {
+	if original == nil || updated == nil {
+		return false
+	}
+
+	if original.ObsProject != updated.ObsProject ||
+		original.RegionID != updated.RegionID ||
+		original.ZoneID != updated.ZoneID {
+		return true
+	}
+
+	if !slices.Equal(original.DemandResTypes, updated.DemandResTypes) {
+		return true
+	}
+
+	if hasCreateReqCvmChange(original, updated) {
+		return true
+	}
+
+	return hasCreateReqCbsChange(original, updated)
+}
+
+func hasCreateReqCvmChange(original, updated *CreateResPlanDemandReq) bool {
+	if original.Cvm == nil && updated.Cvm == nil {
+		return false
+	}
+	if original.Cvm == nil || updated.Cvm == nil {
+		return true
+	}
+
+	o, u := original.Cvm, updated.Cvm
+	if o.ResMode != u.ResMode || o.DeviceType != u.DeviceType {
+		return true
+	}
+	if cvt.PtrToVal(o.CpuCore) != cvt.PtrToVal(u.CpuCore) {
+		return true
+	}
+	if cvt.PtrToVal(o.Memory) != cvt.PtrToVal(u.Memory) {
+		return true
+	}
+	if !cvt.PtrToVal(o.Os).Equal(cvt.PtrToVal(u.Os)) {
+		return true
+	}
+
+	return false
+}
+
+func hasCreateReqCbsChange(original, updated *CreateResPlanDemandReq) bool {
+	if original.Cbs == nil && updated.Cbs == nil {
+		return false
+	}
+	if original.Cbs == nil || updated.Cbs == nil {
+		return true
+	}
+
+	o, u := original.Cbs, updated.Cbs
+	if o.DiskType != u.DiskType {
+		return true
+	}
+	if cvt.PtrToVal(o.DiskIo) != cvt.PtrToVal(u.DiskIo) {
+		return true
+	}
+	if cvt.PtrToVal(o.DiskSize) != cvt.PtrToVal(u.DiskSize) {
+		return true
+	}
+
+	return false
 }

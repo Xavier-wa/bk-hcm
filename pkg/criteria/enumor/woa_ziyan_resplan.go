@@ -593,6 +593,8 @@ const (
 	RPDemandAdjustTypeUpdate RPDemandAdjustType = "update"
 	// RPDemandAdjustTypeDelay is resource plan demand adjust type delay.
 	RPDemandAdjustTypeDelay RPDemandAdjustType = "delay"
+	// RPDemandAdjustTypeAdd is resource plan demand adjust type add within adjust ticket.
+	RPDemandAdjustTypeAdd RPDemandAdjustType = "add"
 )
 
 // Validate RPDemandAdjustType.
@@ -600,6 +602,7 @@ func (t RPDemandAdjustType) Validate() error {
 	switch t {
 	case RPDemandAdjustTypeUpdate:
 	case RPDemandAdjustTypeDelay:
+	case RPDemandAdjustTypeAdd:
 	default:
 		return fmt.Errorf("unsupported resource plan demand adjust type: %s", t)
 	}

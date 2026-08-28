@@ -101,7 +101,7 @@ func (s *SubTicketSplitter) getDemandsWithoutTransfer(kt *kit.Kit, allDemands rp
 			continue
 		}
 
-		// 调整类型需求中的延期需求
+		// 调整类型需求中的延期需求：改期时先排除跨年，再与「期望时间不变」场景统一判关键属性
 		if demand.Updated.ExpectTime != demand.Original.ExpectTime {
 			// 判断是否为跨年延期：使用 GetDemandYearMonth 获取需求年进行对比
 			originalTime, err1 := time.Parse(constant.DateLayout, demand.Original.ExpectTime)
@@ -129,21 +129,13 @@ func (s *SubTicketSplitter) getDemandsWithoutTransfer(kt *kit.Kit, allDemands rp
 				remainDemands = append(remainDemands, demand)
 				continue
 			}
-
-			// 非跨年延期，放入延期组
-			delayDemand := demand.Clone()
-			s.adjSplitGroupDemands[enumor.RPTicketTypeDelay] = append(s.adjSplitGroupDemands[enumor.RPTicketTypeDelay],
-				delayDemand)
-			continue
 		}
 
-		// 关键属性未产生变化（技术分类、项目类型、总核数）的调整
-		if demand.Updated.Cvm.TechnicalClass == demand.Original.Cvm.TechnicalClass &&
-			demand.Updated.ObsProject == demand.Original.ObsProject &&
-			demand.Updated.Cvm.CpuCore == demand.Original.Cvm.CpuCore {
+		// 非跨年延期，或关键属性未产生变化（技术分类、项目类型、总核数）的调整，放入延期组
+		if isDelayKeyAttributesUnchanged(demand) {
 			delayDemand := demand.Clone()
-			s.adjSplitGroupDemands[enumor.RPTicketTypeDelay] = append(s.adjSplitGroupDemands[enumor.RPTicketTypeDelay],
-				delayDemand)
+			s.adjSplitGroupDemands[enumor.RPTicketTypeDelay] = append(
+				s.adjSplitGroupDemands[enumor.RPTicketTypeDelay], delayDemand)
 			continue
 		}
 
@@ -152,6 +144,20 @@ func (s *SubTicketSplitter) getDemandsWithoutTransfer(kt *kit.Kit, allDemands rp
 	}
 
 	return remainDemands
+}
+
+// isDelayKeyAttributesUnchanged 判断延期子单 CRP 关键属性是否未变化。
+// 关键属性：技术分类、项目类型、总核数；机型、地域不参与判断。
+func isDelayKeyAttributesUnchanged(demand rpt.ResPlanDemand) bool {
+	if demand.Original == nil || demand.Updated == nil {
+		return false
+	}
+
+	original := demand.Original
+	updated := demand.Updated
+	return original.ObsProject == updated.ObsProject &&
+		original.Cvm.TechnicalClass == updated.Cvm.TechnicalClass &&
+		original.Cvm.CpuCore == updated.Cvm.CpuCore
 }
 
 // splitAdjustDemandsToAddAndDelete 将调整类需求拆分为新增和删除两部分

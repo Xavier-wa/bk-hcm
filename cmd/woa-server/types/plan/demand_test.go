@@ -22,6 +22,11 @@ package plan
 import (
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/assert"
+
+	"hcm/pkg/criteria/enumor"
 )
 
 func TestBudgetOperatorSyncReqValidate(t *testing.T) {
@@ -185,4 +190,273 @@ func TestBudgetOperatorSyncReqTimeRange(t *testing.T) {
 			}
 		})
 	}
+}
+
+func testValidCreateResPlanDemandReq() *CreateResPlanDemandReq {
+	osVal := decimal.NewFromInt(2)
+	cpuCore := int64(8)
+	memory := int64(16)
+	return &CreateResPlanDemandReq{
+		ObsProject:     enumor.ObsProjectNormal,
+		ExpectTime:     "2026-07-07",
+		RegionID:       "ap-guangzhou",
+		DemandResTypes: []enumor.DemandResType{enumor.DemandResTypeCVM},
+		Cvm: &struct {
+			ResMode    enumor.ResMode   `json:"res_mode"`
+			DeviceType string           `json:"device_type"`
+			Os         *decimal.Decimal `json:"os"`
+			CpuCore    *int64           `json:"cpu_core"`
+			Memory     *int64           `json:"memory"`
+		}{
+			ResMode:    enumor.ResModeByDeviceType,
+			DeviceType: "SA2.LARGE8",
+			Os:         &osVal,
+			CpuCore:    &cpuCore,
+			Memory:     &memory,
+		},
+	}
+}
+
+func TestAdjustRPDemandReqElemValidate(t *testing.T) {
+	validUpdated := testValidCreateResPlanDemandReq()
+	validOriginal := testValidCreateResPlanDemandReq()
+
+	tests := []struct {
+		name    string
+		elem    AdjustRPDemandReqElem
+		wantErr bool
+	}{
+		{
+			name: "add valid",
+			elem: AdjustRPDemandReqElem{
+				AdjustType:   enumor.RPDemandAdjustTypeAdd,
+				DemandSource: enumor.DemandSourceIndChg,
+				UpdatedInfo:  validUpdated,
+			},
+			wantErr: false,
+		},
+		{
+			name: "add without demand_source",
+			elem: AdjustRPDemandReqElem{
+				AdjustType:  enumor.RPDemandAdjustTypeAdd,
+				UpdatedInfo: validUpdated,
+			},
+			wantErr: true,
+		},
+		{
+			name: "add with demand_id",
+			elem: AdjustRPDemandReqElem{
+				DemandID:    "demand-1",
+				AdjustType:  enumor.RPDemandAdjustTypeAdd,
+				UpdatedInfo: validUpdated,
+			},
+			wantErr: true,
+		},
+		{
+			name: "add with original_info",
+			elem: AdjustRPDemandReqElem{
+				AdjustType:   enumor.RPDemandAdjustTypeAdd,
+				OriginalInfo: validOriginal,
+				UpdatedInfo:  validUpdated,
+			},
+			wantErr: true,
+		},
+		{
+			name: "update valid",
+			elem: AdjustRPDemandReqElem{
+				DemandID:     "demand-1",
+				AdjustType:   enumor.RPDemandAdjustTypeUpdate,
+				DemandSource: enumor.DemandSourceIndChg,
+				OriginalInfo: validOriginal,
+				UpdatedInfo:  validUpdated,
+			},
+			wantErr: false,
+		},
+		{
+			name: "update without demand_id",
+			elem: AdjustRPDemandReqElem{
+				AdjustType:   enumor.RPDemandAdjustTypeUpdate,
+				OriginalInfo: validOriginal,
+				UpdatedInfo:  validUpdated,
+			},
+			wantErr: true,
+		},
+		{
+			name: "delay with original_info rejected",
+			elem: AdjustRPDemandReqElem{
+				DemandID:     "demand-1",
+				AdjustType:   enumor.RPDemandAdjustTypeDelay,
+				ExpectTime:   "2026-08-07",
+				OriginalInfo: validOriginal,
+			},
+			wantErr: true,
+		},
+		{
+			name: "delay without original_info",
+			elem: AdjustRPDemandReqElem{
+				DemandID:   "demand-1",
+				AdjustType: enumor.RPDemandAdjustTypeDelay,
+				ExpectTime: "2026-08-07",
+			},
+			wantErr: false,
+		},
+		{
+			name: "delay without expect_time",
+			elem: AdjustRPDemandReqElem{
+				DemandID:   "demand-1",
+				AdjustType: enumor.RPDemandAdjustTypeDelay,
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.elem.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestAdjustRPDemandReqElemValidateUpdateOnlyTimeChangeRejected(t *testing.T) {
+	original := testValidCreateResPlanDemandReq()
+	updated := testValidCreateResPlanDemandReq()
+	updated.ExpectTime = "2026-08-07"
+
+	elem := AdjustRPDemandReqElem{
+		DemandID:     "demand-1",
+		AdjustType:   enumor.RPDemandAdjustTypeUpdate,
+		DemandSource: enumor.DemandSourceIndChg,
+		OriginalInfo: original,
+		UpdatedInfo:  updated,
+	}
+
+	err := elem.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "adjust_type should be delay")
+}
+
+func TestAdjustRPDemandReqElemValidateUpdateCombinedChangeAccepted(t *testing.T) {
+	original := testValidCreateResPlanDemandReq()
+	updated := testValidCreateResPlanDemandReq()
+	updated.ExpectTime = "2026-08-07"
+	cpuCore := int64(4)
+	updated.Cvm.CpuCore = &cpuCore
+
+	elem := AdjustRPDemandReqElem{
+		DemandID:     "demand-1",
+		AdjustType:   enumor.RPDemandAdjustTypeUpdate,
+		DemandSource: enumor.DemandSourceIndChg,
+		OriginalInfo: original,
+		UpdatedInfo:  updated,
+	}
+
+	err := elem.Validate()
+	assert.NoError(t, err)
+}
+
+func TestAdjustRPDemandReqElemValidateUpdateNoChangeRejected(t *testing.T) {
+	original := testValidCreateResPlanDemandReq()
+	updated := testValidCreateResPlanDemandReq()
+
+	elem := AdjustRPDemandReqElem{
+		DemandID:     "demand-1",
+		AdjustType:   enumor.RPDemandAdjustTypeUpdate,
+		DemandSource: enumor.DemandSourceIndChg,
+		OriginalInfo: original,
+		UpdatedInfo:  updated,
+	}
+
+	err := elem.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no change detected")
+}
+
+func TestAdjustRPDemandReqElemValidateAddDemandSourceInUpdatedInfoRejected(t *testing.T) {
+	updated := testValidCreateResPlanDemandReq()
+	updated.DemandSource = enumor.DemandSourceIndChg
+
+	elem := AdjustRPDemandReqElem{
+		AdjustType:  enumor.RPDemandAdjustTypeAdd,
+		UpdatedInfo: updated,
+	}
+
+	err := elem.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "demand_source is required")
+}
+
+func TestAdjustRPDemandReqElemValidateAddDemandSourceAtElemLevel(t *testing.T) {
+	elem := AdjustRPDemandReqElem{
+		AdjustType:   enumor.RPDemandAdjustTypeAdd,
+		DemandSource: enumor.DemandSourceIndChg,
+		UpdatedInfo:  testValidCreateResPlanDemandReq(),
+	}
+
+	err := elem.Validate()
+	assert.NoError(t, err)
+}
+
+func TestAdjustRPDemandReqElemValidateDelayWithUpdatedInfoRejected(t *testing.T) {
+	elem := AdjustRPDemandReqElem{
+		DemandID:    "demand-1",
+		AdjustType:  enumor.RPDemandAdjustTypeDelay,
+		ExpectTime:  "2026-08-07",
+		UpdatedInfo: testValidCreateResPlanDemandReq(),
+	}
+
+	err := elem.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "updated_info must be empty")
+}
+
+func TestAdjustRPDemandReqElemValidateDelayWithDelayOsRejected(t *testing.T) {
+	delayOS := "1"
+	elem := AdjustRPDemandReqElem{
+		DemandID:   "demand-1",
+		AdjustType: enumor.RPDemandAdjustTypeDelay,
+		ExpectTime: "2026-08-07",
+		DelayOs:    &delayOS,
+	}
+
+	err := elem.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "delay_os is not supported")
+}
+
+func TestAdjustRPDemandReqValidateDemandClassRequiredForAllAdd(t *testing.T) {
+	req := &AdjustRPDemandReq{
+		Adjusts: []AdjustRPDemandReqElem{
+			{
+				AdjustType:   enumor.RPDemandAdjustTypeAdd,
+				DemandSource: enumor.DemandSourceIndChg,
+				UpdatedInfo:  testValidCreateResPlanDemandReq(),
+			},
+		},
+	}
+
+	err := req.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "demand_class is required")
+}
+
+func TestHasCreateReqResourceChange(t *testing.T) {
+	original := testValidCreateResPlanDemandReq()
+	updated := testValidCreateResPlanDemandReq()
+	osVal := decimal.NewFromInt(1)
+	updated.Cvm.Os = &osVal
+
+	assert.False(t, hasCreateReqResourceChange(original, original))
+	assert.True(t, hasCreateReqResourceChange(original, updated))
+}
+
+func TestHasCreateReqExpectTimeChange(t *testing.T) {
+	original := testValidCreateResPlanDemandReq()
+	updated := testValidCreateResPlanDemandReq()
+	updated.ExpectTime = "2026-08-07"
+
+	assert.True(t, hasCreateReqExpectTimeChange(original, updated))
+	assert.False(t, hasCreateReqExpectTimeChange(original, original))
 }

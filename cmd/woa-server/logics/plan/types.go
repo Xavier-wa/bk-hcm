@@ -70,50 +70,64 @@ func (r *CreateResPlanTicketReq) Validate() error {
 
 	switch r.TicketType {
 	case enumor.RPTicketTypeAdd:
-		// Add ticket use create_demands to build table demands.
-		if len(r.CreateDemands) == 0 {
-			return errors.New("create_demands is required for add ticket")
-		}
-		for _, demand := range r.CreateDemands {
-			if err := demand.Validate(); err != nil {
-				return err
-			}
-		}
-		return nil
+		return r.validateAddTicket()
 	case enumor.RPTicketTypeAdjust:
-		for _, demand := range r.Demands {
-			if demand.Original == nil {
-				return errors.New("original demand of adjust ticket can not be empty")
-			}
-
-			if demand.Updated == nil {
-				return errors.New("updated demand of adjust ticket can not be empty")
-			}
+		if err := r.validateAdjustTicketDemands(); err != nil {
+			return err
 		}
 	case enumor.RPTicketTypeDelete, enumor.RPTicketTypeAutomaticTransfer:
-		for _, demand := range r.Demands {
-			if demand.Original == nil {
-				return fmt.Errorf("original demand of %s ticket can not be empty", r.TicketType)
-			}
-
-			if demand.Updated != nil {
-				return fmt.Errorf("updated demand of %s ticket should be empty", r.TicketType)
-			}
+		if err := r.validateDeleteTicketDemands(); err != nil {
+			return err
 		}
 	default:
 		return fmt.Errorf("unsupported resource plan ticket type: %s", r.TicketType)
 	}
 
+	return r.validateTableDemands()
+}
+
+func (r *CreateResPlanTicketReq) validateAddTicket() error {
+	if len(r.CreateDemands) == 0 {
+		return errors.New("create_demands is required for add ticket")
+	}
+	for _, demand := range r.CreateDemands {
+		if err := demand.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *CreateResPlanTicketReq) validateAdjustTicketDemands() error {
+	for _, demand := range r.Demands {
+		if demand.Updated == nil {
+			return errors.New("updated demand of adjust ticket can not be empty")
+		}
+	}
+	return nil
+}
+
+func (r *CreateResPlanTicketReq) validateDeleteTicketDemands() error {
+	for _, demand := range r.Demands {
+		if demand.Original == nil {
+			return fmt.Errorf("original demand of %s ticket can not be empty", r.TicketType)
+		}
+		if demand.Updated != nil {
+			return fmt.Errorf("updated demand of %s ticket should be empty", r.TicketType)
+		}
+	}
+	return nil
+}
+
+func (r *CreateResPlanTicketReq) validateTableDemands() error {
 	if len(r.Demands) == 0 {
 		return errors.New("demands is required")
 	}
-
 	for _, demand := range r.Demands {
 		if err := demand.Validate(); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 

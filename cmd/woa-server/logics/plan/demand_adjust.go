@@ -38,6 +38,7 @@ import (
 	"hcm/pkg/dal/table/types"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/runtime/filter"
 	cvt "hcm/pkg/tools/converter"
 	"hcm/pkg/tools/maps"
 	"hcm/pkg/tools/slice"
@@ -50,27 +51,31 @@ import (
 func (c *Controller) AdjustBizResPlanDemand(kt *kit.Kit, req *ptypes.AdjustRPDemandReq, bkBizID int64,
 	bizOrgRel *mtypes.BizOrgRel) (ticketID string, retErr error) {
 
-	// 从请求中提取修改的预测需求ID
-	demandIDs := slice.Map(req.Adjusts, func(adjust ptypes.AdjustRPDemandReqElem) string {
-		return adjust.DemandID
-	})
+	demandIDs := collectNonEmptyAdjustDemandIDs(req.Adjusts)
 
-	// check whether all crp demand belong to the biz.
-	allBelong, err := c.AreAllDemandBelongToBiz(kt, demandIDs, bkBizID)
-	if err != nil {
-		logs.Errorf("failed to check whether all demand belong to biz, err: %v, rid: %s", err, kt.Rid)
-		return "", err
-	}
+	if len(demandIDs) > 0 {
+		// check whether all crp demand belong to the biz.
+		allBelong, err := c.AreAllDemandBelongToBiz(kt, demandIDs, bkBizID)
+		if err != nil {
+			logs.Errorf("failed to check whether all demand belong to biz, err: %v, rid: %s", err, kt.Rid)
+			return "", err
+		}
 
-	if !allBelong {
-		logs.Errorf("not all adjust demand belong to biz: %d, rid: %s", bkBizID, kt.Rid)
-		return "", fmt.Errorf("not all adjust crp demand belong to biz: %d", bkBizID)
+		if !allBelong {
+			logs.Errorf("not all adjust demand belong to biz: %d, rid: %s", bkBizID, kt.Rid)
+			return "", fmt.Errorf("not all adjust crp demand belong to biz: %d", bkBizID)
+		}
+
+		if err = c.validateAdjustDemandsAdjustable(kt, bkBizID, demandIDs); err != nil {
+			logs.Errorf("failed to validate adjust demands adjustable, err: %v, rid: %s", err, kt.Rid)
+			return "", err
+		}
 	}
 
 	// examine whether all resource plan demand classes are the same, and get the demand class.
-	demandClass, err := c.ExamineDemandClass(kt, demandIDs)
+	demandClass, err := c.resolveAdjustDemandClass(kt, req)
 	if err != nil {
-		logs.Errorf("failed to examine demand class, err: %v, rid: %s", err, kt.Rid)
+		logs.Errorf("failed to resolve demand class, err: %v, rid: %s", err, kt.Rid)
 		return "", err
 	}
 
@@ -95,15 +100,17 @@ func (c *Controller) AdjustBizResPlanDemand(kt *kit.Kit, req *ptypes.AdjustRPDem
 	lockReq := &rpproto.ResPlanDemandLockOpReq{
 		LockedItems: lockedItems,
 	}
-	if err = c.client.DataService().Global.ResourcePlan.LockResPlanDemand(kt, lockReq); err != nil {
-		logs.Errorf("failed to lock all resource plan demand, err: %v, demandIDs: %v, rid: %s", err, demandIDs,
-			kt.Rid)
-		return "", err
+	if len(lockedItems) > 0 {
+		if err = c.client.DataService().Global.ResourcePlan.LockResPlanDemand(kt, lockReq); err != nil {
+			logs.Errorf("failed to lock all resource plan demand, err: %v, demandIDs: %v, rid: %s", err, demandIDs,
+				kt.Rid)
+			return "", err
+		}
 	}
 
 	// defer is used to unlock all resource plan demand when some errors occur.
 	defer func() {
-		if retErr != nil {
+		if retErr != nil && len(lockedItems) > 0 {
 			if tmpErr := c.client.DataService().Global.ResourcePlan.UnlockResPlanDemand(kt, lockReq); tmpErr != nil {
 				logs.Errorf("failed to unlock all resource plan demand, err: %v, rid: %s", tmpErr, kt.Rid)
 			}
@@ -117,6 +124,163 @@ func (c *Controller) AdjustBizResPlanDemand(kt *kit.Kit, req *ptypes.AdjustRPDem
 	}
 
 	return ticketID, nil
+}
+
+func collectNonEmptyAdjustDemandIDs(adjusts []ptypes.AdjustRPDemandReqElem) []string {
+	demandIDs := make([]string, 0, len(adjusts))
+	for _, adjust := range adjusts {
+		if adjust.DemandID != "" {
+			demandIDs = append(demandIDs, adjust.DemandID)
+		}
+	}
+	return demandIDs
+}
+
+// validateAdjustDemandsAdjustable rejects adjust when any referenced demand is not adjustable.
+func (c *Controller) validateAdjustDemandsAdjustable(kt *kit.Kit, bkBizID int64, demandIDs []string) error {
+	if len(demandIDs) == 0 {
+		return nil
+	}
+
+	// list by demand ids once to derive expect time range for overview query.
+	demands, err := c.listResPlanDemandTablesByIDs(kt, demandIDs)
+	if err != nil {
+		logs.Errorf("failed to list res plan demand for adjust validation, err: %v, demand_ids: %v, rid: %s",
+			err, demandIDs, kt.Rid)
+		return err
+	}
+
+	expectTimeRange, err := buildExpectTimeRangeFromDemandTables(kt, demands)
+	if err != nil {
+		return err
+	}
+
+	listReq := &ptypes.ListResPlanDemandReq{
+		BkBizIDs:        []int64{bkBizID},
+		DemandIDs:       demandIDs,
+		ExpectTimeRange: expectTimeRange,
+		Page:            core.NewDefaultBasePage(),
+	}
+	rst, err := c.ListResPlanDemandAndOverview(kt, listReq)
+	if err != nil {
+		logs.Errorf("failed to list res plan demand overview for adjust validation, err: %v, demand_ids: %v, rid: %s",
+			err, demandIDs, kt.Rid)
+		return err
+	}
+
+	statusMap := slice.FuncToMap(rst.Details, func(item *ptypes.ListResPlanDemandItem) (string, enumor.DemandStatus) {
+		return item.DemandID, item.Status
+	})
+	return validateAdjustDemandStatuses(demandIDs, statusMap)
+}
+
+func validateAdjustDemandStatuses(demandIDs []string, statusMap map[string]enumor.DemandStatus) error {
+	for _, demandID := range demandIDs {
+		status, ok := statusMap[demandID]
+		if !ok {
+			return fmt.Errorf("demand id: %s is not found", demandID)
+		}
+		switch status {
+		case enumor.DemandStatusSpentAll:
+			return fmt.Errorf("demand %s is spent all, cannot adjust", demandID)
+		case enumor.DemandStatusLocked:
+			return fmt.Errorf("demand %s is locked, cannot adjust", demandID)
+		}
+	}
+	return nil
+}
+
+// listResPlanDemandTablesByIDs lists res plan demand table rows by demand ids with batching.
+func (c *Controller) listResPlanDemandTablesByIDs(kt *kit.Kit, demandIDs []string) (
+	[]rpdtablers.ResPlanDemandTable, error) {
+
+	demands := make([]rpdtablers.ResPlanDemandTable, 0, len(demandIDs))
+	for _, batchIDs := range slice.Split(demandIDs, int(filter.DefaultMaxInLimit)) {
+		listReq := &ptypes.ListResPlanDemandReq{
+			DemandIDs: batchIDs,
+			Page:      core.NewDefaultBasePage(),
+		}
+		batchDemands, _, err := c.listAllResPlanDemand(kt, listReq)
+		if err != nil {
+			logs.Errorf("failed to list res plan demand, err: %v, rid: %s", err, kt.Rid)
+			return nil, err
+		}
+		demands = append(demands, batchDemands...)
+	}
+	if len(demands) == 0 {
+		return nil, fmt.Errorf("demands %v not found", demandIDs)
+	}
+
+	return demands, nil
+}
+
+// buildExpectTimeRangeFromDemandTables builds expect time range covering all given demand rows.
+func buildExpectTimeRangeFromDemandTables(kt *kit.Kit, demands []rpdtablers.ResPlanDemandTable) (
+	*times.DateRange, error) {
+
+	if len(demands) == 0 {
+		return nil, errors.New("demands is empty")
+	}
+
+	minExpectTime := demands[0].ExpectTime
+	maxExpectTime := demands[0].ExpectTime
+	for _, demand := range demands[1:] {
+		if demand.ExpectTime < minExpectTime {
+			minExpectTime = demand.ExpectTime
+		}
+		if demand.ExpectTime > maxExpectTime {
+			maxExpectTime = demand.ExpectTime
+		}
+	}
+
+	start, err := times.TransTimeStrWithLayout(strconv.Itoa(minExpectTime), constant.DateLayoutCompact,
+		constant.DateLayout)
+	if err != nil {
+		logs.Errorf("failed to convert min expect time, err: %v, expect_time: %d, rid: %s", err, minExpectTime, kt.Rid)
+		return nil, err
+	}
+	end, err := times.TransTimeStrWithLayout(strconv.Itoa(maxExpectTime), constant.DateLayoutCompact,
+		constant.DateLayout)
+	if err != nil {
+		logs.Errorf("failed to convert max expect time, err: %v, expect_time: %d, rid: %s", err, maxExpectTime, kt.Rid)
+		return nil, err
+	}
+
+	return &times.DateRange{Start: start, End: end}, nil
+}
+
+// resolveAdjustDemandClass resolves demand class for adjust request.
+// When all adjusts are add type without demand_id, request demand_class is required.
+// For mixed batch, demand class is derived from existing demands in DB.
+func (c *Controller) resolveAdjustDemandClass(kt *kit.Kit, req *ptypes.AdjustRPDemandReq) (enumor.DemandClass,
+	error) {
+
+	demandIDs := collectNonEmptyAdjustDemandIDs(req.Adjusts)
+	if len(demandIDs) == 0 {
+		if req.DemandClass == "" {
+			return "", errors.New("demand_class is required when all adjusts are add")
+		}
+		if err := req.DemandClass.Validate(); err != nil {
+			return "", err
+		}
+		return req.DemandClass, nil
+	}
+
+	return c.ExamineDemandClass(kt, demandIDs)
+}
+
+func buildAdjustLockItems(demands rpt.ResPlanDemands) []rpproto.ResPlanDemandLockOpItem {
+	lockedItems := make([]rpproto.ResPlanDemandLockOpItem, 0, len(demands))
+	for _, demand := range demands {
+		if demand.Original == nil {
+			continue
+		}
+		lockedItems = append(lockedItems, rpproto.ResPlanDemandLockOpItem{
+			ID:            demand.Original.DemandID,
+			LockedCPUCore: demand.Original.Cvm.CpuCore,
+		})
+	}
+	return lockedItems
 }
 
 func getDemandIDsAndLockedCoreFromCancelReq(kt *kit.Kit, cancelElems []ptypes.CancelRPDemandReqElem) (
@@ -283,10 +447,13 @@ func (c *Controller) ExamineDemandClass(kt *kit.Kit, demandIDs []string) (enumor
 func (c *Controller) constructAdjustReq(kt *kit.Kit, bizOrgRel *mtypes.BizOrgRel, demandClass enumor.DemandClass,
 	req *ptypes.AdjustRPDemandReq) (*CreateResPlanTicketReq, []rpproto.ResPlanDemandLockOpItem, error) {
 
+	addDemands := make([]ptypes.AdjustRPDemandReqElem, 0)
 	updateDemands := make([]ptypes.AdjustRPDemandReqElem, 0)
 	delayDemands := make([]ptypes.AdjustRPDemandReqElem, 0)
 	for _, adjust := range req.Adjusts {
 		switch adjust.AdjustType {
+		case enumor.RPDemandAdjustTypeAdd:
+			addDemands = append(addDemands, adjust)
 		case enumor.RPDemandAdjustTypeUpdate:
 			updateDemands = append(updateDemands, adjust)
 		case enumor.RPDemandAdjustTypeDelay:
@@ -294,6 +461,24 @@ func (c *Controller) constructAdjustReq(kt *kit.Kit, bizOrgRel *mtypes.BizOrgRel
 		default:
 			return nil, nil, fmt.Errorf("unsupported resource plan demand adjust type: %s", adjust.AdjustType)
 		}
+	}
+
+	addReqs := make([]ptypes.CreateResPlanDemandReq, 0, len(addDemands))
+	for _, adjust := range addDemands {
+		if adjust.UpdatedInfo == nil {
+			return nil, nil, errors.New("updated_info is required for add adjust")
+		}
+		updated := cvt.PtrToVal(adjust.UpdatedInfo)
+		if updated.DemandSource == "" {
+			updated.DemandSource = adjust.DemandSource
+		}
+		addReqs = append(addReqs, updated)
+	}
+
+	addBuilt, err := c.buildDemandsFromCreateReq(kt, demandClass, addReqs)
+	if err != nil {
+		logs.Errorf("failed to build add demands from create req, err: %v, rid: %s", err, kt.Rid)
+		return nil, nil, err
 	}
 
 	// construct update demands.
@@ -310,7 +495,8 @@ func (c *Controller) constructAdjustReq(kt *kit.Kit, bizOrgRel *mtypes.BizOrgRel
 		return nil, nil, err
 	}
 
-	demands := append(updates, delays...)
+	demands := append(addBuilt, updates...)
+	demands = append(demands, delays...)
 	adjustReq := &CreateResPlanTicketReq{
 		TicketType:  enumor.RPTicketTypeAdjust,
 		DemandClass: demandClass,
@@ -318,14 +504,7 @@ func (c *Controller) constructAdjustReq(kt *kit.Kit, bizOrgRel *mtypes.BizOrgRel
 		Demands:     demands,
 	}
 
-	// determine how many CPU cores to locked based on the final adjusted cpu cores.
-	lockedItems := make([]rpproto.ResPlanDemandLockOpItem, 0, len(demands))
-	for _, demand := range demands {
-		lockedItems = append(lockedItems, rpproto.ResPlanDemandLockOpItem{
-			ID:            demand.Original.DemandID,
-			LockedCPUCore: demand.Original.Cvm.CpuCore,
-		})
-	}
+	lockedItems := buildAdjustLockItems(demands)
 
 	return adjustReq, lockedItems, nil
 }
@@ -401,9 +580,21 @@ func (c *Controller) constructUpdateDemands(kt *kit.Kit, updates []ptypes.Adjust
 			return nil, errors.New("cannot adjust cbs plan demand")
 		}
 
+		original, ok := demandOriginMap[update.DemandID]
+		if !ok || original == nil {
+			logs.Errorf("failed to get original demand for update adjust, demand_id: %s, rid: %s",
+				update.DemandID, kt.Rid)
+			return nil, fmt.Errorf("demand id: %s is not found", update.DemandID)
+		}
+
+		demandSource := update.DemandSource
+		if update.UpdatedInfo.DemandSource != "" {
+			demandSource = update.UpdatedInfo.DemandSource
+		}
+
 		result[idx] = rpt.ResPlanDemand{
 			DemandClass: demandClass,
-			Original:    demandOriginMap[update.DemandID],
+			Original:    original,
 			Updated: &rpt.UpdatedRPDemandItem{
 				ObsProject:     update.UpdatedInfo.ObsProject,
 				ExpectTime:     update.UpdatedInfo.ExpectTime,
@@ -413,7 +604,7 @@ func (c *Controller) constructUpdateDemands(kt *kit.Kit, updates []ptypes.Adjust
 				RegionID:       update.UpdatedInfo.RegionID,
 				RegionName:     regionAreaMap[update.UpdatedInfo.RegionID].RegionName,
 				AreaName:       regionAreaMap[update.UpdatedInfo.RegionID].AreaName,
-				DemandSource:   update.DemandSource,
+				DemandSource:   demandSource,
 				Cvm: rpt.Cvm{
 					ResMode:        update.UpdatedInfo.Cvm.ResMode,
 					DeviceType:     update.UpdatedInfo.Cvm.DeviceType,
@@ -452,15 +643,19 @@ func (c *Controller) constructOriginalDemandMap(kt *kit.Kit,
 
 	demandIDs := maps.Keys(originDemandMap)
 
-	// get demand details
-	listReq := &ptypes.ListResPlanDemandReq{
-		DemandIDs: demandIDs,
-		Page:      core.NewDefaultBasePage(),
-	}
-	demands, _, err := c.listAllResPlanDemand(kt, listReq)
-	if err != nil {
-		logs.Errorf("failed to list res plan demand, err: %v, rid: %s", err, kt.Rid)
-		return nil, err
+	// get demand details, batch by MaxInLimit to avoid RuleIn size limit.
+	demands := make([]rpdtablers.ResPlanDemandTable, 0, len(demandIDs))
+	for _, batchIDs := range slice.Split(demandIDs, int(filter.DefaultMaxInLimit)) {
+		listReq := &ptypes.ListResPlanDemandReq{
+			DemandIDs: batchIDs,
+			Page:      core.NewDefaultBasePage(),
+		}
+		batchDemands, _, err := c.listAllResPlanDemand(kt, listReq)
+		if err != nil {
+			logs.Errorf("failed to list res plan demand, err: %v, rid: %s", err, kt.Rid)
+			return nil, err
+		}
+		demands = append(demands, batchDemands...)
 	}
 
 	deviceTypeMap, err := c.GetAllDeviceTypeMap(kt)
@@ -567,29 +762,27 @@ func (c *Controller) constructDelayDemands(kt *kit.Kit, delays []ptypes.AdjustRP
 		return nil, nil
 	}
 
-	// construct crp demand id and origin demand map, crp demand id and remain cpu core map.
-	originDemandMap := make(map[string]ptypes.CreateResPlanDemandResource)
-	for _, delayD := range delays {
-		delayResource := delayD.OriginalInfo.GetResource()
-		// 部分延期时，将 CreateResPlanDemandResource.CpuCore 置为0，此时延期的数量以os为准
-		if delayD.DelayOs != nil {
-			delayOSDecimal, err := decimal.NewFromString(cvt.PtrToVal(delayD.DelayOs))
-			if err != nil {
-				logs.Errorf("failed to convert delay os to decimal, err: %v, delay os: %s, rid: %s", err,
-					delayD.DelayOs, kt.Rid)
-				return nil, err
-			}
-			// 部分延期核数不可超过可延期的总核数
-			if delayOSDecimal.Compare(delayResource.Os) > 0 {
-				logs.Errorf("delay os is greater than original os, delay os: %s, original os: %s, rid: %s",
-					cvt.PtrToVal(delayD.DelayOs), delayResource.Os.String(), kt.Rid)
-				return nil, fmt.Errorf("期望延期：%s台，可延期最大为：%s台", delayOSDecimal.String(),
-					delayResource.Os.String())
-			}
-			delayResource.Os = delayOSDecimal
-			delayResource.CpuCore = ptypes.CreateResPlanDemandUseOsField
+	demandIDs := slice.Map(delays, func(d ptypes.AdjustRPDemandReqElem) string { return d.DemandID })
+	originDemandMap := make(map[string]ptypes.CreateResPlanDemandResource, len(demandIDs))
+	for _, batchIDs := range slice.Split(demandIDs, int(filter.DefaultMaxInLimit)) {
+		listReq := &ptypes.ListResPlanDemandReq{DemandIDs: batchIDs, Page: core.NewDefaultBasePage()}
+		batchDemands, _, err := c.listAllResPlanDemand(kt, listReq)
+		if err != nil {
+			logs.Errorf("failed to list res plan demand for delay, err: %v, rid: %s", err, kt.Rid)
+			return nil, err
 		}
-		originDemandMap[delayD.DemandID] = delayResource
+		for _, dbDemand := range batchDemands {
+			originDemandMap[dbDemand.ID] = ptypes.CreateResPlanDemandResource{
+				Os: cvt.PtrToVal(dbDemand.OS).Decimal, CpuCore: cvt.PtrToVal(dbDemand.CpuCore),
+				Memory: cvt.PtrToVal(dbDemand.Memory), DiskSize: cvt.PtrToVal(dbDemand.DiskSize),
+			}
+		}
+	}
+	for _, delayD := range delays {
+		if _, ok := originDemandMap[delayD.DemandID]; !ok {
+			logs.Errorf("failed to list demand, demand id: %s, rid: %s", delayD.DemandID, kt.Rid)
+			return nil, fmt.Errorf("demand id: %s is not found", delayD.DemandID)
+		}
 	}
 
 	demandOriginMap, err := c.constructOriginalDemandMap(kt, originDemandMap)
@@ -598,42 +791,65 @@ func (c *Controller) constructDelayDemands(kt *kit.Kit, delays []ptypes.AdjustRP
 		return nil, err
 	}
 
+	return assembleDelayResPlanDemands(kt, delays, demandOriginMap, demandClass)
+}
+
+// assembleDelayResPlanDemands assembles delay ResPlanDemand slice from origin map.
+func assembleDelayResPlanDemands(kt *kit.Kit, delays []ptypes.AdjustRPDemandReqElem,
+	demandOriginMap map[string]*rpt.OriginalRPDemandItem, demandClass enumor.DemandClass) (
+	[]rpt.ResPlanDemand, error) {
+
 	result := make([]rpt.ResPlanDemand, len(delays))
 	for idx, delay := range delays {
-		result[idx] = rpt.ResPlanDemand{
-			DemandClass: demandClass,
-			Original:    demandOriginMap[delay.DemandID],
+		original, ok := demandOriginMap[delay.DemandID]
+		if !ok || original == nil {
+			logs.Errorf("failed to get original demand for delay adjust, demand_id: %s, rid: %s",
+				delay.DemandID, kt.Rid)
+			return nil, fmt.Errorf("demand id: %s is not found", delay.DemandID)
+		}
+		if original.ExpectTime == delay.ExpectTime {
+			logs.Errorf("expect time unchanged for delay adjust, demand_id: %s, expect_time: %s, rid: %s",
+				delay.DemandID, delay.ExpectTime, kt.Rid)
+			return nil, errors.New("expect time unchanged for delay adjust")
 		}
 
-		// delay updated equals to original, except expect time.
-		result[idx].Updated = &rpt.UpdatedRPDemandItem{
-			ObsProject:     result[idx].Original.ObsProject,
-			ExpectTime:     delay.ExpectTime,
-			ReturnPlanTime: result[idx].Original.ReturnPlanTime,
-			ZoneID:         result[idx].Original.ZoneID,
-			ZoneName:       result[idx].Original.ZoneName,
-			RegionID:       result[idx].Original.RegionID,
-			RegionName:     result[idx].Original.RegionName,
-			AreaName:       result[idx].Original.AreaName,
-			Cvm: rpt.Cvm{
-				ResMode:        result[idx].Original.Cvm.ResMode,
-				DeviceType:     result[idx].Original.Cvm.DeviceType,
-				DeviceClass:    result[idx].Original.Cvm.DeviceClass,
-				DeviceFamily:   result[idx].Original.Cvm.DeviceFamily,
-				TechnicalClass: result[idx].Original.Cvm.TechnicalClass,
-				CoreType:       result[idx].Original.Cvm.CoreType,
-				Os:             result[idx].Original.Cvm.Os,
-				CpuCore:        result[idx].Original.Cvm.CpuCore,
-				Memory:         result[idx].Original.Cvm.Memory,
-			},
-			Cbs: rpt.Cbs{
-				DiskType:     result[idx].Original.Cbs.DiskType,
-				DiskTypeName: result[idx].Original.Cbs.DiskTypeName,
-				DiskIo:       result[idx].Original.Cbs.DiskIo,
-				DiskSize:     result[idx].Original.Cbs.DiskSize,
-			},
+		result[idx] = rpt.ResPlanDemand{
+			DemandClass: demandClass,
+			Original:    original,
+			Updated:     buildDelayUpdatedItem(original, delay.ExpectTime),
 		}
 	}
 
 	return result, nil
+}
+
+// buildDelayUpdatedItem copies original demand fields with new expect time for delay adjust.
+func buildDelayUpdatedItem(original *rpt.OriginalRPDemandItem, expectTime string) *rpt.UpdatedRPDemandItem {
+	return &rpt.UpdatedRPDemandItem{
+		ObsProject:     original.ObsProject,
+		ExpectTime:     expectTime,
+		ReturnPlanTime: original.ReturnPlanTime,
+		ZoneID:         original.ZoneID,
+		ZoneName:       original.ZoneName,
+		RegionID:       original.RegionID,
+		RegionName:     original.RegionName,
+		AreaName:       original.AreaName,
+		Cvm: rpt.Cvm{
+			ResMode:        original.Cvm.ResMode,
+			DeviceType:     original.Cvm.DeviceType,
+			DeviceClass:    original.Cvm.DeviceClass,
+			DeviceFamily:   original.Cvm.DeviceFamily,
+			TechnicalClass: original.Cvm.TechnicalClass,
+			CoreType:       original.Cvm.CoreType,
+			Os:             original.Cvm.Os,
+			CpuCore:        original.Cvm.CpuCore,
+			Memory:         original.Cvm.Memory,
+		},
+		Cbs: rpt.Cbs{
+			DiskType:     original.Cbs.DiskType,
+			DiskTypeName: original.Cbs.DiskTypeName,
+			DiskIo:       original.Cbs.DiskIo,
+			DiskSize:     original.Cbs.DiskSize,
+		},
+	}
 }
