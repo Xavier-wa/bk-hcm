@@ -21,6 +21,7 @@ package enumor
 
 import (
 	"fmt"
+	"strings"
 
 	"hcm/pkg/criteria/constant"
 )
@@ -176,6 +177,16 @@ func (c CvmTechnicalClass) Validate() error {
 	}
 }
 
+// IsGPUClass reports whether the technical class is a GPU class.
+func (c CvmTechnicalClass) IsGPUClass() bool {
+	switch c {
+	case CvmTechnicalClassInferGPU, CvmTechnicalClassTrainGPU, CvmTechnicalClassGPUDeprecated:
+		return true
+	default:
+		return false
+	}
+}
+
 // Validate DeviceTypeSource.
 func (s DeviceTypeSource) Validate() error {
 	switch s {
@@ -184,4 +195,38 @@ func (s DeviceTypeSource) Validate() error {
 		return fmt.Errorf("unsupported device type source: %s", s)
 	}
 	return nil
+}
+
+// GpuTypeKind is the normalized kind of device-type gpu_type.
+type GpuTypeKind string
+
+const (
+	// GpuTypeKindMissing means gpu_type is empty after trim.
+	GpuTypeKindMissing GpuTypeKind = "missing"
+	// GpuTypeKindNone means gpu_type is the display value 「无」.
+	GpuTypeKindNone GpuTypeKind = "none"
+	// GpuTypeKindReal means gpu_type is a real card model.
+	GpuTypeKindReal GpuTypeKind = "real"
+)
+
+// Validate GpuTypeKind.
+func (k GpuTypeKind) Validate() error {
+	switch k {
+	case GpuTypeKindMissing, GpuTypeKindNone, GpuTypeKindReal:
+		return nil
+	default:
+		return fmt.Errorf("unsupported gpu type kind: %s", k)
+	}
+}
+
+// ClassifyGpuType normalizes gpu_type after trim.
+func ClassifyGpuType(gpuType string) GpuTypeKind {
+	s := strings.TrimSpace(gpuType)
+	if s == "" {
+		return GpuTypeKindMissing
+	}
+	if s == constant.GpuTypeNoneValue {
+		return GpuTypeKindNone
+	}
+	return GpuTypeKindReal
 }

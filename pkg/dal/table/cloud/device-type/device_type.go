@@ -45,6 +45,7 @@ var DeviceTypeColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "cpu_core", NamedC: "cpu_core", Type: enumor.Numeric},
 	{Column: "memory", NamedC: "memory", Type: enumor.Numeric},
 	{Column: "gpu_amount", NamedC: "gpu_amount", Type: enumor.Numeric},
+	{Column: "gpu_type", NamedC: "gpu_type", Type: enumor.String},
 	{Column: "technical_class", NamedC: "technical_class", Type: enumor.String},
 	{Column: "tech_class_res_amt", NamedC: "tech_class_res_amt", Type: enumor.Numeric},
 	{Column: "region", NamedC: "region", Type: enumor.String},
@@ -78,6 +79,8 @@ type DeviceTypeTable struct {
 	Memory int64 `db:"memory" json:"memory"`
 	// GpuAmount GPU卡数
 	GpuAmount float64 `db:"gpu_amount" json:"gpu_amount"`
+	// GpuType GPU卡类型
+	GpuType string `db:"gpu_type" json:"gpu_type" validate:"lte=64"`
 	// DeviceTypeClass 通/专用机型，SpecialType专用，CommonType通用
 	DeviceTypeClass cvmapi.InstanceTypeClass `db:"device_type_class" json:"device_type_class" validate:"lte=64"`
 	// TechnicalClass 技术分类

@@ -79,6 +79,8 @@ type DeviceTypeCreate struct {
 	Memory int64 `json:"memory" validate:"gte=0"`
 	// GpuAmount GPU卡数
 	GpuAmount float64 `json:"gpu_amount" validate:"gte=0"`
+	// GpuType GPU卡类型
+	GpuType string `json:"gpu_type" validate:"lte=64"`
 	// DeviceTypeClass 通/专用机型，SpecialType专用，CommonType通用
 	DeviceTypeClass cvmapi.InstanceTypeClass `json:"device_type_class" validate:"required,lte=64"`
 	// TechnicalClass 技术分类
@@ -126,6 +128,8 @@ type DeviceTypeUpdate struct {
 	Memory *int64 `json:"memory,omitempty" validate:"omitempty,gte=0"`
 	// GpuAmount GPU卡数
 	GpuAmount *float64 `json:"gpu_amount,omitempty" validate:"omitempty,gte=0"`
+	// GpuType GPU卡类型
+	GpuType *string `json:"gpu_type,omitempty" validate:"omitempty,lte=64"`
 	// DeviceTypeClass 通/专用机型，SpecialType专用，CommonType通用
 	DeviceTypeClass *cvmapi.InstanceTypeClass `json:"device_type_class,omitempty" validate:"omitempty,lte=64"`
 	// TechnicalClass 技术分类
@@ -167,6 +171,7 @@ func (r *DeviceTypeBatchCreateReq) TrimSpace() {
 		r.DeviceTypes[i].DeviceClass = strings.TrimSpace(r.DeviceTypes[i].DeviceClass)
 		r.DeviceTypes[i].DeviceFamily = strings.TrimSpace(r.DeviceTypes[i].DeviceFamily)
 		r.DeviceTypes[i].TechnicalClass = strings.TrimSpace(r.DeviceTypes[i].TechnicalClass)
+		r.DeviceTypes[i].GpuType = strings.TrimSpace(r.DeviceTypes[i].GpuType)
 		r.DeviceTypes[i].Region = strings.TrimSpace(r.DeviceTypes[i].Region)
 		r.DeviceTypes[i].Zone = strings.TrimSpace(r.DeviceTypes[i].Zone)
 		r.DeviceTypes[i].GenerationType = strings.TrimSpace(r.DeviceTypes[i].GenerationType)

@@ -72,6 +72,7 @@ func batchCreateDeviceType(cts *rest.Contexts, svc *service, vendor enumor.Vendo
 			CpuCore:         createReq.CpuCore,
 			Memory:          createReq.Memory,
 			GpuAmount:       createReq.GpuAmount,
+			GpuType:         createReq.GpuType,
 			DeviceTypeClass: createReq.DeviceTypeClass,
 			TechnicalClass:  createReq.TechnicalClass,
 			TechClassResAmt: &tabletypes.Decimal{Decimal: createReq.TechClassResAmt},

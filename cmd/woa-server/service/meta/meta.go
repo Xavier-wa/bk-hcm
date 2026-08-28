@@ -14,6 +14,7 @@ package meta
 
 import (
 	"errors"
+	"sort"
 
 	"hcm/cmd/woa-server/types/meta"
 	mtypes "hcm/cmd/woa-server/types/meta"
@@ -22,6 +23,7 @@ import (
 	protocloud "hcm/pkg/api/data-service/cloud"
 	protozone "hcm/pkg/api/data-service/cloud/zone"
 	rsproto "hcm/pkg/api/data-service/rolling-server"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/tools"
@@ -205,6 +207,51 @@ func (s *service) ListDeviceFamily(cts *rest.Contexts) (interface{}, error) {
 	return &core.ListResultT[string]{Details: maps.Keys(deviceFamilySet)}, nil
 }
 
+// ListGpuType lists distinct real gpu types from synced and enabled ziyan device types.
+func (s *service) ListGpuType(cts *rest.Contexts) (interface{}, error) {
+	gpuTypeSet := make(map[string]struct{})
+
+	req := &protocloud.DistinctDeviceTypeListReq{
+		ListReq: core.ListReq{
+			Filter: tools.ExpressionAnd(
+				tools.RuleEqual("vendor", enumor.TCloudZiyan),
+				// 只查询来自同步且可用机型
+				tools.RuleEqual("source", enumor.DeviceTypeSourceSync),
+				tools.RuleEqual("disable", false),
+				// 排除空串与「无」
+				tools.RuleNotEqual("gpu_type", ""),
+				tools.RuleNotEqual("gpu_type", constant.GpuTypeNoneValue),
+			),
+			Page: core.NewDefaultBasePage(),
+		},
+	}
+	for {
+		result, err := s.client.DataService().TCloudZiyan.DeviceType.ListDistinctDeviceType(cts.Kit, req)
+		if err != nil {
+			logs.Errorf("list gpu type failed, err: %v, rid: %s", err, cts.Kit.Rid)
+			return nil, errf.NewFromErr(errf.Aborted, err)
+		}
+		for _, detail := range result.Details {
+			if enumor.ClassifyGpuType(detail.GpuType) != enumor.GpuTypeKindReal {
+				continue
+			}
+			gpuTypeSet[detail.GpuType] = struct{}{}
+		}
+		if len(result.Details) < int(req.Page.Limit) {
+			break
+		}
+		req.Page.Start += uint32(req.Page.Limit)
+	}
+
+	details := maps.Keys(gpuTypeSet)
+	if details == nil {
+		details = []string{}
+	}
+	sort.Strings(details)
+
+	return &core.ListResultT[string]{Details: details}, nil
+}
+
 // ListDeviceType lists device type.
 func (s *service) ListDeviceType(cts *rest.Contexts) (interface{}, error) {
 	req := new(mtypes.ListDeviceTypeReq)
@@ -245,6 +292,7 @@ func (s *service) ListDeviceType(cts *rest.Contexts) (interface{}, error) {
 				CpuCore:         detail.CpuCore,
 				Memory:          detail.Memory,
 				GpuAmount:       detail.GpuAmount,
+				GpuType:         detail.GpuType,
 				DeviceClass:     detail.DeviceClass,
 				DeviceFamily:    detail.DeviceFamily,
 				TechnicalClass:  detail.TechnicalClass,

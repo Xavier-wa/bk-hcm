@@ -145,6 +145,10 @@ func isDeviceTypeChanged(cloud devicetype.DeviceType, db devicetype.DeviceType) 
 		return true
 	}
 
+	if cloud.GpuType != db.GpuType {
+		return true
+	}
+
 	if cloud.TechnicalClass != db.TechnicalClass {
 		return true
 	}
@@ -176,6 +180,7 @@ func (cli *client) createDeviceType(kt *kit.Kit, deviceTypes []devicetype.Device
 			CpuCore:         dt.CpuCore,
 			Memory:          dt.Memory,
 			GpuAmount:       dt.GpuAmount,
+			GpuType:         dt.GpuType,
 			DeviceTypeClass: dt.DeviceTypeClass,
 			TechnicalClass:  dt.TechnicalClass,
 			TechClassResAmt: dt.TechClassResAmt,
@@ -212,6 +217,7 @@ func (cli *client) updateDeviceType(kt *kit.Kit, deviceTypes map[string]devicety
 			CpuCore:         &curDt.CpuCore,
 			Memory:          &curDt.Memory,
 			GpuAmount:       &curDt.GpuAmount,
+			GpuType:         &curDt.GpuType,
 			DeviceTypeClass: &curDt.DeviceTypeClass,
 			TechnicalClass:  &curDt.TechnicalClass,
 			TechClassResAmt: &curDt.TechClassResAmt,

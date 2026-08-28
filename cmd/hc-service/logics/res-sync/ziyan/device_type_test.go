@@ -266,3 +266,53 @@ func TestIsDeviceTypeChanged_ExactMatch(t *testing.T) {
 		})
 	}
 }
+
+func TestIsDeviceTypeChanged_GpuType(t *testing.T) {
+	tests := []struct {
+		name     string
+		cloud    devicetype.DeviceType
+		db       devicetype.DeviceType
+		expected bool
+	}{
+		{
+			name: "仅gpu_type变化：空变为V100",
+			cloud: func() devicetype.DeviceType {
+				dt := baseDeviceType
+				dt.GpuType = "V100"
+				return dt
+			}(),
+			db:       baseDeviceType,
+			expected: true,
+		},
+		{
+			name:     "gpu_type未变化：均为空",
+			cloud:    baseDeviceType,
+			db:       baseDeviceType,
+			expected: false,
+		},
+		{
+			name: "gpu_type未变化：均为NVIDIA A100",
+			cloud: func() devicetype.DeviceType {
+				dt := baseDeviceType
+				dt.GpuType = "NVIDIA A100"
+				return dt
+			}(),
+			db: func() devicetype.DeviceType {
+				dt := baseDeviceType
+				dt.GpuType = "NVIDIA A100"
+				return dt
+			}(),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isDeviceTypeChanged(tt.cloud, tt.db)
+			if result != tt.expected {
+				t.Errorf("isDeviceTypeChanged() = %v, want %v, cloud.GpuType=%q, db.GpuType=%q",
+					result, tt.expected, tt.cloud.GpuType, tt.db.GpuType)
+			}
+		})
+	}
+}

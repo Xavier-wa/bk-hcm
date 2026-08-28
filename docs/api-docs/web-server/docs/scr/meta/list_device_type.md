@@ -43,6 +43,7 @@ POST /api/v1/woa/meta/device_type/list
         "cpu_core": 123,
         "memory": 123,
         "gpu_amount": 0,
+        "gpu_type": "",
         "device_class": "标准型SA5",
         "device_family": "标准型"
       },
@@ -52,6 +53,7 @@ POST /api/v1/woa/meta/device_type/list
         "cpu_core": 123,
         "memory": 123,
         "gpu_amount": 0,
+        "gpu_type": "",
         "device_class": "标准型SA5",
         "device_family": "标准型"
       },
@@ -61,6 +63,7 @@ POST /api/v1/woa/meta/device_type/list
         "cpu_core": 48,
         "memory": 192,
         "gpu_amount": 0.25,
+        "gpu_type": "A100",
         "device_class": "GPU计算型PNV5b",
         "device_family": "GPU型"
       }
@@ -92,5 +95,6 @@ POST /api/v1/woa/meta/device_type/list
 | cpu_core      | int    | CPU核心数，单位：核 |
 | memory        | int    | 内存大小，单位：GB  |
 | gpu_amount    | float  | GPU卡数       |
+| gpu_type      | string | GPU卡类型      |
 | device_class  | string | 机型分类        |
 | device_family | string | 机型族         |

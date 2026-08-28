@@ -168,3 +168,6 @@ const (
 	// RecommendDiskNum 默认磁盘块数
 	RecommendDiskNum uint = 1
 )
+
+// GpuTypeNoneValue is the device-type master-data display value meaning no GPU card.
+const GpuTypeNoneValue = "无"

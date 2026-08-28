@@ -89,6 +89,9 @@ func batchUpdateDeviceType(cts *rest.Contexts, svc *service, vendor enumor.Vendo
 			if updateReq.GpuAmount != nil {
 				record.GpuAmount = cvt.PtrToVal(updateReq.GpuAmount)
 			}
+			if updateReq.GpuType != nil {
+				record.GpuType = cvt.PtrToVal(updateReq.GpuType)
+			}
 			if updateReq.DeviceTypeClass != nil {
 				record.DeviceTypeClass = cvt.PtrToVal(updateReq.DeviceTypeClass)
 			}

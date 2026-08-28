@@ -133,6 +133,7 @@ POST /api/v1/woa/config/findmany/config/cvm/device
         "cpu_core": 4,
         "memory": 16,
         "gpu_amount": 0,
+        "gpu_type": "",
         "technical_class": "",
         "disable": false,
         "source": "sync",
@@ -188,6 +189,7 @@ POST /api/v1/woa/config/findmany/config/cvm/device
 | cpu_core          | int    | CPU核数                                 |
 | memory            | int    | 内存容量，单位：GB                            |
 | gpu_amount        | float  | GPU卡数                                 |
+| gpu_type          | string | GPU卡类型                                |
 | technical_class   | string | 技术分类                                  |
 | disable           | bool   | 是否禁用                                  |
 | source            | string | 机型来源：枚举值：sync(同步)、manually(手动添加)      |

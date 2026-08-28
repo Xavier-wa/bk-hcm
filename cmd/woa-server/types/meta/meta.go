@@ -70,6 +70,7 @@ type ListDeviceTypeRst struct {
 	CpuCore         int64           `json:"cpu_core"`
 	Memory          int64           `json:"memory"`
 	GpuAmount       float64         `json:"gpu_amount"`
+	GpuType         string          `json:"gpu_type"`
 	DeviceClass     string          `json:"device_class"`
 	DeviceFamily    string          `json:"device_family"`
 	TechnicalClass  string          `json:"technical_class"`

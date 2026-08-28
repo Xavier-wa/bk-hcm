@@ -1731,9 +1731,8 @@ func addSpecApplyOrderConsumePool(kt *kit.Kit, poolMap ResPlanConsumePool, sub *
 	// 占用预测核心数：完结（DONE/TERMINATE）按已生产核数，进行中按 max(AppliedCore, 已生产核数)
 	consumeCpuCore := calcSuborderConsumeCore(sub, productedCore)
 	logs.V(2).Infof("calc cvm suborder consume core, suborderID: %s, stage: %s, status: %s, applied: %d, "+
-		"delivered: %d, producteCore: %d, consumeCore: %d, rid: %s",
-		sub.SubOrderId, sub.Stage, sub.Status, sub.AppliedCore, sub.DeliveredCore, productedCore, consumeCpuCore,
-		kt.Rid)
+		"delivered: %d, producteCore: %d, consumeCore: %d, rid: %s", sub.SubOrderId, sub.Stage, sub.Status,
+		sub.AppliedCore, sub.DeliveredCore, productedCore, consumeCpuCore, kt.Rid)
 	if consumeCpuCore <= 0 {
 		return
 	}
@@ -1860,6 +1859,11 @@ func (c *Controller) verifyProdDemandsV2(kt *kit.Kit, bkBizID int64, requireType
 	result := make([]VerifyResPlanResElem, len(needs))
 	// match each need.
 	for i, need := range needs {
+		// 检验前需先确认 GPU 机型的卡型存在，否则无法进行预测匹配
+		if err = c.validateOperateDeviceGpuCard(kt, need.DeviceType); err != nil {
+			return nil, err
+		}
+
 		if need.IsPrePaid {
 			// verify pre paid.
 			result[i], err = c.getDemandMatchResult(kt, requireType, prodMaxAvailable, need,
