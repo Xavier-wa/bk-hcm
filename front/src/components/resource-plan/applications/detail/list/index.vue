@@ -2,13 +2,13 @@
 import { ref, computed, watchEffect } from 'vue';
 import { useI18n } from 'vue-i18n';
 import Panel from '@/components/panel/panel.vue';
-import type { TicketByIdResult } from '@/typings/resourcePlan';
+import type { TicketByIdResult, TicketDemandItem } from '@/typings/resourcePlan';
 import { useLegacyTableSettings } from '@/hooks/use-table-settings';
 import ChangedText from './changed-text.vue';
 
 interface Props {
   demands: TicketByIdResult['demands'];
-  ticketType?: string; // 单据类型（新增，取消，调整） 外部传入
+  ticketType?: string; // 单据类型（新增，取消，调整） 外部传入，对应 base_info.type
   showCpuCount?: boolean;
 }
 
@@ -23,10 +23,19 @@ const sort = ref();
 const order = ref();
 // 单据资源预测详情
 
+/** 机型列：调整单内新增行在此旁挂 NEW 标（Figma 2714:17065） */
+const DEVICE_TYPE_FIELD = 'updated_info.cvm.device_type';
+
+/**
+ * 调整单内新增的预测：提交时 add 不带 original_info，详情回显同约定。
+ * 纯「新增」单据整单都是新预测，不打 NEW；只在调整单里区分混编行。
+ */
+const isNewAdjustDemand = (row: TicketDemandItem) => props.ticketType === 'adjust' && !row.original_info;
+
 const columns = [
   {
     label: '机型',
-    field: 'updated_info.cvm.device_type',
+    field: DEVICE_TYPE_FIELD,
   },
   {
     label: 'CPU总核数',
@@ -191,6 +200,10 @@ watchEffect(() => {
         <bk-table-column v-bind="column">
           <template #default="{ row, cell }">
             <span v-if="column.field === 'demand_class'">{{ cell }}</span>
+            <div v-else-if="column.field === DEVICE_TYPE_FIELD" class="device-type-cell">
+              <ChangedText :col-data="row" :field="column.field" :ticket-type="ticketType" />
+              <span v-if="isNewAdjustDemand(row)" class="demand-new-tag">NEW</span>
+            </div>
             <ChangedText v-else :col-data="row" :field="(column.field as string)" :ticket-type="ticketType" />
           </template>
         </bk-table-column>
@@ -218,5 +231,26 @@ watchEffect(() => {
     color: #f59500;
     font-weight: 700;
   }
+}
+
+.device-type-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
+/* 对齐 Figma 2714:17065 Tag：高 16 / 字 10 / 主绿 #2caf5e / 圆角 2 */
+.demand-new-tag {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: #2caf5e;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
 }
 </style>

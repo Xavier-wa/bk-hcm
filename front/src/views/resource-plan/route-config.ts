@@ -1,11 +1,37 @@
 import type { RouteRecordRaw } from 'vue-router';
 import Meta from '@/router/meta';
 import {
+  MENU_BUSINESS_RESOURCE_PLAN_CVM,
+  MENU_BUSINESS_RESOURCE_PLAN_CVM_ADJUST,
   MENU_BUSINESS_RESOURCE_PLAN_GPU,
   MENU_BUSINESS_RESOURCE_PLAN_GPU_DETAIL,
   MENU_SERVICE_RESOURCE_PLAN_GPU,
   MENU_SERVICE_RESOURCE_PLAN_GPU_DETAIL,
 } from '@/constants/menu-symbol';
+
+const cvmAdjustBiz: RouteRecordRaw[] = [
+  {
+    name: MENU_BUSINESS_RESOURCE_PLAN_CVM_ADJUST,
+    path: 'resource-plan/cvm/adjust',
+    component: () => import('./cvm/adjust/index.vue'),
+    meta: {
+      ...new Meta({
+        activeKey: 'bizResourcePlan',
+        notMenu: true,
+        title: '调整预测需求',
+        menu: {
+          relative: MENU_BUSINESS_RESOURCE_PLAN_CVM,
+        },
+        layout: {
+          breadcrumbs: {
+            show: true,
+            back: true,
+          },
+        },
+      }),
+    },
+  },
+];
 
 const gpuDemandBiz: RouteRecordRaw[] = [
   {
@@ -91,4 +117,4 @@ const gpuDemandSrv: RouteRecordRaw[] = [
   },
 ];
 
-export { gpuDemandBiz, gpuDemandSrv };
+export { cvmAdjustBiz, gpuDemandBiz, gpuDemandSrv };

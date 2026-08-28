@@ -17,10 +17,14 @@ import {
   MENU_BUSINESS_RESOURCE_PLAN_CVM,
   MENU_BUSINESS_INDEX,
   MENU_BUSINESS_RESOURCE_PLAN_CVM_MODIFY,
+  MENU_BUSINESS_RESOURCE_PLAN_CVM_ADJUST,
 } from '@/constants/menu-symbol';
 import { operationLogBiz as operationLogBizRouteConfig } from '@/views/operation-log/route-config';
 import { loadBalancerBiz as loadBalancerBizRouteConfig } from '@/views/load-balancer/route-config';
-import { gpuDemandBiz as gpuDemandBizRouteConfig } from '@/views/resource-plan/route-config';
+import {
+  cvmAdjustBiz as cvmAdjustBizRouteConfig,
+  gpuDemandBiz as gpuDemandBizRouteConfig,
+} from '@/views/resource-plan/route-config';
 import taskRouteConfig from '@/views/task/route-config';
 import { ticketRoutesBiz } from '@/views/ticket/route-config';
 import { chatbotBiz as chatbotBizRouteConfig } from '@/views/chatbot/route-config';
@@ -403,6 +407,7 @@ const businessMenus: RouteRecordRaw[] = [
           },
         ],
       },
+      ...cvmAdjustBizRouteConfig,
       ...gpuDemandBizRouteConfig,
       {
         path: '/business/resource-plan',
@@ -595,13 +600,11 @@ const businessMenus: RouteRecordRaw[] = [
       },
       {
         path: '/business/service/resource-plan-mod',
-        name: 'bizModPlanList',
-        component: () => import('@/views/business/resource-plan/mod'),
-        meta: {
-          backRouter: -1,
-          activeKey: 'bizResourcePlan',
-          notMenu: true,
-        },
+        redirect: (to) => ({
+          name: MENU_BUSINESS_RESOURCE_PLAN_CVM_ADJUST,
+          query: to.query,
+        }),
+        meta: { notMenu: true },
       },
       loadBalancerBizRouteConfig[1],
     ],

@@ -80,15 +80,6 @@ const serviceMenus: RouteRecordRaw[] = [
           notMenu: true,
         },
       },
-      {
-        path: '/service/resource-plan/cvm/mod',
-        name: 'modPlanList',
-        component: () => import('@/views/service/resource-plan/resource-manage/mod'),
-        meta: {
-          activeKey: 'planlist',
-          notMenu: true,
-        },
-      },
       ...gpuDemandSrvRouteConfig,
       {
         path: '/service/resource-plan',
@@ -103,11 +94,6 @@ const serviceMenus: RouteRecordRaw[] = [
       {
         path: '/service/resource-plan/detail',
         redirect: (to) => ({ path: '/service/resource-plan/cvm/detail', query: to.query }),
-        meta: { notMenu: true },
-      },
-      {
-        path: '/service/resource-plan/mod',
-        redirect: (to) => ({ path: '/service/resource-plan/cvm/mod', query: to.query }),
         meta: { notMenu: true },
       },
       {

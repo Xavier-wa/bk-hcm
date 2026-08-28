@@ -1,0 +1,108 @@
+{
+  "id": "fix-resplan-adjust-copy-reason",
+  "title": "资源预测-调整-复制后没有回填变更原因",
+  "currentStage": "done",
+  "createdAt": "2026-08-27T10:00:14.753Z",
+  "updatedAt": "2026-08-27T11:13:42.251Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/fix-resplan-adjust-copy-reason/prd.md",
+        "kind": "file",
+        "addedAt": "2026-08-27T11:05:57.404Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/fix-resplan-adjust-copy-reason/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-27T11:08:39.937Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/fix-resplan-adjust-copy-reason/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-27T11:12:09.474Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-08-27T11:07:34.059Z",
+      "note": "用户确认 prd.md 可作为 coding 唯一依据"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-27T11:12:03.972Z",
+      "note": "用户确认编码完成且手测 PASS，推进 coding→test"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-27T11:12:24.963Z",
+      "note": "用户确认手测 PASS，推进 test→done"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-08-27T10:00:14.753Z"
+    },
+    {
+      "from": "prd",
+      "to": "coding",
+      "at": "2026-08-27T11:07:34.059Z",
+      "gitHead": "7f926b9a81c7862178ea7cd6e6c325ccf8dcc13e",
+      "note": "用户确认 prd.md 可作为 coding 唯一依据"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-27T11:12:03.972Z",
+      "note": "用户确认编码完成且手测 PASS，推进 coding→test"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-27T11:12:24.963Z",
+      "note": "用户确认手测 PASS，推进 test→done"
+    }
+  ],
+  "requirementId": "req-feat-resplan-time-quantity-adjust",
+  "branch": "fix-resplan-adjust-copy-reason",
+  "stages": [
+    "prd",
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137606579"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "completed",
+      "at": "2026-08-27T11:05:32.784Z",
+      "note": "clarification written back; no split; RICE 400; tapd-analyst used the same TAPD body (no comments; screenshot fetch 403)"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-27T11:13:42.251Z",
+      "note": "story 1069995598137606579: status_12→status_16→status_13→status_14(done); owner unchanged. No parentId, skip rollup."
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/views/resource-plan/cvm/adjust/adjust-payload.ts"
+      ],
+      "contentFingerprint": "298ba1f965349a8ffd13da24081f51f519d9de9f",
+      "codeBaseline": "d2d3392f146f42d1b584691d6ae6c5d8161161e0",
+      "seatedAt": "2026-08-27T11:08:39.938Z"
+    }
+  }
+}

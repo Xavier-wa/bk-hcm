@@ -17,20 +17,27 @@ export const useBack = () => {
     return null;
   });
 
+  // 只 peek：渲染面包屑时不能 pop，否则取消按钮再 back 时栈已空、跳不回去
   const from = computed(() => {
     if (Object.hasOwn(route.query, '_f')) {
-      try {
-        return HistoryStorage.pop();
-      } catch (error) {
-        return defaultFrom.value;
-      }
+      return HistoryStorage.peek() ?? defaultFrom.value;
     }
     return defaultFrom.value;
   });
 
-  // 引入 fromConfig 是为了解决业务下 defaultFrom 没有业务ID 的问题
+  // fromConfig：补业务 ID；无 history / relative 时作为真正目的地（如提交后进详情）
   const handleBack = (fromConfig: Partial<RouteLocationRaw> = {}) => {
-    routerAction.redirect(merge({}, from.value, fromConfig), { back: true });
+    const hasFromConfigTarget = Boolean(fromConfig?.name || fromConfig?.path);
+    const target = from.value ?? (hasFromConfigTarget ? fromConfig : null);
+    if (!target) return;
+    if (Object.hasOwn(route.query, '_f')) {
+      try {
+        HistoryStorage.pop();
+      } catch {
+        // 栈空时仍按 peek/defaultFrom 跳，避免返回按钮完全失效
+      }
+    }
+    routerAction.redirect(merge({}, target, fromConfig), { back: true });
   };
 
   return { from, handleBack };

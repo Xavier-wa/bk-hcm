@@ -1,0 +1,24 @@
+{
+  "id": "promo-c0b0ab37",
+  "createdAt": "2026-08-06T09:03:26.036Z",
+  "updatedAt": "2026-08-07T12:34:56.646Z",
+  "status": "shipped",
+  "kind": "rule",
+  "title": "前端任务禁止改 docs/api-docs",
+  "summary": "前端 / workflow-dev 任务禁止写入仓库根 docs/api-docs/**（后端维护的对外接口文档）。接口契约增量只写到 <dataDir>/workflow/<id>/api.md；可读 docs/api-docs 但不改。",
+  "why": "本轮误改 adjust_biz_resource_plan_demand.md，属后端范围，需撤回并沉淀边界，避免前端任务再次越界。",
+  "provenance": {
+    "workflowId": "feat-resplan-time-quantity-adjust"
+  },
+  "target": {
+    "action": "update",
+    "kind": "rule",
+    "relativePath": "rules/fe-no-backend-edit.mdc",
+    "project": "hcm",
+    "baseDigest": "d53810b0cd9382af74c9fb7e0a4ae2fc983cfbd5"
+  },
+  "ship": {
+    "via": "local",
+    "at": "2026-08-07T12:34:56.646Z"
+  }
+}

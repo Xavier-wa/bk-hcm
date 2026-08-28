@@ -1,0 +1,38 @@
+{
+  "id": "req-feat-resplan-time-quantity-adjust",
+  "title": "资源预测-时间和数量同时调整",
+  "createdAt": "2026-07-29T01:57:52.963Z",
+  "updatedAt": "2026-08-27T12:25:00.000Z",
+  "external": {
+    "tapd": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598135047237",
+    "tapdParentRequirementId": "1069995598135047237"
+  },
+  "iterations": [
+    {
+      "wfId": "feat-resplan-time-quantity-adjust",
+      "status": "done",
+      "branch": "feat-resplan-time-quantity-adjust",
+      "title": "资源预测-时间和数量同时调整-前端实现",
+      "createdAt": "2026-07-29T01:58:02.051Z"
+    },
+    {
+      "wfId": "fix-resplan-adjust-copy-reason",
+      "status": "done",
+      "branch": "fix-resplan-adjust-copy-reason",
+      "title": "资源预测-调整-复制后没有回填变更原因",
+      "createdAt": "2026-08-27T10:00:14.753Z"
+    },
+    {
+      "wfId": "fix-resplan-ticketdetail-back",
+      "status": "done",
+      "branch": "feat-resplan-time-quantity-adjust",
+      "title": "资源预测-修改预测提交后-单据详情返回按钮没有响应",
+      "createdAt": "2026-08-27T11:21:02.792Z"
+    }
+  ],
+  "aggregatedArtifacts": {},
+  "codeScope": {
+    "globs": [],
+    "autoLearned": true
+  }
+}

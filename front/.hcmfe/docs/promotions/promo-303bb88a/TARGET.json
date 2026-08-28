@@ -1,0 +1,7 @@
+{
+  "action": "update",
+  "kind": "rule",
+  "relativePath": "rules/fe-conventions.mdc",
+  "project": "hcm",
+  "baseDigest": "60c42f14c2841770efad0ab2b35bc94723ccb6624f400bfcd314e09561f43b50"
+}

@@ -1,4 +1,4 @@
-import { defineComponent, computed, ref, PropType, onMounted, reactive } from 'vue';
+import { defineComponent, computed, ref, PropType, onMounted } from 'vue';
 import { Button, Dropdown } from 'bkui-vue';
 import { Plus as PlusIcon } from 'bkui-vue/lib/icon';
 import { useTable } from '@/hooks/useResourcePlanTable';
@@ -6,9 +6,8 @@ import { useI18n } from 'vue-i18n';
 import routerAction from '@/router/utils/action';
 import useColumns from '@/views/resource/resource-manage/hooks/use-scr-columns';
 import BatchCancellationDialog from '@/components/resource-plan/resource-manage/list/table/components/batch-cancellation-dialog/batch-cancellation-dialog';
-import BatchPostponeSideslider from '@/components/resource-plan/resource-manage/list/table/components/batch-postpone-sideslider/index.vue';
 import cssModule from './index.module.scss';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { IListResourcesDemandsItem, IListResourcesDemandsParam, ResourcesDemandsStatus } from '@/typings/resourcePlan';
 import { useConfigRequirementStore, type IRequirementObsProject } from '@/store/config/requirement';
 import { IPageQuery } from '@/typings';
@@ -19,7 +18,7 @@ import { useGlobalPermissionDialog } from '@/store/useGlobalPermissionDialog';
 import { ITimeRange } from '@/typings/plan';
 import { GLOBAL_BIZS_KEY } from '@/common/constant';
 import useCvmChargeType from '@/views/ziyanScr/hooks/use-cvm-charge-type';
-import { MENU_BUSINESS_RESOURCE_PLAN_CVM } from '@/constants/menu-symbol';
+import { MENU_BUSINESS_RESOURCE_PLAN_CVM, MENU_BUSINESS_RESOURCE_PLAN_CVM_ADJUST } from '@/constants/menu-symbol';
 import useDeadlineRestrict from '@/views/business/resource-plan/use-deadline-restrict';
 
 const { DropdownMenu, DropdownItem } = Dropdown;
@@ -30,7 +29,6 @@ export enum OperationActions {
   BIZ_ADJUST = 'biz_adjust',
   BIZ_CANCEL = 'biz_cancel',
   PURCHASE = 'purchase',
-  BIZ_BATCH_POSTPONE = 'biz_batch_postpone',
 }
 
 export default defineComponent({
@@ -48,7 +46,6 @@ export default defineComponent({
 
     const { t } = useI18n();
     const route = useRoute();
-    const router = useRouter();
     const { columns, generateColumnsSettings } = useColumns('resourceForecast');
     const { getResourcesDemandsList, getResourcesDemandsListByOrg } = useResourcePlanStore();
     const { getRequirementObsProject } = useConfigRequirementStore();
@@ -86,13 +83,9 @@ export default defineComponent({
         label: t('取消'),
         loading: false,
       },
-      [OperationActions.BIZ_BATCH_POSTPONE]: {
-        label: t('部分延期'),
-        loading: false,
-      },
     };
 
-    const bizActions = [OperationActions.BIZ_ADJUST, OperationActions.BIZ_CANCEL, OperationActions.BIZ_BATCH_POSTPONE];
+    const bizActions = [OperationActions.BIZ_ADJUST, OperationActions.BIZ_CANCEL];
     const serviceActions = [OperationActions.SERVICE_ADJUST, OperationActions.SERVICE_CANCEL];
     const operationDropdownList = Object.entries(operationMap)
       .filter(([type]) => (props.isBiz ? bizActions : serviceActions).includes(type as OperationActions))
@@ -108,6 +101,22 @@ export default defineComponent({
     const selection = computed<IListResourcesDemandsItem[]>(() => tableRef.value?.getSelection?.() || []);
     const hasNonCurrentYearInSelection = computed(() =>
       selection.value.some((row) => shouldDisableRow(row.expect_time)),
+    );
+    /** 批量调整要求同一 demand_class；混选时禁用按钮并用 tip 说明（对齐截止期禁用态） */
+    const hasMixedDemandClassInSelection = computed(() => {
+      const classes = new Set(
+        selection.value.map((row) => row.demand_class).filter((item): item is string => Boolean(item)),
+      );
+      return classes.size > 1;
+    });
+    const batchDemandClassDisabledTip = computed(() => t('所选预测包含不同预测用途，请按同一预测用途勾选后再批量调整'));
+    const batchAdjustDisabledTip = computed(() => {
+      if (hasMixedDemandClassInSelection.value) return batchDemandClassDisabledTip.value;
+      if (hasNonCurrentYearInSelection.value) return batchDeadlineDisabledTip.value;
+      return '';
+    });
+    const isBatchAdjustDisabledByRule = computed(
+      () => hasNonCurrentYearInSelection.value || hasMixedDemandClassInSelection.value,
     );
     const tableColumns = computed(() => {
       const newColumns = props.isBiz ? columns.slice(2) : columns.slice(0, -1);
@@ -131,7 +140,7 @@ export default defineComponent({
                 theme='primary'
                 text
                 onClick={() => {
-                  router.push({
+                  routerAction.redirect({
                     path: props.isBiz ? '/business/resource-plan/detail' : '/service/resource-plan/detail',
                     query: { ...route.query, demandId: data.demand_id },
                   });
@@ -243,7 +252,7 @@ export default defineComponent({
         handleAuth('biz_resource_plan_operate');
         globalPermissionDialog.setShow(true);
       } else {
-        router.push({
+        routerAction.redirect({
           path: '/business/resource-plan/add',
           query: { ...route.query },
         });
@@ -255,23 +264,31 @@ export default defineComponent({
         // 无权限
         handleAuth('biz_resource_plan_operate');
         globalPermissionDialog.setShow(true);
-      } else {
-        const planIds = data.map(({ demand_id }) => demand_id).join(',');
-        const path = props.isBiz ? '/business/service/resource-plan-mod' : '/service/resource-plan/mod';
-        router.push({
-          path,
+        return;
+      }
+      // 混选由按钮 disabled + tip 拦截；此处仅作兜底，不再弹 Message
+      const classes = new Set(data.map((row) => row.demand_class).filter((item): item is string => Boolean(item)));
+      if (classes.size > 1) return;
+      const planIds = data.map(({ demand_id }) => demand_id).join(',');
+      routerAction.redirect(
+        {
+          name: MENU_BUSINESS_RESOURCE_PLAN_CVM_ADJUST,
           query: {
             [GLOBAL_BIZS_KEY]: getBizsId(),
             planIds,
             start: props.expectTimeRange.start,
             end: props.expectTimeRange.end,
           },
-        });
-      }
+        },
+        { history: true },
+      );
     };
 
     const handleToBizPage = (bizId: number) => {
-      router.push({ name: MENU_BUSINESS_RESOURCE_PLAN_CVM, query: { [GLOBAL_BIZS_KEY]: bizId, ...route.query } });
+      routerAction.redirect({
+        name: MENU_BUSINESS_RESOURCE_PLAN_CVM,
+        query: { [GLOBAL_BIZS_KEY]: bizId, ...route.query },
+      });
     };
 
     const handleCancel = () => {
@@ -283,8 +300,6 @@ export default defineComponent({
         isShow.value = true;
       }
     };
-
-    const batchPostponeSidesliderState = reactive({ isHidden: true, isShow: false, data: null });
 
     const handleOperate = (type: OperationActions, data: IListResourcesDemandsItem) => {
       if (!authVerifyData.value?.permissionAction?.biz_resource_plan_operate) {
@@ -298,8 +313,6 @@ export default defineComponent({
         isShow.value = true;
       } else if (type === OperationActions.BIZ_ADJUST) {
         handleToAdjust([data]);
-      } else if (type === OperationActions.BIZ_BATCH_POSTPONE) {
-        Object.assign(batchPostponeSidesliderState, { isHidden: false, isShow: true, data });
       } else if ([OperationActions.SERVICE_ADJUST, OperationActions.SERVICE_CANCEL].includes(type)) {
         handleToBizPage(data.bk_biz_id);
       }
@@ -362,10 +375,10 @@ export default defineComponent({
                       : undefined
                   }`}
                   onClick={() => handleToAdjust(selection.value)}
-                  disabled={!selection.value.length || hasNonCurrentYearInSelection.value}
+                  disabled={!selection.value.length || isBatchAdjustDisabledByRule.value}
                   v-bk-tooltips={{
-                    content: batchDeadlineDisabledTip.value,
-                    disabled: !hasNonCurrentYearInSelection.value,
+                    content: batchAdjustDisabledTip.value,
+                    disabled: !isBatchAdjustDisabledByRule.value,
                   }}>
                   {t('批量调整')}
                 </Button>
@@ -427,16 +440,6 @@ export default defineComponent({
           />
         </bk-loading>
         <BatchCancellationDialog v-model:isShow={isShow.value} data={currentRowsData.value} onRefresh={triggerApi} />
-        {!batchPostponeSidesliderState.isHidden && (
-          <BatchPostponeSideslider
-            v-model={batchPostponeSidesliderState.isShow}
-            data={batchPostponeSidesliderState.data}
-            onHidden={() => {
-              batchPostponeSidesliderState.isHidden = true;
-              batchPostponeSidesliderState.data = null;
-            }}
-          />
-        )}
       </div>
     );
   },

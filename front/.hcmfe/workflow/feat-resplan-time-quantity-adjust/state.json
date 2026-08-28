@@ -1,0 +1,214 @@
+{
+  "id": "feat-resplan-time-quantity-adjust",
+  "title": "资源预测-时间和数量同时调整-前端实现",
+  "currentStage": "done",
+  "createdAt": "2026-07-29T01:58:02.051Z",
+  "updatedAt": "2026-08-07T12:29:29.728Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-resplan-time-quantity-adjust/prd.md",
+        "kind": "file",
+        "addedAt": "2026-07-29T02:06:12.613Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": "https://www.figma.com/design/nKX02SsMK8StZYAEEw0MfK/%E4%B8%9A%E5%8A%A1%E8%B5%84%E6%BA%90?node-id=2664-45348&m=dev&focus-id=2659-18103",
+        "kind": "url",
+        "addedAt": "2026-07-29T06:47:50.179Z"
+      },
+      {
+        "ref": ".hcmfe/workflow/feat-resplan-time-quantity-adjust/design.md",
+        "kind": "file",
+        "addedAt": "2026-07-29T06:47:55.083Z"
+      },
+      {
+        "ref": "https://www.figma.com/design/nKX02SsMK8StZYAEEw0MfK/%E4%B8%9A%E5%8A%A1%E8%B5%84%E6%BA%90?node-id=2659-18103&m=dev&focus-id=2659-18103",
+        "kind": "url",
+        "addedAt": "2026-07-29T08:57:01.798Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-resplan-time-quantity-adjust/api.md",
+        "kind": "file",
+        "addedAt": "2026-07-29T09:01:07.600Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-resplan-time-quantity-adjust/coding.md",
+        "kind": "file",
+        "addedAt": "2026-07-29T09:11:51.949Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-resplan-time-quantity-adjust/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-04T17:24:49.422Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-07-29T03:36:04.086Z",
+      "note": "用户确认 prd.md 可作为 design 唯一依据"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-07-29T08:59:04.437Z",
+      "note": "用户确认 design.md：总览 2659:18103；按 TAPD 拆包执行 F-001/F-002/F-004；F-003 期望到货时间选择组件本次不做"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-07-29T09:10:54.017Z",
+      "note": "用户确认 api.md（按 MR !3267 冻结：update/delay/add；组合走 update+updated_info.expect_time；F-002 用 add）"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-07T12:27:07.386Z",
+      "note": "用户确认继续推进：F-005 demand_class 已落地且 coding.md 已对齐；seat align 完成，推进 coding→test"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-07T12:29:04.579Z",
+      "note": "用户确认手测 PASS（含 F-005）；test.md 已回填结论，推进 test→done"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-07-29T01:58:02.051Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-07-29T03:36:04.086Z",
+      "note": "用户确认 prd.md 可作为 design 唯一依据"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-07-29T08:59:04.437Z",
+      "note": "用户确认 design.md：总览 2659:18103；按 TAPD 拆包执行 F-001/F-002/F-004；F-003 期望到货时间选择组件本次不做"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-07-29T09:10:54.017Z",
+      "note": "用户确认 api.md（按 MR !3267 冻结：update/delay/add；组合走 update+updated_info.expect_time；F-002 用 add）"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-04T17:24:16.871Z",
+      "note": "用户确认 coding 完成并推进到 test；表头批量改日期已落地，迁移 Message 已按确认去掉"
+    },
+    {
+      "from": "test",
+      "to": "coding",
+      "at": "2026-08-06T07:30:53.095Z",
+      "note": "增量：demand_class 混选控制与纯新增选择，回退 coding 实现"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-07T12:27:07.386Z",
+      "note": "用户确认继续推进：F-005 demand_class 已落地且 coding.md 已对齐；seat align 完成，推进 coding→test"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-07T12:29:04.579Z",
+      "note": "用户确认手测 PASS（含 F-005）；test.md 已回填结论，推进 test→done"
+    }
+  ],
+  "requirementId": "req-feat-resplan-time-quantity-adjust",
+  "branch": "feat-resplan-time-quantity-adjust",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598136510459",
+    "parentId": "1069995598135047237"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "skipped",
+      "at": "2026-07-29T02:01:53.576Z",
+      "note": "用户要求跳过 tapd-story-clarification 与 tapd-story-evaluation；prd 阶段仍单独执行 tapd-analyst"
+    },
+    "hcm-design-icon-intake": {
+      "status": "completed",
+      "at": "2026-07-29T07:23:15.129Z",
+      "note": "已按项目 iconfont 优先级回填批量编辑、复制、新增、移除、前进等图标候选；日期图标复用 Ediatable 日期列内置能力"
+    },
+    "hcm-design-comp-intake": {
+      "status": "completed",
+      "at": "2026-07-29T07:23:42.770Z",
+      "note": "已回填 §3.y 项目三列；本需求为现有调整页的非标准可编辑表格改造，采用 adjacent 复用 @blueking/ediatable 现有用法与项目操作列封装，无 page/comp 组装 skill 入口"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-07T12:29:29.728Z",
+      "note": "story 1069995598136510459: status_12→status_13(tested)→status_14(done); owner 未改。父需求 rollup shouldAdvance=false（兄弟子单仍 backlog，且父单 designing 链外），未更新父单。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "adjust-payload.ts",
+        "src/store/resource-plan/cvm-adjust.ts",
+        "src/views/resource-plan/route-config.ts",
+        "time-period-block.vue",
+        "components/ediatable/operation-column.vue",
+        "typings.ts",
+        "types.ts",
+        "src/views/resource-plan/cvm/adjust/index.vue",
+        "index.scss",
+        "src/views/resource-plan/cvm/adjust/data-list.vue",
+        "src/views/resource-plan/cvm/adjust/render-row.vue",
+        "src/views/resource-plan/cvm/adjust/operation-column.vue",
+        "src/views/resource-plan/cvm/adjust/adjust-payload.ts",
+        "src/views/resource-plan/cvm/adjust/typings.ts",
+        "src/constants/menu-symbol.ts",
+        "src/router/module/business.ts",
+        "src/router/module/service.ts",
+        "src/components/resource-plan/resource-manage/list/table/index.tsx",
+        "src/views/business/resource-plan/detail/index.tsx",
+        "src/components/resource-plan/resource-manage/mod/index.tsx",
+        "src/components/resource-plan/resource-manage/mod/index.scss",
+        "src/components/resource-plan/resource-manage/mod/useModColumn.tsx",
+        "src/views/business/resource-plan/mod/index.tsx",
+        "src/views/service/resource-plan/resource-manage/mod/index.tsx",
+        "src/components/resource-plan/resource-manage/list/table/components/batch-postpone-sideslider/index.vue",
+        "components/resource-plan/add/basic/index.tsx",
+        "typings/plan.ts",
+        "data-list.vue",
+        "add/index.tsx",
+        "resourcePlan.ts",
+        "render-row.vue",
+        "store/resource-plan/cvm-adjust.ts",
+        "reset.css",
+        "add/cvm/index.tsx",
+        "add/cbs/index.tsx",
+        "index.vue",
+        "applications/detail/list/index.vue",
+        "node_modules/@blueking/ediatable/vue3/index.es.min.js",
+        "bkui-vue/lib/input/index.js",
+        "operation-column.vue",
+        "src/router/utils/action.ts",
+        "src/router/utils/history-storage.ts",
+        "src/router/hooks/use-back.ts",
+        "list/table/index.tsx",
+        "cvm-adjust.ts"
+      ],
+      "contentFingerprint": "89e47bfb2d8b9b498b68af54310d9f67e85be823",
+      "codeBaseline": "deba98f618653de2497b77bb73f81c11619cc85e",
+      "seatedAt": "2026-08-07T12:27:01.155Z"
+    }
+  }
+}

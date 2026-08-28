@@ -35,11 +35,8 @@ const isChanged = computed(() => {
   if (isSpecialType.value) {
     return false;
   }
-  return originalVal.value !== updatedVal.value && !!props.colData?.original_info;
-});
-
-const content = computed(() => {
-  return isChanged.value ? `修改前: ${originalVal.value}` : `暂无修改前数据`;
+  // 无 original_info（调整单内新增 / 纯新增）或字段未变 → 不算变更
+  return !!props.colData?.original_info && originalVal.value !== updatedVal.value;
 });
 
 const text = computed(() => {
@@ -48,14 +45,18 @@ const text = computed(() => {
   }
   return updatedVal.value;
 });
+
+const tipContent = computed(() => `修改前: ${originalVal.value ?? '--'}`);
 </script>
 
 <template>
+  <!-- 仅字段真实变更时出 tip；NEW 行与无变更行不再出现「暂无修改前数据」 -->
   <div
     class="resource-plan-detail-cell"
+    :class="{ 'is-changed': isChanged }"
     v-bk-tooltips="{
-      content: content,
-      disabled: isSpecialType,
+      content: tipContent,
+      disabled: !isChanged,
     }"
   >
     <Info v-if="isChanged" class="resource-plan-detail-info resource-plan-detail-text" />
@@ -66,8 +67,11 @@ const text = computed(() => {
 <style lang="scss" scoped>
 .resource-plan-detail-cell {
   display: flex;
-  cursor: pointer;
   align-items: center;
+
+  &.is-changed {
+    cursor: pointer;
+  }
 }
 
 .resource-plan-detail-text {

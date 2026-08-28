@@ -4,13 +4,14 @@ import Table from '@/components/resource-plan/resource-manage/detail/list/index'
 import Basic from '@/components/resource-plan/resource-manage/detail/basic/index';
 import DetailHeader from '@/views/resource/resource-manage/common/header/detail-header';
 import cssModule from './index.module.scss';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { Button } from 'bkui-vue';
+import routerAction from '@/router/utils/action';
+import { MENU_BUSINESS_RESOURCE_PLAN_CVM_ADJUST } from '@/constants/menu-symbol';
 
 export default defineComponent({
   setup() {
-    const router = useRouter();
     const route = useRoute();
     const { t } = useI18n();
 
@@ -21,14 +22,17 @@ export default defineComponent({
 
     const handleAdjust = () => {
       const searchModel = JSON.parse(route.query.searchModel as string);
-      router.push({
-        path: '/business/service/resource-plan-mod',
-        query: {
-          planIds: route.query.demandId,
-          start: searchModel.expect_time_range.start,
-          end: searchModel.expect_time_range.end,
+      routerAction.redirect(
+        {
+          name: MENU_BUSINESS_RESOURCE_PLAN_CVM_ADJUST,
+          query: {
+            planIds: route.query.demandId,
+            start: searchModel.expect_time_range.start,
+            end: searchModel.expect_time_range.end,
+          },
         },
-      });
+        { history: true },
+      );
     };
 
     return () => (

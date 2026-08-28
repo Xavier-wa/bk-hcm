@@ -21,18 +21,39 @@ export class HistoryStorage {
     return historyList;
   }
 
+  /**
+   * btoa 只接受 Latin1。列表页 query 常含中文筛选条件，直接 btoa(JSON) 会抛 InvalidCharacterError。
+   * 先按 UTF-8 转成字节再 btoa；ASCII 旧数据同样可被 TextDecoder 还原。
+   */
+  private static serialize(data: RouteLocationRaw): string {
+    const bytes = new TextEncoder().encode(JSON.stringify(data));
+    let binary = '';
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    return btoa(binary);
+  }
+
+  private static deserialize(record: string): RouteLocationRaw {
+    const binary = atob(record);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+
   static append(data: RouteLocationRaw) {
-    const base64 = btoa(JSON.stringify(data));
     const historyList = this.get();
-    historyList.push(base64);
+    historyList.push(this.serialize(data));
     window.sessionStorage.setItem(this.key, JSON.stringify(historyList));
   }
 
   static remove(name: RouteRecordNameGeneric) {
     const historyList = this.get();
     const index = historyList.findIndex((item) => {
-      const history = JSON.parse(atob(item));
-      return history.name === name;
+      try {
+        return this.deserialize(item).name === name;
+      } catch {
+        return false;
+      }
     });
     if (index !== -1) {
       historyList.splice(index, 1);
@@ -43,8 +64,24 @@ export class HistoryStorage {
   static pop(): RouteLocationRaw {
     const historyList = this.get();
     const record = historyList.pop();
-    const route = JSON.parse(atob(record));
+    if (record === undefined) {
+      throw new Error('history stack is empty');
+    }
+    const route = this.deserialize(record);
+    window.sessionStorage.setItem(this.key, JSON.stringify(historyList));
     return route;
+  }
+
+  /** 只读栈顶，供面包屑判断「能否返回」；真正离开时再 pop */
+  static peek(): RouteLocationRaw | null {
+    const historyList = this.get();
+    const record = historyList[historyList.length - 1];
+    if (!record) return null;
+    try {
+      return this.deserialize(record);
+    } catch {
+      return null;
+    }
   }
 
   static clear() {

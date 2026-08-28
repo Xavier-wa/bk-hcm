@@ -1,0 +1,23 @@
+{
+  "id": "promo-303bb88a",
+  "createdAt": "2026-08-06T09:03:26.149Z",
+  "updatedAt": "2026-08-07T12:33:52.155Z",
+  "status": "shipped",
+  "kind": "rule",
+  "title": "组件事件处理函数必须以 handle 开头",
+  "summary": "凡直接绑定到组件/DOM 事件的函数（模板 @xxx=、TSX onXxx=）必须以 handle 开头，例如 handleSelectionChange、handlePageChange。内部工具函数可不加此前缀。",
+  "why": "本轮曾出现 pruneMixedDemandClassSelection 直接绑 onSelectionChange，命名不一致；与现有 handlePageChange 等模式统一后可降低审查成本。",
+  "provenance": {
+    "workflowId": "feat-resplan-time-quantity-adjust"
+  },
+  "target": {
+    "action": "update",
+    "kind": "rule",
+    "relativePath": "rules/fe-conventions.mdc",
+    "project": "hcm"
+  },
+  "ship": {
+    "via": "local",
+    "at": "2026-08-07T12:33:52.155Z"
+  }
+}

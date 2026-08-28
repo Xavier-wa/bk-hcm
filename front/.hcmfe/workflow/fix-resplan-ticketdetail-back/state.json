@@ -1,0 +1,108 @@
+{
+  "id": "fix-resplan-ticketdetail-back",
+  "title": "资源预测-修改预测提交后-单据详情返回按钮没有响应",
+  "currentStage": "done",
+  "createdAt": "2026-08-27T11:21:02.792Z",
+  "updatedAt": "2026-08-27T12:11:58.305Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/fix-resplan-ticketdetail-back/prd.md",
+        "kind": "file",
+        "addedAt": "2026-08-27T11:46:43.699Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/fix-resplan-ticketdetail-back/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-27T11:49:11.397Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/fix-resplan-ticketdetail-back/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-27T11:58:13.248Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-08-27T11:48:05.600Z",
+      "note": "user confirmed PRD: keep old DetailHeader; submit-path back to ticket list; list-to-detail back unchanged"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-27T11:58:06.363Z",
+      "note": "user confirmed coding: handleBack falls back to fromConfig.name/path; list-to-detail history path unchanged"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-27T12:10:52.404Z",
+      "note": "user confirmed hand test PASS; proceed test to done"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-08-27T11:21:02.792Z"
+    },
+    {
+      "from": "prd",
+      "to": "coding",
+      "at": "2026-08-27T11:48:05.600Z",
+      "gitHead": "7f926b9a81c7862178ea7cd6e6c325ccf8dcc13e",
+      "note": "user confirmed PRD: keep old DetailHeader; submit-path back to ticket list; list-to-detail back unchanged"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-27T11:58:06.363Z",
+      "note": "user confirmed coding: handleBack falls back to fromConfig.name/path; list-to-detail history path unchanged"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-27T12:10:52.404Z",
+      "note": "user confirmed hand test PASS; proceed test to done"
+    }
+  ],
+  "requirementId": "req-feat-resplan-time-quantity-adjust",
+  "branch": "feat-resplan-time-quantity-adjust",
+  "stages": [
+    "prd",
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137606214"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "completed",
+      "at": "2026-08-27T11:46:51.342Z",
+      "note": "clarification written back; no split; RICE 400; tapd-analyst used TAPD body (repro screenshots in description, no comments)"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-27T12:11:58.305Z",
+      "note": "story 1069995598137606214: status_12\to status_16\to status_13\to status_14(done); owner unchanged. No parentId, skip rollup."
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/router/hooks/use-back.ts"
+      ],
+      "contentFingerprint": "5ac73d11915ca81239f26375745f4665429b9f2e",
+      "codeBaseline": "e9920de503ee1967dd7b8a0b6fb65cbb99de4019",
+      "seatedAt": "2026-08-27T11:57:58.602Z"
+    }
+  }
+}
