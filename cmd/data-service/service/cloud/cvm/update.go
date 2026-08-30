@@ -79,6 +79,10 @@ func batchUpdateCvm[T corecvm.Extension](cts *rest.Contexts, svc *cvmSvc, vendor
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
+	// 按 id 升序加锁，避免并发更新同批 cvm 行时形成循环等待触发 MySQL 死锁(Error 1213)
+	req.Cvms = slice.SortByKey(req.Cvms,
+		func(one protocloud.CvmBatchUpdateWithExtension[T]) string { return one.ID })
+
 	ids := make([]string, 0, len(req.Cvms))
 	for _, one := range req.Cvms {
 		ids = append(ids, one.ID)
@@ -260,6 +264,10 @@ func (svc *cvmSvc) BatchUpdateCvmCommonInfo(cts *rest.Contexts) (interface{}, er
 	if err := req.Validate(); err != nil {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
+
+	// 按 id 升序加锁，避免并发更新同批 cvm 行时形成循环等待触发 MySQL 死锁(Error 1213)
+	req.Cvms = slice.SortByKey(req.Cvms,
+		func(one protocloud.CvmCommonInfoBatchUpdateData) string { return one.ID })
 
 	ids := make([]string, 0, len(req.Cvms))
 	_, err := svc.dao.Txn().AutoTxn(cts.Kit, func(txn *sqlx.Tx, opt *orm.TxnOption) (interface{}, error) {

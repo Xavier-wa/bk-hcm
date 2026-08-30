@@ -337,19 +337,118 @@ func splitIP(ip string) []string {
 	return strings.Split(ip, ",")
 }
 
-func isHostChange(cloud cvm.Cvm[cvm.TCloudZiyanHostExtension], db cvm.Cvm[cvm.TCloudZiyanHostExtension]) bool {
-	if db.BkBizID != cloud.BkBizID {
+// isHostChange 全量链路比较：cc 来源字段 + cvm 来源字段。
+func isHostChange(cloud, db cvm.Cvm[cvm.TCloudZiyanHostExtension]) bool {
+	return isHostCCChange(cloud, db) || isHostCvmChange(cloud, db)
+}
+
+// isHostCCChange 比较 cc 来源字段：基础字段 + extension cc 槽位。增量链路（HostCCInfo）与全量链路的 cc 部分共用。
+func isHostCCChange(cc, db cvm.Cvm[cvm.TCloudZiyanHostExtension]) bool {
+	return isHostCCBaseFieldChange(cc, db) || isHostCCExtensionChange(cc, db)
+}
+
+// isHostCCBaseFieldChange 比较 cc 来源的基础字段。
+func isHostCCBaseFieldChange(cc, db cvm.Cvm[cvm.TCloudZiyanHostExtension]) bool {
+	if db.BkCloudID != cc.BkCloudID {
 		return true
 	}
 
-	if db.BkHostID != cloud.BkHostID {
+	if db.BkBizID != cc.BkBizID {
 		return true
 	}
 
-	if db.Region != cloud.Region {
+	if db.BkHostID != cc.BkHostID {
 		return true
 	}
 
+	if db.BkAssetID != cc.BkAssetID {
+		return true
+	}
+
+	if db.Region != cc.Region {
+		return true
+	}
+
+	if db.OsName != cc.OsName {
+		return true
+	}
+
+	if db.MachineType != cc.MachineType {
+		return true
+	}
+
+	return isHostIPChange(cc, db)
+}
+
+// isHostIPChange 比较 cc 来源的 IP 字段。
+func isHostIPChange(cc, db cvm.Cvm[cvm.TCloudZiyanHostExtension]) bool {
+	if !assert.IsStringSliceEqual(db.PrivateIPv4Addresses, cc.PrivateIPv4Addresses) {
+		return true
+	}
+
+	if !assert.IsStringSliceEqual(db.PublicIPv4Addresses, cc.PublicIPv4Addresses) {
+		return true
+	}
+
+	if !assert.IsStringSliceEqual(db.PrivateIPv6Addresses, cc.PrivateIPv6Addresses) {
+		return true
+	}
+
+	if !assert.IsStringSliceEqual(db.PublicIPv6Addresses, cc.PublicIPv6Addresses) {
+		return true
+	}
+
+	return false
+}
+
+// isHostCCExtensionChange 比较 extension 中的 cc 槽位。
+func isHostCCExtensionChange(cc, db cvm.Cvm[cvm.TCloudZiyanHostExtension]) bool {
+	if db.Extension == nil || cc.Extension == nil {
+		return true
+	}
+
+	if db.Extension.HostName != cc.Extension.HostName {
+		return true
+	}
+
+	if db.Extension.SvrSourceTypeID != cc.Extension.SvrSourceTypeID {
+		return true
+	}
+
+	if db.Extension.SrvStatus != cc.Extension.SrvStatus {
+		return true
+	}
+
+	if db.Extension.SvrDeviceClass != cc.Extension.SvrDeviceClass {
+		return true
+	}
+
+	if db.Extension.BkDisk != cc.Extension.BkDisk {
+		return true
+	}
+
+	if db.Extension.BkCpu != cc.Extension.BkCpu {
+		return true
+	}
+
+	if db.Extension.BkOSName != cc.Extension.BkOSName {
+		return true
+	}
+
+	if db.Extension.Operator != cc.Extension.Operator {
+		return true
+	}
+
+	return db.Extension.BkBakOperator != cc.Extension.BkBakOperator
+}
+
+// isHostCvmChange 比较 cvm 来源字段：基础字段 + extension cvm 槽位。
+func isHostCvmChange(cloud, db cvm.Cvm[cvm.TCloudZiyanHostExtension]) bool {
+	return isHostCvmBaseFieldChange(cloud, db) || isHostCvmExtensionChange(cloud, db)
+}
+
+// isHostCvmBaseFieldChange 比较 cvm 来源的基础字段。
+func isHostCvmBaseFieldChange(cloud, db cvm.Cvm[cvm.TCloudZiyanHostExtension]) bool {
 	if db.Zone != cloud.Zone {
 		return true
 	}
@@ -363,10 +462,6 @@ func isHostChange(cloud cvm.Cvm[cvm.TCloudZiyanHostExtension], db cvm.Cvm[cvm.TC
 	}
 
 	if db.Name != cloud.Name {
-		return true
-	}
-
-	if db.BkAssetID != cloud.BkAssetID {
 		return true
 	}
 
@@ -388,15 +483,7 @@ func isHostChange(cloud cvm.Cvm[cvm.TCloudZiyanHostExtension], db cvm.Cvm[cvm.TC
 		return true
 	}
 
-	if db.OsName != cloud.OsName {
-		return true
-	}
-
 	if db.Status != cloud.Status {
-		return true
-	}
-
-	if db.MachineType != cloud.MachineType {
 		return true
 	}
 
@@ -404,91 +491,16 @@ func isHostChange(cloud cvm.Cvm[cvm.TCloudZiyanHostExtension], db cvm.Cvm[cvm.TC
 		return true
 	}
 
-	if db.CloudExpiredTime != cloud.CloudExpiredTime {
-		return true
-	}
-
-	if isHostIPChange(db, cloud) {
-		return true
-	}
-
-	if isHostExtensionChange(db, cloud) {
-		return true
-	}
-
-	return false
+	return db.CloudExpiredTime != cloud.CloudExpiredTime
 }
 
-func isHostIPChange(cloud cvm.Cvm[cvm.TCloudZiyanHostExtension], db cvm.Cvm[cvm.TCloudZiyanHostExtension]) bool {
-	if !assert.IsStringSliceEqual(db.PrivateIPv4Addresses, cloud.PrivateIPv4Addresses) {
-		return true
-	}
-
-	if !assert.IsStringSliceEqual(db.PublicIPv4Addresses, cloud.PublicIPv4Addresses) {
-		return true
-	}
-
-	if !assert.IsStringSliceEqual(db.PrivateIPv6Addresses, cloud.PrivateIPv6Addresses) {
-		return true
-	}
-
-	if !assert.IsStringSliceEqual(db.PublicIPv6Addresses, cloud.PublicIPv6Addresses) {
-		return true
-	}
-
-	return false
-}
-
-func isHostExtensionChange(cloud cvm.Cvm[cvm.TCloudZiyanHostExtension], db cvm.Cvm[cvm.TCloudZiyanHostExtension]) bool {
+// isHostCvmExtensionChange 比较 extension 中的 cvm 槽位（TCloudCvmExtension）。
+func isHostCvmExtensionChange(cloud, db cvm.Cvm[cvm.TCloudZiyanHostExtension]) bool {
 	if db.Extension == nil || cloud.Extension == nil {
 		return true
 	}
 
-	if db.Extension.HostName != cloud.Extension.HostName {
-		return true
-	}
-
-	if db.Extension.SvrSourceTypeID != cloud.Extension.SvrSourceTypeID {
-		return true
-	}
-
-	if db.Extension.SrvStatus != cloud.Extension.SrvStatus {
-		return true
-	}
-
-	if db.BkAssetID != cloud.BkAssetID {
-		return true
-	}
-
-	if db.Extension.SvrDeviceClass != cloud.Extension.SvrDeviceClass {
-		return true
-	}
-
-	if db.Extension.BkCpu != cloud.Extension.BkCpu {
-		return true
-	}
-
-	if db.Extension.BkDisk != cloud.Extension.BkDisk {
-		return true
-	}
-
-	if db.Extension.BkOSName != cloud.Extension.BkOSName {
-		return true
-	}
-
-	if db.Extension.Operator != cloud.Extension.Operator {
-		return true
-	}
-
-	if db.Extension.BkBakOperator != cloud.Extension.BkBakOperator {
-		return true
-	}
-
-	if tcloud.IsCvmExtensionChange(cloud.Extension.TCloudCvmExtension, db.Extension.TCloudCvmExtension) {
-		return true
-	}
-
-	return false
+	return tcloud.IsCvmExtensionChange(cloud.Extension.TCloudCvmExtension, db.Extension.TCloudCvmExtension)
 }
 
 // RemoveHostFromCC 对比根据的主机，删除本地多余的主机
@@ -738,8 +750,23 @@ func (cli *client) listHostFromDBByCloudIDs(kt *kit.Kit, cloudIDs []string) (
 	return res, nil
 }
 
+// listHostFromDBForDiff 按 bk_host_id 与 cloud_id 两个维度查询 db 存量主机，cloudIDs 取自云上主机列表。
 func (cli *client) listHostFromDBForDiff(kt *kit.Kit, hostIDs []int64,
 	cloudHosts []cvm.Cvm[cvm.TCloudZiyanHostExtension]) ([]cvm.Cvm[cvm.TCloudZiyanHostExtension], error) {
+
+	cloudIDs := make([]string, 0, len(cloudHosts))
+	for i := range cloudHosts {
+		cloudIDs = append(cloudIDs, cloudHosts[i].CloudID)
+	}
+
+	return cli.listHostFromDBForDiffByCloudIDs(kt, hostIDs, cloudIDs)
+}
+
+// listHostFromDBForDiffByCloudIDs 按 bk_host_id 与 cloud_id 两个维度查询 db 存量主机，合并去重后返回：
+// 当前物理机的cloud_id用的是机器的固资号，cc 主机重建会导致 bk_host_id 变化，但 cloud_id 不变，
+// 只按 bk_host_id 查会漏掉旧记录，使其在 diff 时被误判为新增，从而触发 cloud_id + vendor 唯一键冲突
+func (cli *client) listHostFromDBForDiffByCloudIDs(kt *kit.Kit, hostIDs []int64, cloudIDs []string) (
+	[]cvm.Cvm[cvm.TCloudZiyanHostExtension], error) {
 
 	dbHosts, err := cli.listHostFromDBByHostIDs(kt, hostIDs)
 	if err != nil {
@@ -747,10 +774,6 @@ func (cli *client) listHostFromDBForDiff(kt *kit.Kit, hostIDs []int64,
 		return nil, err
 	}
 
-	cloudIDs := make([]string, 0, len(cloudHosts))
-	for i := range cloudHosts {
-		cloudIDs = append(cloudIDs, cloudHosts[i].CloudID)
-	}
 	if len(cloudIDs) == 0 {
 		return dbHosts, nil
 	}

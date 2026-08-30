@@ -61,6 +61,7 @@ func InitService(cap *capability.Capability) {
 	h.Add("SyncHostWithRelRes", "POST", "/hosts/with/relation_resources/sync", v.SyncHostWithRelRes)
 	h.Add("SyncHostWithRelResByCond", "POST", "/hosts/with/relation_resources/by_condition/sync",
 		v.SyncHostWithRelResByCond)
+	h.Add("SyncHostCCInfoByCond", "POST", "/hosts/cc_info/by_condition/sync", v.SyncHostCCInfoByCond)
 	h.Add("DeleteHost", "DELETE", "/hosts/by_condition/delete", v.DeleteHostByCond)
 	h.Add("SyncSecurityGroupUsageBiz", "POST", "/security_groups/usage_biz_rels/sync", v.SyncSecurityGroupUsageBiz)
 	h.Add("SyncImage", "POST", "/images/sync", v.SyncImage)

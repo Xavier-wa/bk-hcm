@@ -70,6 +70,31 @@ func (svc *service) SyncHostWithRelResByCond(cts *rest.Contexts) (interface{}, e
 	return nil, nil
 }
 
+// SyncHostCCInfoByCond 增量同步入口，只刷新 cc 来源字段，创建的主机转完整链路处理
+func (svc *service) SyncHostCCInfoByCond(cts *rest.Contexts) (interface{}, error) {
+	req := new(sync.TCloudZiyanSyncHostByCondReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	syncCli, err := svc.syncCli.TCloudZiyan(cts.Kit, req.AccountID)
+	if err != nil {
+		return nil, err
+	}
+
+	params := &ziyan.SyncHostParams{AccountID: req.AccountID, BizID: req.BizID, HostIDs: req.HostIDs}
+	if _, err := syncCli.HostCCInfo(cts.Kit, params); err != nil {
+		logs.Errorf("sync host cc info by condition failed, err: %v, req: %+v, rid: %s", err, req, cts.Kit.Rid)
+		return nil, err
+	}
+
+	return nil, nil
+}
+
 // DeleteHostByCond ....
 func (svc *service) DeleteHostByCond(cts *rest.Contexts) (interface{}, error) {
 	req := new(sync.TCloudZiyanDelHostByCondReq)

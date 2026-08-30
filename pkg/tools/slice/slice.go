@@ -21,6 +21,9 @@
 package slice
 
 import (
+	"slices"
+	"strings"
+
 	"hcm/pkg/tools/maps"
 )
 
@@ -149,6 +152,16 @@ func NotIn[S ~[]E, E comparable](sliceA, sliceB S) S {
 		}
 	}
 	return maps.Keys(diffs)
+}
+
+// SortByKey 按 keyOf 提取的键升序排序，返回排序后的新切片，不修改入参。
+func SortByKey[T any](items []T, keyOf func(T) string) []T {
+	sorted := make([]T, len(items))
+	copy(sorted, items)
+	slices.SortFunc(sorted, func(a, b T) int {
+		return strings.Compare(keyOf(a), keyOf(b))
+	})
+	return sorted
 }
 
 // TopKSort 实现部分排序，保证最大的k的元素在最后k个位置

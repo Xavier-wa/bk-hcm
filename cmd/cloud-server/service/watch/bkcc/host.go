@@ -435,7 +435,8 @@ func (w *Watcher) upsertTCloudZiyanHost(kt *kit.Kit, space any, hostIDs []int64)
 
 	for _, batch := range slice.Split(hostIDs, constant.BatchOperationMaxLimit) {
 		req := &sync.TCloudZiyanSyncHostByCondReq{BizID: bizID, HostIDs: batch, AccountID: accountID}
-		err := w.CliSet.HCService().TCloudZiyan.Cvm.SyncHostWithRelResByCond(kt.Ctx, kt.Header(), req)
+		// 增量同步只刷新 cc 来源字段，云上信息由全量同步负责；新增的主机在下游转由完整链路补全
+		err := w.CliSet.HCService().TCloudZiyan.Cvm.SyncHostCCInfoByCond(kt, req)
 		if err != nil {
 			logs.Errorf("upsert host failed, err: %v, ids: %v, vendor: %s, rid: %s", err, batch, vendor, kt.Rid)
 			tr.AddSyncResult(enumor.CCWatchOpUpsert, enumor.CCWatchResultFailed, len(batch))

@@ -102,6 +102,12 @@ func (cli *CvmClient) SyncHostWithRelResByCond(ctx context.Context, h http.Heade
 	return nil
 }
 
+// SyncHostCCInfoByCond 增量同步主机的 cc 信息，不同步云上信息
+func (cli *CvmClient) SyncHostCCInfoByCond(kt *kit.Kit, request *sync.TCloudZiyanSyncHostByCondReq) error {
+	return common.RequestNoResp[sync.TCloudZiyanSyncHostByCondReq](cli.client, rest.POST, kt, request,
+		"/hosts/cc_info/by_condition/sync")
+}
+
 // DeleteHostByCond delete host by condition.
 func (cli *CvmClient) DeleteHostByCond(ctx context.Context, h http.Header,
 	request *sync.TCloudZiyanDelHostByCondReq) error {

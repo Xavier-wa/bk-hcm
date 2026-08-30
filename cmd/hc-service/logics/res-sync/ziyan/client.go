@@ -75,6 +75,8 @@ type Interface interface {
 
 	RemoveHostFromCC(kt *kit.Kit, params *DelHostParams) error
 	HostWithRelRes(kt *kit.Kit, params *SyncHostParams) (*SyncResult, error)
+	// HostCCInfo 增量同步入口，只刷新 cc 来源字段，创建的主机转 HostWithRelRes 处理
+	HostCCInfo(kt *kit.Kit, params *SyncHostParams) (*SyncResult, error)
 
 	// Image 同步镜像
 	Image(kt *kit.Kit, params *SyncBaseParams, opt *SyncImageOption) (*SyncResult, error)
