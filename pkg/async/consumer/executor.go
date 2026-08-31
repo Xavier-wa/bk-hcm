@@ -262,8 +262,7 @@ func (exec *executor) initWorkerTask(flow *Flow, task *Task) {
 func (exec *executor) workerDo(task *Task) (err error) {
 	// cancelMap清理执行成功/失败的任务
 	defer exec.cancelMap.Delete(task.ID)
-	// 无论任务成功还是失败，都需要交给scheduler分析任务流的状态
-	// 执行完的任务回写到scheduler用于获取待执行的任务
+	// 无论任务成功还是失败，都需要交给scheduler分析任务流的状态,执行完的任务回写到scheduler用于获取待执行的任务
 	defer exec.GetSchedulerFunc().EntryTask(task)
 	var runErr error
 	var failedRet any
@@ -329,7 +328,6 @@ func (exec *executor) workerDo(task *Task) (err error) {
 		if err == nil {
 			return false, nil, nil
 		}
-
 		if !needRetry {
 			return true, failRet, err
 		}
