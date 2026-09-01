@@ -12748,7 +12748,6 @@ paths:
               type: object
               required:
               - page
-              - bk_biz_id
               properties:
                 end:
                   type: string
@@ -12762,10 +12761,6 @@ paths:
                   type: string
                   default: ''
                   description: 单据创建时间过滤条件起点日期，格式如"2022-05-01"
-                bk_biz_id:
-                  type: number
-                  default: ''
-                  description: 业务ID
         required: true
         description: ''
       x-bk-apigateway-resource:
