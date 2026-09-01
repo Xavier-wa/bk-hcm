@@ -710,7 +710,7 @@ func (s *Service) initCronTask() error {
 	}
 	s.tasks[enumor.CronTaskSyncDeviceTypePhysicalRel] = syncDeviceTypePhysicalRelTask
 
-	applyRecommendTask, err := crontask.NewApplyRecommendOfflineTask(s.client, s.sd)
+	applyRecommendTask, err := crontask.NewApplyRecommendOfflineTask(s.client, s.schedulerIf, s.sd)
 	if err != nil {
 		logs.Errorf("init apply recommend offline task failed, err: %v", err)
 		return err

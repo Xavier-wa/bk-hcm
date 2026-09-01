@@ -47,6 +47,7 @@ import (
 	"hcm/pkg"
 	"hcm/pkg/adaptor/types/cvm"
 	"hcm/pkg/api/core"
+	coredevicetype "hcm/pkg/api/core/cloud/device-type"
 	protocloud "hcm/pkg/api/data-service/cloud"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	dissolveproto "hcm/pkg/api/data-service/dissolve"
@@ -191,6 +192,9 @@ type Interface interface {
 	// Returns (pass, reason, error): business failures yield pass=false with a human-readable reason;
 	// system errors are returned as error.
 	VerifyApplyCapacity(kt *kit.Kit, input *types.ApplyReq) (bool, string, error)
+	// CheckDeviceType 按需求类型校验机型是否允许申领。
+	CheckDeviceType(kt *kit.Kit, requireType enumor.RequireType,
+		infos []coredevicetype.DistinctDeviceType) (map[string]string, error)
 }
 
 // scheduler provides resource apply service

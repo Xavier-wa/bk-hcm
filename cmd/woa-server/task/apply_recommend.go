@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"hcm/cmd/woa-server/logics/applyrecommend"
+	"hcm/cmd/woa-server/logics/task/scheduler"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/enumor"
@@ -35,15 +36,19 @@ import (
 
 // ApplyRecommendOfflineTask is the cron task for apply recommend offline stats.
 type ApplyRecommendOfflineTask struct {
-	clientSet *client.ClientSet
-	sd        serviced.State
+	clientSet   *client.ClientSet
+	schedulerIf scheduler.Interface
+	sd          serviced.State
 }
 
 // NewApplyRecommendOfflineTask creates a new apply recommend offline task.
-func NewApplyRecommendOfflineTask(clientSet *client.ClientSet, sd serviced.State) (croncore.Task, error) {
+func NewApplyRecommendOfflineTask(clientSet *client.ClientSet, schedulerIf scheduler.Interface,
+	sd serviced.State) (croncore.Task, error) {
+
 	return &ApplyRecommendOfflineTask{
-		clientSet: clientSet,
-		sd:        sd,
+		clientSet:   clientSet,
+		schedulerIf: schedulerIf,
+		sd:          sd,
 	}, nil
 }
 
@@ -72,7 +77,7 @@ func (t *ApplyRecommendOfflineTask) Do(kt *kit.Kit) error {
 
 	logs.Infof("master node executing apply recommend offline task, rid: %s", kt.Rid)
 
-	logics := applyrecommend.NewLogics(t.clientSet)
+	logics := applyrecommend.NewLogics(t.clientSet, t.schedulerIf)
 	if err := logics.GenerateRecommend(kt); err != nil {
 		logs.Errorf("generate apply recommend failed, err: %v, rid: %s", err, kt.Rid)
 		return err

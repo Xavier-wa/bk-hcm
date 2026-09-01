@@ -23,8 +23,11 @@ package applyrecommend
 import (
 	"time"
 
+	"hcm/cmd/woa-server/logics/task/scheduler"
 	"hcm/pkg/api/core"
+	coredevicetype "hcm/pkg/api/core/cloud/device-type"
 	dataproto "hcm/pkg/api/data-service"
+	dscloud "hcm/pkg/api/data-service/cloud"
 	protocloud "hcm/pkg/api/data-service/cloud/zone"
 	cvmapplyproto "hcm/pkg/api/data-service/cvm-apply"
 	"hcm/pkg/cc"
@@ -42,12 +45,13 @@ import (
 
 // Logics holds the apply recommend logics.
 type Logics struct {
-	client *client.ClientSet
+	client      *client.ClientSet
+	schedulerIf scheduler.Interface
 }
 
 // NewLogics creates a new apply recommend Logics instance.
-func NewLogics(client *client.ClientSet) *Logics {
-	return &Logics{client: client}
+func NewLogics(client *client.ClientSet, schedulerIf scheduler.Interface) *Logics {
+	return &Logics{client: client, schedulerIf: schedulerIf}
 }
 
 // GenerateRecommend executes the full apply recommend offline stats pipeline.
@@ -122,8 +126,18 @@ func (l *Logics) collectCounts(kt *kit.Kit, lookbackDays int) (map[userCountKey]
 		return nil, nil, err
 	}
 
+	denied, err := l.checkDeviceTypes(kt, devices)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	for _, item := range devices {
 		if skipDeviceForCount(kt, item, validImages) {
+			continue
+		}
+		if reason := denied[item.RequireType][item.DeviceType]; reason != "" {
+			logs.Warnf("skip unavailable device type, id: %s, require_type: %d, device_type: %s, reason: %s, "+
+				"rid: %s", item.ID, item.RequireType, item.DeviceType, reason, kt.Rid)
 			continue
 		}
 
@@ -165,10 +179,63 @@ func skipDeviceForCount(kt *kit.Kit, item *cvmapply.ZiyanCvmDeviceInfo, validIma
 		return true
 	}
 	if err := item.RequireType.Validate(); err != nil {
-		logs.Warnf("skip unsupported require type, id: %s, require_type: %d, rid: %s", item.ID, item.RequireType, kt.Rid)
+		logs.Warnf("skip unsupported require type, id: %s, require_type: %d, rid: %s", item.ID, item.RequireType,
+			kt.Rid)
 		return true
 	}
 	return false
+}
+
+func (l *Logics) checkDeviceTypes(kt *kit.Kit, devices []*cvmapply.ZiyanCvmDeviceInfo) (
+	map[enumor.RequireType]map[string]string, error) {
+
+	deviceTypes := make([]string, 0, len(devices))
+	requireDeviceTypes := make(map[enumor.RequireType][]string)
+	for _, item := range devices {
+		deviceTypes = append(deviceTypes, item.DeviceType)
+		requireDeviceTypes[item.RequireType] = append(requireDeviceTypes[item.RequireType], item.DeviceType)
+	}
+
+	deviceTypeMap := make(map[string]coredevicetype.DistinctDeviceType)
+	for _, batch := range slice.Split(slice.Unique(deviceTypes), int(core.DefaultMaxPageLimit)) {
+		req := &dscloud.DistinctDeviceTypeListReq{
+			ListReq: core.ListReq{
+				Filter: tools.ExpressionAnd(tools.RuleEqual("vendor", enumor.TCloudZiyan),
+					tools.RuleIn("device_type", batch)),
+				Page: core.NewDefaultBasePage(),
+			},
+		}
+		resp, err := l.client.DataService().TCloudZiyan.DeviceType.ListDistinctDeviceType(kt, req)
+		if err != nil {
+			logs.Errorf("list distinct device type failed, err: %v, deviceTypes: %v, rid: %s", err, batch, kt.Rid)
+			return nil, err
+		}
+		for _, item := range resp.Details {
+			deviceTypeMap[item.DeviceType] = item
+		}
+	}
+
+	denied := make(map[enumor.RequireType]map[string]string)
+	for requireType, types := range requireDeviceTypes {
+		denied[requireType] = make(map[string]string)
+		infos := make([]coredevicetype.DistinctDeviceType, 0, len(types))
+		for _, deviceType := range slice.Unique(types) {
+			info, ok := deviceTypeMap[deviceType]
+			if !ok {
+				denied[requireType][deviceType] = "机型数据不存在"
+				continue
+			}
+			infos = append(infos, info)
+		}
+		result, err := l.schedulerIf.CheckDeviceType(kt, requireType, infos)
+		if err != nil {
+			return nil, err
+		}
+		for deviceType, reason := range result {
+			denied[requireType][deviceType] = reason
+		}
+	}
+	return denied, nil
 }
 
 func (l *Logics) queryValidImageIDs(kt *kit.Kit, imageIDs []string) (map[string]struct{}, error) {
