@@ -17,31 +17,27 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package aiagent
+package enumor
 
-import (
-	"testing"
+import "fmt"
 
-	"hcm/pkg/criteria/enumor"
+// FeedbackReaction is the user's attitude toward one Agent run. It is stored in
+// aiagent_run_feedback.reaction as the same string values used on the API.
+type FeedbackReaction string
+
+const (
+	// FeedbackReactionLike 点赞
+	FeedbackReactionLike FeedbackReaction = "like"
+	// FeedbackReactionDislike 点踩
+	FeedbackReactionDislike FeedbackReaction = "dislike"
 )
 
-func TestSessionTableSessionTag(t *testing.T) {
-	tests := []struct {
-		name string
-		tag  enumor.IntentType
-		want enumor.IntentType
-	}{
-		{name: "empty tag", tag: "", want: ""},
-		{name: "host_apply tag", tag: enumor.IntentTypeHostApply, want: enumor.IntentTypeHostApply},
-		{name: "chat tag", tag: enumor.IntentTypeChat, want: enumor.IntentTypeChat},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			s := SessionTable{SessionTag: tc.tag}
-			if s.SessionTag != tc.want {
-				t.Errorf("SessionTag = %q, want %q", s.SessionTag, tc.want)
-			}
-		})
+// Validate checks whether the reaction is one of the declared values.
+func (r FeedbackReaction) Validate() error {
+	switch r {
+	case FeedbackReactionLike, FeedbackReactionDislike:
+		return nil
+	default:
+		return fmt.Errorf("unsupported feedback reaction: %s", r)
 	}
 }

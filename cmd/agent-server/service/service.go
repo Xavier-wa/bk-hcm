@@ -44,6 +44,7 @@ import (
 	aguievent "hcm/cmd/agent-server/service/agui-event"
 	"hcm/cmd/agent-server/service/capability"
 	configsvc "hcm/cmd/agent-server/service/config"
+	"hcm/cmd/agent-server/service/feedback"
 	"hcm/cmd/agent-server/service/memory"
 	promptsvc "hcm/cmd/agent-server/service/prompt"
 	"hcm/cmd/agent-server/service/runobserve"
@@ -320,6 +321,8 @@ func (s *Service) mountAGUI(mux *http.ServeMux) error {
 			agui.WithMessagesSnapshotFollowEnabled(true),
 			agui.WithFlushInterval(50*time.Millisecond),
 			agui.WithMessagesSnapshotPath(constant.AGUIHistoryPath),
+			// 历史快照回显各轮 RUN_STARTED/FINISHED/ERROR，带上历史 run_id
+			agui.WithMessagesSnapshotRunLifecycleEventsEnabled(true),
 		)
 	}
 
@@ -434,6 +437,7 @@ func (s *Service) apiSet() *restful.Container {
 	memory.InitService(c)
 	session.InitService(c, s.resolver)
 	configsvc.InitService(c)
+	feedback.InitService(c)
 	skillsvc.InitService(c)
 	promptsvc.InitService(c)
 	// 提供前端判断 Agent 是否就绪的接口（走 rest.Handler 统一封装 result/code/message/data）

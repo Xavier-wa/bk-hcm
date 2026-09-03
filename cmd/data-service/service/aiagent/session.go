@@ -54,6 +54,12 @@ func InitService(cap *capability.Capability) {
 	h.Add("IncrAIAgentSessionContentCount", http.MethodPatch, "/aiagent/sessions/incr_content_count",
 		svc.IncrAiagentSessionContentCount)
 
+	h.Add("CreateAgentRunFeedback", http.MethodPost, "/aiagent/feedbacks/create", svc.CreateAgentRunFeedback)
+	h.Add("UpdateAgentRunFeedback", http.MethodPatch, "/aiagent/feedbacks", svc.UpdateAgentRunFeedback)
+	h.Add("ListAgentRunFeedback", http.MethodPost, "/aiagent/feedbacks/list", svc.ListAgentRunFeedback)
+	h.Add("BatchDeleteAgentRunFeedback", http.MethodDelete, "/aiagent/feedbacks/batch",
+		svc.BatchDeleteAgentRunFeedback)
+
 	h.Load(cap.WebService)
 }
 

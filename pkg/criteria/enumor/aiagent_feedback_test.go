@@ -17,30 +17,27 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package aiagent
+package enumor
 
-import (
-	"testing"
+import "testing"
 
-	"hcm/pkg/criteria/enumor"
-)
-
-func TestSessionTableSessionTag(t *testing.T) {
+func TestFeedbackReaction_Validate(t *testing.T) {
 	tests := []struct {
-		name string
-		tag  enumor.IntentType
-		want enumor.IntentType
+		name     string
+		reaction FeedbackReaction
+		wantErr  bool
 	}{
-		{name: "empty tag", tag: "", want: ""},
-		{name: "host_apply tag", tag: enumor.IntentTypeHostApply, want: enumor.IntentTypeHostApply},
-		{name: "chat tag", tag: enumor.IntentTypeChat, want: enumor.IntentTypeChat},
+		{name: "like is valid", reaction: FeedbackReactionLike, wantErr: false},
+		{name: "dislike is valid", reaction: FeedbackReactionDislike, wantErr: false},
+		{name: "empty string fails validation", reaction: FeedbackReaction(""), wantErr: true},
+		{name: "unknown value fails validation", reaction: FeedbackReaction("neutral"), wantErr: true},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			s := SessionTable{SessionTag: tc.tag}
-			if s.SessionTag != tc.want {
-				t.Errorf("SessionTag = %q, want %q", s.SessionTag, tc.want)
+			err := tc.reaction.Validate()
+			if (err != nil) != tc.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
 		})
 	}

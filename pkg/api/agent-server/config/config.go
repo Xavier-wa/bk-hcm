@@ -36,3 +36,15 @@ type UpsertAccessTokenReq struct {
 func (r *UpsertAccessTokenReq) Validate() error {
 	return validator.Validate.Struct(r)
 }
+
+// ListConfigItem is one global_config row returned by GET /bizs/{bk_biz_id}/config/list.
+type ListConfigItem struct {
+	ConfigKey string `json:"config_key"`
+	// ConfigValue 是扁平 map：key 为英文枚举，value 为中文文案，不包含分组结构。
+	ConfigValue map[string]string `json:"config_value"`
+}
+
+// ListConfigResp is the response body for GET /bizs/{bk_biz_id}/config/list.
+type ListConfigResp struct {
+	Details []ListConfigItem `json:"details"`
+}

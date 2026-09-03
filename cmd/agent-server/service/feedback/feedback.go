@@ -17,31 +17,35 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package aiagent
+// Package feedback provides agent-server user feedback (like/dislike) APIs:
+// user-facing commit/delete under /bizs/{bk_biz_id}. Operational listing is
+// served by the eval dashboard APIs, not this package.
+package feedback
 
 import (
-	"testing"
+	"net/http"
 
-	"hcm/pkg/criteria/enumor"
+	"hcm/cmd/agent-server/service/capability"
+	"hcm/pkg/client"
+	"hcm/pkg/iam/auth"
+	"hcm/pkg/rest"
 )
 
-func TestSessionTableSessionTag(t *testing.T) {
-	tests := []struct {
-		name string
-		tag  enumor.IntentType
-		want enumor.IntentType
-	}{
-		{name: "empty tag", tag: "", want: ""},
-		{name: "host_apply tag", tag: enumor.IntentTypeHostApply, want: enumor.IntentTypeHostApply},
-		{name: "chat tag", tag: enumor.IntentTypeChat, want: enumor.IntentTypeChat},
+// InitService initialize the feedback service.
+func InitService(cap *capability.Capability) {
+	svc := &service{
+		cli:        cap.ClientSet,
+		authorizer: cap.Authorizer,
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			s := SessionTable{SessionTag: tc.tag}
-			if s.SessionTag != tc.want {
-				t.Errorf("SessionTag = %q, want %q", s.SessionTag, tc.want)
-			}
-		})
-	}
+	bizH := rest.NewHandler()
+	bizH.Path("/bizs/{bk_biz_id}")
+	bizH.Add("BizCommitFeedback", http.MethodPost, "/feedback/commit", svc.BizCommitFeedback)
+	bizH.Add("BizDeleteFeedback", http.MethodDelete, "/feedback/{run_id}", svc.BizDeleteFeedback)
+	bizH.Load(cap.WebService)
+}
+
+type service struct {
+	cli        *client.ClientSet
+	authorizer auth.Authorizer
 }

@@ -17,7 +17,7 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package aiagent
+package config
 
 import (
 	"testing"
@@ -25,22 +25,25 @@ import (
 	"hcm/pkg/criteria/enumor"
 )
 
-func TestSessionTableSessionTag(t *testing.T) {
+// TestListConfigTypeWhitelist 守住 GET /config/list 的 config_type 白名单：本期只放行
+// agent_feedback_tag，避免今后有人不小心把 auth/access_token 等凭据类配置加进来。
+func TestListConfigTypeWhitelist(t *testing.T) {
 	tests := []struct {
-		name string
-		tag  enumor.IntentType
-		want enumor.IntentType
+		name       string
+		configType enumor.GlobalConfigType
+		wantAllow  bool
 	}{
-		{name: "empty tag", tag: "", want: ""},
-		{name: "host_apply tag", tag: enumor.IntentTypeHostApply, want: enumor.IntentTypeHostApply},
-		{name: "chat tag", tag: enumor.IntentTypeChat, want: enumor.IntentTypeChat},
+		{name: "agent_feedback_tag is allowed", configType: enumor.GlobalConfigTypeAgentFeedbackTag, wantAllow: true},
+		{name: "auth is not allowed", configType: enumor.GlobalConfigTypeAuth, wantAllow: false},
+		{name: "unknown type is not allowed", configType: enumor.GlobalConfigType("unknown"), wantAllow: false},
+		{name: "empty type is not allowed", configType: enumor.GlobalConfigType(""), wantAllow: false},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			s := SessionTable{SessionTag: tc.tag}
-			if s.SessionTag != tc.want {
-				t.Errorf("SessionTag = %q, want %q", s.SessionTag, tc.want)
+			_, ok := listConfigTypeWhitelist[tc.configType]
+			if ok != tc.wantAllow {
+				t.Errorf("listConfigTypeWhitelist[%q] allowed = %v, want %v", tc.configType, ok, tc.wantAllow)
 			}
 		})
 	}

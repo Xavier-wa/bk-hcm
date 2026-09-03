@@ -227,6 +227,7 @@ type Set interface {
 	ZiyanCvmApplyBizRecommend() cvmapply.ZiyanCvmApplyBizRecommendInterface
 
 	AiagentSession() daoaiagent.AiagentSession
+	AiagentRunFeedback() daoaiagent.AiagentRunFeedback
 
 	Txn() *Txn
 }
@@ -1372,4 +1373,9 @@ func (s *set) ZiyanCvmApplyBizRecommend() cvmapply.ZiyanCvmApplyBizRecommendInte
 // AiagentSession return aiagent session dao.
 func (s *set) AiagentSession() daoaiagent.AiagentSession {
 	return daoaiagent.NewAiagentSessionDao(s.orm, s.idGen, s.audit)
+}
+
+// AiagentRunFeedback return aiagent run feedback dao.
+func (s *set) AiagentRunFeedback() daoaiagent.AiagentRunFeedback {
+	return daoaiagent.NewAiagentRunFeedbackDao(s.orm, s.idGen)
 }

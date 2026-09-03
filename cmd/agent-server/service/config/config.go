@@ -38,8 +38,12 @@ func InitService(cap *capability.Capability) {
 
 	h := rest.NewHandler()
 	h.Add("UpsertAccessToken", http.MethodPut, "/config/access_token", svc.UpsertAccessToken)
-
 	h.Load(cap.WebService)
+
+	bizH := rest.NewHandler()
+	bizH.Path("/bizs/{bk_biz_id}")
+	bizH.Add("ListBizAgentConfig", http.MethodGet, "/config/list", svc.ListBizAgentConfig)
+	bizH.Load(cap.WebService)
 }
 
 type service struct {

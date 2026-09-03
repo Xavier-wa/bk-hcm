@@ -20,28 +20,26 @@
 package aiagent
 
 import (
-	"testing"
-
-	"hcm/pkg/criteria/enumor"
+	dsaiagent "hcm/pkg/api/data-service/aiagent"
+	"hcm/pkg/client/common"
+	"hcm/pkg/kit"
+	"hcm/pkg/rest"
 )
 
-func TestSessionTableSessionTag(t *testing.T) {
-	tests := []struct {
-		name string
-		tag  enumor.IntentType
-		want enumor.IntentType
-	}{
-		{name: "empty tag", tag: "", want: ""},
-		{name: "host_apply tag", tag: enumor.IntentTypeHostApply, want: enumor.IntentTypeHostApply},
-		{name: "chat tag", tag: enumor.IntentTypeChat, want: enumor.IntentTypeChat},
-	}
+// RunClient is the data-service aiagent run API client.
+type RunClient struct {
+	client rest.ClientInterface
+}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			s := SessionTable{SessionTag: tc.tag}
-			if s.SessionTag != tc.want {
-				t.Errorf("SessionTag = %q, want %q", s.SessionTag, tc.want)
-			}
-		})
-	}
+// NewRunClient creates a new RunClient.
+func NewRunClient(client rest.ClientInterface) *RunClient {
+	return &RunClient{client: client}
+}
+
+// List queries aiagent runs.
+func (c *RunClient) List(kt *kit.Kit, req *dsaiagent.ListAiagentRunReq) (
+	*dsaiagent.ListAiagentRunResult, error) {
+
+	return common.Request[dsaiagent.ListAiagentRunReq, dsaiagent.ListAiagentRunResult](
+		c.client, rest.POST, kt, req, "/runs/list")
 }

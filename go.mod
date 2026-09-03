@@ -79,11 +79,11 @@ require (
 	go.opentelemetry.io/otel/exporters/prometheus v0.51.0
 	go.opentelemetry.io/otel/sdk/metric v1.39.0
 	trpc.group/trpc-go/trpc-a2a-go v0.2.5
-	trpc.group/trpc-go/trpc-agent-go v1.8.1
-	trpc.group/trpc-go/trpc-agent-go/memory/mysql v1.8.0
-	trpc.group/trpc-go/trpc-agent-go/memory/sqlitevec v1.8.0
-	trpc.group/trpc-go/trpc-agent-go/server/agui v1.8.0
-	trpc.group/trpc-go/trpc-agent-go/session/mysql v1.8.0
+	trpc.group/trpc-go/trpc-agent-go v1.9.0
+	trpc.group/trpc-go/trpc-agent-go/memory/mysql v1.9.0
+	trpc.group/trpc-go/trpc-agent-go/memory/sqlitevec v1.9.0
+	trpc.group/trpc-go/trpc-agent-go/server/agui v1.9.0
+	trpc.group/trpc-go/trpc-agent-go/session/mysql v1.9.0
 	trpc.group/trpc-go/trpc-mcp-go v0.0.16
 )
 

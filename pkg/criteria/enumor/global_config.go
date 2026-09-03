@@ -90,6 +90,19 @@ const (
 	GlobalConfigTypeCvmApply GlobalConfigType = "cvm_apply"
 	// GlobalConfigTypeRegionRecommend 地域推荐相关配置
 	GlobalConfigTypeRegionRecommend GlobalConfigType = "region_recommend"
+	// GlobalConfigTypeAgentFeedbackTag Agent 反馈标签配置类型，config_key 为 like/dislike，
+	// config_value 为「英文标签 key -> 中文文案」的扁平 JSON map
+	GlobalConfigTypeAgentFeedbackTag GlobalConfigType = "agent_feedback_tag"
+)
+
+// GlobalConfigKeyAgentFeedbackTag agent_feedback_tag global config key
+type GlobalConfigKeyAgentFeedbackTag string
+
+const (
+	// GlobalConfigKeyAgentFeedbackTagLike 点赞标签配置 key
+	GlobalConfigKeyAgentFeedbackTagLike GlobalConfigKeyAgentFeedbackTag = "like"
+	// GlobalConfigKeyAgentFeedbackTagDislike 点踩标签配置 key
+	GlobalConfigKeyAgentFeedbackTagDislike GlobalConfigKeyAgentFeedbackTag = "dislike"
 )
 
 // GlobalConfigResDissolveKey resource dissolve global config key

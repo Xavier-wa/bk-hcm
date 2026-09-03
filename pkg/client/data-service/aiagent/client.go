@@ -26,12 +26,16 @@ import (
 
 // Client is the data-service aiagent module client.
 type Client struct {
-	Session *SessionClient
+	Session  *SessionClient
+	Feedback *FeedbackClient
+	Run      *RunClient
 }
 
 // NewClient creates a new aiagent Client.
 func NewClient(client rest.ClientInterface) *Client {
 	return &Client{
-		Session: NewSessionClient(client),
+		Session:  NewSessionClient(client),
+		Feedback: NewFeedbackClient(client),
+		Run:      NewRunClient(client),
 	}
 }

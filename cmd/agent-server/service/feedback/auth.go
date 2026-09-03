@@ -17,31 +17,32 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-package aiagent
+package feedback
 
 import (
-	"testing"
+	"fmt"
 
-	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/criteria/errf"
+	"hcm/pkg/iam/meta"
+	"hcm/pkg/kit"
+	"hcm/pkg/logs"
 )
 
-func TestSessionTableSessionTag(t *testing.T) {
-	tests := []struct {
-		name string
-		tag  enumor.IntentType
-		want enumor.IntentType
-	}{
-		{name: "empty tag", tag: "", want: ""},
-		{name: "host_apply tag", tag: enumor.IntentTypeHostApply, want: enumor.IntentTypeHostApply},
-		{name: "chat tag", tag: enumor.IntentTypeChat, want: enumor.IntentTypeChat},
+// authorizeBizSession 校验指定业务的业务访问权限。用户侧反馈接口只能操作自己的反馈，
+// 不叠加平台智能体助手。
+func (svc *service) authorizeBizSession(kt *kit.Kit, bizID int64) error {
+	if err := svc.authorizer.AuthorizeWithPerm(kt, meta.ResourceAttribute{
+		Basic: &meta.Basic{Type: meta.Biz, Action: meta.Access},
+		BizID: bizID,
+	}); err != nil {
+		logs.Errorf("authorize biz access failed, err: %v, user: %s, bk_biz_id: %d, rid: %s",
+			err, kt.User, bizID, kt.Rid)
+		ef := errf.Error(err)
+		if ef != nil && ef.Permissions != nil {
+			return errf.NewWithPerm(errf.PermissionDenied,
+				fmt.Sprintf("permission denied, bk_biz_id: %d", bizID), ef.Permissions)
+		}
+		return errf.Newf(errf.PermissionDenied, "permission denied, bk_biz_id: %d", bizID)
 	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			s := SessionTable{SessionTag: tc.tag}
-			if s.SessionTag != tc.want {
-				t.Errorf("SessionTag = %q, want %q", s.SessionTag, tc.want)
-			}
-		})
-	}
+	return nil
 }

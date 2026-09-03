@@ -336,6 +336,8 @@ const (
 
 	// AiagentSessionTable is aiagent_session table's name.
 	AiagentSessionTable Name = "aiagent_session"
+	// AiagentRunFeedbackTable is aiagent_run_feedback table's name.
+	AiagentRunFeedbackTable Name = "aiagent_run_feedback"
 )
 
 // Validate whether the table name is valid or not.
@@ -516,7 +518,8 @@ var TableMap = map[Name]TableConfig{
 	ZiyanCvmApplyUserRecommendTable: {},
 	ZiyanCvmApplyBizRecommendTable:  {},
 
-	AiagentSessionTable: {},
+	AiagentSessionTable:     {},
+	AiagentRunFeedbackTable: {},
 }
 
 // Register 注册表名

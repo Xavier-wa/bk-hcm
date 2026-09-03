@@ -19,29 +19,20 @@
 
 package aiagent
 
-import (
-	"testing"
+import "hcm/pkg/api/core"
 
-	"hcm/pkg/criteria/enumor"
-)
+// ListAiagentRunReq is an alias for core.ListReq for listing aiagent runs.
+type ListAiagentRunReq = core.ListReq
 
-func TestSessionTableSessionTag(t *testing.T) {
-	tests := []struct {
-		name string
-		tag  enumor.IntentType
-		want enumor.IntentType
-	}{
-		{name: "empty tag", tag: "", want: ""},
-		{name: "host_apply tag", tag: enumor.IntentTypeHostApply, want: enumor.IntentTypeHostApply},
-		{name: "chat tag", tag: enumor.IntentTypeChat, want: enumor.IntentTypeChat},
-	}
+// ListAiagentRunResult defines the response for listing aiagent runs.
+type ListAiagentRunResult struct {
+	Count   uint64    `json:"count"`
+	Details []RunElem `json:"details"`
+}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			s := SessionTable{SessionTag: tc.tag}
-			if s.SessionTag != tc.want {
-				t.Errorf("SessionTag = %q, want %q", s.SessionTag, tc.want)
-			}
-		})
-	}
+// RunElem is the subset of an aiagent_run row used to match a run to a session.
+// Extra JSON fields from data-service are ignored.
+type RunElem struct {
+	RunID       string `json:"run_id"`
+	SessionCode string `json:"session_code"`
 }
