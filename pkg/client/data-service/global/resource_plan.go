@@ -79,18 +79,6 @@ func (b *ResourcePlanClient) DeleteResPlanDemand(kt *kit.Kit, req *dataproto.Bat
 		b.client, rest.DELETE, kt, req, "/res_plans/res_plan_demands/batch")
 }
 
-// LockResPlanDemand lock resource plan demand
-func (b *ResourcePlanClient) LockResPlanDemand(kt *kit.Kit, req *rpproto.ResPlanDemandLockOpReq) error {
-	return common.RequestNoResp[rpproto.ResPlanDemandLockOpReq](
-		b.client, rest.PATCH, kt, req, "/res_plans/res_plan_demands/lock")
-}
-
-// UnlockResPlanDemand unlock resource plan demand
-func (b *ResourcePlanClient) UnlockResPlanDemand(kt *kit.Kit, req *rpproto.ResPlanDemandLockOpReq) error {
-	return common.RequestNoResp[rpproto.ResPlanDemandLockOpReq](
-		b.client, rest.PATCH, kt, req, "/res_plans/res_plan_demands/unlock")
-}
-
 // BatchUpsertResPlanDemand upsert resource plan demand
 func (b *ResourcePlanClient) BatchUpsertResPlanDemand(kt *kit.Kit, req *rpproto.ResPlanDemandBatchUpsertReq) (
 	*core.BatchCreateResult, error) {
