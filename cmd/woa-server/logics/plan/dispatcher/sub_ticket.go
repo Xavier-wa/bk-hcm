@@ -247,7 +247,8 @@ func (d *Dispatcher) checkCrpTicket(kt *kit.Kit, subTicket *ptypes.SubTicketInfo
 		update.Status = enumor.RPSubTicketStatusDone
 	case cvmapi.PlanOrderStatusDeptAdmin:
 		// CRP 单据处于部门管理员审批节点（status=1），尝试自动过单
-		autoApproved, err := d.tryAutoApproveCrpDeptAdmin(kt, subTicket)
+		crpPendingApprovers := strings.Split(planItem.Data.BaseInfo.CurrentProcessor, ";")
+		autoApproved, err := d.tryAutoApproveCrpDeptAdmin(kt, subTicket, crpPendingApprovers)
 		if err != nil {
 			logs.Errorf("failed to try auto approve crp dept admin, err: %v, id: %s, crp_sn: %s, rid: %s",
 				err, subTicket.ID, subTicket.CrpSN, kt.Rid)
@@ -335,16 +336,14 @@ func (d *Dispatcher) tryAutoApproveAdminAudit(kt *kit.Kit, subTicket *ptypes.Sub
 }
 
 // tryAutoApproveCrpDeptAdmin 尝试自动过单 CRP 部门管理员节点
-func (d *Dispatcher) tryAutoApproveCrpDeptAdmin(kt *kit.Kit, subTicket *ptypes.SubTicketInfo) (bool, error) {
-	// 检查是否满足自动过单条件
-	checkResult := checkPredictionAutoApprove(kt, subTicket.Demands)
-	if !checkResult.CanAutoApprove {
+func (d *Dispatcher) tryAutoApproveCrpDeptAdmin(kt *kit.Kit, subTicket *ptypes.SubTicketInfo,
+	crpPendingApprovers []string) (bool, error) {
+
+	decision := resolveCrpDeptAdminAutoApprove(kt, subTicket.Demands, subTicket.AdminAuditStatus,
+		subTicket.AdminAuditOperator, crpPendingApprovers)
+	if !decision.ShouldApprove {
 		return false, nil
 	}
-
-	// 获取操作人，使用 AdminHandler 的第一个账号
-	operators := strings.Split(constant.AdminHandler, ";")
-	operator := operators[0]
 
 	// 构建 CRP 审批请求
 	confirmReq := &cvmapi.ConfirmOrderForIEGReq{
@@ -357,9 +356,8 @@ func (d *Dispatcher) tryAutoApproveCrpDeptAdmin(kt *kit.Kit, subTicket *ptypes.S
 			TodoOrderId:   subTicket.CrpSN,
 			ApproveResult: cvmapi.ConfirmOrderApproveResultApprove, // 0: 同意
 			Status:        cvmapi.PlanOrderStatusDeptAdmin,         // 1: 部门管理员节点
-			Operator:      operator,
-			ApproveMemo: fmt.Sprintf("自动过单: %s (CPU: %d核, CBS: %dGB)",
-				checkResult.Reason, checkResult.TotalCPUCores, checkResult.TotalCBSSizeGB),
+			Operator:      decision.Operator,
+			ApproveMemo:   decision.ApproveMemo,
 		},
 	}
 
@@ -373,6 +371,12 @@ func (d *Dispatcher) tryAutoApproveCrpDeptAdmin(kt *kit.Kit, subTicket *ptypes.S
 
 	// 检查响应结果
 	if resp.Error.Code != 0 {
+		if isCrpConfirmOrderStatusChanged(resp.Error.Code, resp.Error.Message) {
+			logs.Warnf("ignore crp confirm order non-idempotent error, code: %d, msg: %s, id: %s, crp_sn: %s, "+
+				"crp_trace: %s, rid: %s", resp.Error.Code, resp.Error.Message, subTicket.ID, subTicket.CrpSN,
+				resp.TraceId, kt.Rid)
+			return true, nil
+		}
 		logs.Errorf("crp confirm order api returned error, code: %d, msg: %s, id: %s, crp_sn: %s, crp_trace: %s, rid: %s",
 			resp.Error.Code, resp.Error.Message, subTicket.ID, subTicket.CrpSN, resp.TraceId, kt.Rid)
 		return false, fmt.Errorf("crp confirm order failed, code: %d, msg: %s", resp.Error.Code, resp.Error.Message)
@@ -386,6 +390,12 @@ func (d *Dispatcher) tryAutoApproveCrpDeptAdmin(kt *kit.Kit, subTicket *ptypes.S
 	}
 
 	if resp.Result.Status != 0 {
+		if isCrpConfirmOrderStatusChanged(resp.Result.Status, resp.Result.Message) {
+			logs.Warnf("ignore crp confirm order non-idempotent result, status: %d, msg: %s, id: %s, crp_sn: %s, "+
+				"crp_trace: %s, rid: %s", resp.Result.Status, resp.Result.Message, subTicket.ID, subTicket.CrpSN,
+				resp.TraceId, kt.Rid)
+			return true, nil
+		}
 		logs.Errorf("crp confirm order result status error, status: %d, msg: %s, id: %s, crp_sn: %s, crp_trace: %s, rid: %s",
 			resp.Result.Status, resp.Result.Message, subTicket.ID, subTicket.CrpSN, resp.TraceId, kt.Rid)
 		return false, fmt.Errorf("crp confirm order result failed, status: %d, msg: %s",
@@ -393,6 +403,14 @@ func (d *Dispatcher) tryAutoApproveCrpDeptAdmin(kt *kit.Kit, subTicket *ptypes.S
 	}
 
 	return true, nil
+}
+
+// isCrpConfirmOrderStatusChanged checks CRP non-idempotent confirm response for already-changed order status.
+func isCrpConfirmOrderStatusChanged(code int, message string) bool {
+	if code != constant.CRPConfirmOrderStatusChangedCode {
+		return false
+	}
+	return strings.Contains(message, constant.CRPConfirmOrderStatusChangedMessage)
 }
 
 // subTicketStatistics 子单统计结果

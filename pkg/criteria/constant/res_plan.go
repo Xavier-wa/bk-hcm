@@ -38,3 +38,12 @@ const (
 	// DefaultDiskIO 磁盘IO默认值（MB/s）。无特殊要求时填写该值；高性能云盘上限150，SSD云硬盘上限260。
 	DefaultDiskIO int64 = 15
 )
+
+// SamePersonAutoApproveMemoPrefix is CRP dept admin same-person auto approve memo prefix.
+const SamePersonAutoApproveMemoPrefix = "系统自动通过（重复审批跳过）"
+
+// CRPConfirmOrderStatusChangedCode is CRP confirmOrderForIEG error code when order status already changed.
+const CRPConfirmOrderStatusChangedCode = 10010
+
+// CRPConfirmOrderStatusChangedMessage is CRP confirmOrderForIEG error message when order status already changed.
+const CRPConfirmOrderStatusChangedMessage = "单据状态已经发生改变"

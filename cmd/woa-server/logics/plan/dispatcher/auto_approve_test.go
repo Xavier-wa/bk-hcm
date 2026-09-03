@@ -20,13 +20,19 @@
 package dispatcher
 
 import (
+	"context"
+	"errors"
+	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	ptypes "hcm/cmd/woa-server/types/plan"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	rpt "hcm/pkg/dal/table/resource-plan/res-plan-ticket"
+	"hcm/pkg/thirdparty/cvmapi"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -715,4 +721,303 @@ func TestAutoApprove_ZeroValues(t *testing.T) {
 	assert.True(t, result.CanAutoApprove)
 	assert.Equal(t, int64(0), result.TotalCPUCores)
 	assert.Equal(t, int64(0), result.TotalCBSSizeGB)
+}
+
+// recordingCRPClient records ConfirmOrderForIEG calls for auto approve tests.
+type recordingCRPClient struct {
+	mockCRPClient
+	confirmReq  *cvmapi.ConfirmOrderForIEGReq
+	confirmErr  error
+	confirmResp *cvmapi.ConfirmOrderForIEGResp
+}
+
+func (r *recordingCRPClient) ConfirmOrderForIEG(_ context.Context, _ http.Header,
+	req *cvmapi.ConfirmOrderForIEGReq) (*cvmapi.ConfirmOrderForIEGResp, error) {
+
+	r.confirmReq = req
+	if r.confirmErr != nil {
+		return nil, r.confirmErr
+	}
+	if r.confirmResp != nil {
+		return r.confirmResp, nil
+	}
+
+	return &cvmapi.ConfirmOrderForIEGResp{
+		RespMeta: cvmapi.RespMeta{Error: cvmapi.RespError{Code: 0}},
+		Result:   &cvmapi.ConfirmOrderForIEGRst{Status: 0},
+	}, nil
+}
+
+// ---- TestCheckSamePersonAutoApprove ----
+
+func TestCheckSamePersonAutoApprove(t *testing.T) {
+	testCases := []struct {
+		name        string
+		hcmOperator string
+		crpPending  []string
+		want        string
+	}{
+		{
+			name:        "case insensitive match returns crp rtx",
+			hcmOperator: "ForestChen",
+			crpPending:  []string{"forestchen"},
+			want:        "forestchen",
+		},
+		{
+			name:        "no match returns empty",
+			hcmOperator: "alice",
+			crpPending:  []string{"forestchen", "bob"},
+			want:        "",
+		},
+		{
+			name:        "multi approvers match one",
+			hcmOperator: "carol",
+			crpPending:  []string{"alice", "carol", "bob"},
+			want:        "carol",
+		},
+		{
+			name:        "empty hcm operator",
+			hcmOperator: "  ",
+			crpPending:  []string{"forestchen"},
+			want:        "",
+		},
+		{
+			name:        "empty crp pending list",
+			hcmOperator: "forestchen",
+			crpPending:  nil,
+			want:        "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := checkSamePersonAutoApprove(tc.hcmOperator, tc.crpPending)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+// ---- TestResolveCrpDeptAdminAutoApprove ----
+
+func TestResolveCrpDeptAdminAutoApprove(t *testing.T) {
+	kt := testKit()
+	standardFamily := string(enumor.DeviceFamilyStandard)
+	thresholdDemands := rpt.ResPlanDemands{
+		makeAutoApproveDemand(standardFamily, 500, 10000),
+	}
+	nonThresholdDemands := rpt.ResPlanDemands{
+		makeChangeDemand(),
+	}
+
+	testCases := []struct {
+		name               string
+		demands            rpt.ResPlanDemands
+		adminAuditStatus   enumor.RPAdminAuditStatus
+		adminAuditOperator string
+		crpPending         []string
+		wantApprove        bool
+		wantOperator       string
+		wantMemoContain    string
+	}{
+		{
+			name:               "threshold path uses dommyzhang",
+			demands:            thresholdDemands,
+			adminAuditStatus:   enumor.RPAdminAuditStatusDone,
+			adminAuditOperator: "forestchen",
+			crpPending:         []string{"forestchen"},
+			wantApprove:        true,
+			wantOperator:       "dommyzhang",
+			wantMemoContain:    "满足自动过单条件",
+		},
+		{
+			name:               "same person path when threshold not met",
+			demands:            nonThresholdDemands,
+			adminAuditStatus:   enumor.RPAdminAuditStatusDone,
+			adminAuditOperator: "forestchen",
+			crpPending:         []string{"forestchen", "bob"},
+			wantApprove:        true,
+			wantOperator:       "forestchen",
+			wantMemoContain:    constant.SamePersonAutoApproveMemoPrefix,
+		},
+		{
+			name:               "no auto approve when both paths miss",
+			demands:            nonThresholdDemands,
+			adminAuditStatus:   enumor.RPAdminAuditStatusDone,
+			adminAuditOperator: "forestchen",
+			crpPending:         []string{"bob"},
+			wantApprove:        false,
+		},
+		{
+			name:               "skip status does not trigger same person path",
+			demands:            nonThresholdDemands,
+			adminAuditStatus:   enumor.RPAdminAuditStatusSkip,
+			adminAuditOperator: "",
+			crpPending:         []string{"forestchen"},
+			wantApprove:        false,
+		},
+		{
+			name:               "auditing status does not trigger same person path",
+			demands:            nonThresholdDemands,
+			adminAuditStatus:   enumor.RPAdminAuditStatusAuditing,
+			adminAuditOperator: "forestchen",
+			crpPending:         []string{"forestchen"},
+			wantApprove:        false,
+		},
+		{
+			name:               "delete demand same person path still applies",
+			demands:            rpt.ResPlanDemands{makeDeleteDemand()},
+			adminAuditStatus:   enumor.RPAdminAuditStatusDone,
+			adminAuditOperator: "forestchen",
+			crpPending:         []string{"forestchen"},
+			wantApprove:        true,
+			wantOperator:       "forestchen",
+			wantMemoContain:    constant.SamePersonAutoApproveMemoPrefix,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			decision := resolveCrpDeptAdminAutoApprove(kt, tc.demands, tc.adminAuditStatus,
+				tc.adminAuditOperator, tc.crpPending)
+			assert.Equal(t, tc.wantApprove, decision.ShouldApprove)
+			if !tc.wantApprove {
+				return
+			}
+			assert.Equal(t, tc.wantOperator, decision.Operator)
+			assert.Contains(t, decision.ApproveMemo, tc.wantMemoContain)
+		})
+	}
+}
+
+// ---- TestTryAutoApproveCrpDeptAdmin ----
+
+func TestTryAutoApproveCrpDeptAdmin_SamePerson(t *testing.T) {
+	cli := &recordingCRPClient{}
+	d := &Dispatcher{crpCli: cli}
+	subTicket := &ptypes.SubTicketInfo{
+		ID:                 "sub-001",
+		CrpSN:              "crp-001",
+		AdminAuditStatus:   enumor.RPAdminAuditStatusDone,
+		AdminAuditOperator: "forestchen",
+		Demands:            rpt.ResPlanDemands{makeChangeDemand()},
+	}
+
+	approved, err := d.tryAutoApproveCrpDeptAdmin(testKit(), subTicket, []string{"forestchen", "bob"})
+	assert.NoError(t, err)
+	assert.True(t, approved)
+	assert.NotNil(t, cli.confirmReq)
+	assert.Equal(t, "forestchen", cli.confirmReq.Params.Operator)
+	assert.Contains(t, cli.confirmReq.Params.ApproveMemo, constant.SamePersonAutoApproveMemoPrefix)
+}
+
+func TestTryAutoApproveCrpDeptAdmin_NoAutoApprove(t *testing.T) {
+	cli := &recordingCRPClient{}
+	d := &Dispatcher{crpCli: cli}
+	subTicket := &ptypes.SubTicketInfo{
+		ID:                 "sub-001",
+		CrpSN:              "crp-001",
+		AdminAuditStatus:   enumor.RPAdminAuditStatusDone,
+		AdminAuditOperator: "forestchen",
+		Demands:            rpt.ResPlanDemands{makeChangeDemand()},
+	}
+
+	approved, err := d.tryAutoApproveCrpDeptAdmin(testKit(), subTicket, []string{"bob"})
+	assert.NoError(t, err)
+	assert.False(t, approved)
+	assert.Nil(t, cli.confirmReq)
+}
+
+func TestTryAutoApproveCrpDeptAdmin_ConfirmOrderFailed(t *testing.T) {
+	cli := &recordingCRPClient{confirmErr: errors.New("crp unavailable")}
+	d := &Dispatcher{crpCli: cli}
+	subTicket := &ptypes.SubTicketInfo{
+		ID:                 "sub-001",
+		CrpSN:              "crp-001",
+		AdminAuditStatus:   enumor.RPAdminAuditStatusDone,
+		AdminAuditOperator: "forestchen",
+		Demands:            rpt.ResPlanDemands{makeChangeDemand()},
+	}
+
+	approved, err := d.tryAutoApproveCrpDeptAdmin(testKit(), subTicket, []string{"forestchen"})
+	assert.Error(t, err)
+	assert.False(t, approved)
+	assert.NotNil(t, cli.confirmReq)
+}
+
+func TestTryAutoApproveCrpDeptAdmin_ThresholdPathUnchanged(t *testing.T) {
+	cli := &recordingCRPClient{}
+	d := &Dispatcher{crpCli: cli}
+	standardFamily := string(enumor.DeviceFamilyStandard)
+	subTicket := &ptypes.SubTicketInfo{
+		ID:               "sub-001",
+		CrpSN:            "crp-001",
+		AdminAuditStatus: enumor.RPAdminAuditStatusSkip,
+		Demands: rpt.ResPlanDemands{
+			makeAutoApproveDemand(standardFamily, 500, 10000),
+		},
+	}
+
+	approved, err := d.tryAutoApproveCrpDeptAdmin(testKit(), subTicket, []string{"bob"})
+	assert.NoError(t, err)
+	assert.True(t, approved)
+	assert.Equal(t, strings.Split(constant.AdminHandler, ";")[0], cli.confirmReq.Params.Operator)
+	assert.Contains(t, cli.confirmReq.Params.ApproveMemo, "满足自动过单条件")
+}
+
+func TestIsCrpConfirmOrderStatusChanged(t *testing.T) {
+	assert.True(t, isCrpConfirmOrderStatusChanged(constant.CRPConfirmOrderStatusChangedCode,
+		constant.CRPConfirmOrderStatusChangedMessage))
+	assert.True(t, isCrpConfirmOrderStatusChanged(constant.CRPConfirmOrderStatusChangedCode,
+		constant.CRPConfirmOrderStatusChangedMessage+","))
+	assert.False(t, isCrpConfirmOrderStatusChanged(10011, constant.CRPConfirmOrderStatusChangedMessage))
+	assert.False(t, isCrpConfirmOrderStatusChanged(constant.CRPConfirmOrderStatusChangedCode, "other error"))
+}
+
+func TestTryAutoApproveCrpDeptAdmin_IgnoreStatusChangedError(t *testing.T) {
+	cli := &recordingCRPClient{
+		confirmResp: &cvmapi.ConfirmOrderForIEGResp{
+			RespMeta: cvmapi.RespMeta{
+				Error: cvmapi.RespError{
+					Code:    constant.CRPConfirmOrderStatusChangedCode,
+					Message: constant.CRPConfirmOrderStatusChangedMessage,
+				},
+			},
+		},
+	}
+	d := &Dispatcher{crpCli: cli}
+	subTicket := &ptypes.SubTicketInfo{
+		ID:                 "sub-001",
+		CrpSN:              "crp-001",
+		AdminAuditStatus:   enumor.RPAdminAuditStatusDone,
+		AdminAuditOperator: "forestchen",
+		Demands:            rpt.ResPlanDemands{makeChangeDemand()},
+	}
+
+	approved, err := d.tryAutoApproveCrpDeptAdmin(testKit(), subTicket, []string{"forestchen"})
+	assert.NoError(t, err)
+	assert.True(t, approved)
+}
+
+func TestTryAutoApproveCrpDeptAdmin_IgnoreStatusChangedResult(t *testing.T) {
+	cli := &recordingCRPClient{
+		confirmResp: &cvmapi.ConfirmOrderForIEGResp{
+			RespMeta: cvmapi.RespMeta{Error: cvmapi.RespError{Code: 0}},
+			Result: &cvmapi.ConfirmOrderForIEGRst{
+				Status:  constant.CRPConfirmOrderStatusChangedCode,
+				Message: constant.CRPConfirmOrderStatusChangedMessage,
+			},
+		},
+	}
+	d := &Dispatcher{crpCli: cli}
+	subTicket := &ptypes.SubTicketInfo{
+		ID:                 "sub-001",
+		CrpSN:              "crp-001",
+		AdminAuditStatus:   enumor.RPAdminAuditStatusDone,
+		AdminAuditOperator: "forestchen",
+		Demands:            rpt.ResPlanDemands{makeChangeDemand()},
+	}
+
+	approved, err := d.tryAutoApproveCrpDeptAdmin(testKit(), subTicket, []string{"forestchen"})
+	assert.NoError(t, err)
+	assert.True(t, approved)
 }

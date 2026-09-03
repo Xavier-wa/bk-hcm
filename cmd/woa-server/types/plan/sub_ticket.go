@@ -57,9 +57,11 @@ type SubTicketInfo struct {
 	Status           enumor.RPSubTicketStatus  `json:"status"`
 	Stage            enumor.RPSubTicketStage   `json:"stage"`
 	AdminAuditStatus enumor.RPAdminAuditStatus `json:"admin_audit_status"`
-	CrpSN            string                    `json:"crp_sn"`
-	CrpURL           string                    `json:"crp_url"`
-	Applicant        string                    `json:"applicant"`
+	// AdminAuditOperator HCM department admin audit operator RTX, set when AdminAuditStatus is done.
+	AdminAuditOperator string `json:"admin_audit_operator,omitempty"`
+	CrpSN              string `json:"crp_sn"`
+	CrpURL             string `json:"crp_url"`
+	Applicant          string `json:"applicant"`
 }
 
 // ListResPlanSubTicketReq is list resource plan sub ticket request.

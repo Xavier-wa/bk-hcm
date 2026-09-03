@@ -142,3 +142,68 @@ func processDemand(demand rpt.ResPlanDemand, result *autoApproveCheckResult,
 
 	return result, reasons
 }
+
+// crpDeptAdminAutoApproveDecision CRP department admin node auto approve decision.
+type crpDeptAdminAutoApproveDecision struct {
+	ShouldApprove bool
+	Operator      string
+	ApproveMemo   string
+}
+
+// checkSamePersonAutoApprove matches HCM admin audit operator against CRP pending approvers.
+// Returns matched RTX from crpPendingApprovers on hit, otherwise empty string.
+func checkSamePersonAutoApprove(hcmOperator string, crpPendingApprovers []string) string {
+	hcmOperator = strings.TrimSpace(hcmOperator)
+	if hcmOperator == "" || len(crpPendingApprovers) == 0 {
+		return ""
+	}
+
+	for _, approver := range crpPendingApprovers {
+		approver = strings.TrimSpace(approver)
+		if approver == "" {
+			continue
+		}
+		if strings.EqualFold(approver, hcmOperator) {
+			return approver
+		}
+	}
+
+	return ""
+}
+
+// resolveCrpDeptAdminAutoApprove decides whether CRP dept admin node should auto approve.
+// Threshold path and same-person path are OR-ed; threshold path takes precedence when both hit.
+func resolveCrpDeptAdminAutoApprove(kt *kit.Kit, demands rpt.ResPlanDemands,
+	adminAuditStatus enumor.RPAdminAuditStatus, adminAuditOperator string,
+	crpPendingApprovers []string) *crpDeptAdminAutoApproveDecision {
+
+	decision := &crpDeptAdminAutoApproveDecision{}
+
+	checkResult := checkPredictionAutoApprove(kt, demands)
+	if checkResult.CanAutoApprove {
+		operators := strings.Split(constant.AdminHandler, ";")
+		if len(operators) == 0 {
+			logs.Errorf("AdminHandler is empty, cannot auto approve, rid: %s", kt.Rid)
+			return decision
+		}
+		decision.ShouldApprove = true
+		decision.Operator = operators[0]
+		decision.ApproveMemo = fmt.Sprintf("自动过单: %s (CPU: %d核, CBS: %dGB)",
+			checkResult.Reason, checkResult.TotalCPUCores, checkResult.TotalCBSSizeGB)
+		return decision
+	}
+
+	if adminAuditStatus != enumor.RPAdminAuditStatusDone || adminAuditOperator == "" {
+		return decision
+	}
+
+	matched := checkSamePersonAutoApprove(adminAuditOperator, crpPendingApprovers)
+	if matched == "" {
+		return decision
+	}
+
+	decision.ShouldApprove = true
+	decision.Operator = matched
+	decision.ApproveMemo = fmt.Sprintf("%s (operator: %s)", constant.SamePersonAutoApproveMemoPrefix, matched)
+	return decision
+}
