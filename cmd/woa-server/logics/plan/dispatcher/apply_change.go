@@ -633,7 +633,7 @@ func convOrderChangeInfoFromCrpRespItem(kt *kit.Kit, orderID string, item *cvmap
 		CoreType:        item.CoreTypeName,
 		DiskType:        diskType,
 		DiskTypeName:    item.DiskTypeName,
-		DiskIO:          item.InstanceIO,
+		DiskIO:          resolveDiskIO(kt, item.InstanceIO),
 		ChangeOs:        item.ChangeCvmAmount,
 		ChangeCpuCore:   item.ChangeCoreAmount,
 		ChangeMemory:    item.ChangeRamAmount,
@@ -760,7 +760,7 @@ func prepareDeductResPlanDemand(updateDemand rpd.ResPlanDemandTable, changeCpuCo
 	return deductCpuNum
 }
 
-func newResPlanDemandCreateReq(ticket *ApplyTicketCtx, demand *ptypes.CrpOrderChangeInfo,
+func newResPlanDemandCreateReq(kt *kit.Kit, ticket *ApplyTicketCtx, demand *ptypes.CrpOrderChangeInfo,
 	expectTime time.Time) rpproto.ResPlanDemandCreateReq {
 
 	osChange := demand.ChangeOs
@@ -798,8 +798,19 @@ func newResPlanDemandCreateReq(ticket *ApplyTicketCtx, demand *ptypes.CrpOrderCh
 		CpuCore:         &cpuCoreChange,
 		Memory:          &memoryChange,
 		DiskSize:        &diskSizeChange,
-		DiskIO:          demand.DiskIO,
+		DiskIO:          resolveDiskIO(kt, demand.DiskIO),
 	}
+}
+
+// resolveDiskIO returns disk io, falling back to the default when CRP omits or returns a non-positive value.
+func resolveDiskIO(kt *kit.Kit, diskIO int64) int64 {
+	if diskIO > 0 {
+		return diskIO
+	}
+
+	logs.Warnf("disk io is empty, fallback to default, disk_io: %d, default: %d, rid: %s", diskIO,
+		constant.DefaultDiskIO, kt.Rid)
+	return constant.DefaultDiskIO
 }
 
 func convCreateResPlanDemandReqs(kt *kit.Kit, ticket *ApplyTicketCtx, demand *ptypes.CrpOrderChangeInfo) (
@@ -816,7 +827,7 @@ func convCreateResPlanDemandReqs(kt *kit.Kit, ticket *ApplyTicketCtx, demand *pt
 	cpuCoreChange := demand.ChangeCpuCore
 	memoryChange := demand.ChangeMemory
 	diskSizeChange := demand.ChangeDiskSize
-	createReq := newResPlanDemandCreateReq(ticket, demand, expectTimeFormat)
+	createReq := newResPlanDemandCreateReq(kt, ticket, demand, expectTimeFormat)
 
 	if demand.ObsProject == enumor.ObsProjectShortLease {
 		returnPlanTimeFormat, err := time.Parse(constant.DateLayout, demand.ReturnPlanTime)

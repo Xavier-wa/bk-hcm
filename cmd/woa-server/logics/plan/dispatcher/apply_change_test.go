@@ -22,6 +22,7 @@ package dispatcher
 import (
 	"testing"
 
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/thirdparty/cvmapi"
 
@@ -41,4 +42,43 @@ func TestConvOrderChangeInfoFromCrpRespItemTrustsFutureObsProject(t *testing.T) 
 	got, err := convOrderChangeInfoFromCrpRespItem(testKit(), "order-1", item)
 	assert.NoError(t, err)
 	assert.Equal(t, enumor.ObsProject("2099春节保障"), got.ObsProject)
+	assert.Equal(t, constant.DefaultDiskIO, got.DiskIO)
+}
+
+func TestConvOrderChangeInfoFromCrpRespItem_DiskIO(t *testing.T) {
+	baseItem := func(instanceIO int64) *cvmapi.PlanOrderChangeItem {
+		return &cvmapi.PlanOrderChangeItem{
+			ProjectName:   "常规项目",
+			DiskTypeName:  string(enumor.DiskPremium),
+			PlanType:      enumor.PlanTypeCrpInPlan,
+			ResourceMode:  enumor.ResModeByDeviceType,
+			InstanceModel: "SA2.LARGE8",
+			InstanceIO:    instanceIO,
+		}
+	}
+
+	testCases := []struct {
+		name     string
+		item     *cvmapi.PlanOrderChangeItem
+		wantDisk int64
+	}{
+		{
+			name:     "crp omitted instance io fallback to default",
+			item:     baseItem(0),
+			wantDisk: constant.DefaultDiskIO,
+		},
+		{
+			name:     "keep positive instance io from crp",
+			item:     baseItem(150),
+			wantDisk: 150,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := convOrderChangeInfoFromCrpRespItem(testKit(), "order-1", tc.item)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.wantDisk, got.DiskIO)
+		})
+	}
 }

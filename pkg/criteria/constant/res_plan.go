@@ -34,4 +34,7 @@ const (
 	// AutoApproveCBSSizeThreshold CBS容量阈值（单位：GB），整单CBS容量≤该值时可自动过单
 	// 45TB = 45 * 1024 = 46080GB
 	AutoApproveCBSSizeThreshold int64 = 46080
+
+	// DefaultDiskIO 磁盘IO默认值（MB/s）。无特殊要求时填写该值；高性能云盘上限150，SSD云硬盘上限260。
+	DefaultDiskIO int64 = 15
 )
