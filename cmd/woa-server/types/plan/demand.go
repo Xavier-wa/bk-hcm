@@ -635,6 +635,7 @@ func (e *AdjustRPDemandReqElem) validateAddAdjustFields() error {
 	if err := e.UpdatedInfo.Validate(); err != nil {
 		return err
 	}
+	// updated_info.demand_source is ignored; elem-level demand_source is used when constructing demands.
 	return validateRequiredAdjustDemandSource(e.DemandSource)
 }
 
@@ -654,6 +655,7 @@ func (e *AdjustRPDemandReqElem) validateUpdateAdjustFields() error {
 	if err := e.UpdatedInfo.Validate(); err != nil {
 		return err
 	}
+	// original_info/updated_info.demand_source is ignored; elem-level demand_source is used when constructing demands.
 	if err := validateRequiredAdjustDemandSource(e.DemandSource); err != nil {
 		return err
 	}
@@ -680,7 +682,6 @@ func (e *AdjustRPDemandReqElem) validateDelayAdjustFields() error {
 }
 
 // validateRequiredAdjustDemandSource validates elem-level demand_source for add/update adjust.
-// Elem-level value is used as default when updated_info.demand_source is omitted.
 func validateRequiredAdjustDemandSource(elemSource enumor.DemandSource) error {
 	if elemSource == "" {
 		return errors.New("demand_source is required when adjust_type is add or update")

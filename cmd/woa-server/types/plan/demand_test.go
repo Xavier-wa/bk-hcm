@@ -374,18 +374,49 @@ func TestAdjustRPDemandReqElemValidateUpdateNoChangeRejected(t *testing.T) {
 	assert.Contains(t, err.Error(), "no change detected")
 }
 
-func TestAdjustRPDemandReqElemValidateAddDemandSourceInUpdatedInfoRejected(t *testing.T) {
+func TestAdjustRPDemandReqElemValidateAddDemandSourceInUpdatedInfoIgnored(t *testing.T) {
 	updated := testValidCreateResPlanDemandReq()
-	updated.DemandSource = enumor.DemandSourceIndChg
+	updated.DemandSource = enumor.DemandSourceArchAdj
 
 	elem := AdjustRPDemandReqElem{
+		AdjustType:   enumor.RPDemandAdjustTypeAdd,
+		DemandSource: enumor.DemandSourceIndChg,
+		UpdatedInfo:  updated,
+	}
+
+	err := elem.Validate()
+	assert.NoError(t, err)
+}
+
+func TestAdjustRPDemandReqElemValidateAddDemandSourceOnlyAtElemLevelRequired(t *testing.T) {
+	elem := AdjustRPDemandReqElem{
 		AdjustType:  enumor.RPDemandAdjustTypeAdd,
-		UpdatedInfo: updated,
+		UpdatedInfo: testValidCreateResPlanDemandReq(),
 	}
 
 	err := elem.Validate()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "demand_source is required")
+}
+
+func TestAdjustRPDemandReqElemValidateUpdateDemandSourceInInfoIgnored(t *testing.T) {
+	original := testValidCreateResPlanDemandReq()
+	original.DemandSource = enumor.DemandSourceArchAdj
+	updated := testValidCreateResPlanDemandReq()
+	updated.DemandSource = enumor.DemandSourceArchAdj
+	cpuCore := int64(4)
+	updated.Cvm.CpuCore = &cpuCore
+
+	elem := AdjustRPDemandReqElem{
+		DemandID:     "demand-1",
+		AdjustType:   enumor.RPDemandAdjustTypeUpdate,
+		DemandSource: enumor.DemandSourceIndChg,
+		OriginalInfo: original,
+		UpdatedInfo:  updated,
+	}
+
+	err := elem.Validate()
+	assert.NoError(t, err)
 }
 
 func TestAdjustRPDemandReqElemValidateAddDemandSourceAtElemLevel(t *testing.T) {

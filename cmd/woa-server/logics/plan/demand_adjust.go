@@ -469,9 +469,8 @@ func (c *Controller) constructAdjustReq(kt *kit.Kit, bizOrgRel *mtypes.BizOrgRel
 			return nil, nil, errors.New("updated_info is required for add adjust")
 		}
 		updated := cvt.PtrToVal(adjust.UpdatedInfo)
-		if updated.DemandSource == "" {
-			updated.DemandSource = adjust.DemandSource
-		}
+		// Ignore updated_info.demand_source; elem-level demand_source is the source of truth.
+		updated.DemandSource = adjust.DemandSource
 		addReqs = append(addReqs, updated)
 	}
 
@@ -587,11 +586,6 @@ func (c *Controller) constructUpdateDemands(kt *kit.Kit, updates []ptypes.Adjust
 			return nil, fmt.Errorf("demand id: %s is not found", update.DemandID)
 		}
 
-		demandSource := update.DemandSource
-		if update.UpdatedInfo.DemandSource != "" {
-			demandSource = update.UpdatedInfo.DemandSource
-		}
-
 		result[idx] = rpt.ResPlanDemand{
 			DemandClass: demandClass,
 			Original:    original,
@@ -604,7 +598,8 @@ func (c *Controller) constructUpdateDemands(kt *kit.Kit, updates []ptypes.Adjust
 				RegionID:       update.UpdatedInfo.RegionID,
 				RegionName:     regionAreaMap[update.UpdatedInfo.RegionID].RegionName,
 				AreaName:       regionAreaMap[update.UpdatedInfo.RegionID].AreaName,
-				DemandSource:   demandSource,
+				// Ignore updated_info.demand_source; elem-level demand_source is the source of truth.
+				DemandSource:   update.DemandSource,
 				Cvm: rpt.Cvm{
 					ResMode:        update.UpdatedInfo.Cvm.ResMode,
 					DeviceType:     update.UpdatedInfo.Cvm.DeviceType,

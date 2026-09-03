@@ -17,14 +17,14 @@ POST /api/v1/woa/bizs/{bk_biz_id}/plans/resources/demands/adjust
 
 #### adjusts[i]
 
-| 参数名称          | 参数类型   | 必选  | 描述                                                                                      |
-| ------------- | ------ | --- | --------------------------------------------------------------------------------------- |
-| demand_id     | string | 否   | 预测需求ID，adjust_type为add时不需要，其余类型必填                                                       |
-| adjust_type   | string | 是   | 调整类型。枚举值：**delay**：仅调整期望交付时间（整单延期）；**update**：调规格/数量，或换机型且改期；**add**：调整单内新增预测           |
-| demand_source | string | 否   | 需求分类/变更原因。**adjust_type 为 update 或 add 时**必填；作为默认值，当 `updated_info.demand_source` 未传时使用 |
-| original_info | object | 否   | 调整前需求信息。**update 时必填**；delay、add 不需要传（delay 后端按 demand_id 查库）                           |
-| updated_info  | object | 否   | 调整后/新增的需求信息。**update、add 时必填**；delay 不需要传                                               |
-| expect_time   | string | 否   | 修改后的期望交付时间，格式 YYYY-MM-DD。**delay 时必填**；update/add 的到货时间用 `updated_info.expect_time`     |
+| 参数名称          | 参数类型   | 必选  | 描述                                                                                  |
+| ------------- | ------ | --- | ----------------------------------------------------------------------------------- |
+| demand_id     | string | 否   | 预测需求ID，adjust_type为add时不需要，其余类型必填                                                   |
+| adjust_type   | string | 是   | 调整类型。枚举值：**delay**：仅调整期望交付时间（整单延期）；**update**：调规格/数量，或换机型且改期；**add**：调整单内新增预测       |
+| demand_source | string | 否   | 需求分类/变更原因。**adjust_type 为 update 或 add 时**必填；每条 adjust 独立填写                         |
+| original_info | object | 否   | 调整前需求信息。**update 时必填**；delay、add 不需要传（delay 后端按 demand_id 查库）                       |
+| updated_info  | object | 否   | 调整后/新增的需求信息。**update、add 时必填**；delay 不需要传                                           |
+| expect_time   | string | 否   | 修改后的期望交付时间，格式 YYYY-MM-DD。**delay 时必填**；update/add 的到货时间用 `updated_info.expect_time` |
 
 #### adjusts[i].original_info & adjusts[i].updated_info
 
@@ -35,13 +35,13 @@ POST /api/v1/woa/bizs/{bk_biz_id}/plans/resources/demands/adjust
 | return_plan_time | string       | 否   | 预期退回时间，格式为YYYY-MM-DD。当OBS项目类型为"短租项目"时，该字段必填       |
 | region_id        | string       | 是   | 地区/城市ID                                           |
 | zone_id          | string       | 否   | 可用区ID                                             |
-| demand_source    | string       | 否   | 需求分类/变更原因                                         |
 | remark           | string       | 否   | 需求备注                                              |
 | demand_res_types | string array | 是   | 预测资源类型列表(枚举值：CVM、CBS)，需求包含CVM时，传递CVM，包含CBS时，传递CBS |
 | cvm              | object       | 否   | 申请的CVM信息                                          |
 | cbs              | object       | 否   | 申请的CBS信息                                          |
 
 #### adjusts[i].original_info.cvm & adjusts[i].updated_info.cvm
+
 | 参数名称        | 参数类型   | 必选  | 描述                 |
 | ----------- | ------ | --- | ------------------ |
 | res_mode    | string | 是   | 资源模式(枚举值：按机型、按机型族) |
@@ -75,7 +75,6 @@ POST /api/v1/woa/bizs/{bk_biz_id}/plans/resources/demands/adjust
         "return_plan_time": "2025-01-01",
         "region_id": "ap-shanghai",
         "zone_id": "ap-shanghai-2",
-        "demand_source": "指标变化",
         "remark": "这里是需求备注",
         "demand_res_types": [
           "CVM",
@@ -100,7 +99,6 @@ POST /api/v1/woa/bizs/{bk_biz_id}/plans/resources/demands/adjust
         "return_plan_time": "2025-01-20",
         "region_id": "ap-shanghai",
         "zone_id": "ap-shanghai-2",
-        "demand_source": "指标变化",
         "remark": "这里是需求备注",
         "demand_res_types": [
           "CVM",
