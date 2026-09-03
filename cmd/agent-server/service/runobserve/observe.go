@@ -51,6 +51,9 @@ func ObserveEvents(ctx context.Context, evts []aguievents.Event) {
 			continue
 		}
 		observeEvent(meta, evt, rid)
+		if l := currentLedger(); l != nil {
+			l.handle(meta, evt)
+		}
 	}
 }
 

@@ -1132,6 +1132,10 @@ func genAgentAssistantResource(*meta.ResourceAttribute) (client.ActionID, []clie
 	return sys.AgentAssistant, make([]client.Resource, 0), nil
 }
 
+func genAgentAssistantManageResource(*meta.ResourceAttribute) (client.ActionID, []client.Resource, error) {
+	return sys.AgentAssistantManage, make([]client.Resource, 0), nil
+}
+
 func genGlobalConfigResource(a *meta.ResourceAttribute) (client.ActionID, []client.Resource, error) {
 	switch a.Basic.Action {
 	case meta.Create:

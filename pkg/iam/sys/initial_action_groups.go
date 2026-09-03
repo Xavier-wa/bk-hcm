@@ -338,6 +338,7 @@ func genPlatformManageActionGroups() client.ActionGroup {
 				NameEn: "Agent Assistant",
 				Actions: []client.ActionWithID{
 					{ID: AgentAssistant},
+					{ID: AgentAssistantManage},
 				},
 			},
 		},

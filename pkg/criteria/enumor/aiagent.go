@@ -130,6 +130,8 @@ const (
 	// 也不被 Validate 接受。分类不可用（提示词缺失、LLM 调用失败、响应无法识别等）时用它替代 chat，
 	// 使「分类失败」与「用户确在闲聊」两种语义分离——否则一旦 chat 被实现为受支持场景，
 	// 所有降级路径都会被 IsSupportedScene 判为可切换，导致分类失败时误切场景。
+	//
+	// aiagent_run.scene 解不出合法意图时也复用该值落库（ValidateRunScene 放行）。
 	IntentTypeUnsupported IntentType = "unsupported"
 )
 
@@ -154,6 +156,26 @@ func (t IntentType) Validate() error {
 	default:
 		return fmt.Errorf("unsupported intent type: %s", t)
 	}
+}
+
+// ValidateRunScene 校验账本 scene：合法意图类别，或 IntentTypeUnsupported 降级值。
+func (t IntentType) ValidateRunScene() error {
+	if err := t.Validate(); err == nil {
+		return nil
+	}
+	if t == IntentTypeUnsupported {
+		return nil
+	}
+	return fmt.Errorf("unsupported aiagent run scene: %s", t)
+}
+
+// NormalizeRunScene maps a session tag to a ledger scene.
+// Invalid tags reuse IntentTypeUnsupported（与意图分类失败同一降级值）。
+func NormalizeRunScene(tag IntentType) IntentType {
+	if err := tag.Validate(); err == nil {
+		return tag
+	}
+	return IntentTypeUnsupported
 }
 
 // IsSupportedScene reports whether the intent has an implemented scene flow.

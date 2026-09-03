@@ -198,6 +198,16 @@ const (
 	DefaultLLMRequestBodyLogLimit = 16 * 1024
 )
 
+// history sync
+const (
+	// AiagentRunIDMaxLen is aiagent_run.run_id VARCHAR(64).
+	AiagentRunIDMaxLen = 64
+	// MaxHistorySyncSessionLimit caps session_codes per history sync call.
+	MaxHistorySyncSessionLimit = 20
+	// AiagentRunHistorySyncReason marks ledger rows created from session history.
+	AiagentRunHistorySyncReason = "history_sync"
+)
+
 // session constant
 const (
 	// SessionCacheResolverCapacity is the capacity of the session cache resolver.
@@ -418,7 +428,30 @@ const (
 	MemoryExtractPromptKey = "memory_extract_prompt"
 	// IntentRecognitionPromptKey is the well-known prompt key used by the intent recognition.
 	IntentRecognitionPromptKey = "intent_recognition_prompt"
+	// EvalScopePromptKey is the well-known prompt key used by eval stage-1.
+	EvalScopePromptKey = "eval_scope_prompt"
+	// EvalRubricPromptKey is the well-known prompt key used by eval stage-2.
+	EvalRubricPromptKey = "eval_rubric_prompt"
 )
+
+// eval score
+const (
+	// MinEvalScore is the inclusive lower bound of process/outcome/quality scores.
+	MinEvalScore = 0
+	// MaxEvalScore is the inclusive upper bound of process/outcome/quality scores.
+	MaxEvalScore = 100
+	// DefaultAiagentRunEvalGapLimit is the default page size for listing terminal
+	// runs that have no eval row. Use AiagentRunEvalGapLimit instead of a raw 20.
+	DefaultAiagentRunEvalGapLimit = 20
+)
+
+// AiagentRunEvalGapLimit returns limit, or DefaultAiagentRunEvalGapLimit when limit is 0.
+func AiagentRunEvalGapLimit(limit uint) uint {
+	if limit == 0 {
+		return DefaultAiagentRunEvalGapLimit
+	}
+	return limit
+}
 
 // PromptSystemKey 按场景派生 system prompt 的 store key。
 // scene 为空时返回默认场景的 SystemPromptKey；非空时返回 "{scene}_system_prompt"。

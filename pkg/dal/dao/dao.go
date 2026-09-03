@@ -228,6 +228,8 @@ type Set interface {
 
 	AiagentSession() daoaiagent.AiagentSession
 	AiagentRunFeedback() daoaiagent.AiagentRunFeedback
+	AiagentRun() daoaiagent.AiagentRun
+	AiagentRunEval() daoaiagent.AiagentRunEval
 
 	Txn() *Txn
 }
@@ -1378,4 +1380,14 @@ func (s *set) AiagentSession() daoaiagent.AiagentSession {
 // AiagentRunFeedback return aiagent run feedback dao.
 func (s *set) AiagentRunFeedback() daoaiagent.AiagentRunFeedback {
 	return daoaiagent.NewAiagentRunFeedbackDao(s.orm, s.idGen)
+}
+
+// AiagentRun return aiagent run dao.
+func (s *set) AiagentRun() daoaiagent.AiagentRun {
+	return daoaiagent.NewAiagentRunDao(s.orm, s.idGen, s.audit)
+}
+
+// AiagentRunEval return aiagent run eval dao.
+func (s *set) AiagentRunEval() daoaiagent.AiagentRunEval {
+	return daoaiagent.NewAiagentRunEvalDao(s.orm, s.idGen, s.audit)
 }

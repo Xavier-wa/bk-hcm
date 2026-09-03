@@ -377,6 +377,8 @@ prompt:
   systemPromptFile: "cmd/agent-server/etc/prompts/system_prompt.md"
   instructionFile: "cmd/agent-server/etc/prompts/instruction.md"
   intentRecognitionPromptFile: "cmd/agent-server/etc/prompts/intent_recognition_prompt.md"
+  evalScopePromptFile: "cmd/agent-server/etc/prompts/eval_scope_prompt.md"
+  evalRubricPromptFile: "cmd/agent-server/etc/prompts/eval_rubric_prompt.md"
   # 子场景 prompt：key 为场景名（enumor.IntentType，如 resource_query）。
   # 新增场景只需在此追加一个块并提供 prompt 文件，无需改动 Go 代码。
   # store key 按约定派生：{scene}_system_prompt / {scene}_instruction_prompt。
@@ -410,11 +412,44 @@ prompt:
     - id: 6
       code: resource_query_instruction_prompt  # resource_query 场景 instruction，追加在 subgraph system message 之后
       required: false
+    # 评估判官：对应 EvalScopePromptKey / EvalRubricPromptKey
+    - id: 7
+      code: eval_scope_prompt
+      required: false
+    - id: 8
+      code: eval_rubric_prompt
+      required: false
 
 # 意图识别节点配置（仅 agui.model.mode: graph 时生效）。
 # prompt 文件路径在上方 prompt.intentRecognitionPromptFile 中配置。
 intent:
   contextWindowSize: 5  # 传入意图识别 LLM 的最近用户消息条数（默认 5）
+
+# 被动模型评估。默认关闭。enabled=true 时必须配置合法 model 且 session DSN 已配。
+eval:
+  enabled: false
+  model:
+    name: ""
+    provider: ""
+    maxTokens: 8192
+    temperature: 0.2
+  concurrency: 2
+  submitWaitTimeout: "1s"   # 1s-3s 限时等槽；-1s 一直等；禁止 0
+  # 启动补偿：捞「已终态、无评估行」的缺口。lookback 必须 < trackTTL。
+  compensateLookback: "24h"   # 只捞 now-24h 以内的缺口
+  compensateBatchSize: 20     # 本次启动最多入队条数，多了下次重启再捞
+  contextRunLimit: 5
+  shutdownDrain: "30s"        # 进程退出时最多等在途评估 job 这么久
+  passThreshold: 80           # 查询侧通过门槛：quality>=80 且无红线；不落库
+  rubricVersion: "v1"
+  trackTTL: "168h"
+  # processWeights / outcomeWeights 可覆盖默认九维权重；不配则用代码默认值
+
+# 账本孤儿清扫。默认关，显式 enabled: true 才注册。
+aiagentRunSweep:
+  enabled: true
+  interval: "10m"
+  orphanThreshold: "4h"
 
 # BKAIDev 同步网关凭证，由 skills / prompt 等同步域共用。
 # 仅在至少一个同步域 enabled: true 时需要配置。

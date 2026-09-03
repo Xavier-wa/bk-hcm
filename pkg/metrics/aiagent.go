@@ -29,11 +29,27 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	// AiagentEvalResultSuccess is eval_total result when a row is written.
+	AiagentEvalResultSuccess = "success"
+	// AiagentEvalResultFail is eval_total result when evaluation fails.
+	AiagentEvalResultFail = "fail"
+	// AiagentEvalResultSkip is eval_total result when evaluation is skipped.
+	AiagentEvalResultSkip = "skip"
+	// AiagentEvalScopeFallbackIllegal is stage-1 fallback because start_run_id is illegal.
+	AiagentEvalScopeFallbackIllegal = "illegal"
+	// AiagentEvalScopeFallbackFail is stage-1 fallback because the judge call failed.
+	AiagentEvalScopeFallbackFail = "fail"
+)
+
 type aiagentMetric struct {
-	runTotal    *prometheus.CounterVec
-	runDuration *prometheus.HistogramVec
-	runInflight *prometheus.GaugeVec
-	runCancel   *prometheus.CounterVec
+	runTotal          *prometheus.CounterVec
+	runDuration       *prometheus.HistogramVec
+	runInflight       *prometheus.GaugeVec
+	runCancel         *prometheus.CounterVec
+	evalTotal         *prometheus.CounterVec
+	evalDroppedTotal  prometheus.Counter
+	evalScopeFallback *prometheus.CounterVec
 }
 
 var (
@@ -77,6 +93,30 @@ func initAiagentMetric() {
 			Help:      "the total count of aiagent /cancel requests by bkcc_biz_id / scene.",
 		}, []string{LabelBKCCBizID, LabelScene})
 		Register().MustRegister(m.runCancel)
+
+		m.evalTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: Namespace,
+			Subsystem: AiagentSubSys,
+			Name:      "eval_total",
+			Help:      "the total count of aiagent evaluations by result.",
+		}, []string{LabelResult})
+		Register().MustRegister(m.evalTotal)
+
+		m.evalDroppedTotal = prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: Namespace,
+			Subsystem: AiagentSubSys,
+			Name:      "eval_dropped_total",
+			Help:      "the total count of realtime eval jobs dropped after submitWaitTimeout.",
+		})
+		Register().MustRegister(m.evalDroppedTotal)
+
+		m.evalScopeFallback = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: Namespace,
+			Subsystem: AiagentSubSys,
+			Name:      "eval_scope_fallback_total",
+			Help:      "the total count of stage-1 window fallbacks that evaluate only the target run.",
+		}, []string{LabelReason})
+		Register().MustRegister(m.evalScopeFallback)
 
 		aiagent = m
 	})
@@ -158,4 +198,34 @@ func IncAiagentRunCancel(bkBizID int64, scene string) {
 		LabelBKCCBizID: strconv.FormatInt(bkBizID, 10),
 		LabelScene:     scene,
 	}).Inc()
+}
+
+// IncAiagentEvalTotal increments eval_total by result (success / fail / skip).
+func IncAiagentEvalTotal(result string) {
+	if aiagent == nil {
+		initAiagentMetric()
+	}
+	if result == "" {
+		result = AiagentEvalResultFail
+	}
+	aiagent.evalTotal.With(prometheus.Labels{LabelResult: result}).Inc()
+}
+
+// IncAiagentEvalDropped increments eval_dropped_total once.
+func IncAiagentEvalDropped() {
+	if aiagent == nil {
+		initAiagentMetric()
+	}
+	aiagent.evalDroppedTotal.Inc()
+}
+
+// IncAiagentEvalScopeFallback increments eval_scope_fallback_total by reason.
+func IncAiagentEvalScopeFallback(reason string) {
+	if aiagent == nil {
+		initAiagentMetric()
+	}
+	if reason == "" {
+		reason = AiagentEvalScopeFallbackFail
+	}
+	aiagent.evalScopeFallback.With(prometheus.Labels{LabelReason: reason}).Inc()
 }

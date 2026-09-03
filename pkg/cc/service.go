@@ -1446,6 +1446,10 @@ type AgentPromptConfig struct {
 	// IntentRecognitionPromptFile is the path to the intent recognition prompt file.
 	// Required in graph mode when not using BKAIDev sync.
 	IntentRecognitionPromptFile string `yaml:"intentRecognitionPromptFile"`
+	// EvalScopePromptFile is the stage-1 eval prompt path (local file mode).
+	EvalScopePromptFile string `yaml:"evalScopePromptFile"`
+	// EvalRubricPromptFile is the stage-2 eval prompt path (local file mode).
+	EvalRubricPromptFile string `yaml:"evalRubricPromptFile"`
 	// ScenePrompts configures per-scene system+instruction prompt files (local file mode).
 	// The map key is the scene name (an enumor.IntentType value, e.g. "resource_query").
 	// New scenes only need a yaml block here plus the prompt files, no Go code change.
@@ -1456,6 +1460,10 @@ type AgentPromptConfig struct {
 	Instruction string `yaml:"-"`
 	// IntentRecognitionPrompt holds the loaded intent recognition prompt content. Not serialised to yaml.
 	IntentRecognitionPrompt string `yaml:"-"`
+	// EvalScopePrompt is loaded from EvalScopePromptFile. Not serialised.
+	EvalScopePrompt string `yaml:"-"`
+	// EvalRubricPrompt is loaded from EvalRubricPromptFile. Not serialised.
+	EvalRubricPrompt string `yaml:"-"`
 	// ScenePromptContents holds the per-scene prompt content loaded from ScenePrompts at startup.
 	// Keyed by scene name, same as ScenePrompts. Not serialised to yaml.
 	ScenePromptContents map[string]ScenePromptContent `yaml:"-"`
@@ -1493,6 +1501,8 @@ func (s *AgentPromptConfig) trySetDefault() {
 	s.SystemPrompt = loadPromptFile(s.SystemPromptFile)
 	s.Instruction = loadPromptFile(s.InstructionFile)
 	s.IntentRecognitionPrompt = loadPromptFile(s.IntentRecognitionPromptFile)
+	s.EvalScopePrompt = loadPromptFile(s.EvalScopePromptFile)
+	s.EvalRubricPrompt = loadPromptFile(s.EvalRubricPromptFile)
 
 	if len(s.ScenePrompts) > 0 {
 		s.ScenePromptContents = make(map[string]ScenePromptContent, len(s.ScenePrompts))
@@ -1956,6 +1966,10 @@ type AgentServerSetting struct {
 	BKAIDevSyncAPIGateway ApiGateway `yaml:"bkaidevSyncApiGateway"`
 	// A2A 配置 A2A 协议端点；默认关闭（Enable=false），开启时与 AG-UI 并行挂载。
 	A2A A2ASetting `yaml:"a2a"`
+	// Eval configures passive model evaluation. Default off.
+	Eval AgentEvalConfig `yaml:"eval"`
+	// AiagentRunSweep configures orphan running-row sweep. Default on.
+	AiagentRunSweep AiagentRunSweepConfig `yaml:"aiagentRunSweep"`
 }
 
 // SkillSyncEnabled reports whether BKAIDev skill sync is turned on.
@@ -1996,6 +2010,8 @@ func (s *AgentServerSetting) trySetDefault() {
 		s.Skills.trySetDefault()
 	}
 	s.Prompt.trySetDefault()
+	s.Eval.trySetDefault()
+	s.AiagentRunSweep.trySetDefault()
 }
 
 // Validate AgentServerSetting option.
@@ -2034,6 +2050,14 @@ func (s AgentServerSetting) Validate() error {
 
 	if err := s.Prompt.Validate(s.AGUI.Model.Mode); err != nil {
 		return fmt.Errorf("prompt: %w", err)
+	}
+
+	if err := s.AiagentRunSweep.validate(); err != nil {
+		return err
+	}
+
+	if err := s.Eval.validate(s); err != nil {
+		return err
 	}
 
 	return nil

@@ -169,6 +169,9 @@ const (
 
 	// AgentAssistant 智能体助手
 	AgentAssistant ResourceType = "agent_assistant"
+
+	// AgentAssistantManage 智能体助手管理
+	AgentAssistantManage ResourceType = "agent_assistant_manage"
 )
 
 // resourceTypes 所有合法的 ResourceType 枚举值
@@ -218,6 +221,8 @@ var resourceTypes = map[ResourceType]struct{}{
 	PermissionTemplate:       {},
 	GlobalConfig:             {},
 	PermissionPolicyLibrary:  {},
+	AgentAssistant:           {},
+	AgentAssistantManage:     {},
 }
 
 // Validate 验证 ResourceType

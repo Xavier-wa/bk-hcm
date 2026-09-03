@@ -60,6 +60,20 @@ func InitService(cap *capability.Capability) {
 	h.Add("BatchDeleteAgentRunFeedback", http.MethodDelete, "/aiagent/feedbacks/batch",
 		svc.BatchDeleteAgentRunFeedback)
 
+	h.Add("CreateAIAgentRun", http.MethodPost, "/aiagent/runs/create", svc.CreateAiagentRun)
+	h.Add("UpdateAIAgentRunStatus", http.MethodPatch, "/aiagent/runs/status", svc.UpdateAiagentRunStatus)
+	h.Add("PatchAIAgentRunTranscript", http.MethodPatch, "/aiagent/runs/transcript",
+		svc.PatchAiagentRunTranscript)
+	h.Add("ListAIAgentRuns", http.MethodPost, "/aiagent/runs/list", svc.ListAiagentRuns)
+
+	h.Add("CreateAIAgentRunEval", http.MethodPost, "/aiagent/run_evals/create", svc.CreateAiagentRunEval)
+	h.Add("GetAIAgentRunEval", http.MethodGet, "/aiagent/run_evals/{run_id}", svc.GetAiagentRunEval)
+	h.Add("ListAIAgentRunEvals", http.MethodPost, "/aiagent/run_evals/list", svc.ListAiagentRunEvals)
+	h.Add("ListAIAgentRunEvalGaps", http.MethodPost, "/aiagent/run_evals/gaps/list",
+		svc.ListAiagentRunEvalGaps)
+	h.Add("OverwriteAIAgentRunEval", http.MethodPut, "/aiagent/run_evals/overwrite",
+		svc.OverwriteAiagentRunEval)
+
 	h.Load(cap.WebService)
 }
 

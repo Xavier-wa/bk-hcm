@@ -29,6 +29,7 @@ type Client struct {
 	Session  *SessionClient
 	Feedback *FeedbackClient
 	Run      *RunClient
+	RunEval  *RunEvalClient
 }
 
 // NewClient creates a new aiagent Client.
@@ -37,5 +38,6 @@ func NewClient(client rest.ClientInterface) *Client {
 		Session:  NewSessionClient(client),
 		Feedback: NewFeedbackClient(client),
 		Run:      NewRunClient(client),
+		RunEval: NewRunEvalClient(client),
 	}
 }

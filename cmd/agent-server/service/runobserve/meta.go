@@ -22,13 +22,17 @@ package runobserve
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
+
+	aguievents "github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/core/events"
 )
 
 type runMetaCtxKey struct{}
@@ -46,13 +50,36 @@ type RunMeta struct {
 	// Hold happens on the real RUN_STARTED at AfterTranslate; EndRun releases
 	// if the SSE ends without a terminal event.
 	inflightHeld atomic.Bool
+
+	RunID       string
+	SessionCode string
+	User        string
+	Rid         string
+	Kit         *kit.Kit
+	// Query is this turn's user text taken from the /agui request body.
+	Query string
+
+	mu      sync.Mutex
+	events  []aguievents.Event
+	created chan struct{}
+	once    sync.Once
 }
 
 // NewRunMeta 构造一轮 /agui 的观测上下文。scene 经原子写入。
-func NewRunMeta(bkBizID int64, scene enumor.IntentType, startedAt time.Time) *RunMeta {
+func NewRunMeta(runID, sessionCode, user string, scene enumor.IntentType, bkBizID int64, kt *kit.Kit) *RunMeta {
+	rid := ""
+	if kt != nil {
+		rid = kt.Rid
+	}
 	meta := &RunMeta{
-		BkBizID:   bkBizID,
-		StartedAt: startedAt,
+		BkBizID:     bkBizID,
+		StartedAt:   time.Now(),
+		RunID:       runID,
+		SessionCode: sessionCode,
+		User:        user,
+		Rid:         rid,
+		Kit:         kt,
+		created:     make(chan struct{}),
 	}
 	meta.SetScene(scene)
 	return meta
@@ -130,4 +157,49 @@ func NormalizeScene(tag enumor.IntentType) enumor.IntentType {
 		return tag
 	}
 	return ""
+}
+
+func (m *RunMeta) appendEvent(evt aguievents.Event) {
+	if m == nil || evt == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.events = append(m.events, evt)
+}
+
+func (m *RunMeta) snapshotEvents() []aguievents.Event {
+	if m == nil {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]aguievents.Event, len(m.events))
+	copy(out, m.events)
+	return out
+}
+
+func (m *RunMeta) markCreated() {
+	if m == nil {
+		return
+	}
+	m.once.Do(func() {
+		if m.created != nil {
+			close(m.created)
+		}
+	})
+}
+
+func (m *RunMeta) waitCreated(timeout time.Duration) bool {
+	if m == nil || m.created == nil {
+		return false
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-m.created:
+		return true
+	case <-timer.C:
+		return false
+	}
 }

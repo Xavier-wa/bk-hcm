@@ -40,4 +40,6 @@ const (
 	CronTaskSyncAgentSkills CronTask = "sync_agent_skills"
 	// CronTaskSyncAgentPrompts syncs agent-server prompts from BKAIDev.
 	CronTaskSyncAgentPrompts CronTask = "sync_agent_prompts"
+	// CronTaskSweepAiagentRun sweeps orphan running rows in aiagent_run.
+	CronTaskSweepAiagentRun CronTask = "sweep_aiagent_run"
 )

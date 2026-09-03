@@ -36,6 +36,26 @@ func NewRunClient(client rest.ClientInterface) *RunClient {
 	return &RunClient{client: client}
 }
 
+// Create creates an aiagent run.
+func (c *RunClient) Create(kt *kit.Kit, req *dsaiagent.CreateAiagentRunReq) (
+	*dsaiagent.CreateAiagentRunResult, error) {
+
+	return common.Request[dsaiagent.CreateAiagentRunReq, dsaiagent.CreateAiagentRunResult](
+		c.client, rest.POST, kt, req, "/runs/create")
+}
+
+// UpdateStatus CAS-updates a running row to a terminal status.
+func (c *RunClient) UpdateStatus(kt *kit.Kit, req *dsaiagent.UpdateAiagentRunStatusReq) error {
+	return common.RequestNoResp[dsaiagent.UpdateAiagentRunStatusReq](
+		c.client, rest.PATCH, kt, req, "/runs/status")
+}
+
+// PatchTranscript backfills query/transcript without refreshing updated_at.
+func (c *RunClient) PatchTranscript(kt *kit.Kit, req *dsaiagent.PatchAiagentRunTranscriptReq) error {
+	return common.RequestNoResp[dsaiagent.PatchAiagentRunTranscriptReq](
+		c.client, rest.PATCH, kt, req, "/runs/transcript")
+}
+
 // List queries aiagent runs.
 func (c *RunClient) List(kt *kit.Kit, req *dsaiagent.ListAiagentRunReq) (
 	*dsaiagent.ListAiagentRunResult, error) {

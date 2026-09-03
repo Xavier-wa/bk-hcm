@@ -88,6 +88,10 @@ func resolveDefaultModel(flagModelName string, allowedNames []string, modelsMap 
 //
 // Full request URL: {gatewayCfg.BaseURL}/chat/completions
 // (path suffix appended by the OpenAI Go SDK automatically)
+func BuildModelWithConfig(modelName string, gatewayCfg *cc.AgentModelProvider) model.Model {
+	return buildModelWithConfig(modelName, gatewayCfg)
+}
+
 func buildModelWithConfig(modelName string, gatewayCfg *cc.AgentModelProvider) model.Model {
 	opts := buildOpenAIOptions(gatewayCfg)
 	opts = append(opts, openai.WithEnableTokenTailoring(true))

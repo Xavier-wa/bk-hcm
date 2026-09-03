@@ -38,12 +38,15 @@ import (
 	"hcm/cmd/agent-server/logics"
 	cvmapply "hcm/cmd/agent-server/logics/agent/cvm_apply"
 	authlogic "hcm/cmd/agent-server/logics/auth"
+	evalogic "hcm/cmd/agent-server/logics/eval"
+	"hcm/cmd/agent-server/logics/model"
 	"hcm/cmd/agent-server/logics/prompt"
 	"hcm/cmd/agent-server/logics/skill"
 	"hcm/cmd/agent-server/service/a2a"
 	aguievent "hcm/cmd/agent-server/service/agui-event"
 	"hcm/cmd/agent-server/service/capability"
 	configsvc "hcm/cmd/agent-server/service/config"
+	evalsvc "hcm/cmd/agent-server/service/eval"
 	"hcm/cmd/agent-server/service/feedback"
 	"hcm/cmd/agent-server/service/memory"
 	promptsvc "hcm/cmd/agent-server/service/prompt"
@@ -85,12 +88,16 @@ import (
 
 // Service do all the agent server's work
 type Service struct {
-	serve      *http.Server
-	authorizer auth.Authorizer
-	clientSet  *client.ClientSet
-	resolver   *session.Resolver
-	runTime    *logics.Runtime
-	tasks      map[enumor.CronTask]core.Task
+	serve         *http.Server
+	authorizer    auth.Authorizer
+	clientSet     *client.ClientSet
+	resolver      *session.Resolver
+	runTime       *logics.Runtime
+	tasks         map[enumor.CronTask]core.Task
+	ledger        *runobserve.Ledger
+	dispatcher    *evalogic.Dispatcher
+	evaluator     *evalogic.Evaluator
+	historySyncer *evalogic.HistorySyncer
 }
 
 // NewService create a service instance.
@@ -122,6 +129,9 @@ func NewService(sd serviced.ServiceDiscover) (*Service, error) {
 		clientSet:  apiClientSet,
 		resolver:   session.NewResolver(apiClientSet.DataService()),
 		runTime:    rt,
+	}
+	if err = svc.initEval(); err != nil {
+		return nil, err
 	}
 	if err = svc.initCronTasks(); err != nil {
 		return nil, err
@@ -158,11 +168,69 @@ func (s *Service) initCronTasks() error {
 		tasks = append(tasks, promptTask)
 	}
 
+	sweepTask, err := runobserve.NewSweepCronTask(s.clientSet, s.submitEval)
+	if err != nil {
+		logs.Errorf("init aiagent run sweep cron task failed, err: %v", err)
+		return err
+	}
+	if sweepTask != nil {
+		s.tasks[enumor.CronTaskSweepAiagentRun] = sweepTask
+		tasks = append(tasks, sweepTask)
+	}
+
 	if err = cron.Register(tasks); err != nil {
 		return fmt.Errorf("register skill sync cron: %w", err)
 	}
 
 	return nil
+}
+
+func (s *Service) initEval() error {
+	s.ledger = runobserve.NewLedger(s.clientSet, s.submitEval)
+	runobserve.SetLedger(s.ledger)
+
+	// History sync 写账本、不入评估队列，不依赖 eval.enabled。
+	if sess := s.runTime.SessionSvc(); sess != nil {
+		s.historySyncer = evalogic.NewHistorySyncer(s.clientSet, sess, cc.AgentServer().AGUI.AppName)
+	}
+
+	cfg := cc.AgentServer().Eval
+	if !cfg.IsEnabled() {
+		return nil
+	}
+	provider, err := cc.AgentServer().GetProvider(cfg.Model.Provider)
+	if err != nil {
+		return fmt.Errorf("init eval model: %w", err)
+	}
+
+	// eval.model：评估专用，不进 agui.modelsMap，不服务用户对话。
+	evalModel := model.BuildModelWithConfig(cfg.Model.Name, provider)
+	loader := evalogic.NewContextLoader(s.clientSet, s.runTime.SessionSvc(), cc.AgentServer().AGUI.AppName)
+	s.evaluator = evalogic.NewEvaluator(s.clientSet, loader, evalModel, s.runTime.PromptStore())
+	s.dispatcher = evalogic.NewDispatcher(cfg.Concurrency, cfg.SubmitWait(),
+		func(kt *kit.Kit, runID string, overwrite bool) {
+			if s.evaluator == nil {
+				logs.Errorf("agent run model evaluator is nil, rid: %s", kt.Rid)
+				return
+			}
+			s.evaluator.Evaluate(kt, runID, overwrite)
+		})
+
+	logs.Infof("eval dispatcher initialized, concurrency: %d, wait: %s", cfg.Concurrency, cfg.SubmitWaitTimeout)
+	return nil
+}
+
+// submitEval enqueues one run for evaluation after a terminal CAS.
+func (s *Service) submitEval(kt *kit.Kit, runID string) {
+	if s.dispatcher == nil {
+		rid := ""
+		if kt != nil {
+			rid = kt.Rid
+		}
+		logs.Errorf("submit eval failed, dispatcher is nil, run_id: %s, rid: %s", runID, rid)
+		return
+	}
+	s.dispatcher.Submit(kt, runID)
 }
 
 // initTLSConfig 初始化TLS配置
@@ -239,6 +307,12 @@ func (s *Service) ListenAndServeRest() error {
 
 			logs.Infof("start shutdown restful server gracefully...")
 
+			if s.dispatcher != nil {
+				// shutdownDrain：取消仍在等槽的 Acquire，并最多等这么久让已开工的评估结束。
+				drain := cc.AgentServer().Eval.ShutdownDrainDur()
+				s.dispatcher.Shutdown(drain)
+			}
+
 			ctx, cancel := context.WithTimeout(context.TODO(), 20*time.Second)
 			defer cancel()
 			if err := server.Shutdown(ctx); err != nil {
@@ -258,6 +332,10 @@ func (s *Service) ListenAndServeRest() error {
 	}()
 
 	s.serve = server
+
+	if cc.AgentServer().Eval.IsEnabled() && s.dispatcher != nil {
+		go evalogic.Compensate(kit.New(), s.clientSet, s.dispatcher)
+	}
 
 	return nil
 }
@@ -440,6 +518,8 @@ func (s *Service) apiSet() *restful.Container {
 	feedback.InitService(c)
 	skillsvc.InitService(c)
 	promptsvc.InitService(c)
+	runobserve.InitService(c)
+	evalsvc.InitService(c, s.dispatcher, s.historySyncer)
 	// 提供前端判断 Agent 是否就绪的接口（走 rest.Handler 统一封装 result/code/message/data）
 	readinessH := rest.NewHandler()
 	readinessH.Add("AgentReadiness", http.MethodGet, "/readiness", s.AgentReadiness)
@@ -535,20 +615,28 @@ func (s *Service) sessionCodeMiddleware(next http.Handler) http.Handler {
 		isAGUI := strings.HasSuffix(r.URL.Path, "/agui")
 		isCancel := strings.HasSuffix(r.URL.Path, "/cancel")
 		scene := runobserve.NormalizeScene(sessionMeta.SessionTag)
+		runID, _ := reqMap["runId"].(string)
 		if isAGUI {
 			go s.asyncIncrContentCount(kt, sessionCode)
 			if sessionMeta.BkBizID > 0 {
 				r = r.WithContext(authlogic.WithBkBizID(r.Context(), sessionMeta.BkBizID))
 			}
 			// 仅真实 /agui 挂本轮元数据；/history 不挂，避免重放被计成新 run。
-			r = r.WithContext(runobserve.WithRunMeta(r.Context(), runobserve.NewRunMeta(
-				sessionMeta.BkBizID, scene, time.Now())))
+			// 入站 kit 原样放入 RunMeta，create/cas 再各自 NewSubKit 一次，避免 rid 叠超 50。
+			meta := runobserve.NewRunMeta(
+				runID, sessionCode, sessionMeta.User, scene, sessionMeta.BkBizID, kt,
+			)
+			meta.Query = runobserve.QueryFromAGUIReq(reqMap)
+			r = r.WithContext(runobserve.WithRunMeta(r.Context(), meta))
 			// STARTED 由 AfterTranslate 持有 inflight；SSE 结束若未见终态则在此释放。
 			defer runobserve.EndRun(r.Context())
 		}
 		if isCancel {
 			// 鉴权与 session 解析已通过，立刻计 cancel；不减 inflight。
 			metrics.IncAiagentRunCancel(sessionMeta.BkBizID, string(scene))
+			if s.ledger != nil {
+				go s.ledger.Cancel(kt.NewSubKit(), runID, sessionCode)
+			}
 		}
 		next.ServeHTTP(w, r)
 

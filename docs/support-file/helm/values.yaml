@@ -1094,8 +1094,35 @@ agentserver:
       - id: 6
         code: resource_query_instruction_prompt
         required: false
+      - id: 7
+        code: eval_scope_prompt
+        required: false
+      - id: 8
+        code: eval_rubric_prompt
+        required: false
   intent:
     contextWindowSize: 5
+  eval:
+    enabled: false
+    model:
+      name: ""
+      provider: ""
+      maxTokens: 8192
+      temperature: 0.2
+    concurrency: 2
+    submitWaitTimeout: "1s"
+    # 启动补偿：捞已终态无评估行的缺口；lookback 必须小于 trackTTL
+    compensateLookback: "24h"
+    compensateBatchSize: 20
+    contextRunLimit: 5
+    shutdownDrain: "30s"        # 进程退出最多等在途评估这么久
+    passThreshold: 80           # 查询侧通过：quality>=门槛 且无红线
+    rubricVersion: "v1"
+    trackTTL: "168h"
+  aiagentRunSweep:
+    enabled: true
+    interval: "10m"
+    orphanThreshold: "4h"
   ## skills / prompt 同步共用的 BKAIDev 网关凭证
   ##
   bkaidevSyncApiGateway:

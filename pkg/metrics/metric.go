@@ -107,6 +107,10 @@ const (
 	LabelState = "state"
 	// LabelScene scene标签，取值对齐 enumor.IntentType（未分类/非法 tag 留空）
 	LabelScene = "scene"
+	// LabelResult result标签，取值如 success / fail
+	LabelResult = "result"
+	// LabelReason reason标签
+	LabelReason = "reason"
 	// LabelErrType errType标签
 	LabelErrType = "err_type"
 	// LabelFlowName flowName标签

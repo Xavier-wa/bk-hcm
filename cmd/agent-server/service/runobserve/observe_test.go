@@ -23,7 +23,6 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
-	"time"
 
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
@@ -47,7 +46,7 @@ func TestObserveEventsSkipWithoutMeta(t *testing.T) {
 
 func TestObserveEventsStartedFinished(t *testing.T) {
 	metrics.EnsureAiagentMetric()
-	meta := NewRunMeta(9, enumor.IntentTypeChat, time.Now().Add(-time.Second))
+	meta := NewRunMeta("r-obs", "sess", "user", enumor.IntentTypeChat, 9, nil)
 	ctx := WithRunMeta(context.Background(), meta)
 	before := currentInflight(t)
 
@@ -64,7 +63,7 @@ func TestObserveEventsStartedFinished(t *testing.T) {
 
 func TestAfterTranslateRecordsStartedWithoutRewriting(t *testing.T) {
 	metrics.EnsureAiagentMetric()
-	meta := NewRunMeta(0, enumor.IntentTypeChat, time.Time{})
+	meta := NewRunMeta("", "", "", enumor.IntentTypeChat, 0, nil)
 	ctx := WithRunMeta(context.Background(), meta)
 	before := currentInflight(t)
 	started := aguievents.NewRunStartedEvent("t1", "r-after")
@@ -84,7 +83,7 @@ func TestAfterTranslateRecordsStartedWithoutRewriting(t *testing.T) {
 
 func TestBeginRunAndEndRunPairInflight(t *testing.T) {
 	metrics.EnsureAiagentMetric()
-	meta := NewRunMeta(0, enumor.IntentTypeChat, time.Time{})
+	meta := NewRunMeta("", "", "", enumor.IntentTypeChat, 0, nil)
 	ctx := WithRunMeta(context.Background(), meta)
 	before := currentInflight(t)
 
@@ -109,7 +108,7 @@ func TestBeginRunAndEndRunPairInflight(t *testing.T) {
 
 func TestFinishedWithoutHoldDoesNotGoNegative(t *testing.T) {
 	metrics.EnsureAiagentMetric()
-	meta := NewRunMeta(0, enumor.IntentTypeChat, time.Time{})
+	meta := NewRunMeta("", "", "", enumor.IntentTypeChat, 0, nil)
 	ctx := WithRunMeta(context.Background(), meta)
 	before := currentInflight(t)
 
@@ -121,7 +120,7 @@ func TestFinishedWithoutHoldDoesNotGoNegative(t *testing.T) {
 
 func TestEndRunReleasesHoldWithoutTerminalEvent(t *testing.T) {
 	metrics.EnsureAiagentMetric()
-	meta := NewRunMeta(0, enumor.IntentTypeChat, time.Time{})
+	meta := NewRunMeta("", "", "", enumor.IntentTypeChat, 0, nil)
 	ctx := WithRunMeta(context.Background(), meta)
 	before := currentInflight(t)
 
@@ -164,13 +163,13 @@ func TestSceneForMetric(t *testing.T) {
 	if got := meta.SceneForMetric(); got != "" {
 		t.Fatalf("cleared scene = %q, want empty", got)
 	}
-	if got := NewRunMeta(1, enumor.IntentTypeChat, time.Time{}).SceneForMetric(); got != "chat" {
+	if got := NewRunMeta("", "", "", enumor.IntentTypeChat, 1, nil).SceneForMetric(); got != "chat" {
 		t.Fatalf("NewRunMeta scene = %q, want chat", got)
 	}
 }
 
 func TestRunMetaSceneConcurrentAccess(t *testing.T) {
-	meta := NewRunMeta(0, enumor.IntentTypeChat, time.Time{})
+	meta := NewRunMeta("", "", "", enumor.IntentTypeChat, 0, nil)
 	const n = 1000
 	done := make(chan struct{})
 	go func() {
@@ -207,7 +206,7 @@ func TestRefreshSceneFromStateDelta(t *testing.T) {
 }
 
 func TestRefreshSceneKeepsEntryWhenTagEmpty(t *testing.T) {
-	meta := NewRunMeta(0, enumor.IntentTypeHostApply, time.Time{})
+	meta := NewRunMeta("", "", "", enumor.IntentTypeHostApply, 0, nil)
 	ctx := WithRunMeta(context.Background(), meta)
 	raw, err := json.Marshal("")
 	if err != nil {
@@ -220,7 +219,7 @@ func TestRefreshSceneKeepsEntryWhenTagEmpty(t *testing.T) {
 }
 
 func TestRefreshSceneKeepsEntryWhenTagUnknown(t *testing.T) {
-	meta := NewRunMeta(0, enumor.IntentTypeHostApply, time.Time{})
+	meta := NewRunMeta("", "", "", enumor.IntentTypeHostApply, 0, nil)
 	ctx := WithRunMeta(context.Background(), meta)
 	raw, err := json.Marshal(string(enumor.IntentTypeUnsupported))
 	if err != nil {

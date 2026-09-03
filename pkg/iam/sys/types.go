@@ -280,6 +280,9 @@ const (
 	// AgentAssistant 平台管理-智能体助手
 	AgentAssistant client.ActionID = "agent_assistant"
 
+	// AgentAssistantManage 平台管理-智能体助手管理
+	AgentAssistantManage client.ActionID = "agent_assistant_manage"
+
 	// Skip is an action that no need to auth
 	Skip client.ActionID = "skip"
 )
@@ -365,6 +368,7 @@ var ActionIDNameMap = map[client.ActionID]string{
 	RollingServerManage:    "滚服管理",
 	GreenChannel:           "小额绿通",
 	AgentAssistant:         "平台-智能体助手",
+	AgentAssistantManage:   "平台-智能体助手管理",
 
 	AccountBillPrepaidCreate: "云账单-预付费账单写入",
 	AccountBillPrepaidDelete: "云账单-预付费账单删除",

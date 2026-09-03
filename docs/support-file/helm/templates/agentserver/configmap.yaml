@@ -51,5 +51,9 @@ data:
       {{- toYaml .Values.agentserver.prompt | nindent 6 }}
     intent:
       {{- toYaml .Values.agentserver.intent | nindent 6 }}
+    eval:
+      {{- toYaml .Values.agentserver.eval | nindent 6 }}
+    aiagentRunSweep:
+      {{- toYaml .Values.agentserver.aiagentRunSweep | nindent 6 }}
     bkaidevSyncApiGateway:
       {{- toYaml .Values.agentserver.bkaidevSyncApiGateway | nindent 6 }}

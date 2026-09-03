@@ -338,6 +338,10 @@ const (
 	AiagentSessionTable Name = "aiagent_session"
 	// AiagentRunFeedbackTable is aiagent_run_feedback table's name.
 	AiagentRunFeedbackTable Name = "aiagent_run_feedback"
+	// AiagentRunTable is aiagent_run table's name.
+	AiagentRunTable Name = "aiagent_run"
+	// AiagentRunEvalTable is aiagent_run_eval table's name.
+	AiagentRunEvalTable Name = "aiagent_run_eval"
 )
 
 // Validate whether the table name is valid or not.
@@ -520,6 +524,8 @@ var TableMap = map[Name]TableConfig{
 
 	AiagentSessionTable:     {},
 	AiagentRunFeedbackTable: {},
+	AiagentRunTable:     {},
+	AiagentRunEvalTable: {},
 }
 
 // Register 注册表名
