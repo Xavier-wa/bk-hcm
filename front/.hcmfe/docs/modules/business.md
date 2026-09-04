@@ -11,6 +11,7 @@
 - `business-manage.vue` / `business-detail.vue` — 业务管理自身（容器的合法职责）。
 - `host/`、`host-inventory/` — 主机 / 主机清单 → 应拆为 host 原子模块。
 - `cert-manager/` — 证书 → 应拆为 cert 原子模块。
+  - 删除按钮按云厂商禁用：自研云（`vendor === 'tcloud-ziyan'`）证书删除按钮置灰，tips「自研云证书不允许删除，如有疑问，请联系C2000」，优先级高于「已分配业务」提示；判定与视角无关（业务/资源视角同一段代码，2026-09-04 引入）。
 - `load-balancer/` → 归 [load-balancer](load-balancer.md) 原子模块。
 - `resource-plan/` → 归 [resource-plan](resource-plan.md)（资源预测）。
 - `rolling-server/` → 归 [rolling-server](rolling-server.md)（滚服）。

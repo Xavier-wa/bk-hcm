@@ -68,7 +68,7 @@
           }
         ]
       },
-      "syncedAt": "2026-08-18T11:46:48.401Z",
+      "syncedAt": "2026-09-03T10:05:47.570Z",
       "statusOptions": {
         "story": {
           "status_8": "backlog(新)",
@@ -107,13 +107,85 @@
       },
       "statusTransitions": {
         "story": {
+          "status_9": {
+            "key": "status_9",
+            "label": "挂起",
+            "satisfies": [
+              "backlog"
+            ],
+            "excludedFromRollup": true
+          },
+          "status_15": {
+            "key": "status_15",
+            "label": "refuse(已拒绝)",
+            "satisfies": [
+              "backlog"
+            ],
+            "excludedFromRollup": true
+          },
+          "status_16": {
+            "key": "status_16",
+            "label": "testing(测试中)",
+            "satisfies": [
+              "for_test"
+            ]
+          },
+          "status_17": {
+            "key": "status_17",
+            "label": "for approve(echo 审批)",
+            "satisfies": [
+              "backlog"
+            ]
+          },
           "status_18": {
             "key": "status_18",
             "label": "approved",
             "satisfies": [
               "backlog"
+            ]
+          },
+          "status_19": {
+            "key": "status_19",
+            "label": "for gray",
+            "satisfies": [
+              "tested"
+            ]
+          },
+          "status_20": {
+            "key": "status_20",
+            "label": "grayed",
+            "satisfies": [
+              "done"
+            ]
+          },
+          "status_21": {
+            "key": "status_21",
+            "label": "accepted",
+            "satisfies": [
+              "done"
+            ]
+          },
+          "status_22": {
+            "key": "status_22",
+            "label": "for accept",
+            "satisfies": [
+              "tested"
             ],
-            "nextSemantic": "todo"
+            "nextSemantic": "done"
+          },
+          "status_23": {
+            "key": "status_23",
+            "label": "designing",
+            "satisfies": [
+              "todo"
+            ]
+          },
+          "status_24": {
+            "key": "status_24",
+            "label": "design approved",
+            "satisfies": [
+              "todo"
+            ]
           }
         },
         "bug": {}

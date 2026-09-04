@@ -1,0 +1,163 @@
+{
+  "id": "feat-cert-ziyan-delete-tip",
+  "title": "自研云证书-云上不支持删除，页面需提示",
+  "currentStage": "done",
+  "createdAt": "2026-09-03T09:52:35.713Z",
+  "updatedAt": "2026-09-04T01:38:00.625Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-cert-ziyan-delete-tip/prd.md",
+        "kind": "file",
+        "addedAt": "2026-09-03T10:04:57.482Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-cert-ziyan-delete-tip/design.md",
+        "kind": "file",
+        "addedAt": "2026-09-03T10:07:57.032Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-cert-ziyan-delete-tip/api.md",
+        "kind": "file",
+        "addedAt": "2026-09-03T10:09:42.384Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-cert-ziyan-delete-tip/coding.md",
+        "kind": "file",
+        "addedAt": "2026-09-03T10:14:02.582Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-cert-ziyan-delete-tip/test.md",
+        "kind": "file",
+        "addedAt": "2026-09-04T01:35:01.652Z"
+      },
+      {
+        "ref": ".hcmfe/workflow/feat-cert-ziyan-delete-tip/e2e.spec.ts",
+        "kind": "file",
+        "addedAt": "2026-09-04T01:35:02.745Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-09-03T10:06:08.388Z",
+      "note": "PRD 已基于 TAPD 全量解读产出，需求点 F-001/F-002 与 AC-001~AC-007 齐备；前置澄清节点已完成，TAPD 状态已追平至 todo(已规划)。自动化任务预授权确认推进。"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-09-03T10:08:18.487Z",
+      "note": "Design 走无设计稿豁免路径（纯渲染层拦截、沿用现网 UI），已定义操作列删除按钮四态判定与提示优先级，并完成 design.post 图标/组件选型两个节点回填；TAPD 状态已在 todo，本步幂等。自动化任务预授权确认推进。"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-09-03T10:09:47.537Z",
+      "note": "API 阶段确认无新增/变更接口，判定仅依赖证书列表已返回的 vendor 字段；已核实 certColumns 含 vendor 列与 VendorEnum.ZIYAN 常量。自动化任务预授权确认推进。"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-09-03T10:15:07.763Z",
+      "note": "编码完成：cert-manager 操作列删除按钮增加自研云置灰判定与提示优先级，仅改 1 个文件；eslint 0 问题、编辑器 0 诊断、prettier 与改动前基线一致；TAPD 已追平至 doing。自动化任务预授权确认推进。"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-09-04T01:36:40.034Z",
+      "note": "Test 阶段完成：自动化 E2E 8 条用例全部通过（14.6s，含业务/资源视角、提示优先级、无权限场景），P2 UI 细节待 QA 补验；hcm-verify-e2e 与 hcm-docs-closeout 两个 post 节点已完成。自动化任务预授权确认推进。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-09-03T09:52:35.713Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-09-03T10:06:08.388Z",
+      "note": "PRD 已基于 TAPD 全量解读产出，需求点 F-001/F-002 与 AC-001~AC-007 齐备；前置澄清节点已完成，TAPD 状态已追平至 todo(已规划)。自动化任务预授权确认推进。"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-09-03T10:08:18.487Z",
+      "note": "Design 走无设计稿豁免路径（纯渲染层拦截、沿用现网 UI），已定义操作列删除按钮四态判定与提示优先级，并完成 design.post 图标/组件选型两个节点回填；TAPD 状态已在 todo，本步幂等。自动化任务预授权确认推进。"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-09-03T10:09:47.537Z",
+      "gitHead": "ed7a0e62e2a3423eabf2e0944e1d3e58b6cdca77",
+      "note": "API 阶段确认无新增/变更接口，判定仅依赖证书列表已返回的 vendor 字段；已核实 certColumns 含 vendor 列与 VendorEnum.ZIYAN 常量。自动化任务预授权确认推进。"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-09-03T10:15:07.763Z",
+      "note": "编码完成：cert-manager 操作列删除按钮增加自研云置灰判定与提示优先级，仅改 1 个文件；eslint 0 问题、编辑器 0 诊断、prettier 与改动前基线一致；TAPD 已追平至 doing。自动化任务预授权确认推进。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-09-04T01:36:40.034Z",
+      "note": "Test 阶段完成：自动化 E2E 8 条用例全部通过（14.6s，含业务/资源视角、提示优先级、无权限场景），P2 UI 细节待 QA 补验；hcm-verify-e2e 与 hcm-docs-closeout 两个 post 节点已完成。自动化任务预授权确认推进。"
+    }
+  ],
+  "branch": "feat-cert-ziyan-delete-tip",
+  "requirementId": "req-feat-cert-ziyan-delete-tip",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137815326"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "completed",
+      "at": "2026-09-03T10:04:13.526Z",
+      "note": "幂等豁免：绑定单据已于 2026-09-03 10:10 完成第 1 轮澄清（7 项问答全闭环，无遗留待确认项），已执行 tapd-analyst 全量解读核验（正文 + 正文截图 + 评论区，评论区为空），口径一致；不重复回写 description，避免覆盖已有澄清快照。"
+    },
+    "hcm-design-icon-intake": {
+      "status": "completed",
+      "at": "2026-09-03T10:08:05.863Z",
+      "note": "已按 wf-design-icon-intake 执行：design.md §3.x 语义列为 N/A，本需求不新增、不替换任何图标（沿用现网文本按钮与 v-bk-tooltips 载体）；已 Grep front/src/assets/iconfont/style.css 按 delete/close/info/help/tips/warn 语义检索，无命中，无需引入 iconfont 或 bkui icon 兜底。无图标语义需映射。"
+    },
+    "hcm-design-comp-intake": {
+      "status": "completed",
+      "at": "2026-09-03T10:08:12.598Z",
+      "note": "已按 wf-design-comp-intake 决策顺序回填 design.md §3.y 项目三列：本需求为在既有证书管理列表页面的既有操作列实现上扩展判定，非整页新列表/表单/详情（非 page）、非局部嵌入（非 comp-*），命中优先级 3 adjacent，落码入口为「无」，项目路径 front/src/views/business/cert-manager/index.tsx 操作列 render。不新建页面与组件。"
+    },
+    "hcm-verify-e2e": {
+      "status": "completed",
+      "at": "2026-09-04T01:36:28.888Z",
+      "note": "已按 wf-verify-e2e 完整执行：骨架自检发现缺失后用 e2e-setup 安装骨架（playwright.config.ts + manifest + mocks + scripts，复用已装 @playwright/test 1.62.1），本地构建静态产物并起静态服务，按 e2e-authoring 规范扩 mocks/data.ts + api.ts（证书列表 / auth/verify 逐项授权 / 业务列表）后在 workflow 目录维护 e2e.spec.ts 8 条用例（P0-01~04、P1-01/02/03/05）。运行结果 8 passed (14.6s)，结论与报告路径已回写 test.md。关键经验：文本按钮约 24x12px，tooltip 断言必须直接 hover 按钮本身而非单元格；disabled 不抑制 bkui tooltip（事件 target 命中内层 span 正常冒泡）。"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-09-04T01:36:31.960Z",
+      "note": "docs_status 得 touched=[business] 且 hasDrift，非空；已热写入 modules/business.md 的 cert-manager 行（自研云删除按钮禁用规则 + 提示优先级 + 视角无关），未整篇重写；docs_deepen(business) 刷新基线（119 files）。promotionQueue.totalOpen=0，无待评审晋升，跳过 promotions-review。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-09-04T01:38:00.625Z",
+      "note": "单张 story 按 planner 路径逐级追平：status_12(for test) → status_13(tested) → status_22(for accept，必经中间节点) → status_14(done)，最终 status key = status_14。owner 未变更。无父需求，无需 rollup。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/views/business/cert-manager/index.tsx"
+      ],
+      "contentFingerprint": "0a673388f2acdfd1e232318cc08f680ad07907af",
+      "codeBaseline": "9a7dc21e871212b5c2359ae6f2798d777447daf6",
+      "seatedAt": "2026-09-03T10:15:00.047Z"
+    }
+  }
+}

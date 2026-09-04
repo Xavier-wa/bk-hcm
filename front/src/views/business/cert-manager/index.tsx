@@ -69,27 +69,34 @@ export default defineComponent({
         {
           label: '操作',
           width: 120,
-          render: ({ data }: { data: any }) => (
-            <hcm-auth sign={{ type: authTypeMap.value.delete, relation: [currentBusinessId.value] }}>
-              {{
-                default: ({ noPerm }: { noPerm: boolean }) => (
-                  <span
-                    v-bk-tooltips={{
-                      content: '该证书已分配业务, 仅可在业务下操作',
-                      disabled: !(isResourcePage && data.bk_biz_id !== -1),
-                    }}>
-                    <Button
-                      text
-                      theme='primary'
-                      onClick={() => handleDeleteCert(data)}
-                      disabled={noPerm || (isResourcePage && data.bk_biz_id !== -1)}>
-                      删除
-                    </Button>
-                  </span>
-                ),
-              }}
-            </hcm-auth>
-          ),
+          render: ({ data }: { data: any }) => {
+            // 自研云证书云上不支持删除, 置灰并提示原因
+            const isZiyanCert = data.vendor === VendorEnum.ZIYAN;
+            const isAssignedBiz = isResourcePage && data.bk_biz_id !== -1;
+            return (
+              <hcm-auth sign={{ type: authTypeMap.value.delete, relation: [currentBusinessId.value] }}>
+                {{
+                  default: ({ noPerm }: { noPerm: boolean }) => (
+                    <span
+                      v-bk-tooltips={{
+                        content: isZiyanCert
+                          ? '自研云证书不允许删除，如有疑问，请联系C2000'
+                          : '该证书已分配业务, 仅可在业务下操作',
+                        disabled: !isZiyanCert && !isAssignedBiz,
+                      }}>
+                      <Button
+                        text
+                        theme='primary'
+                        onClick={() => handleDeleteCert(data)}
+                        disabled={noPerm || isZiyanCert || isAssignedBiz}>
+                        删除
+                      </Button>
+                    </span>
+                  ),
+                }}
+              </hcm-auth>
+            );
+          },
         },
       ];
       if (isResourcePage) {

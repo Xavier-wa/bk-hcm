@@ -1,0 +1,20 @@
+{
+  "id": "req-feat-cert-ziyan-delete-tip",
+  "title": "自研云证书-云上不支持删除，页面需提示",
+  "createdAt": "2026-09-03T09:52:36.089Z",
+  "updatedAt": "2026-09-03T09:52:36.093Z",
+  "iterations": [
+    {
+      "wfId": "feat-cert-ziyan-delete-tip",
+      "status": "prd",
+      "branch": "feat-cert-ziyan-delete-tip",
+      "title": "自研云证书-云上不支持删除，页面需提示",
+      "createdAt": "2026-09-03T09:52:35.713Z"
+    }
+  ],
+  "aggregatedArtifacts": {},
+  "codeScope": {
+    "globs": [],
+    "autoLearned": true
+  }
+}
