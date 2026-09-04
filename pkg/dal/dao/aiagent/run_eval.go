@@ -221,15 +221,18 @@ func (d *AiagentRunEvalDao) UpdateByRunIDWithTx(kt *kit.Kit, tx *sqlx.Tx,
 	}
 
 	sqlStr := fmt.Sprintf(`UPDATE %s SET session_id=:session_id, user=:user, bk_biz_id=:bk_biz_id,
-start_run_id=:start_run_id, process_score=:process_score, outcome_score=:outcome_score,
-quality_score=:quality_score, redlines=:redlines, reason_code=:reason_code,
-rubric_version=:rubric_version, eval_result=:eval_result, context_snapshot=:context_snapshot,
-eval_trace=:eval_trace, reviser=:reviser WHERE run_id=:run_id`, table.AiagentRunEvalTable)
+scene=:scene, query=:query, start_run_id=:start_run_id, process_score=:process_score,
+outcome_score=:outcome_score, quality_score=:quality_score, redlines=:redlines,
+reason_code=:reason_code, rubric_version=:rubric_version, eval_result=:eval_result,
+context_snapshot=:context_snapshot, eval_trace=:eval_trace, reviser=:reviser
+WHERE run_id=:run_id`, table.AiagentRunEvalTable)
 
 	effected, err := d.orm.Txn(tx).Update(kt.Ctx, sqlStr, map[string]interface{}{
 		"session_id":       model.SessionID,
 		"user":             model.User,
 		"bk_biz_id":        model.BkBizID,
+		"scene":            model.Scene,
+		"query":            model.Query,
 		"start_run_id":     model.StartRunID,
 		"process_score":    model.ProcessScore,
 		"outcome_score":    model.OutcomeScore,

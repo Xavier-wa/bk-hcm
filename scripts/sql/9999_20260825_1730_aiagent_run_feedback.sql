@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS `aiagent_run_feedback`
     `session_id` VARCHAR(64)  NOT NULL COMMENT '所属会话ID，等于aiagent_session.id',
     `user`       VARCHAR(64)  NOT NULL COMMENT '提交反馈的用户，不可变',
     `bk_biz_id`  BIGINT       NOT NULL COMMENT '所属业务ID',
+    `scene`      VARCHAR(32)  NOT NULL COMMENT '场景，与 aiagent_run.scene 对应，不可变',
+    `query`      TEXT         NOT NULL COMMENT '本轮第一条用户文本，与 aiagent_run.query 对应，不可变',
     `tags`       JSON                  DEFAULT NULL COMMENT '归因标签数组',
     `reaction`   VARCHAR(16)  NOT NULL COMMENT '反馈态度：like / dislike',
     `comment`    VARCHAR(500)          DEFAULT '' COMMENT '用户手输文本',
@@ -46,7 +48,8 @@ CREATE TABLE IF NOT EXISTS `aiagent_run_feedback`
     KEY `idx_session_id` (`session_id`),
     KEY `idx_user_created_at` (`user`, `created_at`),
     KEY `idx_reaction_created_at` (`reaction`, `created_at`),
-    KEY `idx_updated_at` (`updated_at`)
+    KEY `idx_updated_at` (`updated_at`),
+    KEY `idx_scene_created_at` (`scene`, `created_at`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4 COMMENT ='Agent对话反馈表';
 

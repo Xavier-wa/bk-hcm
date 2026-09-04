@@ -34,11 +34,15 @@ import (
 
 // CreateAgentRunFeedbackReq defines the request for creating an agent run feedback row.
 type CreateAgentRunFeedbackReq struct {
-	RunID     string            `json:"run_id" validate:"required,max=64"`
-	SessionID string            `json:"session_id" validate:"required,max=64"`
-	User      string            `json:"user" validate:"required,max=64"`
-	BkBizID   int64             `json:"bk_biz_id" validate:"required"`
-	Tags      types.StringArray `json:"tags,omitempty"`
+	RunID     string `json:"run_id" validate:"required,max=64"`
+	SessionID string `json:"session_id" validate:"required,max=64"`
+	User      string `json:"user" validate:"required,max=64"`
+	BkBizID   int64  `json:"bk_biz_id" validate:"required"`
+	// Scene mirrors aiagent_run.scene at feedback time, kept for dashboard filter pushdown.
+	Scene enumor.IntentType `json:"scene" validate:"required,max=32"`
+	// Query mirrors aiagent_run.query at feedback time, kept for dashboard filter pushdown.
+	Query string            `json:"query"`
+	Tags  types.StringArray `json:"tags,omitempty"`
 	// Reaction is the stored attitude, enumeration values such as: like/dislike.
 	Reaction enumor.FeedbackReaction `json:"reaction"`
 	Comment  string                  `json:"comment,omitempty" validate:"max=500"`
@@ -47,6 +51,9 @@ type CreateAgentRunFeedbackReq struct {
 // Validate validates the create request.
 func (req *CreateAgentRunFeedbackReq) Validate() error {
 	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+	if err := req.Scene.ValidateRunScene(); err != nil {
 		return err
 	}
 	return req.Reaction.Validate()

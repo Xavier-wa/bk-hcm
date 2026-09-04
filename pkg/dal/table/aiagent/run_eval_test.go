@@ -33,6 +33,8 @@ func validEval() RunEvalTable {
 		SessionID:       "sess",
 		User:            "u1",
 		BkBizID:         100,
+		Scene:           enumor.IntentTypeChat,
+		Query:           "hello",
 		StartRunID:      "r1",
 		ProcessScore:    80,
 		OutcomeScore:    80,
@@ -61,21 +63,39 @@ func TestRunEvalInsertValidate(t *testing.T) {
 	if err := missingUser.InsertValidate(); err == nil {
 		t.Fatal("empty user must fail")
 	}
+
+	missingScene := validEval()
+	missingScene.Scene = ""
+	if err := missingScene.InsertValidate(); err == nil {
+		t.Fatal("empty scene must fail")
+	}
 }
 
-func TestRunEvalColumnsOmitSceneAndItems(t *testing.T) {
-	hasUser, hasBkBizID := false, false
+// TestRunEvalColumnsHaveSceneQueryOmitSessionCodeAndTranscript asserts the aiagent_run_eval
+// column set: scene/query are denormalized from aiagent_run (dashboard filter/sort pushdown),
+// while session_code/passed/transcript are intentionally still not stored (session_id already
+// covers the thread key, passed is derived from quality_score+redlines, transcript is looked up
+// from aiagent_run on demand).
+func TestRunEvalColumnsHaveSceneQueryOmitSessionCodeAndTranscript(t *testing.T) {
+	hasUser, hasBkBizID, hasScene, hasQuery := false, false, false, false
 	for _, col := range RunEvalColumnDescriptor {
 		switch col.Column {
 		case "user":
 			hasUser = true
 		case "bk_biz_id":
 			hasBkBizID = true
-		case "scene", "session_code", "passed", "query", "transcript":
+		case "scene":
+			hasScene = true
+		case "query":
+			hasQuery = true
+		case "session_code", "passed", "transcript":
 			t.Fatalf("aiagent_run_eval must not store %s", col.Column)
 		}
 	}
 	if !hasUser || !hasBkBizID {
 		t.Fatal("aiagent_run_eval must store user and bk_biz_id")
+	}
+	if !hasScene || !hasQuery {
+		t.Fatal("aiagent_run_eval must store scene and query")
 	}
 }

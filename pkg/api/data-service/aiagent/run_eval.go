@@ -34,10 +34,14 @@ import (
 
 // CreateAiagentRunEvalReq defines the request for creating an eval row.
 type CreateAiagentRunEvalReq struct {
-	RunID           string                       `json:"run_id" validate:"required,max=64"`
-	SessionID       string                       `json:"session_id" validate:"required,max=128"`
-	User            string                       `json:"user" validate:"required,max=64"`
-	BkBizID         int64                        `json:"bk_biz_id"`
+	RunID     string `json:"run_id" validate:"required,max=64"`
+	SessionID string `json:"session_id" validate:"required,max=128"`
+	User      string `json:"user" validate:"required,max=64"`
+	BkBizID   int64  `json:"bk_biz_id"`
+	// Scene mirrors aiagent_run.scene at eval time, kept for dashboard filter/sort pushdown.
+	Scene enumor.IntentType `json:"scene" validate:"required,max=32"`
+	// Query mirrors aiagent_run.query at eval time, kept for dashboard filter/sort pushdown.
+	Query           string                       `json:"query"`
 	StartRunID      string                       `json:"start_run_id" validate:"required,max=64"`
 	ProcessScore    int                          `json:"process_score"`
 	OutcomeScore    int                          `json:"outcome_score"`
@@ -63,6 +67,9 @@ func (req *CreateAiagentRunEvalReq) Validate() error {
 	}
 	if req.User == "" {
 		return errors.New("user is required")
+	}
+	if err := req.Scene.ValidateRunScene(); err != nil {
+		return err
 	}
 	if err := req.ReasonCode.Validate(); err != nil {
 		return err

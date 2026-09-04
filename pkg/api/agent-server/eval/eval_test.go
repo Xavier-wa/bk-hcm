@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"hcm/pkg/api/core"
 	"hcm/pkg/criteria/constant"
 )
 
@@ -83,5 +84,24 @@ func TestReevalReqValidate(t *testing.T) {
 	req = &ReevalReq{Overwrite: &overwrite}
 	if err := req.Validate(); err != nil {
 		t.Fatalf("overwrite=true must pass, err: %v", err)
+	}
+}
+
+func TestDashboardListReqValidateCountPage(t *testing.T) {
+	period := PeriodFilter{From: "2026-08-01T00:00:00Z", To: "2026-08-02T00:00:00Z"}
+	evalReq := &DashboardEvalResultsListReq{PeriodFilter: period, Page: core.NewCountPage()}
+	if err := evalReq.Validate(); err != nil {
+		t.Fatalf("eval results count page must pass, err: %v", err)
+	}
+	if evalReq.Page.Limit != 0 {
+		t.Fatalf("eval results count page limit must remain zero, got %d", evalReq.Page.Limit)
+	}
+
+	feedbackReq := &DashboardFeedbackListReq{PeriodFilter: period, Page: core.NewCountPage()}
+	if err := feedbackReq.Validate(); err != nil {
+		t.Fatalf("feedback count page must pass, err: %v", err)
+	}
+	if feedbackReq.Page.Limit != 0 {
+		t.Fatalf("feedback count page limit must remain zero, got %d", feedbackReq.Page.Limit)
 	}
 }

@@ -1,7 +1,7 @@
 ### 描述
 
 - 该接口提供版本：v9.9.9.9。
-- 该接口所需权限：平台-智能体助手管理。调用方使用 HCM `bk_app_code`，并携带已认证用户。
+- 该接口所需权限：平台-智能体助手管理。
 - 该接口功能描述：运营看板单轮详情。返回账本问句/场景/用户/终态、评估结论、九维分数，以及评估窗口内各轮 transcript。
 
 ### URL
@@ -17,10 +17,9 @@ GET /api/v1/agent/eval/runs/{run_id}
 
 ### 调用示例
 
-```
+
 GET /api/v1/agent/eval/runs/6f6b35e6-9ee9-11f1-852b-525400225955?include_trace=false
-X-Bkapi-Authorization: {"bk_app_code":"<hcm_app_code>","bk_app_secret":"<hcm_app_secret>","bk_username":"<user>"}
-```
+
 
 ### 响应示例
 

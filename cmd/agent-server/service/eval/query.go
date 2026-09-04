@@ -31,8 +31,8 @@ import (
 	"hcm/pkg/rest"
 )
 
-// GetRun returns ledger + eval detail. Track events are never queried.
-func (svc *service) GetRun(cts *rest.Contexts) (interface{}, error) {
+// GetAgentEvalRun returns ledger + eval detail. Track events are never queried.
+func (svc *service) GetAgentEvalRun(cts *rest.Contexts) (interface{}, error) {
 	if err := svc.authorizeManage(cts.Kit); err != nil {
 		return nil, err
 	}

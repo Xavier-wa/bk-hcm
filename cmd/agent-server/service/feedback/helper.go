@@ -77,8 +77,11 @@ func findOwnedSession(kt *kit.Kit, cli *client.ClientSet, sessionID string, bizI
 }
 
 // ensureRunMatchesSession verifies that runID exists on aiagent_run and that the
-// row's session_code matches the owned session. Status is not checked.
-func ensureRunMatchesSession(kt *kit.Kit, cli *client.ClientSet, runID, sessionCode string) error {
+// row's session_code matches the owned session. Status is not checked. Returns the
+// run row so callers can copy scene/query into the feedback row without a second query.
+func ensureRunMatchesSession(kt *kit.Kit, cli *client.ClientSet, runID, sessionCode string) (
+	*tableaiagent.RunTable, error) {
+
 	listReq := &core.ListReq{
 		Filter: tools.EqualExpression("run_id", runID),
 		Page:   &core.BasePage{Start: 0, Limit: 1},
@@ -86,18 +89,19 @@ func ensureRunMatchesSession(kt *kit.Kit, cli *client.ClientSet, runID, sessionC
 	result, err := cli.DataService().Aiagent.Run.List(kt, listReq)
 	if err != nil {
 		logs.Errorf("find run failed, err: %v, run_id: %s, rid: %s", err, runID, kt.Rid)
-		return err
+		return nil, err
 	}
 
 	found := result != nil && len(result.Details) > 0
 	if !found {
-		return errf.Newf(errf.RecordNotFound, "run not found, run_id: %s", runID)
+		return nil, errf.Newf(errf.RecordNotFound, "run not found, run_id: %s", runID)
 	}
 
-	if sessionCode != result.Details[0].SessionCode {
-		return errf.Newf(errf.InvalidParameter, "run_id %s does not belong to session_code %s",
-			runID, result.Details[0].SessionCode)
+	run := result.Details[0]
+	if sessionCode != run.SessionCode {
+		return nil, errf.Newf(errf.InvalidParameter, "run_id %s does not belong to session_code %s",
+			runID, run.SessionCode)
 	}
 
-	return nil
+	return &run, nil
 }

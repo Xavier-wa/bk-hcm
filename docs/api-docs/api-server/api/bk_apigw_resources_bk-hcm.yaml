@@ -3083,6 +3083,64 @@ paths:
         disabledStages: []
         descriptionEn:
 
+  /api/v1/agent/eval/dashboard/eval_results/list:
+    post:
+      operationId: list_agent_eval_dashboard_eval_results
+      description: 查询 Agent 评估看板评估结果分页列表
+      tags:
+        - Agent
+        - Eval
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/agent/eval/dashboard/eval_results/list
+          matchSubpath: false
+          timeout: 30
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        disabledStages: []
+        descriptionEn:
+
+  /api/v1/agent/eval/dashboard/feedback/list:
+    post:
+      operationId: list_agent_eval_dashboard_feedback
+      description: 查询 Agent 评估看板用户反馈分页列表
+      tags:
+        - Agent
+        - Eval
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/agent/eval/dashboard/feedback/list
+          matchSubpath: false
+          timeout: 30
+          upstreams: {}
+          transformHeaders: {}
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        disabledStages: []
+        descriptionEn:
+
   /api/v1/agent/eval/runs/{run_id}:
     get:
       operationId: get_agent_eval_run

@@ -166,6 +166,8 @@ func (e *Evaluator) buildEvalPersistReq(kt *kit.Kit, in evalPersistInput) (
 		SessionID:     e.loader.resolveThreadID(kt, target.Run.SessionCode),
 		User:          target.Run.User,
 		BkBizID:       target.Run.BkBizID,
+		Scene:         target.Run.Scene,
+		Query:         target.Run.Query,
 		StartRunID:    in.startRunID,
 		ProcessScore:  in.score.Process,
 		OutcomeScore:  in.score.Outcome,

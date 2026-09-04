@@ -41,6 +41,8 @@ var RunEvalColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "session_id", NamedC: "session_id", Type: enumor.String},
 	{Column: "user", NamedC: "user", Type: enumor.String},
 	{Column: "bk_biz_id", NamedC: "bk_biz_id", Type: enumor.Numeric},
+	{Column: "scene", NamedC: "scene", Type: enumor.String},
+	{Column: "query", NamedC: "query", Type: enumor.String},
 	{Column: "start_run_id", NamedC: "start_run_id", Type: enumor.String},
 	{Column: "process_score", NamedC: "process_score", Type: enumor.Numeric},
 	{Column: "outcome_score", NamedC: "outcome_score", Type: enumor.Numeric},
@@ -59,11 +61,15 @@ var RunEvalColumnDescriptor = utils.ColumnDescriptors{
 
 // RunEvalTable is used to save one model evaluation result.
 type RunEvalTable struct {
-	ID              string                       `db:"id" json:"id"`
-	RunID           string                       `db:"run_id" validate:"max=64" json:"run_id"`
-	SessionID       string                       `db:"session_id" validate:"max=128" json:"session_id"`
-	User            string                       `db:"user" validate:"max=64" json:"user"`
-	BkBizID         int64                        `db:"bk_biz_id" json:"bk_biz_id"`
+	ID        string `db:"id" json:"id"`
+	RunID     string `db:"run_id" validate:"max=64" json:"run_id"`
+	SessionID string `db:"session_id" validate:"max=128" json:"session_id"`
+	User      string `db:"user" validate:"max=64" json:"user"`
+	BkBizID   int64  `db:"bk_biz_id" json:"bk_biz_id"`
+	// Scene mirrors aiagent_run.scene at eval time, kept for dashboard filter/sort pushdown.
+	Scene enumor.IntentType `db:"scene" validate:"max=32" json:"scene"`
+	// Query mirrors aiagent_run.query at eval time, kept for dashboard filter/sort pushdown.
+	Query           string                       `db:"query" json:"query"`
 	StartRunID      string                       `db:"start_run_id" validate:"max=64" json:"start_run_id"`
 	ProcessScore    int                          `db:"process_score" json:"process_score"`
 	OutcomeScore    int                          `db:"outcome_score" json:"outcome_score"`
@@ -109,6 +115,9 @@ func (r RunEvalTable) InsertValidate() error {
 	if len(r.User) == 0 {
 		return errors.New("user can not be empty")
 	}
+	if err := r.Scene.ValidateRunScene(); err != nil {
+		return err
+	}
 	if len(r.StartRunID) == 0 {
 		return errors.New("start_run_id can not be empty")
 	}
@@ -152,6 +161,11 @@ func (r RunEvalTable) UpdateValidate() error {
 	}
 	if len(r.Reviser) == 0 {
 		return errors.New("reviser can not be empty")
+	}
+	if r.Scene != "" {
+		if err := r.Scene.ValidateRunScene(); err != nil {
+			return err
+		}
 	}
 	if r.ReasonCode != "" {
 		if err := r.ReasonCode.Validate(); err != nil {

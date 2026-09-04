@@ -48,6 +48,8 @@ func (svc *service) CreateAgentRunFeedback(cts *rest.Contexts) (interface{}, err
 		SessionID: req.SessionID,
 		User:      req.User,
 		BkBizID:   req.BkBizID,
+		Scene:     req.Scene,
+		Query:     req.Query,
 		Tags:      req.Tags,
 		Reaction:  req.Reaction,
 		Comment:   converter.ValToPtr(req.Comment),

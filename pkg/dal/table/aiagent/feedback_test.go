@@ -36,6 +36,8 @@ func validFeedbackTable() FeedbackTable {
 		SessionID: "session1",
 		User:      "zhangsan",
 		BkBizID:   123,
+		Scene:     enumor.IntentTypeChat,
+		Query:     "hello",
 		Reaction:  enumor.FeedbackReactionLike,
 		Creator:   "zhangsan",
 	}
@@ -53,6 +55,10 @@ func TestFeedbackTable_InsertValidate(t *testing.T) {
 		{name: "missing session_id fails", mutate: func(f *FeedbackTable) { f.SessionID = "" }, wantErr: true},
 		{name: "missing user fails", mutate: func(f *FeedbackTable) { f.User = "" }, wantErr: true},
 		{name: "zero bk_biz_id fails", mutate: func(f *FeedbackTable) { f.BkBizID = 0 }, wantErr: true},
+		{name: "missing scene fails", mutate: func(f *FeedbackTable) { f.Scene = "" }, wantErr: true},
+		{name: "invalid scene fails", mutate: func(f *FeedbackTable) {
+			f.Scene = enumor.IntentType("other")
+		}, wantErr: true},
 		{name: "missing creator fails", mutate: func(f *FeedbackTable) { f.Creator = "" }, wantErr: true},
 		{name: "missing reaction fails", mutate: func(f *FeedbackTable) { f.Reaction = "" }, wantErr: true},
 		{name: "invalid reaction fails", mutate: func(f *FeedbackTable) {
@@ -82,6 +88,7 @@ func TestFeedbackTable_UpdateValidate(t *testing.T) {
 			name: "valid update passes",
 			mutate: func(f *FeedbackTable) {
 				f.RunID, f.SessionID, f.User, f.Creator = "", "", "", ""
+				f.Scene, f.Query = "", ""
 				f.Reviser = "lisi"
 			},
 			wantErr: false,
@@ -90,6 +97,7 @@ func TestFeedbackTable_UpdateValidate(t *testing.T) {
 			name: "invalid reaction is rejected",
 			mutate: func(f *FeedbackTable) {
 				f.RunID, f.SessionID, f.User, f.Creator = "", "", "", ""
+				f.Scene, f.Query = "", ""
 				f.Reviser = "lisi"
 				f.Reaction = enumor.FeedbackReaction("neutral")
 			},
@@ -99,6 +107,7 @@ func TestFeedbackTable_UpdateValidate(t *testing.T) {
 			name: "changing run_id is rejected",
 			mutate: func(f *FeedbackTable) {
 				f.SessionID, f.User, f.Creator = "", "", ""
+				f.Scene, f.Query = "", ""
 				f.Reviser = "lisi"
 			},
 			wantErr: true,
@@ -107,6 +116,7 @@ func TestFeedbackTable_UpdateValidate(t *testing.T) {
 			name: "changing session_id is rejected",
 			mutate: func(f *FeedbackTable) {
 				f.RunID, f.User, f.Creator = "", "", ""
+				f.Scene, f.Query = "", ""
 				f.Reviser = "lisi"
 			},
 			wantErr: true,
@@ -115,6 +125,25 @@ func TestFeedbackTable_UpdateValidate(t *testing.T) {
 			name: "changing user is rejected",
 			mutate: func(f *FeedbackTable) {
 				f.RunID, f.SessionID, f.Creator = "", "", ""
+				f.Scene, f.Query = "", ""
+				f.Reviser = "lisi"
+			},
+			wantErr: true,
+		},
+		{
+			name: "changing scene is rejected",
+			mutate: func(f *FeedbackTable) {
+				f.RunID, f.SessionID, f.User, f.Creator = "", "", "", ""
+				f.Query = ""
+				f.Reviser = "lisi"
+			},
+			wantErr: true,
+		},
+		{
+			name: "changing query is rejected",
+			mutate: func(f *FeedbackTable) {
+				f.RunID, f.SessionID, f.User, f.Creator = "", "", "", ""
+				f.Scene = ""
 				f.Reviser = "lisi"
 			},
 			wantErr: true,
@@ -123,6 +152,7 @@ func TestFeedbackTable_UpdateValidate(t *testing.T) {
 			name: "changing creator is rejected",
 			mutate: func(f *FeedbackTable) {
 				f.RunID, f.SessionID, f.User = "", "", ""
+				f.Scene, f.Query = "", ""
 				f.Reviser = "lisi"
 			},
 			wantErr: true,
@@ -131,6 +161,7 @@ func TestFeedbackTable_UpdateValidate(t *testing.T) {
 			name: "missing reviser is rejected",
 			mutate: func(f *FeedbackTable) {
 				f.RunID, f.SessionID, f.User, f.Creator = "", "", "", ""
+				f.Scene, f.Query = "", ""
 			},
 			wantErr: true,
 		},

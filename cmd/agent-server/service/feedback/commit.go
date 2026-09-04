@@ -29,6 +29,7 @@ import (
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/tools"
+	tableaiagent "hcm/pkg/dal/table/aiagent"
 	"hcm/pkg/dal/table/types"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
@@ -66,7 +67,8 @@ func (svc *service) BizCommitFeedback(cts *rest.Contexts) (interface{}, error) {
 		return nil, err
 	}
 
-	if err := ensureRunMatchesSession(cts.Kit, svc.cli, req.RunID, sess.SessionCode); err != nil {
+	run, err := ensureRunMatchesSession(cts.Kit, svc.cli, req.RunID, sess.SessionCode)
+	if err != nil {
 		return nil, err
 	}
 
@@ -74,7 +76,7 @@ func (svc *service) BizCommitFeedback(cts *rest.Contexts) (interface{}, error) {
 		return nil, err
 	}
 
-	id, err := svc.upsertFeedback(cts.Kit, bizID, req)
+	id, err := svc.upsertFeedback(cts.Kit, bizID, req, run)
 	if err != nil {
 		logs.Errorf("upsert feedback failed, err: %v, run_id: %s, rid: %s", err, req.RunID, cts.Kit.Rid)
 		return nil, err
@@ -124,9 +126,9 @@ func (svc *service) validateFeedbackTags(kt *kit.Kit, reaction enumor.FeedbackRe
 // upsertFeedback writes the feedback row for req.RunID: it overwrites the existing
 // row when one already exists (which also implements the "clear old tags/comment on
 // reaction change" rule, since the whole row is always rewritten), otherwise it
-// inserts a new row.
-func (svc *service) upsertFeedback(kt *kit.Kit, bizID int64, req *proto.CommitFeedbackReq) (
-	string, error) {
+// inserts a new row. run supplies the immutable scene/query snapshot for the insert path.
+func (svc *service) upsertFeedback(kt *kit.Kit, bizID int64, req *proto.CommitFeedbackReq,
+	run *tableaiagent.RunTable) (string, error) {
 
 	feedbackCli := svc.cli.DataService().Aiagent.Feedback
 
@@ -160,6 +162,8 @@ func (svc *service) upsertFeedback(kt *kit.Kit, bizID int64, req *proto.CommitFe
 		SessionID: req.SessionID,
 		User:      kt.User,
 		BkBizID:   bizID,
+		Scene:     run.Scene,
+		Query:     run.Query,
 		Tags:      types.StringArray(req.Tags),
 		Reaction:  req.Reaction,
 		Comment:   req.Comment,

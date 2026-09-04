@@ -181,6 +181,8 @@ func evalReqToTable(req *dsaiagent.CreateAiagentRunEvalReq) *tableaiagent.RunEva
 		SessionID:       req.SessionID,
 		User:            req.User,
 		BkBizID:         req.BkBizID,
+		Scene:           req.Scene,
+		Query:           req.Query,
 		StartRunID:      req.StartRunID,
 		ProcessScore:    req.ProcessScore,
 		OutcomeScore:    req.OutcomeScore,

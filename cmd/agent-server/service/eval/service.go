@@ -50,9 +50,13 @@ func InitService(c *capability.Capability, dispatcher *eval.Dispatcher, syncer *
 		syncer:     syncer,
 	}
 	h := rest.NewHandler()
-	h.Add("EvalRunDetail", http.MethodGet, "/eval/runs/{run_id}", svc.GetRun)
+	h.Add("GetAgentEvalRun", http.MethodGet, "/eval/runs/{run_id}", svc.GetAgentEvalRun)
 	h.Add("EvalReeval", http.MethodPost, "/eval/runs/{run_id}/reeval", svc.Reeval)
 	h.Add("EvalSyncHistory", http.MethodPost, "/eval/runs/history/sync", svc.SyncHistory)
+	h.Add("ListEvalDashboardEvalResults", http.MethodPost, "/eval/dashboard/eval_results/list",
+		svc.ListDashboardEvalResults)
+	h.Add("ListEvalDashboardFeedback", http.MethodPost, "/eval/dashboard/feedback/list",
+		svc.ListDashboardFeedback)
 	h.Load(c.WebService)
 }
 

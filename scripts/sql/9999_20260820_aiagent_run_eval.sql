@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS `aiagent_run_eval`
     `session_id`       VARCHAR(128) NOT NULL COMMENT 'aiagent_session.id（=thread_id），按会话聚合；对外会话键在账本 session_code',
     `user`             VARCHAR(64)  NOT NULL COMMENT '发起用户，与 aiagent_run.user 对应',
     `bk_biz_id`        BIGINT       NOT NULL COMMENT '业务ID，与 aiagent_run.bk_biz_id 对应',
+    `scene`            VARCHAR(32)  NOT NULL COMMENT '场景，与 aiagent_run.scene 对应',
+    `query`            TEXT         NOT NULL COMMENT '本轮第一条用户文本，与 aiagent_run.query 对应',
     `start_run_id`     VARCHAR(64)  NOT NULL COMMENT '阶段二最早一轮；等于 run_id 表示只评本轮',
     `process_score`    SMALLINT     NOT NULL COMMENT '过程分 0-100，代码计算',
     `outcome_score`    SMALLINT     NOT NULL COMMENT '结果分 0-100，代码计算',
@@ -55,7 +57,8 @@ CREATE TABLE IF NOT EXISTS `aiagent_run_eval`
     KEY `idx_start_run_id` (`start_run_id`),
     KEY `idx_reason_code` (`reason_code`),
     KEY `idx_user_created_at` (`user`, `created_at`),
-    KEY `idx_bk_biz_id_created_at` (`bk_biz_id`, `created_at`)
+    KEY `idx_bk_biz_id_created_at` (`bk_biz_id`, `created_at`),
+    KEY `idx_scene_created_at` (`scene`, `created_at`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4 COMMENT ='aiagent模型评估结果';
 

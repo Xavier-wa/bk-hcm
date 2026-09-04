@@ -39,6 +39,8 @@ var FeedbackColumnDescriptor = utils.ColumnDescriptors{
 	{Column: "session_id", NamedC: "session_id", Type: enumor.String},
 	{Column: "user", NamedC: "user", Type: enumor.String},
 	{Column: "bk_biz_id", NamedC: "bk_biz_id", Type: enumor.Numeric},
+	{Column: "scene", NamedC: "scene", Type: enumor.String},
+	{Column: "query", NamedC: "query", Type: enumor.String},
 	{Column: "tags", NamedC: "tags", Type: enumor.Json},
 	{Column: "reaction", NamedC: "reaction", Type: enumor.String},
 	{Column: "comment", NamedC: "comment", Type: enumor.String},
@@ -51,12 +53,16 @@ var FeedbackColumnDescriptor = utils.ColumnDescriptors{
 // FeedbackTable is used to save the user's feedback (like/dislike) on one Agent run.
 // One run has at most one feedback row, enforced by the uk_run_id unique index.
 type FeedbackTable struct {
-	ID        string            `db:"id" json:"id"`
-	RunID     string            `db:"run_id" validate:"max=64" json:"run_id"`
-	SessionID string            `db:"session_id" validate:"max=64" json:"session_id"`
-	User      string            `db:"user" validate:"max=64" json:"user"`
-	BkBizID   int64             `db:"bk_biz_id" json:"bk_biz_id"`
-	Tags      types.StringArray `db:"tags" json:"tags"`
+	ID        string `db:"id" json:"id"`
+	RunID     string `db:"run_id" validate:"max=64" json:"run_id"`
+	SessionID string `db:"session_id" validate:"max=64" json:"session_id"`
+	User      string `db:"user" validate:"max=64" json:"user"`
+	BkBizID   int64  `db:"bk_biz_id" json:"bk_biz_id"`
+	// Scene mirrors aiagent_run.scene at feedback time, immutable, kept for dashboard filter pushdown.
+	Scene enumor.IntentType `db:"scene" validate:"max=32" json:"scene"`
+	// Query mirrors aiagent_run.query at feedback time, immutable, kept for dashboard filter pushdown.
+	Query string            `db:"query" json:"query"`
+	Tags  types.StringArray `db:"tags" json:"tags"`
 	// Reaction is the stored attitude, enumeration values such as: like/dislike.
 	Reaction enumor.FeedbackReaction `db:"reaction" json:"reaction"`
 	// Comment is the optional free-text note.
@@ -92,6 +98,9 @@ func (f FeedbackTable) InsertValidate() error {
 	if f.BkBizID == 0 {
 		return errors.New("bk_biz_id is required")
 	}
+	if err := f.Scene.ValidateRunScene(); err != nil {
+		return err
+	}
 	if err := f.Reaction.Validate(); err != nil {
 		return err
 	}
@@ -115,6 +124,12 @@ func (f FeedbackTable) UpdateValidate() error {
 	}
 	if len(f.User) != 0 {
 		return errors.New("user can not update")
+	}
+	if f.Scene != "" {
+		return errors.New("scene can not update")
+	}
+	if len(f.Query) != 0 {
+		return errors.New("query can not update")
 	}
 	if len(f.Creator) != 0 {
 		return errors.New("creator can not update")

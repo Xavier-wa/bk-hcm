@@ -26,6 +26,7 @@ import (
 	evalogic "hcm/cmd/agent-server/logics/eval"
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/dal/table/types"
+	"hcm/pkg/runtime/filter"
 )
 
 func TestIsPassedShape(t *testing.T) {
@@ -60,5 +61,47 @@ func TestJsonItems(t *testing.T) {
 	got = jsonItems(types.JsonField(`not-json`))
 	if _, ok := got.(json.RawMessage); !ok {
 		t.Fatalf("invalid json must keep raw, got %T", got)
+	}
+}
+
+func TestRfc3339ToCSTDateTime(t *testing.T) {
+	got, err := rfc3339ToCSTDateTime("2026-08-16T00:00:00+08:00")
+	if err != nil || got != "2026-08-16T00:00:00+08:00" {
+		t.Fatalf("+08:00 must keep CST wall clock in TimeStdFormat, got %q, err: %v", got, err)
+	}
+
+	got, err = rfc3339ToCSTDateTime("2026-08-15T16:00:00Z")
+	if err != nil || got != "2026-08-16T00:00:00+08:00" {
+		t.Fatalf("UTC must be converted to CST TimeStdFormat, got %q, err: %v", got, err)
+	}
+
+	if _, err := rfc3339ToCSTDateTime("2026-08-16 00:00:00"); err == nil {
+		t.Fatal("naive DATETIME without offset must fail RFC3339 parsing")
+	}
+}
+
+func TestPeriodExprFormatsCSTDateTime(t *testing.T) {
+	expr, err := periodExpr("created_at", "2026-08-16T00:00:00+08:00", "2026-08-23T23:59:59+08:00",
+		"resource_query")
+	if err != nil {
+		t.Fatalf("valid rfc3339 range must not error, err: %v", err)
+	}
+	if len(expr.Rules) != 3 {
+		t.Fatalf("want from/to/scene rules, got %d", len(expr.Rules))
+	}
+	from, ok := expr.Rules[0].(*filter.AtomRule)
+	if !ok || from.Value != "2026-08-16T00:00:00+08:00" {
+		t.Fatalf("from must be reformatted to CST TimeStdFormat, got %+v", expr.Rules[0])
+	}
+	to, ok := expr.Rules[1].(*filter.AtomRule)
+	if !ok || to.Value != "2026-08-23T23:59:59+08:00" {
+		t.Fatalf("to must be reformatted to CST TimeStdFormat, got %+v", expr.Rules[1])
+	}
+
+	if _, err := periodExpr("created_at", "bad-from", "2026-08-23T23:59:59+08:00", ""); err == nil {
+		t.Fatal("invalid from must error instead of building a bad filter")
+	}
+	if _, err := periodExpr("created_at", "2026-08-16T00:00:00+08:00", "bad-to", ""); err == nil {
+		t.Fatal("invalid to must error instead of building a bad filter")
 	}
 }

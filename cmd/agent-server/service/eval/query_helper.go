@@ -21,16 +21,21 @@ package eval
 
 import (
 	"encoding/json"
+	"fmt"
+	"time"
 
 	evalogic "hcm/cmd/agent-server/logics/eval"
 	proto "hcm/pkg/api/agent-server/eval"
 	"hcm/pkg/api/core"
 	"hcm/pkg/cc"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/dal/dao/tools"
 	tableaiagent "hcm/pkg/dal/table/aiagent"
 	"hcm/pkg/dal/table/types"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/runtime/filter"
+	"hcm/pkg/tools/times"
 )
 
 func passThreshold() int {
@@ -90,6 +95,41 @@ func (svc *service) loadRunsByIDs(kt *kit.Kit, ids, fields []string) (
 		}
 	}
 	return out, nil
+}
+
+// periodExpr builds the common [from, to] + optional scene filter used by dashboard list queries.
+// from/to are RFC3339 request strings; they are normalized to CST wall-clock RFC3339
+// (constant.TimeStdFormat) before being put into the filter. data-service Time columns reject
+// naive DATETIME strings like "2006-01-02 15:04:05", so the value must keep the T separator and
+// timezone offset; converting into Asia/Shanghai first keeps the intended CST range.
+func periodExpr(field, from, to, scene string, extra ...*filter.AtomRule) (*filter.Expression, error) {
+	fromCST, err := rfc3339ToCSTDateTime(from)
+	if err != nil {
+		return nil, fmt.Errorf("invalid from: %w", err)
+	}
+	toCST, err := rfc3339ToCSTDateTime(to)
+	if err != nil {
+		return nil, fmt.Errorf("invalid to: %w", err)
+	}
+
+	rules := []*filter.AtomRule{
+		tools.RuleGreaterThanEqual(field, fromCST),
+		tools.RuleLessThanEqual(field, toCST),
+	}
+	if scene != "" {
+		rules = append(rules, tools.RuleEqual("scene", scene))
+	}
+	rules = append(rules, extra...)
+	return tools.ExpressionAnd(rules...), nil
+}
+
+// rfc3339ToCSTDateTime parses an RFC3339 timestamp and formats it as CST wall-clock TimeStdFormat.
+func rfc3339ToCSTDateTime(raw string) (string, error) {
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return "", err
+	}
+	return t.In(times.CST()).Format(constant.TimeStdFormat), nil
 }
 
 func jsonItems(raw types.JsonField) any {
