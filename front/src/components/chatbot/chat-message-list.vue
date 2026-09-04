@@ -16,6 +16,7 @@ import { touchCardActionProtect } from '@/hooks/chatbot/card-action-protect';
 import { useHitl } from '@/hooks/chatbot/use-hitl';
 import { useAccountSelect } from '@/hooks/chatbot/use-account-select';
 import { useHostApply } from '@/hooks/chatbot/use-host-apply';
+import { useAgentFeedback } from '@/hooks/chatbot/use-agent-feedback';
 import {
   type AccountSelectInterruptMessage,
   type HostApplyPreorderMessage,
@@ -40,6 +41,7 @@ const {
   isChatting,
   isCurrentSessionRemoteBusy,
   currentSessionCode,
+  currentSession,
   sendMessage,
   regenerate,
   resendEdited,
@@ -58,16 +60,12 @@ const { messageGroups } = useMessageGroup({
 
 const messageStatus = computed(() => (isChatting.value ? MessageStatus.Streaming : MessageStatus.Complete));
 
-// 组件内置工具按钮里只保留「复制」「重新生成」，其余能力（引用/分享/点赞/不满意/删除）暂未支持
+// 引用/分享/删除仍未支持；点赞/点踩走 chat-x 内置 MessageUserFeedback
 const messageTools: IToolBtn[] = [
   { id: 'cite', hidden: true },
   { id: 'share', hidden: true },
 ];
-const updateTools: IToolBtn[] = [
-  { id: 'like', hidden: true },
-  { id: 'unlike', hidden: true },
-  { id: 'delete', hidden: true },
-];
+const updateTools: IToolBtn[] = [{ id: 'delete', hidden: true }];
 
 const { isHitlInterruptMessage, getHitlContent, getHitlReadonlyState } = useHitl(messages);
 const { isAccountSelectMessage, getAccountSelectContent, getAccountSelectReadonlyState, selectedAccountId } =
@@ -88,10 +86,24 @@ const {
   getSubmitRows,
 } = useHostApply(messages);
 
+const { handleLikeUnlikeAction, handleLikeUnlikeFeedback, handleFeedbackCancelClick } = useAgentFeedback({
+  getBkBizId: getBizsId,
+  getSessionId: () => currentSession.value?.sessionId ?? '',
+  messageGroups,
+});
+
 const handleAgentAction = async (tool: IToolBtn, msgs: Message[]) => {
   if (tool.id === 'rebuild') {
     await regenerate(msgs);
+    return;
   }
+  if (tool.id === 'like' || tool.id === 'unlike') {
+    return handleLikeUnlikeAction(tool, msgs);
+  }
+};
+
+const handleAgentFeedback = (tool: IToolBtn, msgs: Message[], reasonList: string[], otherReason: string) => {
+  handleLikeUnlikeFeedback(tool, msgs, reasonList, otherReason);
 };
 
 // 账号选择确认：记录所选 account_id 到消息（供只读态/吸顶回显复用），并以 resumeValue 回写 agent
@@ -169,63 +181,66 @@ const handleStopSending = () => {
 </script>
 
 <template>
-  <MessageContainer
-    class="chat-message-list"
-    :messages="messages"
-    :message-groups="messageGroups"
-    :message-status="messageStatus"
-    :message-tools="messageTools"
-    :update-tools="updateTools"
-    :on-agent-action="handleAgentAction"
-    :on-user-input-confirm="handleUserInputConfirm"
-    @stop-streaming="handleStopSending"
-  >
-    <template #default="{ message }">
-      <HitlInterruptCard
-        v-if="isHitlInterruptMessage(message)"
-        :content="getHitlContent(message)"
-        :readonly="getHitlReadonlyState(message).readonly"
-        :readonly-value="getHitlReadonlyState(message).value"
-        :locked="isCurrentSessionRemoteBusy"
-        :on-confirm="sendMessage"
-      />
-      <AccountSelectCard
-        v-else-if="isAccountSelectMessage(message)"
-        :content="getAccountSelectContent(message)"
-        :readonly="getAccountSelectReadonlyState(message).readonly"
-        :readonly-value="getAccountSelectReadonlyState(message).accountId"
-        :locked="isCurrentSessionRemoteBusy"
-        :on-confirm="(accountId) => handleAccountConfirm(message, accountId)"
-      />
-      <HostApplyRecommendCard
-        v-else-if="isRecommendMessage(message)"
-        :content="getRecommendContent(message)"
-        :readonly="getRecommendReadonlyState(message).readonly"
-        :selected-index="getSelectedIndex(message)"
-        :initial-index="getInitialIndex(message)"
-        :locked="isCurrentSessionRemoteBusy"
-        :on-select="(index) => handleSelectPlan(message, index)"
-        :on-add-to-list="handleAddToList"
-      />
-      <HostApplyPreorderCard
-        v-else-if="isPreorderMessage(message)"
-        :content="getPreorderContent(message)"
-        :readonly="getPreorderReadonlyState(message).readonly"
-        :readonly-suborders="getPreorderReadonlySuborders(message)"
-        :locked="isCurrentSessionRemoteBusy"
-        :on-confirm="(suborders, edited) => handleConfirmPreorder(message, suborders, edited)"
-        :on-add-to-list="handleAddToList"
-      />
-      <HostApplySubmitCard
-        v-else-if="isSubmitMessage(message)"
-        :rows="getSubmitRows(message)"
-        :readonly="getSubmitReadonlyState(message).readonly"
-        :locked="isCurrentSessionRemoteBusy"
-        :on-confirm="() => handleSubmitConfirm(message)"
-        :on-add-to-list="() => handleAddToList(getSubmitRows(message))"
-      />
-    </template>
-  </MessageContainer>
+  <div @click.capture="handleFeedbackCancelClick">
+    <MessageContainer
+      class="chat-message-list"
+      :messages="messages"
+      :message-groups="messageGroups"
+      :message-status="messageStatus"
+      :message-tools="messageTools"
+      :update-tools="updateTools"
+      :on-agent-action="handleAgentAction"
+      :on-agent-feedback="handleAgentFeedback"
+      :on-user-input-confirm="handleUserInputConfirm"
+      @stop-streaming="handleStopSending"
+    >
+      <template #default="{ message }">
+        <HitlInterruptCard
+          v-if="isHitlInterruptMessage(message)"
+          :content="getHitlContent(message)"
+          :readonly="getHitlReadonlyState(message).readonly"
+          :readonly-value="getHitlReadonlyState(message).value"
+          :locked="isCurrentSessionRemoteBusy"
+          :on-confirm="sendMessage"
+        />
+        <AccountSelectCard
+          v-else-if="isAccountSelectMessage(message)"
+          :content="getAccountSelectContent(message)"
+          :readonly="getAccountSelectReadonlyState(message).readonly"
+          :readonly-value="getAccountSelectReadonlyState(message).accountId"
+          :locked="isCurrentSessionRemoteBusy"
+          :on-confirm="(accountId) => handleAccountConfirm(message, accountId)"
+        />
+        <HostApplyRecommendCard
+          v-else-if="isRecommendMessage(message)"
+          :content="getRecommendContent(message)"
+          :readonly="getRecommendReadonlyState(message).readonly"
+          :selected-index="getSelectedIndex(message)"
+          :initial-index="getInitialIndex(message)"
+          :locked="isCurrentSessionRemoteBusy"
+          :on-select="(index) => handleSelectPlan(message, index)"
+          :on-add-to-list="handleAddToList"
+        />
+        <HostApplyPreorderCard
+          v-else-if="isPreorderMessage(message)"
+          :content="getPreorderContent(message)"
+          :readonly="getPreorderReadonlyState(message).readonly"
+          :readonly-suborders="getPreorderReadonlySuborders(message)"
+          :locked="isCurrentSessionRemoteBusy"
+          :on-confirm="(suborders, edited) => handleConfirmPreorder(message, suborders, edited)"
+          :on-add-to-list="handleAddToList"
+        />
+        <HostApplySubmitCard
+          v-else-if="isSubmitMessage(message)"
+          :rows="getSubmitRows(message)"
+          :readonly="getSubmitReadonlyState(message).readonly"
+          :locked="isCurrentSessionRemoteBusy"
+          :on-confirm="() => handleSubmitConfirm(message)"
+          :on-add-to-list="() => handleAddToList(getSubmitRows(message))"
+        />
+      </template>
+    </MessageContainer>
+  </div>
 </template>
 
 <style scoped lang="scss">

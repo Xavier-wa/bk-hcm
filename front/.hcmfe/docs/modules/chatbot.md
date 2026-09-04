@@ -11,6 +11,7 @@
 - **入口鉴权**：首页菜单 `checkAuth`、默认落地、冷启动分流、浮窗显隐均认 IAM `agent_assistant`（「平台-智能体助手」）。不再读 `biz_agent_assistant` / `chatbot_access`。无平台权限时菜单和浮窗不展示；直访 chatbot 走通用申请页（先补业务访问，再申请 `agent_assistant`）。
 - **会话内核**：`hooks/chatbot/use-chatbot.ts` 组装 `useSession` / `useStream` / `useMessage`；对外提供发送、续跑、刷新、跨标签同步状态。
 - **场景卡片**：HITL / 账号选择 / 主机申领推荐·预提单·确认提交；只读态由运行态字段（`__selectedIndex` 等）或「后续已有 user 消息」推断。
+- **主动反馈**：`chat-message-list.vue` 的 chat-x 工具栏打开 `like` / `unlike`（引用/分享/删除仍隐藏）。点赞/点踩走内置原因面板：`onAgentAction` 展示 `GET /api/v1/agent/bizs/{bk_biz_id}/config/list?config_type=agent_feedback_tag` 下发的中文标签；`onAgentFeedback` 调 `POST .../feedback/commit`（`unlike` → `dislike`，chips 中文反查英文 key）。`session_id` 用 sessions/list 的 `id`，不是 `session_code`。`run_id`：实时流取 `/agui` 的 `RUN_STARTED.runId`；历史取 SNAPSHOT 里 `activityType=RUN_STARTED` 的 `content.runId`（本期新增，不在 assistant 消息根上）。再点已选中按钮：chat-x 在 Tippy `onShow` 取消激活且不发 feedback，由消息列表捕获 `.ai-tool-btn.is-active` 后调 `DELETE .../feedback/{run_id}`。全页与浮窗共用该列表。
 - **多入口读一致性**（`feat-aiagent-session-sync`）：
   - F-001：可见/聚焦刷新当前会话（~300ms 去抖）
   - F-002：带 `resumeValue` 的续跑前先 `refreshCurrentSession`
@@ -56,6 +57,9 @@
 | `hooks/chatbot/use-session.ts` | `refreshCurrentSession`；刷新前后 card meta 恢复 |
 | `hooks/chatbot/use-stream.ts` | 替换式 history；`resume_forwarded` 回填 |
 | `hooks/chatbot/card-client-meta.ts` | 卡片运行态捕获/恢复/已提交快照/宽松匹配 |
-| `components/chatbot/chat-message-list.vue` | 下发 `locked` 给交互卡 |
+| `components/chatbot/chat-message-list.vue` | 下发 `locked` 给交互卡；点赞/点踩接 commit/delete |
+| `hooks/chatbot/use-agent-feedback.ts` | 标签配置、commit/delete、本会话取消映射 |
+| `store/chatbot/feedback.ts` | Agent 反馈 HTTP 封装 |
+| `hooks/chatbot/use-event.ts` | AG-UI 事件分发；实时消息打 `__runId` |
 | `components/chatbot/custom-message-card.vue` | 锁定黄条横幅（非只读折叠） |
 | `components/ai-assistant/index.vue` / `views/chatbot/index.vue` | F-001 可见/聚焦刷新 |

@@ -1,0 +1,156 @@
+{
+  "id": "feat-agent-reply-feedback",
+  "title": "用户主动反馈-前端实现",
+  "currentStage": "done",
+  "createdAt": "2026-08-27T13:11:57.703Z",
+  "updatedAt": "2026-08-28T08:52:29.360Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-agent-reply-feedback/prd.md",
+        "kind": "file",
+        "addedAt": "2026-08-28T01:50:10.334Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-agent-reply-feedback/design.md",
+        "kind": "file",
+        "addedAt": "2026-08-28T02:01:38.228Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-agent-reply-feedback/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-28T02:14:55.759Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-agent-reply-feedback/api.md",
+        "kind": "file",
+        "addedAt": "2026-08-28T02:58:46.244Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-agent-reply-feedback/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-28T03:25:28.622Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-08-28T01:58:03.116Z",
+      "note": "用户确认 prd.md 可作为 design 唯一依据；交互跟随 chat-x，点踩原因用本需求四条文案"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-08-28T02:01:47.933Z",
+      "note": "用户确认：无稿、交互跟 chat-x；现网打开 like/unlike 并接 onAgentFeedback"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-28T03:23:26.675Z",
+      "note": "用户原话「好，继续」：确认 coding 完成，推进 test"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-28T06:25:11.781Z",
+      "note": "用户原话：测试了交互都正常触发了；继续工作流。test.md 已回写 PASS"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-08-27T13:11:57.703Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-08-28T01:58:03.116Z",
+      "note": "用户确认 prd.md 可作为 design 唯一依据；交互跟随 chat-x，点踩原因用本需求四条文案"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-08-28T02:01:47.933Z",
+      "note": "用户确认：无稿、交互跟 chat-x；现网打开 like/unlike 并接 onAgentFeedback"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-08-28T02:01:54.159Z",
+      "gitHead": "c13a4df3007e4b26bc4a32309adb1e03f3e3108f",
+      "note": "用户原话：按使用chat-x组件来定，可以直接进入coding。跳过独立 api 阶段（上报契约在 coding 标需后端配合）"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-28T03:23:26.675Z",
+      "note": "用户原话「好，继续」：确认 coding 完成，推进 test"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-28T06:25:11.781Z",
+      "note": "用户原话：测试了交互都正常触发了；继续工作流。test.md 已回写 PASS"
+    }
+  ],
+  "branch": "feat-agent-reply-feedback",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137584175",
+    "parentId": "1069995598135398593"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "skipped",
+      "at": "2026-08-28T01:42:00.287Z",
+      "note": "user: skip-done; story 1069995598137584175 already has clarification (v0.2 + round 2), evaluation, and full read in TAPD description — skip to avoid re-running"
+    },
+    "hcm-design-icon-intake": {
+      "status": "skipped",
+      "at": "2026-08-28T02:01:42.355Z",
+      "note": "user: 按使用 chat-x 组件来定；图标用 chat-x like/unlike 内置，不引入项目 iconfont"
+    },
+    "hcm-design-comp-intake": {
+      "status": "completed",
+      "at": "2026-08-28T02:01:42.797Z",
+      "note": "filled §3.y: adjacent / 无 page-comp skill / chat-message-list.vue + chat-x MessageContainer UserFeedback"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-28T06:24:59.853Z",
+      "note": "gaps empty: chatbot hasDrift=false (already written mid-iteration); base glob overlap on chatbot files, base.md already points those paths to chatbot.md, no base body rewrite"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-28T06:28:50.241Z",
+      "note": "story 1069995598137584175 final status_14; owner unchanged; parent 1069995598135398593 shouldAdvance=false remains status_11"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "chat-message-list.vue",
+        "src/components/chatbot/chat-message-list.vue",
+        "src/hooks/chatbot/use-agent-feedback.ts",
+        "src/hooks/chatbot/agent-feedback.ts",
+        "src/store/chatbot/feedback.ts",
+        "src/hooks/chatbot/use-event.ts",
+        "src/hooks/chatbot/use-stream.ts",
+        "src/hooks/chatbot/types.ts",
+        "src/hooks/chatbot/use-session.ts"
+      ],
+      "contentFingerprint": "0166ae7608a16bfb2a311117573c218ba596ed1c",
+      "codeBaseline": "70a8ce7ba8a31725774ca479467ad5d19f741c7c",
+      "seatedAt": "2026-08-28T08:52:29.360Z"
+    }
+  }
+}

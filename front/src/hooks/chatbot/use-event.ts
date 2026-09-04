@@ -13,6 +13,7 @@ import {
   type HostApplySubmitValue,
   type SceneSwitchedValue,
 } from './types';
+import { pickRunId, stampMessageRunId } from './agent-feedback';
 import { genId, type MessageModule } from './use-message';
 
 // scene.switched 回调：由 useChatbot 在 session 模块就绪后注入（event 早于 session 创建）
@@ -47,10 +48,17 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
   // 不用 getCurrentStreamingMessage 定位：推理与正文可能同时处于 streaming，最后一条不一定是推理。
   let currentReasoning: Message | null = null;
   let reasoningStartedAt = 0;
+  // 本轮 AG-UI runId，随 RUN_STARTED / 后续事件刷新，供点赞/点踩按 run 上报。
+  let currentRunId = '';
+
+  const pushMessage = (message: Message) => {
+    stampMessageRunId(message, currentRunId);
+    msg.messages.value.push(message);
+  };
 
   const startReasoning = () => {
     const messageId = genId();
-    msg.messages.value.push({
+    pushMessage({
       role: MessageRole.Reasoning,
       content: [],
       id: genId(),
@@ -78,10 +86,13 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
   };
 
   const handleEvent = (event: Record<string, unknown>) => {
+    const eventRunId = pickRunId(event);
+    if (eventRunId) currentRunId = eventRunId;
+
     switch (event.type) {
       // ---- 文本消息 ----
       case EventType.TextMessageStart: {
-        msg.messages.value.push({
+        pushMessage({
           role: (event.role as string) || MessageRole.Assistant,
           content: '',
           id: genId(),
@@ -91,6 +102,7 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
         break;
       }
       case EventType.TextMessageContent: {
+        stampMessageRunId(msg.getMessageByMessageId(event.messageId as string), currentRunId);
         msg.appendContent(event.messageId as string, event.delta as string);
         break;
       }
@@ -103,9 +115,10 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
         const m = msg.getCurrentStreamingMessage();
         // 推理消息的 content 是数组，不能被当作正文续写；此时另起一条 assistant 消息
         if (m && m.role !== MessageRole.Reasoning) {
+          stampMessageRunId(m, currentRunId);
           (m as { content: string }).content += (event.delta as string) || '';
         } else {
-          msg.messages.value.push({
+          pushMessage({
             role: (event.role as string) || MessageRole.Assistant,
             content: (event.delta as string) || '',
             id: genId(),
@@ -154,7 +167,7 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
 
       // ---- 工具调用 ----
       case EventType.ToolCallStart: {
-        msg.messages.value.push({
+        pushMessage({
           role: MessageRole.Assistant,
           content: '',
           id: genId(),
@@ -190,7 +203,7 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
         break;
       }
       case EventType.ToolCallResult: {
-        msg.messages.value.push({
+        pushMessage({
           role: MessageRole.Tool,
           content: event.content as string,
           id: genId(),
@@ -217,19 +230,21 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
         finalizeReasoning();
         const streaming = msg.getCurrentStreamingMessage();
         if (streaming) streaming.status = MessageStatus.Complete;
-        msg.messages.value.push({
+        pushMessage({
           role: MessageRole.Assistant,
           content: (event.message as string) || '请求出错',
           id: genId(),
           messageId: genId(),
           status: MessageStatus.Error,
         } as Message);
+        currentRunId = '';
         break;
       }
       case EventType.RunFinished: {
         finalizeReasoning();
         const streaming = msg.getCurrentStreamingMessage();
         if (streaming) streaming.status = MessageStatus.Complete;
+        currentRunId = '';
         break;
       }
 
@@ -244,7 +259,7 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
         const name = event.name as string;
         if (name === 'hitl.interrupt') {
           const rawValue = JSON.parse(event.value as string) as HitlInterruptValue;
-          msg.messages.value.push({
+          pushMessage({
             role: MessageRole.Assistant,
             content: rawValue as any,
             id: genId(),
@@ -254,7 +269,7 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
           } as Message);
         } else if (name === 'account_select.interrupt') {
           const rawValue = JSON.parse(event.value as string) as AccountSelectInterruptValue;
-          msg.messages.value.push({
+          pushMessage({
             role: MessageRole.Assistant,
             content: rawValue as any,
             id: genId(),
@@ -264,7 +279,7 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
           } as Message);
         } else if (name === HOST_APPLY_RECOMMEND_EVENT) {
           const rawValue = JSON.parse(event.value as string) as HostApplyRecommendValue;
-          msg.messages.value.push({
+          pushMessage({
             role: MessageRole.Assistant,
             content: rawValue as any,
             id: genId(),
@@ -274,7 +289,7 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
           } as Message);
         } else if (name === HOST_APPLY_CONFIRM_EVENT) {
           const rawValue = JSON.parse(event.value as string) as HostApplyPreorderValue;
-          msg.messages.value.push({
+          pushMessage({
             role: MessageRole.Assistant,
             content: rawValue as any,
             id: genId(),
@@ -284,7 +299,7 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
           } as Message);
         } else if (name === HOST_APPLY_SUBMIT_EVENT) {
           const rawValue = JSON.parse(event.value as string) as HostApplySubmitValue;
-          msg.messages.value.push({
+          pushMessage({
             role: MessageRole.Assistant,
             content: rawValue as any,
             id: genId(),

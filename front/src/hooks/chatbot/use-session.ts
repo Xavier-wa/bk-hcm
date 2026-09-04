@@ -31,6 +31,7 @@ interface SessionDeps {
 }
 
 const toSession = (item: SessionApiItem): ChatSession => ({
+  sessionId: item.id,
   sessionCode: item.session_code,
   sessionName: item.session_name || '新对话',
   sessionContentCount: item.session_content_count,
@@ -112,6 +113,7 @@ export function useSession(deps: SessionDeps) {
     try {
       const res = await sessionApi.createSession(bkBizId, '新对话', sessionTag);
       const session: ChatSession = {
+        sessionId: res.id,
         sessionCode: res.session_code,
         sessionName: res.session_name || '新对话',
         sessionContentCount: 0,

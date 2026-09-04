@@ -2,7 +2,7 @@
   "version": 1,
   "project": "hcm",
   "generatedAt": "2026-07-14T09:49:59.375Z",
-  "updatedAt": "2026-08-27T09:37:09.988Z",
+  "updatedAt": "2026-08-28T08:52:27.661Z",
   "modules": [
     {
       "id": "base",
@@ -35,10 +35,10 @@
       "doc": "modules/base.md",
       "status": "drafted",
       "fingerprint": {
-        "computedAt": "2026-08-27T09:37:09.988Z",
-        "rootHash": "01a84ce83e1febc8c39490bcc27596e823d29372"
+        "computedAt": "2026-08-28T03:57:09.721Z",
+        "rootHash": "b7e179b142702a8dda108fd209edee0f13756c2c"
       },
-      "updatedAt": "2026-08-27T09:37:09.988Z"
+      "updatedAt": "2026-08-28T03:57:09.721Z"
     },
     {
       "id": "component-variant",
@@ -388,10 +388,10 @@
       "doc": "modules/chatbot.md",
       "status": "drafted",
       "fingerprint": {
-        "computedAt": "2026-08-26T09:32:17.936Z",
-        "rootHash": "9c3b0ba8e0fabd7903b6271bfbb81d6a549b5f79"
+        "computedAt": "2026-08-28T08:52:27.660Z",
+        "rootHash": "3ee47625a0eafc2ac8164d67f7b7d1708f101297"
       },
-      "updatedAt": "2026-08-26T09:32:17.936Z"
+      "updatedAt": "2026-08-28T08:52:27.661Z"
     },
     {
       "id": "app-shell",

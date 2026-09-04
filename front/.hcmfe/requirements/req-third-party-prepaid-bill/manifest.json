@@ -2,35 +2,35 @@
   "id": "req-third-party-prepaid-bill",
   "title": "三方云预付费账单管理-前端",
   "createdAt": "2026-08-21T02:25:44.806Z",
-  "updatedAt": "2026-08-27T09:38:03.603Z",
+  "updatedAt": "2026-08-27T13:10:12.904Z",
   "external": {
     "tapd": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598137371319"
   },
   "iterations": [
     {
       "wfId": "feat-third-party-prepaid-bill",
-      "status": "coding",
+      "status": "done",
       "branch": "feat-third-party-prepaid-bill",
       "title": "预付费账单列表查询展示",
       "createdAt": "2026-08-21T02:25:51.774Z"
     },
     {
       "wfId": "feat-prepaid-bill-detail",
-      "status": "prd",
+      "status": "done",
       "branch": "feat-third-party-prepaid-bill",
       "title": "预付费账单详情与分摊明细",
       "createdAt": "2026-08-24T07:14:32.952Z"
     },
     {
       "wfId": "feat-prepaid-bill-export",
-      "status": "prd",
+      "status": "done",
       "branch": "feat-third-party-prepaid-bill",
       "title": "预付费账单查询结果导出",
       "createdAt": "2026-08-24T11:17:06.843Z"
     },
     {
       "wfId": "feat-bill-adjust-guard",
-      "status": "prd",
+      "status": "done",
       "branch": "feat-third-party-prepaid-bill",
       "title": "账单调整列表状态与守卫",
       "createdAt": "2026-08-24T12:16:59.308Z"

@@ -10,6 +10,8 @@ export type HitlInterruptMessage = Message & {
 };
 
 export interface ChatSession {
+  // 会话主键，对应 GET .../sessions/list 的 details[].id（如 000002p9），反馈接口的 session_id 用这个，不是 session_code
+  sessionId: string;
   sessionCode: string;
   sessionName: string;
   sessionContentCount: number;

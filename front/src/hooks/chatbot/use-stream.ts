@@ -26,6 +26,7 @@ import {
   type HostApplySubmitValue,
   type HostApplySuborder,
 } from './types';
+import { isSnapshotRunMarker, pickRunId, pickSnapshotActivityRunId, stampMessageRunId } from './agent-feedback';
 import { genId, type MessageModule } from './use-message';
 import type { EventModule } from './use-event';
 
@@ -275,10 +276,12 @@ export function useStream(msg: MessageModule, event: EventModule) {
   const toHistoryMessage = (raw: Record<string, unknown>): Message => {
     const id = (raw.id as string) || genId();
     const role = raw.role as string;
+    const runId = pickRunId(raw);
     const base = {
       id,
       messageId: (raw.id as string) || genId(),
       status: MessageStatus.Complete,
+      ...(runId ? { __runId: runId } : {}),
       ...(raw.toolCalls ? { toolCalls: raw.toolCalls } : {}),
       ...(raw.toolCallId ? { toolCallId: raw.toolCallId, duration: raw.duration ?? 0 } : {}),
     };
@@ -554,7 +557,15 @@ export function useStream(msg: MessageModule, event: EventModule) {
           let lastRecommend: HostApplyRecommendMessage | undefined;
           let lastPreorder: HostApplyPreorderMessage | undefined;
           let lastSubmit: HostApplySubmitMessage | undefined;
+          // 历史 SNAPSHOT 新增：用 activityType=RUN_STARTED/FINISHED 标出每轮 runId（不在 assistant 消息根上）
+          let snapshotRunId = '';
           for (const raw of items) {
+            if (isSnapshotRunMarker(raw)) {
+              const markerRunId = pickSnapshotActivityRunId(raw);
+              if (raw.activityType === 'RUN_STARTED' && markerRunId) snapshotRunId = markerRunId;
+              if (raw.activityType === 'RUN_FINISHED') snapshotRunId = '';
+              continue;
+            }
             if (isResumeForwarded(raw)) {
               applyResumeForwarded(raw, lastRecommend, lastPreorder, lastSubmit);
               continue;
@@ -562,6 +573,7 @@ export function useStream(msg: MessageModule, event: EventModule) {
             if (isInternalActivity(raw)) continue;
 
             const message = toHistoryMessage(raw);
+            stampMessageRunId(message, snapshotRunId);
             next.push(message);
             if ((message as HostApplyRecommendMessage).__type === 'host_apply.recommend') {
               lastRecommend = message as HostApplyRecommendMessage;

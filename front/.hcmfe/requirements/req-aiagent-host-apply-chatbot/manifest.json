@@ -2,7 +2,7 @@
   "id": "req-aiagent-host-apply-chatbot",
   "title": "aiagent - 主机申领场景 chatbot",
   "createdAt": "2026-06-21T10:16:37.530Z",
-  "updatedAt": "2026-08-26T07:25:53.280Z",
+  "updatedAt": "2026-08-27T13:10:12.903Z",
   "external": {
     "tapd": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598134649532"
   },
@@ -31,7 +31,7 @@
     },
     {
       "wfId": "feat-aiagent-host-apply-data-disk",
-      "status": "coding",
+      "status": "done",
       "branch": "feat-aiagent-host-apply-data-disk",
       "title": "aiagent-主机申领条件允许不挂数据盘",
       "createdAt": "2026-08-26T07:25:53.228Z"
