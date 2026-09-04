@@ -14,8 +14,7 @@
     "action": "update",
     "kind": "rule",
     "relativePath": "rules/fe-no-backend-edit.mdc",
-    "project": "hcm",
-    "baseDigest": "d53810b0cd9382af74c9fb7e0a4ae2fc983cfbd5"
+    "project": "hcm"
   },
   "ship": {
     "via": "local",

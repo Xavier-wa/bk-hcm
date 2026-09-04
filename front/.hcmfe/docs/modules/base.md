@@ -66,6 +66,8 @@ base 的 `src/components/**` 宽 glob 会把各业务模块的组件一并命中
 - **不传参**：用全局业务（`accountStore` → URL `bizs` → localStorage）。适用于业务视角下的列表页等"页面业务 == 全局业务"的场景。
 - **传 `bizId`**：用页面数据自带的业务。**页面 URL 上带 `bkBizId`（`PAGE_BIZ_KEY`）时必须传**——全局业务由业务选择器异步初始化，页面挂载阶段读到的可能还是上一次的业务，存在时序竞态。详见 [app-shell](app-shell.md)（全局业务如何产生）与 [ziyan-scr](ziyan-scr.md)（单据页面的落地约定）。
 
+`src/store/business.ts` 是业务上下文接口的集中封装处：业务列表、跨业务/当前业务下的资源操作接口（如安全组克隆 `cloneSecurity` 走 `getBusinessApiPath()` 不传参形态）都在此；业务语义强、与具体页面解耦的接口放这里，不要散落到各 views 页面内。
+
 函数内部对传入值做了有效性判断（非有限数或 ≤ 0 一律回退全局业务），因此调用方可以直接把 `Number(route.query.bkBizId)`、`props.xxx.bk_biz_id` 这类可能缺失的值传进来，不会拼出 `bizs/NaN/`。**注意不要在调用方用 `??` 兜底**：`Number(undefined)` 是 `NaN`，`??` 兜不住，这正是曾经踩过的坑。
 
 相关常量都在 `src/common/constant.ts`：`GLOBAL_BIZS_KEY = 'bizs'`（全局业务，URL 与 localStorage 共用）、`PAGE_BIZ_KEY = 'bkBizId'`（页面自身声明的业务）。原先的 `GLOBAL_BIZS_VERSION` / `GLOBAL_BIZS_VERSION_KEY` 已删除，不要恢复。

@@ -2,7 +2,6 @@
   "version": 1,
   "project": "hcm",
   "generatedAt": "2026-07-14T09:49:59.375Z",
-  "updatedAt": "2026-08-28T08:52:27.661Z",
   "modules": [
     {
       "id": "base",
@@ -35,10 +34,8 @@
       "doc": "modules/base.md",
       "status": "drafted",
       "fingerprint": {
-        "computedAt": "2026-08-28T03:57:09.721Z",
-        "rootHash": "b7e179b142702a8dda108fd209edee0f13756c2c"
-      },
-      "updatedAt": "2026-08-28T03:57:09.721Z"
+        "rootHash": "ee4d2a4bd08073abbca007515d78b63701681b27"
+      }
     },
     {
       "id": "component-variant",
@@ -57,10 +54,8 @@
         "page-variant"
       ],
       "fingerprint": {
-        "computedAt": "2026-07-14T12:38:36.974Z",
         "rootHash": "02dfd5783f67c0cb4ab6c69f2ca90503557cf9f2"
-      },
-      "updatedAt": "2026-07-15T04:01:34.440Z"
+      }
     },
     {
       "id": "page-variant",
@@ -80,10 +75,8 @@
         "plugin-handler"
       ],
       "fingerprint": {
-        "computedAt": "2026-07-14T12:38:37.019Z",
         "rootHash": "4fc7fcf5279fadc5ffd5f487a704f5c9e09c1527"
-      },
-      "updatedAt": "2026-07-15T04:01:34.534Z"
+      }
     },
     {
       "id": "menu-route",
@@ -101,10 +94,8 @@
         "auth"
       ],
       "fingerprint": {
-        "computedAt": "2026-08-25T02:07:20.497Z",
         "rootHash": "100aca3c29abd8a9ab50703187b87d90b36d0783"
-      },
-      "updatedAt": "2026-08-25T02:07:20.497Z"
+      }
     },
     {
       "id": "auth",
@@ -127,10 +118,8 @@
         "menu-route"
       ],
       "fingerprint": {
-        "computedAt": "2026-08-18T03:16:48.979Z",
         "rootHash": "e148be382f467e34902211a4f5a8287ee340ea69"
-      },
-      "updatedAt": "2026-08-18T03:16:48.979Z"
+      }
     },
     {
       "id": "operation-log",
@@ -143,10 +132,8 @@
       "doc": "modules/operation-log.md",
       "status": "drafted",
       "fingerprint": {
-        "computedAt": "2026-08-27T08:50:53.694Z",
         "rootHash": "828aa78483ed313e00494055a7ff3a87b5e5fbbc"
-      },
-      "updatedAt": "2026-08-27T08:50:53.694Z"
+      }
     },
     {
       "id": "resource",
@@ -159,10 +146,8 @@
       "doc": "modules/resource.md",
       "status": "drafted",
       "fingerprint": {
-        "computedAt": "2026-08-20T09:55:42.306Z",
-        "rootHash": "de53fcfc5f0f9105646f440fcc5f83b7f27b5099"
-      },
-      "updatedAt": "2026-08-20T09:55:42.306Z"
+        "rootHash": "54e0e3e793b0c6bcdb40a3db95342e282156d88f"
+      }
     },
     {
       "id": "business",
@@ -180,10 +165,8 @@
         "rolling-server"
       ],
       "fingerprint": {
-        "computedAt": "2026-07-14T12:29:00.811Z",
         "rootHash": "2dcb8615fa9091229019d2d5a8e7fcdbe010740f"
-      },
-      "updatedAt": "2026-07-15T04:01:35.012Z"
+      }
     },
     {
       "id": "ziyan-scr",
@@ -200,10 +183,8 @@
         "resource"
       ],
       "fingerprint": {
-        "computedAt": "2026-08-26T02:49:01.209Z",
         "rootHash": "c5c6efc949992273c735f8d0b7a31551da5c88fd"
-      },
-      "updatedAt": "2026-08-26T02:49:01.209Z"
+      }
     },
     {
       "id": "service",
@@ -219,10 +200,8 @@
         "resource-plan"
       ],
       "fingerprint": {
-        "computedAt": "2026-07-14T12:29:03.319Z",
         "rootHash": "fe9c1ee0f8bb9111f99f74f423123c4a528d5947"
-      },
-      "updatedAt": "2026-07-15T04:01:35.207Z"
+      }
     },
     {
       "id": "cloud-account-manage",
@@ -234,8 +213,7 @@
       ],
       "doc": "modules/cloud-account-manage.md",
       "status": "drafted",
-      "fingerprint": null,
-      "updatedAt": "2026-07-15T04:01:35.303Z"
+      "fingerprint": null
     },
     {
       "id": "load-balancer",
@@ -250,8 +228,7 @@
       "relates": [
         "business"
       ],
-      "fingerprint": null,
-      "updatedAt": "2026-07-15T04:01:35.402Z"
+      "fingerprint": null
     },
     {
       "id": "bill",
@@ -266,10 +243,8 @@
       "doc": "modules/bill.md",
       "status": "drafted",
       "fingerprint": {
-        "computedAt": "2026-08-27T08:50:53.753Z",
         "rootHash": "56ce9c2ea38d51a97cf268e2964039726e61cfed"
-      },
-      "updatedAt": "2026-08-27T08:50:53.753Z"
+      }
     },
     {
       "id": "ticket",
@@ -282,10 +257,8 @@
       "doc": "modules/ticket.md",
       "status": "drafted",
       "fingerprint": {
-        "computedAt": "2026-07-24T03:04:33.415Z",
         "rootHash": "99063f1eaea8d007e96b3071dffad01887f815ed"
-      },
-      "updatedAt": "2026-07-24T03:04:33.415Z"
+      }
     },
     {
       "id": "scheme",
@@ -297,8 +270,7 @@
       ],
       "doc": "modules/scheme.md",
       "status": "drafted",
-      "fingerprint": null,
-      "updatedAt": "2026-07-15T04:01:35.695Z"
+      "fingerprint": null
     },
     {
       "id": "task",
@@ -310,8 +282,7 @@
       ],
       "doc": "modules/task.md",
       "status": "drafted",
-      "fingerprint": null,
-      "updatedAt": "2026-07-15T04:01:35.791Z"
+      "fingerprint": null
     },
     {
       "id": "stats",
@@ -323,8 +294,7 @@
       ],
       "doc": "modules/stats.md",
       "status": "drafted",
-      "fingerprint": null,
-      "updatedAt": "2026-07-15T04:01:35.885Z"
+      "fingerprint": null
     },
     {
       "id": "rolling-server",
@@ -340,8 +310,7 @@
         "business",
         "ziyan-scr"
       ],
-      "fingerprint": null,
-      "updatedAt": "2026-07-15T04:01:35.986Z"
+      "fingerprint": null
     },
     {
       "id": "resource-plan",
@@ -357,8 +326,7 @@
         "business",
         "service"
       ],
-      "fingerprint": null,
-      "updatedAt": "2026-07-15T04:01:36.092Z"
+      "fingerprint": null
     },
     {
       "id": "green-channel",
@@ -370,8 +338,7 @@
       ],
       "doc": "modules/green-channel.md",
       "status": "drafted",
-      "fingerprint": null,
-      "updatedAt": "2026-07-15T04:01:36.196Z"
+      "fingerprint": null
     },
     {
       "id": "chatbot",
@@ -388,10 +355,8 @@
       "doc": "modules/chatbot.md",
       "status": "drafted",
       "fingerprint": {
-        "computedAt": "2026-08-28T08:52:27.660Z",
-        "rootHash": "3ee47625a0eafc2ac8164d67f7b7d1708f101297"
-      },
-      "updatedAt": "2026-08-28T08:52:27.661Z"
+        "rootHash": "9c3b0ba8e0fabd7903b6271bfbb81d6a549b5f79"
+      }
     },
     {
       "id": "app-shell",
@@ -407,10 +372,8 @@
       "doc": "modules/app-shell.md",
       "status": "drafted",
       "fingerprint": {
-        "computedAt": "2026-08-26T02:49:01.258Z",
         "rootHash": "60dc935543baf3fca15e3057c00b26542442fa01"
-      },
-      "updatedAt": "2026-08-26T02:49:01.258Z"
+      }
     },
     {
       "id": "model",
@@ -427,10 +390,8 @@
         "auth"
       ],
       "fingerprint": {
-        "computedAt": "2026-08-26T09:32:35.456Z",
         "rootHash": "7a5fd98c460511c0bc10a47efa8b47fef2abce26"
-      },
-      "updatedAt": "2026-08-26T09:32:35.456Z"
+      }
     },
     {
       "id": "plugin-handler",
@@ -442,8 +403,7 @@
       ],
       "doc": "modules/plugin-handler.md",
       "status": "drafted",
-      "fingerprint": null,
-      "updatedAt": "2026-07-15T04:01:36.582Z"
+      "fingerprint": null
     }
   ]
 }

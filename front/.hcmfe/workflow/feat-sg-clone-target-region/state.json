@@ -1,0 +1,145 @@
+{
+  "id": "feat-sg-clone-target-region",
+  "title": "安全组-克隆支持选择目标地域",
+  "currentStage": "done",
+  "createdAt": "2026-08-28T02:53:40.870Z",
+  "updatedAt": "2026-08-28T03:18:27.789Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-sg-clone-target-region/prd.md",
+        "kind": "file",
+        "addedAt": "2026-08-28T02:59:53.699Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": ".hcmfe/workflow/feat-sg-clone-target-region/design.md",
+        "kind": "file",
+        "addedAt": "2026-08-28T03:01:34.312Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-sg-clone-target-region/api.md",
+        "kind": "file",
+        "addedAt": "2026-08-28T03:03:55.000Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-sg-clone-target-region/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-28T03:08:57.357Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-sg-clone-target-region/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-28T03:15:32.882Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-08-28T02:59:59.712Z"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-08-28T03:02:38.404Z"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-08-28T03:04:01.035Z"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-28T03:15:23.073Z"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-28T03:17:45.186Z"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-08-28T02:53:40.870Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-08-28T02:59:59.712Z"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-08-28T03:02:38.404Z"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-08-28T03:04:01.035Z",
+      "gitHead": "1610d0d1ce694f54a2eb457d60054978c3fd104a"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-28T03:15:23.073Z"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-28T03:17:45.186Z"
+    }
+  ],
+  "branch": "feat-sg-clone-target-region",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598136749088"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "completed",
+      "at": "2026-08-28T02:58:56.441Z"
+    },
+    "hcm-design-icon-intake": {
+      "status": "completed",
+      "at": "2026-08-28T03:01:55.982Z",
+      "note": "真实执行完成（未 skip）：校验 design.md §3.x——本需求无新增图标语义，UI 变更仅为克隆弹窗内 bk-select 下拉，不引入 iconfont/bkui icon，已在 design.md §3.x 显式记录 N/A"
+    },
+    "hcm-design-comp-intake": {
+      "status": "completed",
+      "at": "2026-08-28T03:02:25.418Z",
+      "note": "真实执行完成（未 skip）：按决策顺序判定两行语义均为 adjacent（现有克隆弹窗 Dialog 内局部改动，非整页/非标准 comp 模式），已回填 §3.y 项目三列：落码入口均为无，目标路径 clone-security/index.vue 与 manager-selector/index.vue"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-28T03:17:42.287Z",
+      "note": "真实执行完成：docs_status 算出 gaps=[base(drafted,hasDrift), resource(drafted,hasDrift)]（全库 15 模块因 blueprint.lock.json 缺失标记 stale，changes=[]），按 skill 增量补写 resource.md（安全组克隆目标地域现状）与 base.md（business store 子层职责），docs_deepen 刷新两模块基线成功；经验已进 promote pending 队列（promo-2b0a54e8，workflow_next 路径约定），未阻塞 done"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-28T03:18:27.788Z",
+      "note": "TAPD 收口完成：绑定 story 1069995598136749088（objectType=story），按 planner 路径 forward-only 逐跳追平 status_11(doing)→status_12(for_test)→status_13(tested)→status_14(done)，最终 status_14 已上线（工作流完成态）；owner 未变更；无 parent_id，不需 rollup"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/views/resource/resource-manage/children/dialog/clone-security/index.vue",
+        "src/store/business.ts",
+        "src/views/resource/resource-manage/children/plugin/security-group/show-clone.plugin.ts",
+        "src/views/resource/resource-manage/children/manage/security-manage.vue",
+        "src/store/region.ts"
+      ],
+      "contentFingerprint": "2099864964ef53b6b04fa3356577293ccdfdd92a",
+      "codeBaseline": "3d249e6c65ab68d5fafe7a2360ff7bcde5143b59",
+      "seatedAt": "2026-08-28T03:15:12.402Z"
+    }
+  }
+}

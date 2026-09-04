@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { reactive, watch, ref, inject, nextTick, computed } from 'vue';
+import { reactive, watch, ref, inject, nextTick, computed, type PropType } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAccountStore, useResourceStore } from '@/store';
 import { BusinessFormFilter, QueryFilterType, QueryRuleOPEnum, IAccountItem } from '@/typings';
@@ -11,10 +11,8 @@ import AccountSelector from '@/components/account-selector/index-new.vue';
 
 const props = defineProps({
   hidden: {
-    type: Array,
-    default() {
-      return [];
-    },
+    type: Array as PropType<string[]>,
+    default: (): string[] => [],
   },
   type: {
     type: String,
@@ -67,6 +65,7 @@ watch(
     cloudRegionsList.value = [];
     switch (val) {
       case VendorEnum.TCLOUD:
+      case VendorEnum.ZIYAN:
         filter.value.rules = [
           {
             field: 'vendor',
@@ -221,7 +220,7 @@ defineExpose([validate]);
     <bk-form-item :label="t('云账号')" class="item-warp" required property="account_id">
       <AccountSelector
         ref="accountSelector"
-        v-model="state.filter.account_id"
+        v-model="(state.filter.account_id as string)"
         :biz-id="isResourcePage ? undefined : accountStore.bizs"
         :disabled="isResourcePage"
         :option-disabled="optionDisabled"

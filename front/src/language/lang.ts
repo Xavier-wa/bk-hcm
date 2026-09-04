@@ -2997,6 +2997,7 @@ const lang: ILANG = {
   预测类型: ['Type of forecast'],
   新增资源预测: ['Additional resource projections'],
   克隆: ['clone'],
+  '已克隆至 {region}！': ['Cloned to {region}!'],
   预测清单不能为空: ['The list of projections cannot be empty'],
   预测清单: ['List of projections'],
   字数不少于20字: ['No less than 20 words'],
