@@ -1,6 +1,6 @@
 ### 描述
 
-- 该接口提供版本：v9.9.9.9。
+- 该接口提供版本：v1.9.3.1。
 - 该接口所需权限：平台-智能体助手管理。
 - 该接口功能描述：按会话从历史事件同步对话轮次到 `aiagent_run`。已存在的 `run_id` 跳过，不覆盖。按 InvocationID 切轮；状态取自 AG-UI track（`aiagent_session_track_events`）该 run 最后一次 `RUN_FINISHED` / `RUN_ERROR`，否则写入 `unknown`。`reason` 为 `history_sync`，时间戳回写为历史事件时间。
 

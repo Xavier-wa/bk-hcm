@@ -18,7 +18,7 @@
  */
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9.9
+    SQLVER=0092,HCMVER=v1.9.3.1
 
     Notes:
     1. 新增 aiagent_run_feedback 表，用于存储用户对单轮 Agent 对话的点赞/点踩反馈
@@ -83,6 +83,6 @@ SET `max_id` = @gc_id_dislike
 WHERE `resource` = 'global_config';
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.9.3.1' as `hcm_ver`, '0092' as `sql_ver`;
 
 COMMIT;

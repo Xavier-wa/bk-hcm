@@ -18,7 +18,7 @@
  */
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9.9
+    SQLVER=0091,HCMVER=v1.9.3.1
 
     Notes:
     1. 新增 aiagent_run_eval 模型评估结果表，含 user / bk_biz_id，与 aiagent_run 对应，供按用户和业务筛选
@@ -66,6 +66,6 @@ insert into id_generator(`resource`, `max_id`)
 values ('aiagent_run_eval', '0');
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.9.3.1' as `hcm_ver`, '0091' as `sql_ver`;
 
 COMMIT;

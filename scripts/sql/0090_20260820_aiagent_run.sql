@@ -18,7 +18,7 @@
  */
 
 /*
-    SQLVER=9999,HCMVER=v9.9.9.9
+    SQLVER=0090,HCMVER=v1.9.3.1
 
     Notes:
     1. 新增 aiagent_run 对话轮次账本
@@ -55,6 +55,6 @@ insert into id_generator(`resource`, `max_id`)
 values ('aiagent_run', '0');
 
 CREATE OR REPLACE VIEW `hcm_version`(`hcm_ver`, `sql_ver`) AS
-SELECT 'v9.9.9.9' as `hcm_ver`, '9999' as `sql_ver`;
+SELECT 'v1.9.3.1' as `hcm_ver`, '0090' as `sql_ver`;
 
 COMMIT;
