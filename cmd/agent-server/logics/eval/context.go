@@ -169,7 +169,12 @@ func (l *ContextLoader) loadTrackByTarget(kt *kit.Kit, target *tableaiagent.RunT
 			err, target.SessionCode, kt.Rid)
 		return nil
 	}
-	return SplitSessionEvents(sess.GetEvents())
+	tracks := splitAGUITracks(aguiTrackEvents(sess))
+	out := make(map[string]Transcript, len(tracks))
+	for runID, track := range tracks {
+		out[runID] = track.Transcript
+	}
+	return out
 }
 
 func (l *ContextLoader) patchTranscript(kt *kit.Kit, runID, query string, tr Transcript) error {

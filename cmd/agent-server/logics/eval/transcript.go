@@ -23,11 +23,11 @@ import (
 	"strings"
 	"time"
 
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 
 	aguievents "github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/core/events"
-	"trpc.group/trpc-go/trpc-agent-go/event"
-	trpcmodel "trpc.group/trpc-go/trpc-agent-go/model"
+	aguitypes "github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/core/types"
 )
 
 type textBuf struct {
@@ -168,11 +168,40 @@ func (r *aguiReducer) onCustom(evt aguievents.Event) {
 	if e == nil {
 		return
 	}
+	if e.Name == constant.AGUIUserMessageCustomEventName {
+		if text := userTextFromAGUICustomValue(e.Value); text != "" {
+			r.out.Items = append(r.out.Items, TranscriptItem{
+				Type: enumor.AiagentTranscriptItemUser, Text: text,
+			})
+			return
+		}
+	}
 	r.out.Items = append(r.out.Items, TranscriptItem{
 		Type:  enumor.AiagentTranscriptItemCustom,
 		Name:  e.Name,
 		Value: e.Value,
 	})
+}
+
+// userTextFromAGUICustomValue 从 trpc-agent-go.user_message 自定义事件的 Value 中解析出
+// 用户输入文本；解析失败或不含文本内容时返回空字符串。
+func userTextFromAGUICustomValue(value any) string {
+	if value == nil {
+		return ""
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+	var msg aguitypes.Message
+	if err := json.Unmarshal(raw, &msg); err != nil {
+		return ""
+	}
+	text, ok := msg.ContentString()
+	if !ok {
+		return ""
+	}
+	return text
 }
 
 func (r *aguiReducer) text(id string) *textBuf {
@@ -252,36 +281,6 @@ type SessionTrack struct {
 	EndedAt    time.Time
 }
 
-// SplitSessionEvents groups framework events by InvocationID into transcripts.
-func SplitSessionEvents(events []event.Event) map[string]Transcript {
-	tracks := SplitSessionTracks(events)
-	out := make(map[string]Transcript, len(tracks))
-	for id, track := range tracks {
-		out[id] = track.Transcript
-	}
-	return out
-}
-
-// SplitSessionTracks groups framework events by InvocationID and records time bounds.
-func SplitSessionTracks(events []event.Event) map[string]SessionTrack {
-	out := make(map[string]SessionTrack)
-	for i := range events {
-		e := &events[i]
-		if e.InvocationID == "" || e.Response == nil {
-			continue
-		}
-		items := transcriptFromResponse(e)
-		if len(items) == 0 {
-			continue
-		}
-		cur := out[e.InvocationID]
-		cur.Transcript.Items = append(cur.Transcript.Items, items...)
-		cur.StartedAt, cur.EndedAt = mergeTrackTimes(cur.StartedAt, cur.EndedAt, e.Timestamp)
-		out[e.InvocationID] = cur
-	}
-	return out
-}
-
 func mergeTrackTimes(startedAt, endedAt, ts time.Time) (time.Time, time.Time) {
 	if ts.IsZero() {
 		return startedAt, endedAt
@@ -293,41 +292,6 @@ func mergeTrackTimes(startedAt, endedAt, ts time.Time) (time.Time, time.Time) {
 		endedAt = ts
 	}
 	return startedAt, endedAt
-}
-
-func transcriptFromResponse(e *event.Event) []TranscriptItem {
-	items := make([]TranscriptItem, 0)
-	for _, choice := range e.Choices {
-		msg := choice.Message
-		switch msg.Role {
-		case trpcmodel.RoleUser:
-			if msg.Content != "" {
-				items = append(items, TranscriptItem{
-					Type: enumor.AiagentTranscriptItemUser, Text: msg.Content,
-				})
-			}
-		case trpcmodel.RoleAssistant:
-			if msg.Content != "" {
-				items = append(items, TranscriptItem{
-					Type: enumor.AiagentTranscriptItemAssistant, Text: msg.Content,
-				})
-			}
-			for _, tc := range msg.ToolCalls {
-				items = append(items, TranscriptItem{
-					Type:     enumor.AiagentTranscriptItemTool,
-					ToolName: tc.Function.Name,
-					ToolArgs: string(tc.Function.Arguments),
-				})
-			}
-		case trpcmodel.RoleTool:
-			items = append(items, TranscriptItem{
-				Type:       enumor.AiagentTranscriptItemTool,
-				ToolResult: msg.Content,
-			})
-		default:
-		}
-	}
-	return items
 }
 
 func decodeTranscript(raw string) Transcript {

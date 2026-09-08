@@ -47,12 +47,14 @@ const (
 	skipReasonRunIDTooLong    = "run_id too long"
 	skipReasonEmptyTranscript = "empty transcript"
 	skipReasonAlreadyExists   = "already exists"
-	// aguiTrack is the session track id used by AG-UI RUN_* events.
+	// aguiTrack is the session track id used by AG-UI protocol events.
 	// 对应框架表 {prefix}session_track_events，prefix 为 aiagent_ 时即 aiagent_session_track_events。
+	// payload.runId 与 /agui 写入 aiagent_run.run_id 是同一个 ID。
 	aguiTrack session.Track = "agui"
 )
 
-// HistorySyncer reconstructs missing aiagent_run rows from session history.
+// HistorySyncer reconstructs missing aiagent_run rows from the session agui track.
+// Run IDs, status, and transcript all come from AG-UI protocol events.
 type HistorySyncer struct {
 	cli        *client.ClientSet
 	sessionSvc session.Service
@@ -168,9 +170,10 @@ func (s *HistorySyncer) loadHistory(kt *kit.Kit, sess *tableaiagent.SessionTable
 			err, sess.SessionCode, kt.Rid)
 		return nil
 	}
+	events := aguiTrackEvents(got)
 	return &sessionHistory{
-		tracks:   SplitSessionTracks(got.GetEvents()),
-		statuses: statusFromAGUITrackEvents(aguiTrackEvents(got)),
+		tracks:   splitAGUITracks(events),
+		statuses: statusFromAGUITrackEvents(events),
 	}
 }
 
@@ -284,6 +287,103 @@ func aguiTrackEvents(sess *session.Session) []session.TrackEvent {
 		return nil
 	}
 	return te.Events
+}
+
+type aguiDecodedEvent struct {
+	evt aguievents.Event
+	ts  time.Time
+}
+
+type aguiRunAcc struct {
+	evts      []aguievents.Event
+	startedAt time.Time
+	endedAt   time.Time
+}
+
+// splitAGUITracks groups agui track events by AG-UI runId, the same ID written to
+// aiagent_run on /agui. User-message custom events without runId attach to the next
+// RUN_STARTED. Events after RUN_FINISHED/ERROR wait for the next run.
+func splitAGUITracks(events []session.TrackEvent) map[string]SessionTrack {
+	acc := make(map[string]*aguiRunAcc)
+	currentRun := ""
+	var pending []aguiDecodedEvent
+	for _, item := range decodeAGUITrackEvents(events) {
+		currentRun, pending = applyAGUITrackItem(acc, currentRun, pending, item)
+	}
+	return finishAGUITracks(acc)
+}
+
+func decodeAGUITrackEvents(events []session.TrackEvent) []aguiDecodedEvent {
+	out := make([]aguiDecodedEvent, 0, len(events))
+	for i := range events {
+		evt, err := aguievents.EventFromJSON(events[i].Payload)
+		if err != nil || evt == nil {
+			continue
+		}
+		out = append(out, aguiDecodedEvent{evt: evt, ts: events[i].Timestamp})
+	}
+	return out
+}
+
+func applyAGUITrackItem(acc map[string]*aguiRunAcc, currentRun string,
+	pending []aguiDecodedEvent, item aguiDecodedEvent) (string, []aguiDecodedEvent) {
+
+	runID := item.evt.RunID()
+	switch item.evt.Type() {
+	case aguievents.EventTypeRunStarted:
+		if runID == "" {
+			return currentRun, pending
+		}
+		flushAGUIPending(acc, runID, pending)
+		appendAGUIRunEvent(acc, runID, item)
+		return runID, nil
+	case aguievents.EventTypeRunFinished, aguievents.EventTypeRunError:
+		if runID == "" {
+			runID = currentRun
+		}
+		if runID == "" {
+			return currentRun, append(pending, item)
+		}
+		appendAGUIRunEvent(acc, runID, item)
+		return "", pending
+	default:
+		if runID == "" {
+			runID = currentRun
+		}
+		if runID == "" {
+			return currentRun, append(pending, item)
+		}
+		appendAGUIRunEvent(acc, runID, item)
+		return currentRun, pending
+	}
+}
+
+func flushAGUIPending(acc map[string]*aguiRunAcc, runID string, pending []aguiDecodedEvent) {
+	for i := range pending {
+		appendAGUIRunEvent(acc, runID, pending[i])
+	}
+}
+
+func appendAGUIRunEvent(acc map[string]*aguiRunAcc, runID string, item aguiDecodedEvent) {
+	cur, ok := acc[runID]
+	if !ok {
+		cur = &aguiRunAcc{}
+		acc[runID] = cur
+	}
+	cur.evts = append(cur.evts, item.evt)
+	cur.startedAt, cur.endedAt = mergeTrackTimes(cur.startedAt, cur.endedAt, item.ts)
+}
+
+func finishAGUITracks(acc map[string]*aguiRunAcc) map[string]SessionTrack {
+	out := make(map[string]SessionTrack, len(acc))
+	for runID, cur := range acc {
+		out[runID] = SessionTrack{
+			Transcript: ReduceAGUIEvents(cur.evts),
+			StartedAt:  cur.startedAt,
+			EndedAt:    cur.endedAt,
+		}
+	}
+	return out
 }
 
 // statusFromAGUITrackEvents maps each run_id to finished/error/unknown from AG-UI track events.

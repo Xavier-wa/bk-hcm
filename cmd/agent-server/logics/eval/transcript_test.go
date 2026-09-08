@@ -21,13 +21,11 @@ package eval
 
 import (
 	"testing"
-	"time"
 
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
 
 	aguievents "github.com/ag-ui-protocol/ag-ui/sdks/community/go/pkg/core/events"
-	"trpc.group/trpc-go/trpc-agent-go/event"
-	trpcmodel "trpc.group/trpc-go/trpc-agent-go/model"
 )
 
 func TestReduceAGUIEventsKeepsUserDropsThinking(t *testing.T) {
@@ -47,50 +45,15 @@ func TestReduceAGUIEventsKeepsUserDropsThinking(t *testing.T) {
 	}
 }
 
-func TestSplitSessionTracksGroupsByInvocation(t *testing.T) {
-	t1 := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	t2 := t1.Add(time.Minute)
-	events := []event.Event{
-		{
-			InvocationID: "run-1",
-			Timestamp:    t1,
-			Response: &trpcmodel.Response{
-				Choices: []trpcmodel.Choice{{
-					Message: trpcmodel.Message{Role: trpcmodel.RoleUser, Content: "hi"},
-				}},
-			},
-		},
-		{
-			InvocationID: "run-1",
-			Timestamp:    t2,
-			Response: &trpcmodel.Response{
-				Choices: []trpcmodel.Choice{{
-					Message: trpcmodel.Message{Role: trpcmodel.RoleAssistant, Content: "ok"},
-				}},
-			},
-		},
-		{
-			InvocationID: "run-2",
-			Timestamp:    t2.Add(time.Minute),
-			Response: &trpcmodel.Response{
-				Choices: []trpcmodel.Choice{{
-					Message: trpcmodel.Message{Role: trpcmodel.RoleUser, Content: "next"},
-				}},
-			},
-		},
+func TestReduceAGUIEventsUserMessageCustom(t *testing.T) {
+	evt := aguievents.NewCustomEvent(constant.AGUIUserMessageCustomEventName, aguievents.WithValue(map[string]any{
+		"id": "m1", "role": "user", "content": "from track",
+	}))
+	got := ReduceAGUIEvents([]aguievents.Event{evt})
+	if len(got.Items) != 1 {
+		t.Fatalf("items = %+v", got.Items)
 	}
-	got := SplitSessionTracks(events)
-	if len(got) != 2 {
-		t.Fatalf("tracks = %d, want 2", len(got))
-	}
-	run1 := got["run-1"]
-	if len(run1.Transcript.Items) != 2 {
-		t.Fatalf("run-1 items = %+v", run1.Transcript.Items)
-	}
-	if !run1.StartedAt.Equal(t1) || !run1.EndedAt.Equal(t2) {
-		t.Fatalf("run-1 times = %v %v", run1.StartedAt, run1.EndedAt)
-	}
-	if SplitSessionEvents(events)["run-2"].Items[0].Text != "next" {
-		t.Fatalf("SplitSessionEvents should keep transcript wrapper")
+	if got.Items[0].Type != enumor.AiagentTranscriptItemUser || got.Items[0].Text != "from track" {
+		t.Fatalf("item = %+v", got.Items[0])
 	}
 }

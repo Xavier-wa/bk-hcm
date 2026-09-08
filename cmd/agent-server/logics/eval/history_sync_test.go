@@ -159,6 +159,98 @@ func TestCountMissingSessions(t *testing.T) {
 	}
 }
 
+func TestSplitAGUITracksGroupsByRunID(t *testing.T) {
+	t1 := time.Date(2026, 8, 13, 7, 37, 0, 0, time.UTC)
+	t2 := t1.Add(time.Second)
+	t3 := t2.Add(time.Second)
+	t4 := t3.Add(time.Minute)
+	events := []session.TrackEvent{
+		mustAGUITrack(t, aguievents.NewCustomEvent(
+			constant.AGUIUserMessageCustomEventName,
+			aguievents.WithValue(map[string]any{
+				"id": "m1", "role": "user", "content": "hello",
+			}),
+		), t1),
+		mustAGUITrack(t, aguievents.NewRunStartedEvent("0000000b", "run-a"), t1),
+		mustAGUITrack(t, aguievents.NewTextMessageStartEvent("a1"), t2),
+		mustAGUITrack(t, aguievents.NewTextMessageContentEvent("a1", "ok"), t2),
+		mustAGUITrack(t, aguievents.NewTextMessageEndEvent("a1"), t2),
+		mustAGUITrack(t, aguievents.NewRunFinishedEvent("0000000b", "run-a"), t3),
+		mustAGUITrack(t, aguievents.NewCustomEvent(
+			constant.AGUIUserMessageCustomEventName,
+			aguievents.WithValue(map[string]any{
+				"id": "m2", "role": "user", "content": "next",
+			}),
+		), t4),
+		mustAGUITrack(t, aguievents.NewRunStartedEvent("0000000b", "run-b"), t4),
+		mustAGUITrack(t, aguievents.NewRunErrorEvent("boom", aguievents.WithRunID("run-b")), t4),
+	}
+	got := splitAGUITracks(events)
+	if len(got) != 2 {
+		t.Fatalf("tracks = %d, want 2, keys=%v", len(got), trackRunIDs(got))
+	}
+	runA := got["run-a"]
+	if FirstUserText(runA.Transcript) != "hello" {
+		t.Fatalf("run-a query = %q", FirstUserText(runA.Transcript))
+	}
+	if LastAssistantText(runA.Transcript, 0) != "ok" {
+		t.Fatalf("run-a assistant = %+v", runA.Transcript.Items)
+	}
+	if !runA.StartedAt.Equal(t1) || !runA.EndedAt.Equal(t3) {
+		t.Fatalf("run-a times = %v %v", runA.StartedAt, runA.EndedAt)
+	}
+	if FirstUserText(got["run-b"].Transcript) != "next" {
+		t.Fatalf("run-b must not inherit run-a user text, items=%+v", got["run-b"].Transcript.Items)
+	}
+	st := statusFromAGUITrackEvents(events)
+	if st["run-a"] != enumor.AiagentRunStatusFinished {
+		t.Fatalf("run-a status = %s", st["run-a"])
+	}
+	if st["run-b"] != enumor.AiagentRunStatusError {
+		t.Fatalf("run-b status = %s", st["run-b"])
+	}
+}
+
+func TestSplitAGUITracksRawFinishedPayload(t *testing.T) {
+	ts := time.Date(2026, 8, 13, 7, 37, 6, 0, time.UTC)
+	events := []session.TrackEvent{
+		mustAGUITrack(t, aguievents.NewCustomEvent(
+			constant.AGUIUserMessageCustomEventName,
+			aguievents.WithValue(map[string]any{
+				"id": "m1", "role": "user", "content": "hi",
+			}),
+		), ts),
+		mustAGUITrack(t, aguievents.NewRunStartedEvent("0000000b",
+			"b61e9061-96e9-11f1-8564-ba3440caa0d2"), ts),
+		{
+			Payload: json.RawMessage(
+				`{"type":"RUN_FINISHED","runId":"b61e9061-96e9-11f1-8564-ba3440caa0d2",` +
+					`"threadId":"0000000b","timestamp":1786606626722}`),
+			Timestamp: ts.Add(time.Second),
+		},
+	}
+	got := splitAGUITracks(events)
+	runID := "b61e9061-96e9-11f1-8564-ba3440caa0d2"
+	if _, ok := got[runID]; !ok {
+		t.Fatalf("missing agui run_id, keys=%v", trackRunIDs(got))
+	}
+	if FirstUserText(got[runID].Transcript) != "hi" {
+		t.Fatalf("transcript = %+v", got[runID].Transcript.Items)
+	}
+	if statusFromAGUITrackEvents(events)[runID] != enumor.AiagentRunStatusFinished {
+		t.Fatalf("status = %s", statusFromAGUITrackEvents(events)[runID])
+	}
+}
+
+func mustAGUITrack(t *testing.T, evt aguievents.Event, ts time.Time) session.TrackEvent {
+	t.Helper()
+	raw, err := evt.ToJSON()
+	if err != nil {
+		t.Fatalf("marshal agui event: %v", err)
+	}
+	return session.TrackEvent{Payload: json.RawMessage(raw), Timestamp: ts}
+}
+
 func TestTrackRunIDs(t *testing.T) {
 	got := trackRunIDs(map[string]SessionTrack{
 		"":   {},

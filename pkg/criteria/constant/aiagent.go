@@ -291,6 +291,11 @@ const StateKeySceneDispatchNext = "scene_dispatch_next"
 // 供前端同步会话标签 UI。
 const SceneSwitchedCustomEventName = "scene.switched"
 
+// AGUIUserMessageCustomEventName is the AG-UI CUSTOM event name used by trpc-agent-go
+// to persist the user input in the session agui track. The event is written before
+// RUN_STARTED and typically has no runId; history sync attaches it to the next run.
+const AGUIUserMessageCustomEventName = "trpc-agent-go.user_message"
+
 // ForwardedPropSessionTag is the forwardedProps key used to pass the session tag into a graph run.
 const ForwardedPropSessionTag = "sessionTag"
 
