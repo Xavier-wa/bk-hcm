@@ -37,6 +37,8 @@ const (
 	YearMonthLayout = "2006-01"
 	// DateLayoutCompact is the date layout with '%Y%m%d'
 	DateLayoutCompact = "20060102"
+	// DateTimeLayoutCN is the date layout with '2006年01月02日15:04:05'
+	DateTimeLayoutCN = "2006年01月02日15:04:05"
 	// DateTimeZoneLayout is the date layout with '%Y-%m-%d %H:%M:%S timezone'
 	DateTimeZoneLayout = "2006-01-02 15:04:05 MST"
 )

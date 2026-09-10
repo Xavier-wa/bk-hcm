@@ -782,6 +782,7 @@ type ResPlan struct {
 	NearExpiredTransfer  ResPlanNearExpiredTransfer `yaml:"nearExpiredTransfer"`
 	RefreshTransferQuota ResPlanTransferQuota       `yaml:"refreshTransferQuota"`
 	ConfirmNotice        ResPlanConfirmNotice       `yaml:"confirmNotice"`
+	RecycleReturnResPlanReport ResPlanRecycleReturnResPlanReport `yaml:"recycleReturnResPlanReport"`
 	AdminAuditor         []string                   `yaml:"adminAuditor"`
 	CRPOverLimitContact  []string                   `yaml:"crpOverLimitContact"`
 }
@@ -814,6 +815,16 @@ type ResPlanConfirmNotice struct {
 	// DefaultReceivers 主送
 	DefaultReceivers []string `yaml:"defaultReceivers"`
 	// CcReceivers 固定抄送人员列表
+	CcReceivers []string `yaml:"ccReceivers"`
+}
+
+// ResPlanRecycleReturnResPlanReport 销毁返还预测周报配置
+type ResPlanRecycleReturnResPlanReport struct {
+	// Enable 是否启用销毁返还预测周报
+	Enable bool `yaml:"enable"`
+	// Receivers 邮件主送人员列表（英文名），为空则跳过发送
+	Receivers []string `yaml:"receivers"`
+	// CcReceivers 邮件固定抄送人员列表
 	CcReceivers []string `yaml:"ccReceivers"`
 }
 

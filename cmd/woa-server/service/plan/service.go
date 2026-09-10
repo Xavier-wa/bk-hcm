@@ -26,6 +26,8 @@ import (
 	"hcm/cmd/woa-server/logics/plan"
 	"hcm/cmd/woa-server/service/capability"
 	"hcm/pkg/client"
+	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/cron/core"
 	"hcm/pkg/dal/dao"
 	"hcm/pkg/iam/auth"
 	"hcm/pkg/rest"
@@ -39,6 +41,7 @@ func InitService(c *capability.Capability) {
 		authorizer:     c.Authorizer,
 		bizLogics:      c.BizLogic,
 		client:         c.Client,
+		tasks:          c.Tasks,
 	}
 	h := rest.NewHandler()
 	s.initPlanService(h)
@@ -57,6 +60,7 @@ type service struct {
 	authorizer     auth.Authorizer
 	bizLogics      biz.Logics
 	client         *client.ClientSet
+	tasks          map[enumor.CronTask]core.Task
 }
 
 func (s *service) initPlanService(h *rest.Handler) {
@@ -137,6 +141,10 @@ func (s *service) initPlanService(h *rest.Handler) {
 	// res plan confirm notice
 	h.Add("PushResPlanConfirmNotice", http.MethodPost,
 		"/plans/resources/demands/confirm_notifications/push", s.PushResPlanConfirmNotice)
+
+	// recycle return res plan report
+	h.Add("PushRecycleReturnResPlanReport", http.MethodPost,
+		s.tasks[enumor.CronTaskRecycleReturnResPlanReport].GetURL(), s.PushRecycleReturnResPlanReport)
 
 	// demand week
 	h.Add("ImportDemandWeek", http.MethodPost, "/plans/demand_week/import", s.ImportDemandWeek)

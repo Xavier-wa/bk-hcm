@@ -1066,9 +1066,10 @@ type QueryOrderInfo struct {
 
 // CvmData cvm plan order change response data
 type CvmData struct {
-	Name  string  `json:"name"`
-	Value float64 `json:"value"`
-	Unit  string  `json:"unit"`
+	Name     string  `json:"name"`
+	Value    float64 `json:"value"`
+	Unit     string  `json:"unit"`
+	CityName string  `json:"cityName,omitempty"`
 }
 
 // TransOrderResp ...

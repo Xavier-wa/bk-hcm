@@ -373,6 +373,10 @@ resPlan:
     sendToBusiness: false
     defaultReceivers: []
     ccReceivers: ["demo"]
+  recycleReturnResPlanReport:
+    enable: false
+    receivers: []
+    ccReceivers: []
   nearExpiredTransfer:
     enable: false
   refreshTransferQuota:

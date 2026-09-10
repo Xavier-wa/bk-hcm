@@ -41,6 +41,8 @@ const (
 	ResPlanNearExpiredDemandTransferFailed WarnSign = "res_plan_near_expired_demand_transfer_failed"
 	// ResPlanConfirmNotificationFailed 资源预测确认通知推送失败.
 	ResPlanConfirmNotificationFailed WarnSign = "res_plan_confirm_notification_failed"
+	// RecycleReturnResPlanReportFailed 销毁返还预测周报推送失败.
+	RecycleReturnResPlanReportFailed WarnSign = "recycle_return_res_plan_report_failed"
 
 	// CvmResetSystemUpdatePwdFailed cvm reset system update pwd failed.
 	CvmResetSystemUpdatePwdFailed WarnSign = "cvm_reset_system_update_pwd_failed"

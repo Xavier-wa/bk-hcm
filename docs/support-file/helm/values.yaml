@@ -1537,6 +1537,10 @@ rollingServer:
     defaultReceivers:
 resPlan:
   reportPenaltyRatio: false
+  recycleReturnResPlanReport:
+    enable: false
+    receivers: []
+    ccReceivers: []
   refreshTransferQuota:
     enable: false
     # 预测转移额度

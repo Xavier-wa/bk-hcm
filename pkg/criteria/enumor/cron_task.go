@@ -31,6 +31,8 @@ const (
 	CronTaskSyncDeviceTypePhysicalRel CronTask = "sync_device_type_physical_rel"
 	// CronTaskApplyRecommendOffline 申领机型推荐离线统计
 	CronTaskApplyRecommendOffline CronTask = "apply_recommend_offline"
+	// CronTaskRecycleReturnResPlanReport 销毁返还预测周报
+	CronTaskRecycleReturnResPlanReport CronTask = "recycle_return_res_plan_report"
 	// CronTaskAsyncFlowAndTaskCleanup 异步任务历史数据清理
 	CronTaskAsyncFlowAndTaskCleanup CronTask = "async_flow_and_task_cleanup"
 	// CronTaskBillSettle 预付费账单与调账定账

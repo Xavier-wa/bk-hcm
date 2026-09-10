@@ -199,6 +199,9 @@ type Logics interface {
 	PushExpireNotifications(kt *kit.Kit, bkBizIDs []int64, extraReceivers []string) error
 	// PushResPlanConfirmNotice push res plan confirm notice.
 	PushResPlanConfirmNotice(kt *kit.Kit, bkBizIDs []int64) ([]int64, []int64, error)
+	// PushRecycleReturnResPlanReport 手动触发销毁返还预测周报
+	PushRecycleReturnResPlanReport(kt *kit.Kit, startStr, endStr string) (
+		*ptypes.PushRecycleReturnResPlanReportResp, error)
 	// ConfirmResPlanDemands confirm res plan demands.
 	ConfirmResPlanDemands(kt *kit.Kit, bkBizID int64, demandIDs []string) ([]string, []string, error)
 

@@ -717,8 +717,17 @@ func (s *Service) initCronTask() error {
 	}
 	s.tasks[enumor.CronTaskApplyRecommendOffline] = applyRecommendTask
 
+	recycleReturnResPlanReportTask, err := crontask.NewRecycleReturnResPlanReportTask(
+		s.planController, s.sd, cc.WoaServer().ResPlan.RecycleReturnResPlanReport)
+	if err != nil {
+		logs.Errorf("init destroy return forecast report task failed, err: %v", err)
+		return err
+	}
+	s.tasks[enumor.CronTaskRecycleReturnResPlanReport] = recycleReturnResPlanReportTask
+
 	err = cron.Register([]croncore.Task{
 		deviceCapacityTask, rollingMonthlyTerminateNoticeTask, syncDeviceTypePhysicalRelTask, applyRecommendTask,
+		recycleReturnResPlanReportTask,
 	})
 	if err != nil {
 		logs.Errorf("register cron tasks failed, err: %v", err)
