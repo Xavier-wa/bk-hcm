@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { inject, Ref, ref, shallowReactive, useTemplateRef, watch } from 'vue';
+import { inject, onBeforeUnmount, Ref, ref, shallowReactive, useTemplateRef, watch } from 'vue';
 import { Close, Success } from 'bkui-vue/lib/icon';
+import { debounce } from 'lodash';
 import { timeFormatter } from '@/common/util';
 import { useCvmDeviceStore, type IInheritCvm, type IInheritedHostGroup } from '@/store/cvm/device';
 import { RequirementType } from '@/store/config/requirement';
@@ -16,11 +17,12 @@ const props = defineProps<{
   inheritInstanceId: string;
   /** 当前选中的机型族（来自 device-type-dialog 的 condition.deviceGroup） */
   deviceGroup?: string;
-  /** 是否启用固资号推荐（仅滚服类型；裁撤类型保持纯输入框+手动校验的原逻辑） */
+  /** 是否启用固资号推荐（仅控制滚服推荐下拉；普通模式同样在输入后自动校验） */
   enableRecommend?: boolean;
 }>();
 
 const emit = defineEmits<{
+  checkStart: [];
   checkSuccess: [cvm: IInheritCvm];
   checkFail: [];
   /** 下拉内 Tab 切换时同步到外部机型族 */
@@ -46,6 +48,26 @@ const checkState = shallowReactive({
   message: '',
 });
 
+let checkRequestId = 0;
+
+const resetCheckResult = () => {
+  inheritCvm.value = null;
+  checkState.error = undefined;
+  checkState.message = '';
+};
+
+const prepareCheck = (assetId?: string) => {
+  const requestId = checkRequestId + 1;
+  checkRequestId = requestId;
+  resetCheckResult();
+  if (!assetId) {
+    emit('checkFail');
+    return;
+  }
+  emit('checkStart');
+  return requestId;
+};
+
 const onError = (error: any) => {
   inheritCvm.value = null;
   checkState.error = true;
@@ -53,15 +75,7 @@ const onError = (error: any) => {
   emit('checkFail');
 };
 
-const handleCheck = async (assetId?: string) => {
-  const id = assetId ?? model.value;
-  if (!id) {
-    inheritCvm.value = null;
-    checkState.error = undefined;
-    checkState.message = '';
-    emit('checkFail');
-    return;
-  }
+const executeCheck = async (id: string, requestId: number) => {
   try {
     const res = await cvmDeviceStore.getInheritCvm(
       {
@@ -73,6 +87,11 @@ const handleCheck = async (assetId?: string) => {
       { globalError: false },
     );
 
+    if (requestId !== checkRequestId) return;
+    if (id !== model.value) {
+      emit('checkFail');
+      return;
+    }
     if (res.code === 0) {
       inheritCvm.value = res.data;
       checkState.error = false;
@@ -82,14 +101,40 @@ const handleCheck = async (assetId?: string) => {
       onError(res);
     }
   } catch (error: any) {
+    if (requestId !== checkRequestId) return;
+    if (id !== model.value) {
+      emit('checkFail');
+      return;
+    }
     onError(error);
   }
 };
 
+const debouncedCheck = debounce(executeCheck, 300);
+
+const handleCheck = (assetId?: string) => {
+  debouncedCheck.cancel();
+  const id = assetId ?? model.value;
+  const requestId = prepareCheck(id);
+  if (id && requestId) executeCheck(id, requestId);
+};
+
+let isImmediateModelChange = false;
+
+const updateModelAndCheckImmediately = (assetId: string) => {
+  debouncedCheck.cancel();
+  if (model.value === assetId) {
+    handleCheck(assetId);
+    return;
+  }
+  isImmediateModelChange = true;
+  model.value = assetId;
+  isImmediateModelChange = false;
+};
+
 // 从下拉列表选中固资号后自动校验并关闭下拉
 const handleAssetSelect = (assetId: string) => {
-  model.value = assetId;
-  handleCheck(assetId);
+  updateModelAndCheckImmediately(assetId);
   // 关闭 bk-select 下拉（hidePopover 为组件公开方法）
   (selectRef.value as any)?.hidePopover();
 };
@@ -174,8 +219,7 @@ watch(
     if (!deviceGroup || hostGroups.value.length === 0) return;
     if (deviceGroup === '全部') {
       // 切换到"全部机型"时清空固资号
-      model.value = '';
-      handleCheck('');
+      updateModelAndCheckImmediately('');
       return;
     }
     // 切换到具体机型族时推荐该族的第一个固资号，并同步下拉 Tab 状态
@@ -185,22 +229,31 @@ watch(
       handleAssetSelect(assetId);
     } else {
       // 对应机型族无候选固资号时清空
-      model.value = '';
-      handleCheck('');
+      updateModelAndCheckImmediately('');
     }
   },
 );
 
+let isModelInitialized = false;
 watch(
   model,
   (value) => {
-    // 详情态进入到编辑时需默认获取一次数据
-    if (value && isInfoMode.value) {
-      handleCheck();
+    const shouldCheckOnInit = !isModelInitialized && value && isInfoMode.value;
+    const shouldHandleChange = isModelInitialized;
+    isModelInitialized = true;
+    if (shouldCheckOnInit || (shouldHandleChange && isImmediateModelChange)) {
+      handleCheck(value);
+      return;
     }
+    if (!shouldHandleChange) return;
+    debouncedCheck.cancel();
+    const requestId = prepareCheck(value);
+    if (value && requestId) debouncedCheck(value, requestId);
   },
-  { immediate: true },
+  { immediate: true, flush: 'sync' },
 );
+
+onBeforeUnmount(() => debouncedCheck.cancel());
 </script>
 
 <template>
@@ -218,7 +271,7 @@ watch(
         固资号
       </span>
     </div>
-    <!-- 滚服类型：固资号推荐下拉；裁撤类型：纯输入框（保持原逻辑） -->
+    <!-- 滚服类型展示固资号推荐下拉；普通模式保持纯输入框，两种模式均在输入后自动校验 -->
     <bk-select
       v-if="enableRecommend"
       ref="selectRef"

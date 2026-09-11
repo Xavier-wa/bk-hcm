@@ -132,6 +132,7 @@ const deviceTypeList = ref<ICvmDevicetypeItem[]>([]);
 
 // 继承套餐的机器信息
 const inheritCvm = ref<IInheritCvm>();
+const isAssetChecking = ref(false);
 
 const inventoryState = shallowReactive({
   activeRowKey: null,
@@ -385,7 +386,7 @@ const confirmDisabled = computed(() => {
   return (
     selectedRowKeys.value.length === 0 ||
     (!resAssignTypeDisabled.value && [undefined, 0].includes(applyData.resAssignType)) ||
-    (isInheritPackage.value && !inheritCvm.value)
+    (isInheritPackage.value && (!inheritCvm.value || isAssetChecking.value))
   );
 });
 
@@ -572,6 +573,7 @@ const handleRemoveSelectedItem = (deviceType: string) => {
 };
 
 const handleAssetMatchSuccess = (cvm: IInheritCvm) => {
+  isAssetChecking.value = false;
   const { instance_charge_type: chargeType, charge_months: chargeMonths, bk_cloud_inst_id } = cvm;
   applyData.chargeType = chargeType;
   applyData.chargeMonths = chargeType === cvmChargeTypes.PREPAID ? chargeMonths : undefined;
@@ -587,7 +589,11 @@ const handleAssetMatchSuccess = (cvm: IInheritCvm) => {
   }
   inheritCvm.value = cvm;
 };
+const handleAssetMatchStart = () => {
+  isAssetChecking.value = true;
+};
 const handleAssetMatchFail = () => {
+  isAssetChecking.value = false;
   applyData.chargeType = cvmChargeTypes.PREPAID;
   applyData.chargeMonths = 36;
   if (selectedRowKeys.value.length > 0) {
@@ -736,6 +742,7 @@ provide('isInheritPackage', isInheritPackage);
               :device-group="condition.deviceGroup"
               :enable-recommend="isRollingServer"
               v-model="applyData.inheritAssetId"
+              @check-start="handleAssetMatchStart"
               @check-success="handleAssetMatchSuccess"
               @check-fail="handleAssetMatchFail"
               @device-group-change="handleDeviceGroupChangeFromAssetMatch"

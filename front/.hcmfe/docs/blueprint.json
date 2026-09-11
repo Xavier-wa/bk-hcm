@@ -34,7 +34,7 @@
       "doc": "modules/base.md",
       "status": "drafted",
       "fingerprint": {
-        "rootHash": "ee4d2a4bd08073abbca007515d78b63701681b27"
+        "rootHash": "a5dc39643c0d1c016ee10399611a2aa45b37725d"
       }
     },
     {
@@ -302,7 +302,9 @@
       "title": "滚服",
       "summary": "滚服：账单/配额/用量。功能物理分散在顶层、business、ziyanScr 下，目标收敛为单一原子模块。物理落点见 base 模块逻辑特性映射表。",
       "globs": [
-        "src/views/rolling-server/**"
+        "src/views/rolling-server/**",
+        "src/components/device-type-selector/cvm-apply/children/asset-match.vue",
+        "src/components/device-type-selector/cvm-apply/children/device-type-dialog.vue"
       ],
       "doc": "modules/rolling-server.md",
       "status": "drafted",
@@ -310,7 +312,9 @@
         "business",
         "ziyan-scr"
       ],
-      "fingerprint": null
+      "fingerprint": {
+        "rootHash": "9556cf86467e3f42ffa30c7f56c34bcd0b03067b"
+      }
     },
     {
       "id": "resource-plan",

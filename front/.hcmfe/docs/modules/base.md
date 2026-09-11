@@ -72,6 +72,10 @@ base 的 `src/components/**` 宽 glob 会把各业务模块的组件一并命中
 
 相关常量都在 `src/common/constant.ts`：`GLOBAL_BIZS_KEY = 'bizs'`（全局业务，URL 与 localStorage 共用）、`PAGE_BIZ_KEY = 'bkBizId'`（页面自身声明的业务）。原先的 `GLOBAL_BIZS_VERSION` / `GLOBAL_BIZS_VERSION_KEY` 已删除，不要恢复。
 
+## CVM 机型选择共享组件
+
+`src/components/device-type-selector/cvm-apply/**` 是主机申请、生产和库存入口复用的机型选择壳。共享层负责弹窗状态、校验事件和机型选择联动；业务专属开关必须限制影响面。固资号自由输入在滚服推荐与普通/裁撤模式中统一执行 300ms 防抖自动校验，并用请求序号丢弃过期响应；手动校验按钮保留为即时重试入口。`enableRecommend` 只控制滚服推荐候选与机型族联动，滚服专属交互归 [rolling-server](rolling-server.md)。修改共享组件时必须同时验证推荐与普通两类入口。
+
 ## 注意事项
 
 - `src/router/**` 已整体划入 menu-route 模块（不再属于 base）。

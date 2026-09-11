@@ -1,0 +1,127 @@
+{
+  "id": "feat-host-claim-asset-validation-reset",
+  "title": "主机申领-滚服项目-首次进入时更改固资号后校验状态未重置",
+  "currentStage": "done",
+  "createdAt": "2026-09-09T07:50:57.939Z",
+  "updatedAt": "2026-09-10T07:44:46.910Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-host-claim-asset-validation-reset/coding.md",
+        "kind": "file",
+        "addedAt": "2026-09-09T08:02:11.198Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-host-claim-asset-validation-reset/test.md",
+        "kind": "file",
+        "addedAt": "2026-09-10T02:14:15.508Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-09-10T07:06:31.956Z",
+      "note": "用户确认产品范围扩展后的 coding.md 与实现可作为测试依据；普通模式复用 300ms 防抖、竞态保护和确认门禁。"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-09-10T07:44:46.908Z",
+      "note": "用户确认普通模式增量与滚服回归手测全部通过；验证结论已回写 test.md，进入 Done 收口。"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-09-09T07:50:57.939Z",
+      "gitHead": "3454dbea5d2204eefe59da0734243ee7e1bcab3b"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-09-10T01:25:01.708Z",
+      "note": "无人值守授权：编码方案与实现已核对，lint/Prettier/ESLint 通过；进入测试阶段。"
+    },
+    {
+      "from": "test",
+      "to": "coding",
+      "at": "2026-09-10T02:02:48.637Z",
+      "gitHead": "3454dbea5d2204eefe59da0734243ee7e1bcab3b",
+      "note": "手测发现连续输入逐字发送请求；返回编码阶段加入输入防抖并保持即时状态失效。"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-09-10T02:10:20.734Z",
+      "note": "用户确认采用防抖方案；自由输入 300ms 防抖、即时路径保持即时、旧结果立即失效，ESLint 与生产构建通过。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-09-10T03:04:34.311Z",
+      "note": "用户确认浏览器手测全部通过，同意作为合入依据并进入 Done 收口。"
+    },
+    {
+      "from": "done",
+      "to": "coding",
+      "at": "2026-09-10T06:42:21.722Z",
+      "gitHead": "15eb512d8e4a8cb0aeca6d891819f295f62b2b36",
+      "note": "产品确认扩大范围：普通模式也需在用户手动修改固资号后自动发起校验，沿用 300ms 防抖与竞态保护；回退 Coding 重新实施和验收。"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-09-10T07:06:31.956Z",
+      "note": "用户确认产品范围扩展后的 coding.md 与实现可作为测试依据；普通模式复用 300ms 防抖、竞态保护和确认门禁。"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-09-10T07:44:46.908Z",
+      "note": "用户确认普通模式增量与滚服回归手测全部通过；验证结论已回写 test.md，进入 Done 收口。"
+    }
+  ],
+  "branch": "feat-host-claim-asset-validation-reset",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598138066096"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "completed",
+      "at": "2026-09-09T07:55:51.595Z",
+      "note": "需求澄清已完整执行；原需求描述已逐字保留并通过连续片段校验，未进行工时或规模评估。"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-09-10T02:20:57.974Z",
+      "note": "已补 base 与 rolling-server 文档：扩展共享固资号校验组件归属，记录 300ms 防抖、请求序号竞态保护、确认门禁及非推荐模式边界；两模块已 deepen，当前 touched gaps 为空。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-09-10T03:07:44.223Z",
+      "note": "story 1069995598138066096 已按 planner 逐级推进至 status_14；owner 未变更；无 parent_id，不需 rollup。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/components/device-type-selector/cvm-apply/children/asset-match.vue",
+        "src/components/device-type-selector/cvm-apply/children/device-type-dialog.vue"
+      ],
+      "contentFingerprint": "7ddae39d7f47ac66b9b735858b9cb78b3029aead",
+      "codeBaseline": "72568f9acc8c7c411744a691c3b874323ef9c99f",
+      "seatedAt": "2026-09-10T06:52:43.153Z"
+    }
+  }
+}
