@@ -197,6 +197,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn: None
   /api/v1/cloud/accounts/secrets/list:
     post:
@@ -6088,7 +6089,7 @@ paths:
           timeout: 0
         pluginConfigs: []
         authConfig:
-          userVerifiedRequired: true
+          userVerifiedRequired: false
           appVerifiedRequired: true
           resourcePermissionRequired: true
         descriptionEn: None
@@ -6337,6 +6338,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn: None
         noneSchema: true
   /api/v1/cloud/bizs/{bk_biz_id}/load_balancers/batch:
@@ -6409,6 +6411,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn: None
   /api/v1/cloud/bizs/{bk_biz_id}/load_balancers/{lb_id}/listeners/create:
     post:
@@ -8109,6 +8112,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn: None
   /api/v1/cloud/bizs/{bk_biz_id}/security_groups/{id}:
     get:
@@ -8303,6 +8307,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn: None
   /api/v1/cloud/bizs/{bk_biz_id}/security_groups/batch:
     delete:
@@ -8374,6 +8379,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn: None
   /api/v1/cloud/bizs/{bk_biz_id}/security_groups/list:
     post:
@@ -8881,6 +8887,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn: None
   /api/v1/cloud/bizs/{bk_biz_id}/security_groups/disassociate/load_balancers:
     post:
@@ -8953,6 +8960,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn: None
   /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/security_groups/{security_group_id}/rules/create:
     post:
@@ -9050,6 +9058,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn: None
   /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/security_groups/{security_group_id}/rules/batch/update:
     put:
@@ -9137,6 +9146,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn: None
   /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/security_groups/{security_group_id}/rules/{id}:
     delete:
@@ -9230,6 +9240,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn: None
   /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/security_groups/{security_group_id}/rules/list:
     post:
@@ -9428,6 +9439,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn:
   /api/v1/cloud/bizs/{bk_biz_id}/listeners/list_by_cond:
     post:
@@ -11160,6 +11172,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn: None
         noneSchema: true
   /api/v1/cloud/bizs/{bk_biz_id}/certs/{id}:
@@ -11169,8 +11182,8 @@ paths:
       tags:
       - Cert
       x-bk-apigateway-resource:
-        isPublic: false
-        allowApplyPermission: false
+        isPublic: true
+        allowApplyPermission: true
         matchSubpath: false
         enableWebsocket: false
         backend:
@@ -11184,6 +11197,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn:
         noneSchema: true
   /api/v1/cloud/bizs/{bk_biz_id}/certs/list:
@@ -11346,6 +11360,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn:
   /api/v1/cloud/bizs/{bk_biz_id}/vendors/tcloud/listeners/{lbl_id}/domains/list:
     post:
@@ -14348,6 +14363,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn:
   /api/v1/woa/bizs/{bk_biz_id}/plans/resources/tickets/create_simple:
     post:
@@ -18600,6 +18616,7 @@ paths:
           userVerifiedRequired: true
           appVerifiedRequired: true
           resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
         descriptionEn:
   /api/v1/cloud/bizs/{bk_biz_id}/vendors/{vendor}/targets/by_topo/list:
     post:
@@ -19544,7 +19561,7 @@ paths:
           timeout: 30
         pluginConfigs: []
         authConfig:
-          userVerifiedRequired: true
+          userVerifiedRequired: false
           appVerifiedRequired: true
           resourcePermissionRequired: true
         descriptionEn:
@@ -20585,3 +20602,239 @@ paths:
           appVerifiedRequired: true
           resourcePermissionRequired: true
         descriptionEn:
+  /api/v1/woa/plans/resources/crp/ticket/list:
+    post:
+      operationId: list_plan_crp_ticket
+      description: 获取预测需要审批的 crp 单据
+      tags:
+      - ResPlan
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/plans/resources/crp/ticket/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: false
+        descriptionEn:
+        noneSchema: true
+  /api/v1/woa/plans/resources/itsm/ticket/list:
+    post:
+      operationId: list_plan_itsm_ticket
+      description: 获取预测需要审批的 itsm 单据
+      tags:
+      - ResPlan
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/plans/resources/itsm/ticket/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: false
+        descriptionEn:
+        noneSchema: true
+  /api/v1/cloud/bizs/{bk_biz_id}/security_groups/{id}/mgmt_attrs:
+    patch:
+      operationId: biz_update_security_group_mgmt_attr
+      description: 业务下-更新安全组管理属性
+      tags:
+      - SecurityGroup
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: number
+                    description: 状态码
+                  data:
+                    type: object
+                    description: 响应数据
+                  message:
+                    type: string
+                    description: 请求信息
+                description: 成功
+          description: 成功
+      parameters:
+      - in: path
+        name: bk_biz_id
+        schema:
+          type: integer
+        required: true
+        description: 业务ID
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+        description: 安全组ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                manager:
+                  type: string
+                  default: ''
+                  description: 负责人
+                mgmt_type:
+                  type: string
+                  default: ''
+                  description: 管理类型，枚举值：biz（业务管理）、platform（平台管理）
+                bak_manager:
+                  type: string
+                  default: ''
+                  description: 备份负责人
+                mgmt_biz_id:
+                  type: string
+                  default: ''
+                  description: 管理业务。当管理类型为platform时，该字段必须为空
+                usage_biz_ids:
+                  type: array
+                  items:
+                    type: number
+                    default: ''
+                  default: ''
+                  description: 使用业务列表，-1代表全部业务可使用
+        required: false
+        description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: patch
+          path: /api/v1/cloud/bizs/{bk_biz_id}/security_groups/{id}/mgmt_attrs
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: false
+        descriptionEn:
+  /api/v1/cloud/bizs/{bk_biz_id}/applications/types/add_account:
+    post:
+      operationId: biz_create_application_for_create_account
+      description: 业务下-创建申请单-用于创建账号
+      tags:
+      - Account
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/cloud/bizs/{bk_biz_id}/applications/types/add_account
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
+        descriptionEn:
+        noneSchema: true
+  /api/v1/cloud/applications/types/add_account:
+    post:
+      operationId: res_create_application_for_create_account
+      description: 资源下-创建申请单-用于创建账号
+      tags:
+      - Account
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/cloud/applications/types/add_account
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: false
+        descriptionEn:
+        noneSchema: true
+  /api/v1/account/bills/prepaid_items/sync:
+    post:
+      operationId: sync_prepaid_item
+      description: 批量推送预付费账单主数据与逐月分摊明细
+      tags:
+      - Bill
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/account/bills/prepaid_items/sync
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: false
+        descriptionEn:
+        noneSchema: true
+  /api/v1/account/bills/prepaid_items/batch:
+    delete:
+      operationId: delete_prepaid_item
+      description: 批量删除预付费账单主单及其派生调账，仅未定账且关联调账非推送中的订单月可删；任一主单已定账或任一关联调账处于推送中时整批拒绝、零变更。无匹配记录或无授权实例时返回 `deleted_count=0`。
+      tags:
+      - Bill
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: delete
+          path: /api/v1/account/bills/prepaid_items/batch
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: false
+        descriptionEn:
+        noneSchema: true

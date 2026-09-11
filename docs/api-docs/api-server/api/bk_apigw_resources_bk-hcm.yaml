@@ -105,6 +105,7 @@ paths:
           transformHeaders: {}
         authConfig:
           userVerifiedRequired: true
+          oauth2PersonalClientEnabled: true
         disabledStages: []
         descriptionEn:
   /api/v1/cloud/accounts/list:
@@ -1799,7 +1800,7 @@ paths:
           upstreams: {}
           transformHeaders: {}
         authConfig:
-          userVerifiedRequired: true
+          userVerifiedRequired: false
         disabledStages: []
         descriptionEn:
   /api/v1/woa/task/apply/ticket/audit/info/list:
@@ -3217,4 +3218,139 @@ paths:
           appVerifiedRequired: true
           resourcePermissionRequired: true
         disabledStages: []
+        descriptionEn:
+  /api/v1/cloud/bizs/{bk_biz_id}/applications/types/add_account:
+    post:
+      operationId: biz_create_application_for_create_account
+      description: 业务下-创建申请单-用于创建账号
+      tags:
+        - Account
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/cloud/bizs/{bk_biz_id}/applications/types/add_account
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+          oauth2PersonalClientEnabled: true
+        descriptionEn:
+
+  /api/v1/cloud/bizs/{bk_biz_id}/security_groups/{id}/mgmt_attrs:
+    patch:
+      operationId: biz_update_security_group_mgmt_attr
+      description: 业务下-更新安全组管理属性
+      tags:
+        - SecurityGroup
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: true
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: patch
+          path: /api/v1/cloud/bizs/{bk_biz_id}/security_groups/{id}/mgmt_attrs
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+
+  /api/v1/woa/plans/resources/crp/ticket/list:
+    post:
+      operationId: list_plan_crp_ticket
+      description: 获取预测需要审批的 crp 单据
+      tags:
+        - ResPlan
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/plans/resources/crp/ticket/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+
+  /api/v1/woa/plans/resources/itsm/ticket/list:
+    post:
+      operationId: list_plan_itsm_ticket
+      description: 获取预测需要审批的 itsm 单据
+      tags:
+        - ResPlan
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/woa/plans/resources/itsm/ticket/list
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+
+  /api/v1/cloud/applications/types/add_account:
+    post:
+      operationId: res_create_application_for_create_account
+      description: 资源下-创建申请单-用于创建账号
+      tags:
+        - Account
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: false
+        allowApplyPermission: false
+        matchSubpath: false
+        enableWebsocket: false
+        backend:
+          name: default
+          method: post
+          path: /api/v1/cloud/applications/types/add_account
+          matchSubpath: false
+          timeout: 0
+        pluginConfigs: []
+        authConfig:
+          userVerifiedRequired: false
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
         descriptionEn:
