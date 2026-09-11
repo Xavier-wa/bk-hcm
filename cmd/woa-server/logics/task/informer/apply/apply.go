@@ -40,6 +40,8 @@ const (
 type Interface interface {
 	// Pop gets head of apply info queue
 	Pop() (string, error)
+	// Done releases the item returned by Pop
+	Done(id string)
 	// Stop stops apply informer watch loop.
 	Stop()
 }
@@ -101,25 +103,31 @@ func (a *applyInformer) Stop() {
 	})
 }
 
-// Pop gets head of apply info queue
+// Pop gets head of apply info queue.
+// 取出的子单在 Done 之前处于处理中状态，期间的入队通知只会被合并暂存、不会再次派发。
+// 调用方必须恰好在处理结束时调用 Done：提前调用会让同一子单被多个 worker 并发调度导致重复生产，
+// 不调用则该子单在 informer 重建前不会再被派发。
 func (a *applyInformer) Pop() (string, error) {
 	obj, shutdown := a.queue.Get()
 	if shutdown {
 		return "", nil
 	}
 
-	defer a.queue.Done(obj)
+	a.queue.Forget(obj)
 
 	id, ok := obj.(string)
 	if !ok {
-		a.queue.Forget(obj)
+		a.queue.Done(obj)
 		logs.Warnf("expected string in queue but got %#v", obj)
 		return "", errors.New("got non-string from queue")
 	}
 
-	a.queue.Forget(obj)
-
 	return id, nil
+}
+
+// Done releases the item returned by Pop, so that the apply order can be dispatched again.
+func (a *applyInformer) Done(id string) {
+	a.queue.Done(id)
 }
 
 // pollLoop continuously polls for apply suborder changes

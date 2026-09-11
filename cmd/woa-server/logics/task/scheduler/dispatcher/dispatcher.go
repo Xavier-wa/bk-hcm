@@ -97,6 +97,11 @@ func (d *Dispatcher) runWorker() error {
 		time.Sleep(time.Second)
 		return nil
 	}
+
+	// 必须在本轮生产处理结束后才释放，期间同一子单不允许被再次派发，
+	// 否则并发调度会各自读到相同的已生产数量，重复下单造成超量生产
+	defer applyInformer.Done(order)
+
 	if err = d.dispatchHandler(core.NewBackendKit(), order); err != nil {
 		logs.Errorf("failed to dispatch apply order %s, err: %v", order, err)
 		return err

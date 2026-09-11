@@ -135,6 +135,10 @@ func (m *Matcher) runWorker() error {
 		return nil
 	}
 
+	// 必须在本条生产记录匹配结束后才释放，期间不允许被再次派发，
+	// 否则并发匹配会对同一批设备重复执行初始化、压测与交付
+	defer generateInformer.Done(generateID)
+
 	// 为匹配任务创建后台操作的 kt
 	kt := core.NewBackendKit()
 
