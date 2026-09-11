@@ -61,11 +61,11 @@ func TestIsGateEnabled(t *testing.T) {
 }
 
 func TestEnabledGateHandlers(t *testing.T) {
-	if hs := GetEnabledGateHandlers(cc.AgentConfirmGateConfig{Enabled: false}, nil); len(hs) != 0 {
+	if hs := GetEnabledGateHandlers(cc.AgentConfirmGateConfig{Enabled: false}, nil, nil); len(hs) != 0 {
 		t.Errorf("disabled gate enabled handlers = %d, want 0", len(hs))
 	}
 
-	hs := GetEnabledGateHandlers(cc.AgentConfirmGateConfig{Enabled: true}, nil)
+	hs := GetEnabledGateHandlers(cc.AgentConfirmGateConfig{Enabled: true}, nil, nil)
 	found := false
 	for _, h := range hs {
 		if h.ToolName() == constant.ToolNameCreateBizApply {

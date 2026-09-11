@@ -24,14 +24,16 @@ import (
 	"hcm/cmd/agent-server/logics/toolproxy"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
+	"hcm/pkg/iam/auth"
 )
 
 // builtinGates 列出所有内置的执行前确认门禁。
 // 新增受门禁工具：实现 hitl.Handler 后在此处追加即可。
-// clientSet 经依赖注入透传给需要跨服务调用的门禁；仅需工具名的场景（如 EnabledGateToolNames）可传 nil。
-func builtinGates(clientSet *client.ClientSet) []hitl.Handler {
+// clientSet 与 authorizer 经依赖注入透传给需要跨服务调用、需要鉴权的门禁；
+// 仅需工具名的场景（如 EnabledGateToolNames）可对两者传 nil。
+func builtinGates(clientSet *client.ClientSet, authorizer auth.Authorizer) []hitl.Handler {
 	return []hitl.Handler{
-		newCreateCvmApplyGate(clientSet),
+		newCreateCvmApplyGate(clientSet, authorizer),
 	}
 }
 
@@ -57,9 +59,12 @@ func isGateEnabled(toolName string, cfg cc.AgentConfirmGateConfig) bool {
 
 // GetEnabledGateHandlers 返回在给定配置下启用的确认门禁 handler。
 // 图构建会把它们注册进 hitl handler 注册表。clientSet 注入给需要跨服务调用的门禁
-// （如申领门禁调用 woa-server 校验）。
-func GetEnabledGateHandlers(cfg cc.AgentConfirmGateConfig, clientSet *client.ClientSet) []hitl.Handler {
-	gates := builtinGates(clientSet)
+// （如申领门禁调用 woa-server 校验），authorizer 注入给需要主动鉴权的门禁
+// （如申领门禁在确认后判定主机申领权限）。
+func GetEnabledGateHandlers(cfg cc.AgentConfirmGateConfig, clientSet *client.ClientSet,
+	authorizer auth.Authorizer) []hitl.Handler {
+
+	gates := builtinGates(clientSet, authorizer)
 	out := make([]hitl.Handler, 0, len(gates))
 	for _, g := range gates {
 		if isGateEnabled(g.ToolName(), cfg) {
@@ -72,8 +77,8 @@ func GetEnabledGateHandlers(cfg cc.AgentConfirmGateConfig, clientSet *client.Cli
 // GetEnabledGateToolNames 返回在给定配置下启用的门禁所守护的工具名集合。
 // 用于把受门禁工具从通用确认工具集中排除，避免二次确认。
 func GetEnabledGateToolNames(cfg cc.AgentConfirmGateConfig) map[string]struct{} {
-	// 仅需工具名，无需跨服务客户端，传 nil 即可。
-	gates := builtinGates(nil)
+	// 仅需工具名，无需跨服务客户端与鉴权入口，传 nil 即可。
+	gates := builtinGates(nil, nil)
 	out := make(map[string]struct{}, len(gates))
 	for _, g := range gates {
 		if isGateEnabled(g.ToolName(), cfg) {

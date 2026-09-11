@@ -118,7 +118,7 @@ func NewService(sd serviced.ServiceDiscover) (*Service, error) {
 		return nil, err
 	}
 
-	rt, err := logics.New(apiClientSet)
+	rt, err := logics.New(apiClientSet, authorizer)
 	if err != nil {
 		logs.Errorf("init runtime failed, err: %v", err)
 		return nil, fmt.Errorf("init runtime: %v", err)

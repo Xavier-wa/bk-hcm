@@ -45,6 +45,7 @@ import (
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/iam/auth"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 	cvt "hcm/pkg/tools/converter"
@@ -115,8 +116,7 @@ import (
 func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *agenttool.MCPToolSet,
 	proxies *toolproxy.ToolProxies, agentName string, modelCfg cc.AgentModelGeneralConfig,
 	promptStore *prompt.Store, clientSet *client.ClientSet, sessionSvc session.Service,
-	saver graph.CheckpointSaver) (
-	*graph.Graph, []trpcagent.Agent, error) {
+	saver graph.CheckpointSaver, authorizer auth.Authorizer) (*graph.Graph, []trpcagent.Agent, error) {
 
 	schema := graph.MessagesStateSchema()
 	stateGraph := graph.NewStateGraph(schema)
@@ -135,7 +135,7 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 		func() (*graph.Graph, error) {
 			return buildHostApplySubgraph(mdl, skillRepo, toolset,
 				proxies.SceneProxy(enumor.IntentTypeHostApply), agentName, modelCfg, promptStore,
-				clientSet, sessionSvc)
+				clientSet, sessionSvc, authorizer)
 		}, saver)
 	if err != nil {
 		return nil, nil, err
@@ -147,7 +147,7 @@ func BuildGraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository, toolset *age
 		func() (*graph.Graph, error) {
 			return buildResourceQuerySubgraph(mdl, skillRepo, toolset,
 				proxies.SceneProxy(enumor.IntentTypeResourceQuery),
-				agentName, modelCfg, promptStore, clientSet)
+				agentName, modelCfg, promptStore, clientSet, authorizer)
 		}, saver)
 	if err != nil {
 		return nil, nil, err
@@ -231,8 +231,7 @@ func registerSubgraphNode(stateGraph *graph.StateGraph, nodeName, description st
 func buildHostApplySubgraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository,
 	toolset *agenttool.MCPToolSet, haToolProxy *toolproxy.ToolProxy, agentName string,
 	modelCfg cc.AgentModelGeneralConfig, promptStore *prompt.Store, clientSet *client.ClientSet,
-	sessionSvc session.Service) (
-	*graph.Graph, error) {
+	sessionSvc session.Service, authorizer auth.Authorizer) (*graph.Graph, error) {
 
 	staticPrompt := resolveStaticPrompt(promptStore)
 	// host_apply 追加账号前置门禁：未选账号时拦截白名单外的工具，引导先调用 select_account。
@@ -249,7 +248,7 @@ func buildHostApplySubgraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository,
 	toolsOpts := genToolNodeOptions(toolset, haToolProxy, agentName)
 
 	hitlReg := buildHITLRegistry(
-		cc.AgentServer().Tools.ConfirmGateForScene(enumor.IntentTypeHostApply), clientSet)
+		cc.AgentServer().Tools.ConfirmGateForScene(enumor.IntentTypeHostApply), clientSet, authorizer)
 
 	schema := graph.MessagesStateSchema()
 	sg := graph.NewStateGraph(schema)
@@ -314,10 +313,13 @@ func buildSkillTools(skillRepo skillpkg.Repository) map[string]trpctool.Tool {
 // buildHITLRegistry constructs a HITL handler registry for a subgraph.
 // It always includes the human_confirm handler and appends all confirm-gate handlers
 // that are enabled for the given scene's configuration.
-func buildHITLRegistry(cfg cc.AgentConfirmGateConfig, clientSet *client.ClientSet) *hitl.Registry {
+// The authorizer parameter is injected into gates that authorize before letting a tool run.
+func buildHITLRegistry(cfg cc.AgentConfirmGateConfig, clientSet *client.ClientSet,
+	authorizer auth.Authorizer) *hitl.Registry {
+
 	reg := hitl.NewRegistry()
 	reg.Register(hitl.NewHumanConfirmHandler())
-	for _, h := range toolgate.GetEnabledGateHandlers(cfg, clientSet) {
+	for _, h := range toolgate.GetEnabledGateHandlers(cfg, clientSet, authorizer) {
 		reg.Register(h)
 	}
 	return reg
@@ -897,8 +899,8 @@ func resolveStaticPrompt(store *prompt.Store) string {
 // and returning control to the main graph's fallback node.
 func buildResourceQuerySubgraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository,
 	toolset *agenttool.MCPToolSet, rqToolProxy *toolproxy.ToolProxy, agentName string,
-	modelCfg cc.AgentModelGeneralConfig, promptStore *prompt.Store, clientSet *client.ClientSet) (
-	*graph.Graph, error) {
+	modelCfg cc.AgentModelGeneralConfig, promptStore *prompt.Store, clientSet *client.ClientSet,
+	authorizer auth.Authorizer) (*graph.Graph, error) {
 
 	rqStaticPrompt := prompt.ResolveSceneStaticPrompt(promptStore, string(enumor.IntentTypeResourceQuery))
 	rqLLMOpts := genLLMNodeOptions(toolset, rqToolProxy, modelCfg)
@@ -919,7 +921,7 @@ func buildResourceQuerySubgraph(mdl trpcmodel.Model, skillRepo skillpkg.Reposito
 	// has a registered handler: LLM-initiated human_confirm questions and pre-execution confirm
 	// gates of real tools (e.g. create_biz_apply). Gates are filtered by the confirm-gate config.
 	hitlReg := buildHITLRegistry(
-		cc.AgentServer().Tools.ConfirmGateForScene(enumor.IntentTypeResourceQuery), clientSet)
+		cc.AgentServer().Tools.ConfirmGateForScene(enumor.IntentTypeResourceQuery), clientSet, authorizer)
 	sg.AddNode(string(enumor.ResourceQueryNodeHITL), hitl.GetNode(hitlReg))
 
 	// 5. Tool Node: executes tools when the LLM requests them.

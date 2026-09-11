@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"hcm/cmd/agent-server/logics/agent/hitl"
 	authlogic "hcm/cmd/agent-server/logics/auth"
@@ -34,6 +35,10 @@ import (
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
+	"hcm/pkg/criteria/errf"
+	"hcm/pkg/iam/auth"
+	"hcm/pkg/iam/meta"
+	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 	"hcm/pkg/tools/util"
@@ -55,17 +60,54 @@ const (
 		"可在该说明之后再次调用提单工具重新弹出确认卡片，方便用户直接点击按钮。"
 	// applyArgsParseFailed 是申领参数无法解析时写回该 tool_call 的结果。
 	applyArgsParseFailed = "申领参数解析失败，暂时无法提单。"
+	// applyMissingBizID 是无法确定申领所属业务时写回该 tool_call 的结果。
+	applyMissingBizID = "无法确定本次申领所属业务（缺少 bk_biz_id），暂时无法提单。请重新发起申领。"
+	// applyAuthCheckFailed 是主动鉴权本身失败（IAM 报错/超时/authorizer 未注入）时写回该 tool_call 的结果。
+	// 此时尚未判定用户是否无权限，因此按系统异常提示，且不提供权限申请地址。
+	applyAuthCheckFailed = "申领权限校验失败，暂时无法提单，请稍后重试。"
+	// applyPreCheckFailedPrefix 是 woa 预检以非权限错误失败时写回该 tool_call 的结果前缀。
+	applyPreCheckFailedPrefix = "申领前置校验失败，暂时无法提单："
+	// applyPreCheckRejectPrefix 是 woa 预检业务不通过（额度/库存/参数等）时写回该 tool_call 的结果前缀。
+	applyPreCheckRejectPrefix = "申领前置校验未通过："
+	// applyNoPermMsgFmt 是无权限且申请地址可用时面向用户的说明，占位为用户名与业务 ID。
+	applyNoPermMsgFmt = "当前用户 %s 在业务 %d 下没有主机申领权限，可点击权限申请链接申请后重试。"
+	// applyNoPermDegradeMsgFmt 是无权限但申请地址不可用时的降级说明，占位为用户名与业务 ID。
+	applyNoPermDegradeMsgFmt = "当前用户 %s 在业务 %d 下没有主机申领权限，且当前无法直接跳转申请，" +
+		"请联系该业务管理员开通主机申领权限后再重试。"
 )
 
 // applyCheckFunc 提单前只读校验调用，默认走 woa-server，便于单测注入桩。
 type applyCheckFunc func(ctx context.Context, bizID int64, req *woatypes.ApplyReq) (*woatypes.CheckApplyOrderResp,
 	error)
 
+// applyAuthorizeFunc 主机申领权限的主动判定，默认走 auth.Authorizer.Authorize，便于单测注入桩。
+// 返回 (authorized, err)：err 非空表示尚不能判定用户是否有权限（IAM 报错/超时）。
+type applyAuthorizeFunc func(kt *kit.Kit, res meta.ResourceAttribute) (bool, error)
+
+// applyURLFunc 生成权限申请地址，默认走 auth.Authorizer 的 GetPermissionToApply + GetApplyPermUrl，
+// 便于单测注入桩。
+type applyURLFunc func(kt *kit.Kit, res meta.ResourceAttribute) (string, error)
+
+// applyDeniedResult 是无权限拒绝写回该 tool_call 的结构化结果。
+// 仅无权限路径使用该结构；其它失败仍写回现网风格的纯文本。
+type applyDeniedResult struct {
+	// Code 无权限标识，固定为 errf.PermissionDenied（2030403），供消费方区分无权限与其它失败。
+	Code int32 `json:"code"`
+	// Message 面向用户的简短原因，含用户名与业务。
+	Message string `json:"message"`
+	// ApplyURL 可直接打开的权限申请地址；生成失败时省略，不给空串或伪造地址。
+	ApplyURL string `json:"apply_url,omitempty"`
+}
+
 // createCvmApplyGate 守护主机申领提单工具（create_biz_apply），实现 hitl.Handler。
-// 门禁持有 woa-server 客户端，在用户确认后调用提单前只读校验接口执行真实前置校验。
+// 门禁持有 authorizer 与 woa-server 客户端：用户确认后先对当前用户、当前业务主动判定主机申领权限，
+// 鉴权通过后再调用 woa 提单前只读校验接口执行真实前置校验。
 type createCvmApplyGate struct {
-	client *client.ClientSet
-	check  applyCheckFunc
+	client     *client.ClientSet
+	authorizer auth.Authorizer
+	check      applyCheckFunc
+	authorize  applyAuthorizeFunc
+	applyURL   applyURLFunc
 }
 
 var (
@@ -73,15 +115,80 @@ var (
 	_ hitl.CancelNoticer = (*createCvmApplyGate)(nil)
 )
 
-// newCreateCvmApplyGate 创建主机申领门禁，注入用于 woa 校验调用的 client set。
-func newCreateCvmApplyGate(clientSet *client.ClientSet) hitl.Handler {
-	g := &createCvmApplyGate{client: clientSet}
+// newCreateCvmApplyGate 创建主机申领门禁，注入用于 woa 校验调用的 client set 与用于主动鉴权的 authorizer。
+// 仅需工具名的场景（如 GetEnabledGateToolNames）可对两者传 nil：此时主动鉴权会 fail closed。
+func newCreateCvmApplyGate(clientSet *client.ClientSet, authorizer auth.Authorizer) hitl.Handler {
+	g := &createCvmApplyGate{client: clientSet, authorizer: authorizer}
 	g.check = g.callWoaCheck
+	g.authorize = g.callAuthorize
+	g.applyURL = g.callApplyURL
 	return g
 }
 
+// newGateKit 从运行上下文构造后端 kit，供 woa 侧调用使用。
+// 用户身份取自请求上下文（X-Bkapi-User-Name），缺失时回退到提单参数中的提单人。
+func newGateKit(ctx context.Context, fallbackUser string) *kit.Kit {
+	kt := core.NewBackendKit()
+	kt.Ctx = ctx
+	kt.Rid = rest.RidFromContext(ctx)
+	if user := authlogic.BKUsernameFromContext(ctx); user != "" {
+		kt.User = user
+		return kt
+	}
+	if fallbackUser != "" {
+		kt.User = fallbackUser
+	}
+	return kt
+}
+
+// newAuthKit 构造用于主机申领主动鉴权的 kit，判定主体只认请求上下文中的蓝鲸用户名。
+// 申领参数中的提单人由模型生成、且用户可在确认卡片上编辑，不能作为权限判定主体；
+// core.NewBackendKit 预置的后端操作用户同样不能顶替真实用户。
+// 上下文缺用户名时返回 nil，由调用方按 fail closed 拒绝，不得当作有权限。
+func newAuthKit(ctx context.Context) *kit.Kit {
+	if authlogic.BKUsernameFromContext(ctx) == "" {
+		return nil
+	}
+	return newGateKit(ctx, "")
+}
+
+// hostApplyResource 返回主机申领的鉴权资源属性。
+// 必须与 woa-server CheckBizApplyOrder 的鉴权点保持一致（cmd/woa-server/service/task/check.go）：
+// 业务 + 创建/申领 + 当前业务 ID。两侧不一致会出现门禁放行但 woa 拒绝、或反之。
+func hostApplyResource(bizID int64) meta.ResourceAttribute {
+	return meta.ResourceAttribute{
+		Basic: &meta.Basic{Type: meta.Biz, Action: meta.Create},
+		BizID: bizID,
+	}
+}
+
+// callAuthorize 调用注入的 authorizer 判定当前用户对该资源是否有权限。
+func (g *createCvmApplyGate) callAuthorize(kt *kit.Kit, res meta.ResourceAttribute) (bool, error) {
+	if g.authorizer == nil {
+		return false, errors.New("authorizer not injected")
+	}
+
+	_, authorized, err := g.authorizer.Authorize(kt, res)
+	if err != nil {
+		return false, err
+	}
+	return authorized, nil
+}
+
+// callApplyURL 为给定资源生成权限申请地址。
+func (g *createCvmApplyGate) callApplyURL(kt *kit.Kit, res meta.ResourceAttribute) (string, error) {
+	if g.authorizer == nil {
+		return "", errors.New("authorizer not injected")
+	}
+
+	permission, err := g.authorizer.GetPermissionToApply(kt, res)
+	if err != nil {
+		return "", err
+	}
+	return g.authorizer.GetApplyPermUrl(kt, permission)
+}
+
 // callWoaCheck 从运行上下文构造后端 kit，并调用 woa-server 的提单前只读校验。
-// 用户身份取自请求上下文（X-Bkapi-User-Name），缺失时回退到提单参数中的提单人，供 woa 侧 IAM 鉴权使用。
 func (g *createCvmApplyGate) callWoaCheck(ctx context.Context, bizID int64, req *woatypes.ApplyReq) (
 	*woatypes.CheckApplyOrderResp, error) {
 
@@ -89,16 +196,7 @@ func (g *createCvmApplyGate) callWoaCheck(ctx context.Context, bizID int64, req 
 		return nil, errors.New("woa client not injected")
 	}
 
-	kt := core.NewBackendKit()
-	kt.Ctx = ctx
-	kt.Rid = rest.RidFromContext(ctx)
-	if user := authlogic.BKUsernameFromContext(ctx); user != "" {
-		kt.User = user
-	} else if req.User != "" {
-		kt.User = req.User
-	}
-
-	return g.client.WoaServer().Task.CheckBizApplyOrder(kt, bizID, req)
+	return g.client.WoaServer().Task.CheckBizApplyOrder(newGateKit(ctx, req.User), bizID, req)
 }
 
 // ToolName 返回受门禁守护的工具名。
@@ -159,48 +257,146 @@ func (g *createCvmApplyGate) OnResume(ctx context.Context, tc *model.ToolCall, r
 	return g.onConfirm(ctx, tc, confirmedArgs)
 }
 
-// onConfirm executes the pre-submit validation after the user confirmed; routes to the tool node
-// on pass, or falls back to the llm node on missing biz ID / validation failure.
+// onConfirm executes the pre-submit checks after the user confirmed; routes to the tool node
+// on pass, or falls back to the llm node on missing biz ID / no permission / validation failure.
 // confirmedArgs carries the args returned by the frontend via forwardedProps.resumeValue;
 // if empty, the original tool-call args are used.
 func (g *createCvmApplyGate) onConfirm(ctx context.Context, tc *model.ToolCall, confirmedArgs map[string]any) (
 	hitl.ResumeResult, error) {
 
 	rid := rest.RidFromContext(ctx)
-	finalArgs := confirmedArgs
-	if len(finalArgs) == 0 {
-		var err error
-		if finalArgs, err = unmarshalArgs(ctx, tc); err != nil {
-			logs.Errorf("apply gate: unmarshal original args failed, err: %v, rid: %s", err, rid)
-			return g.reject(tc, applyArgsParseFailed), nil
-		}
+	finalArgs, err := g.resolveFinalArgs(ctx, tc, confirmedArgs)
+	if err != nil {
+		return g.reject(tc, applyArgsParseFailed), nil
 	}
 
-	// bk_biz_id 缺失视为系统异常：无法确定申领所属业务，记录错误并明确拒绝，不静默放行。
-	// 用户在确认卡片编辑参数后可能不回传 path_param，故回退到原始工具调用参数提取 bk_biz_id。
-	bizID, found := extractApplyPathParam(finalArgs)
-	if !found {
-		if origArgs, oerr := unmarshalArgs(ctx, tc); oerr == nil {
-			bizID, found = extractApplyPathParam(origArgs)
-		}
-	}
+	bizID, found := g.resolveBizID(ctx, tc, finalArgs)
 	if !found {
 		logs.Errorf("apply gate: extract bk_biz_id from path_param failed, rid: %s", rid)
-		return g.reject(tc, "无法确定本次申领所属业务（缺少 bk_biz_id），暂时无法提单。请重新发起申领。"), nil
+		return g.reject(tc, applyMissingBizID), nil
 	}
 
-	ok, reason, err := g.validateApply(ctx, bizID, extractApplyBody(finalArgs))
+	body := extractApplyBody(finalArgs)
+	kt := newAuthKit(ctx)
+	if kt == nil {
+		logs.Errorf("apply gate: no bk_username in request context, cannot authorize host apply, "+
+			"bizID: %d, rid: %s", bizID, rid)
+		return g.reject(tc, applyAuthCheckFailed), nil
+	}
+	res := hostApplyResource(bizID)
+
+	authorized, err := g.doAuthorize(kt, res)
 	if err != nil {
+		logs.Errorf("apply gate: authorize host apply failed, err: %v, bizID: %d, rid: %s", err, bizID, rid)
+		return g.reject(tc, applyAuthCheckFailed), nil
+	}
+	if !authorized {
+		logs.Infof("apply gate: no host apply permission, user: %s, bizID: %d, rid: %s", kt.User, bizID, rid)
+		return g.reject(tc, g.buildDeniedResult(kt, res, bizID)), nil
+	}
+
+	ok, reason, err := g.validateApply(ctx, bizID, body)
+	if err != nil {
+		// 窄兜底：主动鉴权已通过但 woa 仍以无权限拒绝（两次调用间权限被回收、或鉴权点漂移），
+		// 仍按无权限引导处理，不拼成「暂时无法提单」的系统异常文案。
+		if errf.Error(err).Code == errf.PermissionDenied {
+			logs.Warnf("apply gate: woa check denied on permission after gate authorized, err: %v, "+
+				"bizID: %d, rid: %s", err, bizID, rid)
+			return g.reject(tc, g.buildDeniedResult(kt, res, bizID)), nil
+		}
 		logs.Errorf("apply gate: validate apply failed, err: %v, bizID: %d, rid: %s", err, bizID, rid)
-		return g.reject(tc, "申领前置校验失败，暂时无法提单："+err.Error()), nil
+		return g.reject(tc, applyPreCheckFailedPrefix+err.Error()), nil
 	}
 	if !ok {
 		logs.Infof("apply gate: validate apply not passed, reason: %s, bizID: %d, rid: %s", reason, bizID, rid)
-		return g.reject(tc, "申领前置校验未通过："+reason), nil
+		return g.reject(tc, applyPreCheckRejectPrefix+reason), nil
 	}
 
 	logs.Infof("apply gate: validate apply passed, proceed to submit, rid: %s", rid)
 	return g.proceed(tc, confirmedArgs, rid)
+}
+
+// resolveFinalArgs 返回本次确认最终生效的申领参数：优先用户在确认卡片上回传的参数，
+// 为空时回退到原始工具调用参数。
+func (g *createCvmApplyGate) resolveFinalArgs(ctx context.Context, tc *model.ToolCall,
+	confirmedArgs map[string]any) (map[string]any, error) {
+
+	if len(confirmedArgs) > 0 {
+		return confirmedArgs, nil
+	}
+
+	args, err := unmarshalArgs(ctx, tc)
+	if err != nil {
+		logs.Errorf("apply gate: unmarshal original args failed, err: %v, rid: %s", err, rest.RidFromContext(ctx))
+		return nil, err
+	}
+	return args, nil
+}
+
+// resolveBizID 提取本次申领所属业务 ID。
+// 用户在确认卡片编辑参数后可能不回传 path_param，故回退到原始工具调用参数再取一次。
+func (g *createCvmApplyGate) resolveBizID(ctx context.Context, tc *model.ToolCall, finalArgs map[string]any) (
+	int64, bool) {
+
+	if bizID, found := extractApplyPathParam(finalArgs); found {
+		return bizID, true
+	}
+	origArgs, err := unmarshalArgs(ctx, tc)
+	if err != nil {
+		return 0, false
+	}
+	return extractApplyPathParam(origArgs)
+}
+
+// doAuthorize 对当前用户、当前业务主动判定主机申领权限。
+// 鉴权入口未初始化时返回 error，由调用方按 fail closed 拒绝，不得当作有权限。
+func (g *createCvmApplyGate) doAuthorize(kt *kit.Kit, res meta.ResourceAttribute) (bool, error) {
+	if g.authorize == nil {
+		return false, errors.New("apply authorize func not initialized")
+	}
+	return g.authorize(kt, res)
+}
+
+// buildDeniedResult 构造无权限拒绝写回该 tool_call 的 JSON 结果。
+// 申请地址可用时带 apply_url，不可用时省略该字段并给出降级说明；两种情况都带无权限标识。
+func (g *createCvmApplyGate) buildDeniedResult(kt *kit.Kit, res meta.ResourceAttribute, bizID int64) string {
+	rst := &applyDeniedResult{
+		Code:     errf.PermissionDenied,
+		ApplyURL: g.resolveApplyURL(kt, res, bizID),
+	}
+	rst.Message = fmt.Sprintf(applyNoPermDegradeMsgFmt, kt.User, bizID)
+	if rst.ApplyURL != "" {
+		rst.Message = fmt.Sprintf(applyNoPermMsgFmt, kt.User, bizID)
+	}
+
+	raw, err := json.Marshal(rst)
+	if err != nil {
+		logs.Errorf("apply gate: marshal denied result failed, err: %v, bizID: %d, rid: %s", err, bizID, kt.Rid)
+		return fmt.Sprintf("%d：%s", rst.Code, rst.Message)
+	}
+	return string(raw)
+}
+
+// resolveApplyURL 为已判定无权限的资源生成权限申请地址，取不到则返回空串走降级。
+// 与鉴权本身失败不同：此处已经判定无权限，申请地址失败只降级文案，不升格为系统异常。
+func (g *createCvmApplyGate) resolveApplyURL(kt *kit.Kit, res meta.ResourceAttribute, bizID int64) string {
+	if g.applyURL == nil {
+		logs.Warnf("apply gate: apply url func not initialized, degrade without apply_url, bizID: %d, rid: %s",
+			bizID, kt.Rid)
+		return ""
+	}
+
+	url, err := g.applyURL(kt, res)
+	if err != nil {
+		logs.Warnf("apply gate: get apply perm url failed, err: %v, bizID: %d, rid: %s", err, bizID, kt.Rid)
+		return ""
+	}
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		logs.Warnf("apply gate: apply perm url is empty or not http(s): %q, bizID: %d, rid: %s",
+			url, bizID, kt.Rid)
+		return ""
+	}
+	return url
 }
 
 // onCancel 处理取消动作：关闭该 tool_call 并回退到 llm 节点。

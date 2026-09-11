@@ -693,7 +693,7 @@ func TestWireMainGraphTopologySceneDispatchTargets(t *testing.T) {
 func newTestRegistry(enabled bool) *hitl.Registry {
 	reg := hitl.NewRegistry()
 	reg.Register(hitl.NewHumanConfirmHandler())
-	for _, h := range toolgate.GetEnabledGateHandlers(cc.AgentConfirmGateConfig{Enabled: enabled}, nil) {
+	for _, h := range toolgate.GetEnabledGateHandlers(cc.AgentConfirmGateConfig{Enabled: enabled}, nil, nil) {
 		reg.Register(h)
 	}
 	return reg

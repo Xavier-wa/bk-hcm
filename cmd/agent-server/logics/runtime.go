@@ -41,6 +41,7 @@ import (
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/enumor"
+	iamauth "hcm/pkg/iam/auth"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 
@@ -138,7 +139,7 @@ func (rt *Runtime) MCPToolSets() *tool.MCPToolSet {
 
 // New initialises the Agent Runtime from the global configuration (cc.AgentServer).
 // Runtime contains the Agent and Runner.
-func New(clientSet *client.ClientSet) (*Runtime, error) {
+func New(clientSet *client.ClientSet, authorizer iamauth.Authorizer) (*Runtime, error) {
 	aguiCfg := cc.AgentServer().AGUI
 	toolsCfg := cc.AgentServer().Tools
 	storageCfg := cc.AgentServer().Storage
@@ -197,7 +198,7 @@ func New(clientSet *client.ClientSet) (*Runtime, error) {
 
 	runnerOpts := buildRunnerOpts(sessionSvc, memorySvc)
 	agUIRunner, err := newAGUIRunner(defaultMdl, modelsMap, mcpToolSets, skillMgr, promptMgr.Store, runnerOpts,
-		&toolSetup.toolProxies, checkpointSaver, clientSet, sessionSvc)
+		&toolSetup.toolProxies, checkpointSaver, clientSet, sessionSvc, authorizer)
 	if err != nil {
 		return nil, fmt.Errorf("build AGUI runner: %w", err)
 	}
@@ -335,8 +336,8 @@ func buildRunnerOpts(sessionSvc session.Service, memorySvc memory.Service) []run
 
 func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Model, mcpToolSets *tool.MCPToolSet,
 	skillMgr *skill.Manager, promptStore *prompt.Store, runnerOpts []runner.Option, toolProxies *toolproxy.ToolProxies,
-	checkpointSaver graph.CheckpointSaver, clientSet *client.ClientSet, sessionSvc session.Service) (
-	runner.Runner, error) {
+	checkpointSaver graph.CheckpointSaver, clientSet *client.ClientSet, sessionSvc session.Service,
+	authorizer iamauth.Authorizer) (runner.Runner, error) {
 
 	aguiCfg := cc.AgentServer().AGUI
 
@@ -357,7 +358,7 @@ func newAGUIRunner(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mo
 	switch aguiCfg.Model.Mode {
 	case enumor.AgentModeGraph:
 		compiledGraph, subAgents, err := agent.BuildGraph(defaultMdl, skillMgr.Repository, mcpToolSets, toolProxies,
-			aguiCfg.AppName, aguiCfg.Model, promptStore, clientSet, sessionSvc, checkpointSaver)
+			aguiCfg.AppName, aguiCfg.Model, promptStore, clientSet, sessionSvc, checkpointSaver, authorizer)
 		if err != nil {
 			return nil, fmt.Errorf("build graph: %w", err)
 		}
