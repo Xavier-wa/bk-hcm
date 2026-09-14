@@ -75,6 +75,35 @@ func TestAccountGate_AllowWhenResolved_Proxy(t *testing.T) {
 	}
 }
 
+// 信封顶层多带 tool_intent 时，门禁判据不变：仍按解开后的真实工具名拦截/放行。
+func TestAccountGate_UnaffectedByToolIntent(t *testing.T) {
+	gate := makeAccountGateBeforeTool()
+
+	blocked := []byte(`{"tool_name":"bkhcm-devhk/create_biz_apply","parameters":{},` +
+		`"schema_token":"tok","tool_intent":"正在提交主机申领单"}`)
+	res, err := gate(gateCtx(""), &trpctool.BeforeToolArgs{
+		ToolName:  constant.ProxyExecuteToolFullName,
+		Arguments: blocked,
+	})
+	if err != nil {
+		t.Fatalf("gate err: %v", err)
+	}
+	if res == nil || res.CustomResult != constant.SelectAccountRequiredMsg {
+		t.Fatalf("expect block with guide when account unresolved, got %+v", res)
+	}
+
+	res, err = gate(gateCtx("acc-1"), &trpctool.BeforeToolArgs{
+		ToolName:  constant.ProxyExecuteToolFullName,
+		Arguments: blocked,
+	})
+	if err != nil {
+		t.Fatalf("gate err: %v", err)
+	}
+	if res != nil {
+		t.Fatalf("expect allow (nil) when account resolved, got %+v", res)
+	}
+}
+
 // 直连（非 proxy）方式调用提单工具，未选账号同样被拦截。
 func TestAccountGate_BlockCreateBizApplyDirectWhenUnresolved(t *testing.T) {
 	gate := makeAccountGateBeforeTool()

@@ -96,3 +96,19 @@ data: {"type":"TEXT_MESSAGE_END","messageId":"resp-001"}
 
 data: {"type":"RUN_FINISHED","threadId":"a1b2c3d4","runId":"x9y8z7w6"}
 ```
+
+#### 工具调用说明（tool intent）
+
+模型调用任意可见工具时，可在入参里填写一句可选中文字段 `tool_intent`，概括本次调用的目的
+（见 `TOOL_CALL_ARGS` 事件里的信封字段）。该字段随 `TOOL_CALL_ARGS` 正常下发，前端直接从工具
+入参 JSON 中解析展示，后端不额外下发说明事件。
+
+```
+data: {"type":"TOOL_CALL_START","toolCallId":"call-001","toolCallName":"tool_proxy_execute_tool","parentMessageId":"resp-001"}
+
+data: {"type":"TOOL_CALL_ARGS","toolCallId":"call-001","delta":"{\"tool_name\":\"list_account\",\"parameters\":{},\"tool_intent\":\"正在查询该业务下的云账号\"}"}
+
+data: {"type":"TOOL_CALL_END","toolCallId":"call-001"}
+
+data: {"type":"TOOL_CALL_RESULT","messageId":"tool-result-001","toolCallId":"call-001","content":"..."}
+```

@@ -45,11 +45,15 @@ type mockTool struct {
 	decl   *trpctool.Declaration
 	result any
 	err    error
+	// gotArgs records the raw arguments of the last Call, so tests can assert what
+	// execute_tool forwards to the inner MCP tool.
+	gotArgs []byte
 }
 
 func (m *mockTool) Declaration() *trpctool.Declaration { return m.decl }
 
-func (m *mockTool) Call(_ context.Context, _ []byte) (any, error) {
+func (m *mockTool) Call(_ context.Context, jsonArgs []byte) (any, error) {
+	m.gotArgs = append([]byte(nil), jsonArgs...)
 	return m.result, m.err
 }
 

@@ -134,8 +134,9 @@ func TestDynamicToolFilter_SearchHit(t *testing.T) {
 
 	ctx := ctxWithInvocation(model.Message{Content: "list cloud virtual machines"})
 
-	assert.True(t, filter(ctx, newSimpleMockTool("hcm_list_cvm", "list cloud virtual machines")))
-	assert.False(t, filter(ctx, newSimpleMockTool("hcm_create_disk", "create CBS disk")),
+	// MCP 工具名带工具集前缀，拼接分隔符与 ensureBuild 一致（"/"，见 tool_filter.go）。
+	assert.True(t, filter(ctx, newSimpleMockTool("hcm/list_cvm", "list cloud virtual machines")))
+	assert.False(t, filter(ctx, newSimpleMockTool("hcm/create_disk", "create CBS disk")),
 		"unrelated MCP tool should be filtered out")
 }
 
@@ -150,7 +151,7 @@ func TestDynamicToolFilter_SearchNoMatch_MCPToolBlocked(t *testing.T) {
 	filter := MakeDynamicToolFilter(lazy)
 
 	ctx := ctxWithInvocation(model.Message{Content: "today weather forecast"})
-	assert.False(t, filter(ctx, newSimpleMockTool("hcm_list_cvm", "list cloud virtual machines")),
+	assert.False(t, filter(ctx, newSimpleMockTool("hcm/list_cvm", "list cloud virtual machines")),
 		"MCP tool should be blocked when no search match (pure chat)")
 }
 
@@ -194,11 +195,11 @@ func TestDynamicToolFilter_CacheHit(t *testing.T) {
 	ctx := ctxWithInvocation(model.Message{Content: "list cloud virtual machines"})
 
 	// First call populates cache
-	_ = filter(ctx, newSimpleMockTool("hcm_list_cvm", "list cloud virtual machines"))
+	_ = filter(ctx, newSimpleMockTool("hcm/list_cvm", "list cloud virtual machines"))
 
 	// Second call should use cache (same context/invocation)
-	assert.True(t, filter(ctx, newSimpleMockTool("hcm_list_cvm", "list cloud virtual machines")))
-	assert.False(t, filter(ctx, newSimpleMockTool("hcm_create_disk", "create CBS disk")))
+	assert.True(t, filter(ctx, newSimpleMockTool("hcm/list_cvm", "list cloud virtual machines")))
+	assert.False(t, filter(ctx, newSimpleMockTool("hcm/create_disk", "create CBS disk")))
 }
 
 // ---------------------------------------------------------------------------
@@ -216,7 +217,8 @@ func TestLazyToolIndex_PrefixedName(t *testing.T) {
 	lazy.ensureBuild(context.Background())
 
 	require.True(t, lazy.buildOK)
-	assert.True(t, lazy.mcpToolNames["myprefix_tool_a"])
+	// 拼接分隔符与 ensureBuild 一致（"/"，见 tool_filter.go）。
+	assert.True(t, lazy.mcpToolNames["myprefix/tool_a"])
 	assert.False(t, lazy.mcpToolNames["tool_a"])
 }
 
@@ -246,8 +248,9 @@ func TestLazyToolIndex_ToolTagsViaRawName(t *testing.T) {
 	lazy.ensureBuild(context.Background())
 
 	require.True(t, lazy.buildOK)
-	// Tags should be injected via raw name "list_cvm", not prefixed name "svc_list_cvm"
-	assert.True(t, lazy.mcpToolNames["svc_list_cvm"])
+	// Tags should be injected via raw name "list_cvm", not prefixed name "svc/list_cvm".
+	// 拼接分隔符与 ensureBuild 一致（"/"，见 tool_filter.go）。
+	assert.True(t, lazy.mcpToolNames["svc/list_cvm"])
 }
 
 // ---------------------------------------------------------------------------
@@ -267,7 +270,8 @@ func TestLazyToolIndex_PartialBuildFailure(t *testing.T) {
 	lazy.ensureBuild(context.Background())
 
 	assert.True(t, lazy.buildOK, "should succeed with partial tools")
-	assert.True(t, lazy.mcpToolNames["good_tool_ok"])
+	// 拼接分隔符与 ensureBuild 一致（"/"，见 tool_filter.go）。
+	assert.True(t, lazy.mcpToolNames["good/tool_ok"])
 }
 
 func TestLazyToolIndex_AllBuildFailure(t *testing.T) {

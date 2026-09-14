@@ -45,12 +45,12 @@ func NewSearchToolsTool(proxy *ToolProxy) *SearchToolsTool {
 
 // Declaration returns the tool declaration for search_tools.
 func (t *SearchToolsTool) Declaration() *trpctool.Declaration {
-	return &trpctool.Declaration{
+	return tool.DeclWithToolIntent(&trpctool.Declaration{
 		Name: constant.SearchToolsToolName,
 		Description: "【探索未知工具时使用】根据任务描述语义搜索最相关的 MCP 工具，返回工具列表及完整 schema。" +
 			"当用户未指定具体工具名、或你不确定该用哪个工具时调用。若用户已明确工具名，请改用 get_tool_schema。",
 		InputSchema: buildSearchToolsSchema(),
-	}
+	})
 }
 
 type searchToolsParams struct {

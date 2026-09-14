@@ -96,7 +96,7 @@ func TestExtractToolMeta_WithTags(t *testing.T) {
 		"limit":  {Type: "integer"},
 	}, []string{"region"})
 
-	meta := extractToolMeta(mt, []string{"云服务器", "CVM"})
+	meta := extractToolMeta(mt, "list_cvm", []string{"云服务器", "CVM"})
 
 	assert.Equal(t, "list_cvm", meta.Name)
 	assert.Equal(t, "列出云服务器实例", meta.Description)
@@ -120,7 +120,7 @@ func TestExtractToolMeta_WithTags(t *testing.T) {
 
 func TestExtractToolMeta_NoTags(t *testing.T) {
 	mt := newSimpleMockTool("ping", "health check")
-	meta := extractToolMeta(mt, nil)
+	meta := extractToolMeta(mt, "ping", nil)
 
 	assert.Equal(t, "ping", meta.Name)
 	assert.Nil(t, meta.Tags)
@@ -134,7 +134,7 @@ func TestExtractToolMeta_NilInputSchema(t *testing.T) {
 		Name:        "no_schema",
 		Description: "tool with nil schema",
 	}}
-	meta := extractToolMeta(mt, nil)
+	meta := extractToolMeta(mt, "no_schema", nil)
 	assert.Empty(t, meta.Parameters)
 }
 
@@ -393,10 +393,9 @@ func TestCosineSimilarity_UnitVector(t *testing.T) {
 	assert.InDelta(t, 1.0, cosineSimilarity(a, b), 1e-9)
 }
 
-func TestCosineSimilarity_PanicOnLengthMismatch(t *testing.T) {
-	assert.Panics(t, func() {
-		cosineSimilarity([]float64{1, 2}, []float64{1, 2, 3})
-	})
+func TestCosineSimilarity_LengthMismatch(t *testing.T) {
+	// 按函数注释：长度不一致时返回 -1，供调用方降级到全量工具集，而不是 panic。
+	assert.Equal(t, -1.0, cosineSimilarity([]float64{1, 2}, []float64{1, 2, 3}))
 }
 
 // ---------------------------------------------------------------------------

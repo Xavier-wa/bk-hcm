@@ -157,6 +157,15 @@ const (
 	SkillSelectDocsToolName = "skill_select_docs"
 )
 
+// Tool intent
+const (
+	// ToolIntentArgKey is the optional tool argument in which the LLM states, in one Chinese
+	// sentence, what the current call is for. It is never part of a tool's Required list.
+	// The frontend parses it directly from the tool call arguments; the backend does not
+	// re-emit it as a separate AG-UI message.
+	ToolIntentArgKey = "tool_intent"
+)
+
 // MCP proxy tool
 const (
 	// ProxyToolSetName is the name of the MCP proxy toolset.

@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"hcm/cmd/agent-server/logics/tool"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
@@ -43,7 +44,7 @@ func NewGetToolSchemaTool(proxy *ToolProxy) *GetToolSchemaTool {
 
 // Declaration returns the tool declaration for get_tool_schema.
 func (t *GetToolSchemaTool) Declaration() *trpctool.Declaration {
-	return &trpctool.Declaration{
+	return tool.DeclWithToolIntent(&trpctool.Declaration{
 		Name: constant.GetToolSchemaToolName,
 		Description: "【已知工具名时使用】根据工具名称返回完整 JSON Schema。" +
 			"当用户已明确工具名、或 search_tools 结果中已选定工具、需确认参数格式时调用。",
@@ -58,7 +59,7 @@ func (t *GetToolSchemaTool) Declaration() *trpctool.Declaration {
 			},
 			Required: []string{"tool_name"},
 		},
-	}
+	})
 }
 
 // Call returns the schema for the requested tool.

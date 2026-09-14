@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"strings"
 
+	"hcm/cmd/agent-server/logics/tool"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
@@ -34,11 +35,14 @@ import (
 )
 
 // ExecuteToolParams is the JSON envelope for the execute_tool meta-tool:
-// {tool_name, parameters, schema_token}.
+// {tool_name, parameters, schema_token, tool_intent}.
 type ExecuteToolParams struct {
 	ToolName    string          `json:"tool_name"`
 	Parameters  json.RawMessage `json:"parameters"`
 	SchemaToken string          `json:"schema_token"`
+	// ToolIntent 是模型填写的面向用户说明，仅用于 AG-UI 下发，不参与参数校验，
+	// 也不会随 Parameters 传给内层 MCP 工具（内层对未定义字段一律拒绝）。
+	ToolIntent string `json:"tool_intent,omitempty"`
 }
 
 // ParametersMap unmarshals Parameters into a map for schema validation and execution.
@@ -65,7 +69,7 @@ func NewExecuteToolTool(proxy *ToolProxy) *ExecuteToolTool {
 
 // Declaration returns the tool declaration for execute_tool.
 func (t *ExecuteToolTool) Declaration() *trpctool.Declaration {
-	return &trpctool.Declaration{
+	return tool.DeclWithToolIntent(&trpctool.Declaration{
 		Name: constant.ExecuteToolToolName,
 		Description: "【执行实际 MCP 工具】根据 tool_name、parameters 和 schema_token 调用 MCP 工具。" +
 			"必须先通过 search_tools 或 get_tool_schema 获取 schema 和 schema_token 后再调用，禁止猜测参数。",
@@ -88,7 +92,7 @@ func (t *ExecuteToolTool) Declaration() *trpctool.Declaration {
 			},
 			Required: []string{"tool_name", "parameters", "schema_token"},
 		},
-	}
+	})
 }
 
 // Call validates parameters and calls the underlying MCP tool.

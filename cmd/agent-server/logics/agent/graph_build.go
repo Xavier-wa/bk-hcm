@@ -242,8 +242,8 @@ func buildHostApplySubgraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository,
 
 	skillTools := buildSkillTools(skillRepo)
 	// select_account 为 host_apply 专用本地工具：模型确定账号后调用它上报 account_id，由工具校验并落库.
-	skillTools[string(enumor.DeclToolSelectAccount)] = cvmapply.NewSelectAccountTool(
-		clientSet.CloudServer(), sessionSvc, agentName)
+	skillTools[string(enumor.DeclToolSelectAccount)] = agenttool.NewToolWithIntent(
+		cvmapply.NewSelectAccountTool(clientSet.CloudServer(), sessionSvc, agentName))
 
 	toolsOpts := genToolNodeOptions(toolset, haToolProxy, agentName)
 
@@ -300,13 +300,21 @@ func buildHostApplySubgraph(mdl trpcmodel.Model, skillRepo skillpkg.Repository,
 // buildSkillTools constructs the skill tool map shared by every subgraph LLM and tool node.
 // The map contains the three skill meta-tools and the HITL declarative tool (which routes
 // the LLM to the hitl node; it is never executed by the tool node itself).
+// 每个工具都经 NewToolWithIntent 包装，使其声明暴露可选 tool_intent，让模型说明本次调用的目的。
+//
+// TODO: 引进 skill_exec / skill_run（及 WriteStdin/PollSession 等）时，它们实现了
+// StreamableTool（且常只带 StateDelta）。NewToolWithIntent 目前会因无法完整转发流式能力而
+// 放弃包装，导致这些工具没有 tool_intent。接入前须先在 tool_intent_wrapper.go 补齐流式变体
+// （StreamableCall + 按需转发 StreamInner/InnerTextMode/结构化流式错误，且 StateDelta 方法集
+// 与内层严格一致），再在此注册并包 NewToolWithIntent。
 func buildSkillTools(skillRepo skillpkg.Repository) map[string]trpctool.Tool {
 	skillTools := make(map[string]trpctool.Tool)
-	skillTools[constant.SkillLoadToolName] = toolskill.NewLoadTool(skillRepo)
-	skillTools[constant.SkillListDocsToolName] = toolskill.NewListDocsTool(skillRepo)
-	skillTools[constant.SkillSelectDocsToolName] = toolskill.NewSelectDocsTool(skillRepo)
+	skillTools[constant.SkillLoadToolName] = agenttool.NewToolWithIntent(toolskill.NewLoadTool(skillRepo))
+	skillTools[constant.SkillListDocsToolName] = agenttool.NewToolWithIntent(toolskill.NewListDocsTool(skillRepo))
+	skillTools[constant.SkillSelectDocsToolName] = agenttool.NewToolWithIntent(
+		toolskill.NewSelectDocsTool(skillRepo))
 	// 注册 HITL 工具（纯声明工具，路由到 hitl 节点处理，不经过 tool 节点执行）
-	skillTools[string(enumor.DeclToolHumanConfirm)] = hitl.GetToolWrapper()
+	skillTools[string(enumor.DeclToolHumanConfirm)] = agenttool.NewToolWithIntent(hitl.GetToolWrapper())
 	return skillTools
 }
 

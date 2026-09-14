@@ -82,7 +82,9 @@ func NewLLMAgent(defaultMdl trpcmodel.Model, modelsMap map[string]trpcmodel.Mode
 		opts = append(opts, llmagent.WithSkills(skillRepo))
 		opts = append(opts, llmagent.WithSkillLoadMode(llmagent.SkillLoadModeSession))
 		// NOTE: skill_run 幻觉严重，使用仅知识注入模式，避免模型编造 script 执行;
-		//  该模式下不支持在 skill 中引入 command / script
+		//  该模式下不支持在 skill 中引入 command / script。
+		// 若改为启用 skill_run / skill_exec，除切换 ToolProfile 外，还需在 buildSkillTools 注册，
+		// 并先让 NewToolWithIntent 支持 StreamableTool（见 tool_intent_wrapper 的 TODO）。
 		opts = append(opts, llmagent.WithSkillToolProfile(llmagent.SkillToolProfileKnowledgeOnly))
 		// TODO 增加 prompt cache 命中率，不再把 skill 注入到 system prompt，而是单独提供 tool result;
 		//  启用该模式需改造 tool result 的压缩功能
