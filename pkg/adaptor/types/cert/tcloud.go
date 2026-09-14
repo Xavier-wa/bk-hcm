@@ -83,9 +83,20 @@ func (opt TCloudCreateOption) Validate() error {
 // TCloudCert for cert Instance
 type TCloudCert struct {
 	*ssl.Certificates
+	// BkBizID is filled during ziyan cert sync and must not be exposed in list API responses.
+	BkBizID int64 `json:"-"`
 }
 
 // GetCloudID ...
 func (cert TCloudCert) GetCloudID() string {
 	return converter.PtrToVal(cert.CertificateId)
+}
+
+// GetTagMap collects cloud cert tags into a tag map.
+func (cert TCloudCert) GetTagMap() apicore.TagMap {
+	tagMap := make(apicore.TagMap, len(cert.Tags))
+	for _, tag := range cert.Tags {
+		tagMap.Set(converter.PtrToVal(tag.TagKey), converter.PtrToVal(tag.TagValue))
+	}
+	return tagMap
 }

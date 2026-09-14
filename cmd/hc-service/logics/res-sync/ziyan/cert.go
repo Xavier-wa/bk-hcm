@@ -42,10 +42,16 @@ import (
 	"hcm/pkg/tools/assert"
 	"hcm/pkg/tools/converter"
 	"hcm/pkg/tools/slice"
+	"hcm/pkg/ziyan"
 )
+
+// getBkBizIdByBs2Fn resolves bs2_name_id to bk_biz_id. Overridden in unit tests.
+var getBkBizIdByBs2Fn = ziyan.GetBkBizIdByBs2
 
 // SyncCertOption ...
 type SyncCertOption struct {
+	// BkBizID is used only when creating new certs before cloud tags are available.
+	// Sync callers must pass constant.UnassignedBiz; do not use a positive biz id during sync update.
 	BkBizID int64 `json:"bk_biz_id" validate:"omitempty"`
 	// should match params' cloud id
 	PreCachedCertList []typecert.TCloudCert
@@ -77,6 +83,11 @@ func (cli *client) Cert(kt *kit.Kit, params *SyncBaseParams, opt *SyncCertOption
 
 	if len(certFromCloud) == 0 && len(certFromDB) == 0 {
 		return new(SyncResult), nil
+	}
+
+	certFromCloud, err = cli.fillCertBkBizID(kt, certFromCloud)
+	if err != nil {
+		return nil, err
 	}
 
 	addSlice, updateMap, delCloudIDs := common.Diff[typecert.TCloudCert, *corecert.Cert[corecert.TCloudCertExtension]](
@@ -122,28 +133,10 @@ func (cli *client) updateCert(kt *kit.Kit, accountID string, updateMap map[strin
 	certs := make([]*protocloud.CertExtUpdateReq[corecert.TCloudCertExtension], 0)
 
 	for id, one := range updateMap {
-		domainJson, err := types.NewJsonField(one.SubjectAltName)
+		cert, err := convCertCloudToDBUpdate(id, accountID, one)
 		if err != nil {
-			return fmt.Errorf("json marshal extension failed, err: %w", err)
+			return err
 		}
-		tagMap := core.TagMap{}
-		for _, tag := range one.Tags {
-			tagMap.Set(converter.PtrToVal(tag.TagKey), converter.PtrToVal(tag.TagValue))
-		}
-		cert := &protocloud.CertExtUpdateReq[corecert.TCloudCertExtension]{
-			ID:               id,
-			Name:             converter.PtrToVal(one.Alias),
-			Vendor:           string(enumor.TCloudZiyan),
-			AccountID:        accountID,
-			Domain:           domainJson,
-			CertType:         enumor.CertType(converter.PtrToVal(one.CertificateType)),
-			EncryptAlgorithm: converter.PtrToVal(one.EncryptAlgorithm),
-			CertStatus:       strconv.FormatUint(converter.PtrToVal(one.Status), 10),
-			CloudCreatedTime: convTCloudTimeStd(converter.PtrToVal(one.InsertTime)),
-			CloudExpiredTime: convTCloudTimeStd(converter.PtrToVal(one.CertEndTime)),
-			Tags:             tagMap,
-		}
-
 		certs = append(certs, cert)
 	}
 
@@ -163,6 +156,47 @@ func (cli *client) updateCert(kt *kit.Kit, accountID string, updateMap map[strin
 	return nil
 }
 
+func buildCertBatchCreateReq(accountID string, addSlice []typecert.TCloudCert) (
+	*protocloud.CertBatchCreateReq[corecert.TCloudCertExtension], error) {
+
+	createReq := new(protocloud.CertBatchCreateReq[corecert.TCloudCertExtension])
+	for _, one := range addSlice {
+		domainJson, err := types.NewJsonField(one.SubjectAltName)
+		if err != nil {
+			return nil, fmt.Errorf("json marshal extension failed, err: %w", err)
+		}
+
+		createReq.Certs = append(createReq.Certs, protocloud.CertBatchCreate[corecert.TCloudCertExtension]{
+			CloudID:          one.GetCloudID(),
+			Name:             converter.PtrToVal(one.Alias),
+			Vendor:           string(enumor.TCloudZiyan),
+			AccountID:        accountID,
+			BkBizID:          one.BkBizID,
+			Domain:           domainJson,
+			CertType:         enumor.CertType(converter.PtrToVal(one.CertificateType)),
+			EncryptAlgorithm: converter.PtrToVal(one.EncryptAlgorithm),
+			CertStatus:       strconv.FormatUint(converter.PtrToVal(one.Status), 10),
+			CloudCreatedTime: convTCloudTimeStd(converter.PtrToVal(one.InsertTime)),
+			CloudExpiredTime: convTCloudTimeStd(converter.PtrToVal(one.CertEndTime)),
+			Tags:             one.GetTagMap(),
+		})
+	}
+	return createReq, nil
+}
+
+func applyCreateCertBkBizIDFallback(addSlice []typecert.TCloudCert, opt *SyncCertOption) []typecert.TCloudCert {
+	result := append([]typecert.TCloudCert(nil), addSlice...)
+	if opt == nil || opt.BkBizID <= 0 {
+		return result
+	}
+	for i := range result {
+		if result[i].BkBizID == constant.UnassignedBiz {
+			result[i].BkBizID = opt.BkBizID
+		}
+	}
+	return result
+}
+
 func (cli *client) createCert(kt *kit.Kit, accountID string, opt *SyncCertOption,
 	addSlice []typecert.TCloudCert) error {
 
@@ -170,40 +204,14 @@ func (cli *client) createCert(kt *kit.Kit, accountID string, opt *SyncCertOption
 		return nil
 	}
 
-	var createReq = new(protocloud.CertBatchCreateReq[corecert.TCloudCertExtension])
+	addSlice = applyCreateCertBkBizIDFallback(addSlice, opt)
 
-	for _, one := range addSlice {
-		domainJson, err := types.NewJsonField(one.SubjectAltName)
-		if err != nil {
-			return fmt.Errorf("json marshal extension failed, err: %w", err)
-		}
-
-		tagMap := core.TagMap{}
-		for _, tag := range one.Tags {
-			tagMap.Set(converter.PtrToVal(tag.TagKey), converter.PtrToVal(tag.TagValue))
-		}
-		cert := []protocloud.CertBatchCreate[corecert.TCloudCertExtension]{
-			{
-				CloudID:          one.GetCloudID(),
-				Name:             converter.PtrToVal(one.Alias),
-				Vendor:           string(enumor.TCloudZiyan),
-				AccountID:        accountID,
-				BkBizID:          opt.BkBizID,
-				Domain:           domainJson,
-				CertType:         enumor.CertType(converter.PtrToVal(one.CertificateType)),
-				EncryptAlgorithm: converter.PtrToVal(one.EncryptAlgorithm),
-				CertStatus:       strconv.FormatUint(converter.PtrToVal(one.Status), 10),
-				CloudCreatedTime: convTCloudTimeStd(converter.PtrToVal(one.InsertTime)),
-				CloudExpiredTime: convTCloudTimeStd(converter.PtrToVal(one.CertEndTime)),
-				Tags:             tagMap,
-			},
-		}
-
-		createReq.Certs = append(createReq.Certs, cert...)
+	createReq, err := buildCertBatchCreateReq(accountID, addSlice)
+	if err != nil {
+		return err
 	}
 
-	_, err := cli.dbCli.TCloudZiyan.BatchCreateCert(kt.Ctx, kt.Header(), createReq)
-	if err != nil {
+	if _, err := cli.dbCli.TCloudZiyan.BatchCreateCert(kt.Ctx, kt.Header(), createReq); err != nil {
 		logs.Errorf("[%s] request dataservice to create tcloud-ziyan cert failed, createReq: %+v, err: %v, rid: %s",
 			enumor.TCloudZiyan, createReq, err, kt.Rid)
 		return err
@@ -298,7 +306,64 @@ func (cli *client) listCertFromDB(kt *kit.Kit, params *SyncBaseParams) (
 	return result.Details, nil
 }
 
+// fillCertBkBizID resolves bk_biz_id from cloud Bs2 tags. Cloud is the source of truth for sync update.
+func (cli *client) fillCertBkBizID(kt *kit.Kit, certFromCloud []typecert.TCloudCert) (
+	[]typecert.TCloudCert, error) {
+
+	result := append([]typecert.TCloudCert(nil), certFromCloud...)
+	bs2NameIds := make([]int64, 0, len(result))
+	for i := range result {
+		meta := ziyan.ParseResourceMetaIgnoreErr(result[i].GetTagMap())
+		var bs2 int64 = ziyan.NotFoundID
+		if meta != nil && meta.Bs2NameID > 0 {
+			bs2 = meta.Bs2NameID
+		}
+		bs2NameIds = append(bs2NameIds, bs2)
+	}
+
+	bizIds, err := getBkBizIdByBs2Fn(kt, cli.dbCli, cli.cmdbCli, bs2NameIds)
+	if err != nil {
+		logs.Errorf("fail to get bkBizId by bs2NameIds for cert, err: %v, rid: %s", err, kt.Rid)
+		return nil, err
+	}
+	if len(bizIds) != len(result) {
+		return nil, fmt.Errorf("cert bizIds length(%d) not equal to cert length(%d)", len(bizIds), len(result))
+	}
+
+	for i := range result {
+		result[i].BkBizID = bizIds[i]
+	}
+	return result, nil
+}
+
+func convCertCloudToDBUpdate(id, accountID string, one typecert.TCloudCert) (
+	*protocloud.CertExtUpdateReq[corecert.TCloudCertExtension], error) {
+
+	domainJson, err := types.NewJsonField(one.SubjectAltName)
+	if err != nil {
+		return nil, fmt.Errorf("json marshal extension failed, err: %w", err)
+	}
+	return &protocloud.CertExtUpdateReq[corecert.TCloudCertExtension]{
+		ID:               id,
+		Name:             converter.PtrToVal(one.Alias),
+		Vendor:           string(enumor.TCloudZiyan),
+		AccountID:        accountID,
+		BkBizID:          one.BkBizID,
+		Domain:           domainJson,
+		CertType:         enumor.CertType(converter.PtrToVal(one.CertificateType)),
+		EncryptAlgorithm: converter.PtrToVal(one.EncryptAlgorithm),
+		CertStatus:       strconv.FormatUint(converter.PtrToVal(one.Status), 10),
+		CloudCreatedTime: convTCloudTimeStd(converter.PtrToVal(one.InsertTime)),
+		CloudExpiredTime: convTCloudTimeStd(converter.PtrToVal(one.CertEndTime)),
+		Tags:             one.GetTagMap(),
+	}, nil
+}
+
 func isCertChange(cloud typecert.TCloudCert, db *corecert.Cert[corecert.TCloudCertExtension]) bool {
+	if cloud.BkBizID != db.BkBizID {
+		return true
+	}
+
 	if converter.PtrToVal(cloud.Alias) != db.Name {
 		return true
 	}
