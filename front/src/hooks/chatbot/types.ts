@@ -1,4 +1,4 @@
-import { MessageRole, MessageStatus, type Message } from '@blueking/chat-x';
+import { MessageRole, MessageStatus, type Message, type ToolCall } from '@blueking/chat-x';
 
 // 前端内部使用的扩展消息类型（交叉类型，因为 Message 是联合类型无法直接扩展）
 export type HitlInterruptMessage = Message & {
@@ -26,7 +26,9 @@ export interface HitlInterruptValue {
   lineage_id: string;
   value: {
     question: string;
-    options: string[];
+    // agent 侧 human_confirm 的 options 是可选项：模型只给 question 时缺字段 / 为 null / 为空数组，
+    // 此时澄清退化为自由文本作答（默认澄清交互），不是异常数据
+    options?: string[];
   };
 }
 
@@ -207,6 +209,67 @@ export type HostApplySubmitMessage = Message & {
   // 实时流中点击「确认提交」后写入，标记已提交（历史回放无此字段，退化为后续 user 消息判断）
   __submitted?: boolean;
 };
+
+// 过程区摘要行（前端合成，不进协议）
+export const PROCESS_SUMMARY_TYPE = 'process.summary';
+
+export type ProcessSummaryMessage = Message & {
+  role: MessageRole.Assistant;
+  content: string;
+  __type: typeof PROCESS_SUMMARY_TYPE;
+  __turnKey: string;
+};
+
+export const PROCESS_TOOL_TYPE = 'process.tool';
+
+export type ProcessToolCall = ToolCall & {
+  toolMessage?: Message & { duration?: number };
+  // 该次调用的说明文案（来自参数 tool_intent），画在这一行上方
+  intent?: string;
+};
+
+export type ProcessToolMessage = Message & {
+  role: MessageRole.Assistant;
+  content: string;
+  __type: typeof PROCESS_TOOL_TYPE;
+  // 助手消息 content 里的正文（模型在调工具的同时说的话，通常为空）。
+  // 各次调用的说明文案不在这里，按参数拆到 __toolCalls[].intent 上
+  __intent: string;
+  __toolCalls: ProcessToolCall[];
+  // 过程区收起时为 false：消息仍留在列表里（chat-x 消息 v-for 按下标做 key，中途增删会让整轮 DOM 重建），只是不渲染
+  __visible: boolean;
+  // 本轮是否仍在进行；折叠态按此分段存取，本轮结束即整体落回收起，见 useProcessZone 的 detailKey
+  __live: boolean;
+  // 本轮是否仍在流式输出。与 __live 的差别：用户点了停止后 __live 仍为 true（保持展开），但工具不会再返回了。
+  // 决定「没有结果消息」的工具行画不画进行中转圈，见 process-tool-row 的 resolveState
+  __streaming: boolean;
+  // 每个工具行的展开态，按 toolCallId 索引；由 useProcessZone 统一持有，与过程区总开关无关
+  __rowExpanded: Record<string, boolean>;
+};
+
+export const PROCESS_THINKING_TYPE = 'process.thinking';
+
+export type ProcessThinkingMessage = Message & {
+  role: MessageRole.Assistant;
+  content: string;
+  __type: typeof PROCESS_THINKING_TYPE;
+  // 思考正文；不放 content，避免被 chat-x 的「复制」按非 reasoning 消息拼进去
+  __text: string;
+  // 思考耗时，缺省表示无耗时数据：AG-UI 协议的 REASONING_END 只有 messageId，/agui 的耗时全靠前端掐表，
+  // 而 /history 快照重放不出这段时钟（见 process-thinking.vue）。此时标题不画耗时段，不编 0ms
+  __duration?: number;
+  // 过程区收起时为 false：消息仍留在列表里（chat-x 消息 v-for 按下标做 key，中途增删会让整轮 DOM 重建），只是不渲染
+  __visible: boolean;
+  // 本轮是否仍在进行；折叠态按此分段存取，本轮结束即整体落回收起，见 useProcessZone 的 detailKey
+  __live: boolean;
+  // 思考正文的展开态；由 useProcessZone 统一持有，与过程区总开关无关
+  __expanded: boolean;
+};
+
+// 工具参数里的说明字段；画在工具行上方后从「参数」展示里剥掉
+export const TOOL_INTENT_ARG = 'tool_intent';
+// 旧协议遗留：TEXT_MESSAGE / history 曾用 tool-intent-{toolCallId} 传说明。现已改读参数，遇到仍丢弃、不画气泡
+export const TOOL_INTENT_PREFIX = 'tool-intent-';
 
 export enum EventType {
   RunStarted = 'RUN_STARTED',

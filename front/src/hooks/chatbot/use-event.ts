@@ -14,6 +14,7 @@ import {
   type SceneSwitchedValue,
 } from './types';
 import { pickRunId, stampMessageRunId } from './agent-feedback';
+import { appendToolCallDelta, isToolIntentId, trimToolCallArguments } from './tool-intent';
 import { genId, type MessageModule } from './use-message';
 
 // scene.switched 回调：由 useChatbot 在 session 模块就绪后注入（event 早于 session 创建）
@@ -69,6 +70,7 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
     const message = msg.getMessageByMessageId(messageId) as Message;
     currentReasoning = message;
     reasoningStartedAt = Date.now();
+    (currentReasoning as unknown as { duration: number }).duration = 0;
     return message;
   };
 
@@ -85,6 +87,19 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
     reasoningStartedAt = 0;
   };
 
+  // 工具调用耗时：协议不带该字段（AG-UI 的 ToolCallResultEvent 只有 messageId/toolCallId/content/role，见 api.md §2.4），
+  // 与思考耗时同一策略——前端掐表。按 toolCallId 存，支持一轮里并发调多个工具
+  const toolStartedAt = new Map<string, number>();
+
+  // 结算一次工具调用的耗时：优先取事件下发值（协议目前没有），否则用前端计时；都拿不到就不写该字段，不补 0
+  const finalizeToolDuration = (toolCallId: string, eventDuration?: unknown): number | undefined => {
+    const startedAt = toolStartedAt.get(toolCallId);
+    toolStartedAt.delete(toolCallId);
+    const fromEvent = typeof eventDuration === 'number' && Number.isFinite(eventDuration) && eventDuration >= 0;
+    if (fromEvent) return eventDuration as number;
+    return startedAt ? Date.now() - startedAt : undefined;
+  };
+
   const handleEvent = (event: Record<string, unknown>) => {
     const eventRunId = pickRunId(event);
     if (eventRunId) currentRunId = eventRunId;
@@ -92,6 +107,8 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
     switch (event.type) {
       // ---- 文本消息 ----
       case EventType.TextMessageStart: {
+        // 旧协议遗留：tool-intent-* 曾承载工具说明，现已改读参数 tool_intent，仍丢弃以免再开气泡
+        if (isToolIntentId(event.messageId)) break;
         pushMessage({
           role: (event.role as string) || MessageRole.Assistant,
           content: '',
@@ -102,16 +119,19 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
         break;
       }
       case EventType.TextMessageContent: {
+        if (isToolIntentId(event.messageId)) break;
         stampMessageRunId(msg.getMessageByMessageId(event.messageId as string), currentRunId);
         msg.appendContent(event.messageId as string, event.delta as string);
         break;
       }
       case EventType.TextMessageEnd: {
+        if (isToolIntentId(event.messageId)) break;
         const m = msg.getMessageByMessageId(event.messageId as string);
         if (m) m.status = MessageStatus.Complete;
         break;
       }
       case EventType.TextMessageChunk: {
+        if (isToolIntentId(event.messageId)) break;
         const m = msg.getCurrentStreamingMessage();
         // 推理消息的 content 是数组，不能被当作正文续写；此时另起一条 assistant 消息
         if (m && m.role !== MessageRole.Reasoning) {
@@ -145,6 +165,7 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
         const segments = currentReasoning.content as string[];
         if (segments.length === 0) break;
         segments[segments.length - 1] += event.delta;
+        (currentReasoning as unknown as { duration: number }).duration = Date.now() - reasoningStartedAt;
         break;
       }
       case EventType.ReasoningMessageEnd:
@@ -159,6 +180,7 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
         if (typeof event.delta !== 'string') break;
         const message = currentReasoning ?? startReasoning();
         (message.content as string[]).push(event.delta);
+        (message as unknown as { duration: number }).duration = Date.now() - reasoningStartedAt;
         break;
       }
       case EventType.ReasoningEncryptedValue:
@@ -167,6 +189,7 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
 
       // ---- 工具调用 ----
       case EventType.ToolCallStart: {
+        toolStartedAt.set(event.toolCallId as string, Date.now());
         pushMessage({
           role: MessageRole.Assistant,
           content: '',
@@ -193,24 +216,35 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
         if (m) {
           const toolCalls = (m as { toolCalls?: ToolCall[] }).toolCalls || [];
           const tc = toolCalls.find((t) => t.id === event.toolCallId);
-          if (tc) tc.function.arguments += event.delta as string;
+          if (tc) tc.function.arguments = appendToolCallDelta(tc.function.arguments, event.delta);
         }
         break;
       }
       case EventType.ToolCallEnd: {
         const m = getToolCallMessage(event.toolCallId as string);
-        if (m) m.status = MessageStatus.Complete;
+        if (m) {
+          m.status = MessageStatus.Complete;
+          const toolCalls = (m as { toolCalls?: ToolCall[] }).toolCalls || [];
+          const tc = toolCalls.find((t) => t.id === event.toolCallId);
+          // 现网 delta 形如 ` {"query":"...","tool_intent":"..."} `，入参给完后去掉首尾空格
+          if (tc) tc.function.arguments = trimToolCallArguments(tc.function.arguments);
+        }
+        // 入参给完才真正开始执行工具，把起点挪到这里：否则耗时里混进模型逐 token 吐参数的时间。
+        // 缺 TOOL_CALL_END 的通道自动沿用 TOOL_CALL_START 的时间戳
+        toolStartedAt.set(event.toolCallId as string, Date.now());
         break;
       }
       case EventType.ToolCallResult: {
+        const toolCallId = event.toolCallId as string;
+        const duration = finalizeToolDuration(toolCallId, event.duration);
         pushMessage({
           role: MessageRole.Tool,
           content: event.content as string,
           id: genId(),
           messageId: (event.messageId as string) || genId(),
           status: MessageStatus.Complete,
-          toolCallId: event.toolCallId as string,
-          duration: (event.duration as number) || 0,
+          toolCallId,
+          ...(duration === undefined ? {} : { duration }),
         } as unknown as Message);
         break;
       }
@@ -228,6 +262,8 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
       case EventType.RunError: {
         // 已产出的推理正文仍然有效，按完成收尾；错误由随后的 assistant 气泡承载
         finalizeReasoning();
+        // 没等到结果的工具不会再有 TOOL_CALL_RESULT，清掉计时避免跨轮累积
+        toolStartedAt.clear();
         const streaming = msg.getCurrentStreamingMessage();
         if (streaming) streaming.status = MessageStatus.Complete;
         pushMessage({
@@ -242,6 +278,7 @@ export function useEventHandler(msg: MessageModule, deps: EventHandlerDeps = {})
       }
       case EventType.RunFinished: {
         finalizeReasoning();
+        toolStartedAt.clear();
         const streaming = msg.getCurrentStreamingMessage();
         if (streaming) streaming.status = MessageStatus.Complete;
         currentRunId = '';

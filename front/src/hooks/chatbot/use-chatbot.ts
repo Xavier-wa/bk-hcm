@@ -254,6 +254,7 @@ export function useChatbot(options: UseChatbotOptions = {}) {
   return {
     messages: messageModule.messages,
     isChatting: streamModule.isChatting,
+    stayProcessExpanded: streamModule.stayProcessExpanded,
     isCurrentSessionRemoteBusy,
     sessions: sessionModule.sessions,
     currentSessionCode: sessionModule.currentSessionCode,

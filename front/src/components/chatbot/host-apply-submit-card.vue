@@ -5,6 +5,7 @@ import { FilliscreenLine, UnfullScreen, Warn } from 'bkui-vue/lib/icon';
 
 import { type HostApplySuborder } from '@/hooks/chatbot/types';
 import { useChatbotMode } from '@/hooks/chatbot/provide';
+import { useFollowScrollOnMount } from '@/hooks/chatbot/use-follow-scroll';
 import CustomMessageCard from './custom-message-card.vue';
 import HostApplyPreorderTable from './host-apply-preorder-table.vue';
 
@@ -19,6 +20,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), { readonly: false, locked: false });
+
+useFollowScrollOnMount();
 
 // 应用内「最大化」覆盖层：全页保留顶部导航栏可见，浮窗则整屏盖住不露顶部
 const isFloating = useChatbotMode() === 'floating';

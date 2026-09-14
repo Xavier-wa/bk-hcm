@@ -1,0 +1,198 @@
+{
+  "id": "feat-agent-reply-ux",
+  "title": "agent回复交互体验优化-前端",
+  "currentStage": "done",
+  "createdAt": "2026-09-02T04:03:55.626Z",
+  "updatedAt": "2026-09-04T06:27:34.171Z",
+  "artifacts": {
+    "prd": [
+      {
+        "ref": ".hcmfe/workflow/feat-agent-reply-ux/prd.md",
+        "kind": "file",
+        "addedAt": "2026-09-02T06:45:08.287Z"
+      }
+    ],
+    "design": [
+      {
+        "ref": "https://www.figma.com/design/nKX02SsMK8StZYAEEw0MfK/业务资源?node-id=2167-21158",
+        "kind": "url",
+        "addedAt": "2026-09-02T06:51:08.395Z"
+      },
+      {
+        "ref": ".hcmfe/workflow/feat-agent-reply-ux/design.md",
+        "kind": "file",
+        "addedAt": "2026-09-02T06:51:09.291Z"
+      },
+      {
+        "ref": "https://www.figma.com/design/nKX02SsMK8StZYAEEw0MfK/业务资源?node-id=2229-17671",
+        "kind": "url",
+        "addedAt": "2026-09-02T06:51:09.660Z"
+      }
+    ],
+    "api": [
+      {
+        "ref": ".hcmfe/workflow/feat-agent-reply-ux/api.md",
+        "kind": "file",
+        "addedAt": "2026-09-02T07:15:31.397Z"
+      }
+    ],
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-agent-reply-ux/coding.md",
+        "kind": "file",
+        "addedAt": "2026-09-02T07:29:06.220Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-agent-reply-ux/test.md",
+        "kind": "file",
+        "addedAt": "2026-09-04T03:59:32.993Z"
+      }
+    ]
+  },
+  "approvals": {
+    "prd": {
+      "stage": "prd",
+      "approvedAt": "2026-09-02T06:48:26.946Z",
+      "note": "user confirmed PRD and asked to advance to design; Q-001 closed: keep existing tool detail component"
+    },
+    "design": {
+      "stage": "design",
+      "approvedAt": "2026-09-02T07:05:38.580Z",
+      "note": "user confirmed Design; tool row title follows actual call (current copy is 调用工具 xxx), not hardcoded MCP; icon and comp intake completed"
+    },
+    "api": {
+      "stage": "api",
+      "approvedAt": "2026-09-02T07:22:37.906Z",
+      "note": "user confirmed API and asked to advance to coding; no new HTTP, consume existing agui/history"
+    },
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-09-04T03:55:32.908Z",
+      "note": "user confirmed advancing the workflow after coding round 3 (per-item collapse on completion, tool row pending 4th state, user bubble aligned to Figma 2060:20561 + multiline 2229:17681, floating window default width 400->500 with @container breakpoint 380->460); lint --fix clean except pre-existing eqeqeq warning; coding artifact seated align; commit NOT executed yet (awaiting explicit 确认提交)"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-09-04T06:26:29.228Z",
+      "note": "user confirmed test.md results are OK (P0/P1 all PASS, including P0-07 history tool-intent pairing and P0-15 no-option HITL history replay); advancing test to done"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "prd",
+      "at": "2026-09-02T04:03:55.626Z"
+    },
+    {
+      "from": "prd",
+      "to": "design",
+      "at": "2026-09-02T06:48:26.946Z",
+      "note": "user confirmed PRD and asked to advance to design; Q-001 closed: keep existing tool detail component"
+    },
+    {
+      "from": "design",
+      "to": "api",
+      "at": "2026-09-02T07:05:38.580Z",
+      "note": "user confirmed Design; tool row title follows actual call (current copy is 调用工具 xxx), not hardcoded MCP; icon and comp intake completed"
+    },
+    {
+      "from": "api",
+      "to": "coding",
+      "at": "2026-09-02T07:22:37.906Z",
+      "gitHead": "7cde2f4240ca3c71a73e024ca3a91c3f98514aa1",
+      "note": "user confirmed API and asked to advance to coding; no new HTTP, consume existing agui/history"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-09-04T03:55:32.908Z",
+      "note": "user confirmed advancing the workflow after coding round 3 (per-item collapse on completion, tool row pending 4th state, user bubble aligned to Figma 2060:20561 + multiline 2229:17681, floating window default width 400->500 with @container breakpoint 380->460); lint --fix clean except pre-existing eqeqeq warning; coding artifact seated align; commit NOT executed yet (awaiting explicit 确认提交)"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-09-04T06:26:29.228Z",
+      "note": "user confirmed test.md results are OK (P0/P1 all PASS, including P0-07 history tool-intent pairing and P0-15 no-option HITL history replay); advancing test to done"
+    }
+  ],
+  "branch": "feat-agent-reply-ux",
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137818447",
+    "parentId": "1069995598137717911",
+    "items": [
+      {
+        "workspaceId": "69995598",
+        "objectType": "story",
+        "itemId": "1069995598137818447",
+        "parentId": "1069995598137717911"
+      },
+      {
+        "workspaceId": "69995598",
+        "objectType": "story",
+        "itemId": "1069995598137725247"
+      }
+    ]
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-full": {
+      "status": "completed",
+      "at": "2026-09-02T06:38:09.538Z",
+      "note": "clarification written back to TAPD description (original section preserved, status unchanged); tapd-analyst completed with F-001 to F-007 net list"
+    },
+    "hcm-design-icon-intake": {
+      "status": "completed",
+      "at": "2026-09-02T07:05:26.294Z",
+      "note": "filled design.md 3.x project icon candidates: AngleUp/AngleDown pair, check-circle-fill, clock fallback"
+    },
+    "hcm-design-comp-intake": {
+      "status": "completed",
+      "at": "2026-09-02T07:05:32.998Z",
+      "note": "filled design.md 3.y project columns: all adjacent, no page/comp skills, paths under chatbot and chat-x"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-09-04T04:05:42.306Z",
+      "note": "touchedModules = base + chatbot, both hasDrift -> gaps non-empty. chatbot.md: added two sections that the in-flight hot-writes had missed -- user bubble vs chat-x size tier (why font-size is hardcoded instead of --ai-font-size; why .ai-text-content needs pre-wrap for Shift+Enter newlines) and floating-window width <-> card @container breakpoint coupling (default-width 500, breakpoint 460, three cards share the container-type host); key-file table updated. base.md: its drift was 100% chatbot-owned files from the intentional wide-glob overlap already documented in the ownership section, so no business content was copied in; instead added a 'how to read base drift' convention to the shared-layer boundary section, then deepened. Both modules now hasDrift=false. promotionQueue totalOpen=0; promotion candidates raised with user separately (pre-wrap on container vs value node; @container breakpoint coupled to container default width)."
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-09-04T06:27:34.170Z",
+      "note": "story 1069995598137818447: status_12 -> status_13 -> status_14 (done), owner unchanged; story 1069995598137725247: status_12 -> status_13 -> status_14 (done), owner unchanged; parent 1069995598137717911 stays status_11 (doing) because sibling backend story is still status_10; rollup shouldAdvance=false"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/components/chatbot/custom-message-card.vue",
+        "src/components/ai-assistant/index.vue",
+        "src/hooks/chatbot/types.ts",
+        "src/hooks/chatbot/tool-intent.ts",
+        "src/hooks/chatbot/use-event.ts",
+        "src/hooks/chatbot/use-stream.ts",
+        "src/hooks/chatbot/use-chatbot.ts",
+        "src/hooks/chatbot/use-process-zone.ts",
+        "src/components/chatbot/process-zone-summary.vue",
+        "src/components/chatbot/process-thinking.vue",
+        "src/components/chatbot/process-tool-row.vue",
+        "src/components/chatbot/chat-message-list.vue",
+        "src/hooks/chatbot/use-follow-scroll.ts",
+        "src/components/chatbot/account-select-card.vue",
+        "src/components/chatbot/host-apply-recommend-card.vue",
+        "src/components/chatbot/host-apply-preorder-card.vue",
+        "src/components/chatbot/host-apply-submit-card.vue",
+        "process-thinking.vue",
+        "use-follow-scroll.ts",
+        "src/hooks/chatbot/use-hitl.ts",
+        "src/components/chatbot/hitl-interrupt-card.vue",
+        "use-event.ts",
+        "use-hitl.ts"
+      ],
+      "contentFingerprint": "ba66c0a147c19769df5c3508673bc1148a0a2aae",
+      "codeBaseline": "6e661b2c7019c93a7319d9b3484c61fec00c4ebc",
+      "seatedAt": "2026-09-04T03:54:48.344Z"
+    }
+  }
+}

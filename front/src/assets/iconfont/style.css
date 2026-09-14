@@ -461,3 +461,12 @@ url("fonts/iconcool.eot?#iefix") format("embedded-opentype");
 .bkhcm-icon-vector:before {
 	content: "\e19b";
 }
+.bkhcm-icon-circle-error:before {
+	content: "\e19c";
+}
+.bkhcm-icon-circle-success:before {
+	content: "\e19d";
+}
+.bkhcm-icon-circle-time:before {
+	content: "\e19e";
+}

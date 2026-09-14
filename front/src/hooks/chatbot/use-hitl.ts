@@ -33,6 +33,9 @@ export const useHitl = (messages: Ref<Message[]>) => {
     const options = hitlContent?.value.options ?? [];
 
     if (!userAnswer) return { readonly: true, value: '' };
+    // 无 options 的默认澄清：自由文本是唯一可能的作答形态，后继 user 消息即答案，直接回显原文；
+    // 有 options 却未命中时仍按「其它/未命中」留空，不改既有保守判定
+    if (options.length === 0) return { readonly: true, value: userAnswer };
     if (options.includes(userAnswer)) return { readonly: true, value: userAnswer };
 
     return { readonly: true, value: '' };

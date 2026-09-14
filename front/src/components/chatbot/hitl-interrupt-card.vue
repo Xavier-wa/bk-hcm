@@ -4,6 +4,7 @@ import { Button, Input } from 'bkui-vue';
 import { Warn } from 'bkui-vue/lib/icon';
 
 import { type HitlInterruptValue } from '@/hooks/chatbot/types';
+import { useFollowScrollOnMount } from '@/hooks/chatbot/use-follow-scroll';
 
 interface Props {
   content: HitlInterruptValue;
@@ -20,6 +21,8 @@ const props = withDefaults(defineProps<Props>(), {
   locked: false,
 });
 
+useFollowScrollOnMount();
+
 const selectedOption = ref('');
 const customInput = ref('');
 const isConfirmed = ref(false);
@@ -27,9 +30,13 @@ const isConfirmed = ref(false);
 const readonlyAnswer = computed(() => props.readonlyValue.trim());
 const isReadonlyMode = computed(() => props.readonly || Boolean(readonlyAnswer.value));
 
+// options 为可选项，缺字段 / null 时归一为空数组，此时澄清退化为自由文本作答
+const options = computed(() => props.content.value.options ?? []);
+const hasOptions = computed(() => options.value.length > 0);
+
 watch(
-  () => [isReadonlyMode.value, readonlyAnswer.value, props.content.value.options] as const,
-  ([readonlyMode, answer, options]) => {
+  () => [isReadonlyMode.value, readonlyAnswer.value, options.value] as const,
+  ([readonlyMode, answer, currentOptions]) => {
     if (!readonlyMode) return;
     isConfirmed.value = true;
     if (!answer) {
@@ -37,18 +44,25 @@ watch(
       customInput.value = '';
       return;
     }
-    if (options.includes(answer)) {
+    if (currentOptions.includes(answer)) {
       selectedOption.value = answer;
       customInput.value = '';
       return;
     }
     selectedOption.value = '';
-    customInput.value = '';
+    // 无选项时答案只能来自自由输入，只读态回显原文；有选项却未命中仍留空，避免误判为自定义输入
+    customInput.value = currentOptions.length === 0 ? answer : '';
   },
   { immediate: true },
 );
 
-const showCustomInput = computed(() => !isReadonlyMode.value);
+// 只读态下仍需展示已回显的自由文本答案，否则历史回放只剩一句「未选择或输入自定义」
+const showCustomInput = computed(() => !isReadonlyMode.value || Boolean(customInput.value));
+// 无选项时输入框是唯一作答区，不再叫「其他选项」
+const customPlaceholder = computed(() => {
+  if (isReadonlyMode.value) return '未填写内容';
+  return hasOptions.value ? '请输入自定义选项内容...' : '请输入您的回复...';
+});
 const showReadonlyEmpty = computed(() => isReadonlyMode.value && !selectedOption.value && !customInput.value);
 // F-004 锁定横幅：仅在仍可交互（未只读）且被他处锁定时展示
 const showLockedBanner = computed(() => props.locked && !isReadonlyMode.value);
@@ -82,15 +96,15 @@ const handleConfirm = () => {
 </script>
 
 <template>
-  <div class="hitl-interrupt-card">
+  <div class="hitl-interrupt-card ai-turn-card">
     <div v-if="showLockedBanner" class="hitl-locked-banner">
       <Warn class="hitl-locked-icon" />
       <span class="hitl-locked-text">该会话正在其它页面操作中，最新状态稍后自动同步…</span>
     </div>
     <div class="hitl-question">{{ content.value.question }}</div>
-    <div class="hitl-options">
+    <div v-if="hasOptions" class="hitl-options">
       <div
-        v-for="option in content.value.options"
+        v-for="option in options"
         :key="option"
         class="hitl-option"
         :class="{ 'is-selected': selectedOption === option, 'is-disabled': isInteractionDisabled }"
@@ -103,12 +117,12 @@ const handleConfirm = () => {
       </div>
     </div>
     <div v-if="showCustomInput" class="hitl-custom">
-      <div class="hitl-custom-label">其他选项：</div>
+      <div v-if="hasOptions" class="hitl-custom-label">其他选项：</div>
       <Input
         :model-value="customInput"
         :disabled="isInteractionDisabled"
         :readonly="isReadonlyMode"
-        :placeholder="isReadonlyMode ? '未填写内容' : '请输入自定义选项内容...'"
+        :placeholder="customPlaceholder"
         @update:model-value="handleInputChange"
       />
     </div>

@@ -10,6 +10,7 @@ import {
 } from '@/hooks/chatbot/types';
 import { toSpecDisplayItems } from '@/hooks/chatbot/host-apply-display';
 import { ensureDeviceMeta, type HostApplyDeviceMeta } from '@/hooks/chatbot/host-apply-device-meta';
+import { useFollowScrollOnMount } from '@/hooks/chatbot/use-follow-scroll';
 import ReqTypeValue from '@/components/display-value/req-type-value.vue';
 import CustomMessageCard from './custom-message-card.vue';
 import HostApplyAdjustDialog from './host-apply-adjust-dialog.vue';
@@ -32,6 +33,8 @@ const props = withDefaults(defineProps<Props>(), {
   initialIndex: 0,
   locked: false,
 });
+
+useFollowScrollOnMount();
 
 // A 的「调整配置」为本地预览编辑（无明确 agent 回传语义），仅更新当前方案展示，故持有本地副本
 const localRecommendations = ref<HostApplyRecommendation[]>(cloneDeep(props.content.value.recommendations ?? []));
@@ -218,7 +221,8 @@ const handleAdjustSave = (suborder: HostApplySuborder) => {
 }
 
 // 窄容器（浮窗）：label 收窄并左对齐（flex 容器需改 justify-content，text-align 无效）
-@container (max-width: 380px) {
+// 阈值与 custom-message-card.vue 保持一致（由浮窗默认宽 500 反推，见那里的说明）
+@container (max-width: 460px) {
   .ha-spec-row .ha-spec-label {
     width: 100px;
     justify-content: flex-start;

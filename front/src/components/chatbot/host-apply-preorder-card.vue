@@ -6,6 +6,7 @@ import { FilliscreenLine, UnfullScreen } from 'bkui-vue/lib/icon';
 
 import { type HostApplyPreorderValue, type HostApplySuborder } from '@/hooks/chatbot/types';
 import { useChatbotMode } from '@/hooks/chatbot/provide';
+import { useFollowScrollOnMount } from '@/hooks/chatbot/use-follow-scroll';
 import CustomMessageCard from './custom-message-card.vue';
 import HostApplyPreorderTable from './host-apply-preorder-table.vue';
 import HostApplyAdjustDialog from './host-apply-adjust-dialog.vue';
@@ -25,6 +26,8 @@ const props = withDefaults(defineProps<Props>(), {
   readonlySuborders: () => [],
   locked: false,
 });
+
+useFollowScrollOnMount();
 
 const localSuborders = ref<HostApplySuborder[]>(cloneDeep(props.content.value.suborders ?? []));
 const edited = ref(false);

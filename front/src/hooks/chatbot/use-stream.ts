@@ -27,6 +27,7 @@ import {
   type HostApplySuborder,
 } from './types';
 import { isSnapshotRunMarker, pickRunId, pickSnapshotActivityRunId, stampMessageRunId } from './agent-feedback';
+import { isToolIntentHistoryItem, normalizeToolCallsArguments } from './tool-intent';
 import { genId, type MessageModule } from './use-message';
 import type { EventModule } from './use-event';
 
@@ -68,6 +69,8 @@ const readSSE = async (
 export function useStream(msg: MessageModule, event: EventModule) {
   const isChatting = ref(false);
   const sessionCode = ref('');
+  // 用户点「停止生成」后过程区保持展开，直到下一轮 streamChat / 纯历史 SNAPSHOT
+  const stayProcessExpanded = ref(false);
   let abortController: AbortController | null = null;
   // 标记本次流是否被用户主动停止（点击「停止」），用于收尾时保证展示「已停止生成」提示
   let stoppedByUser = false;
@@ -145,10 +148,13 @@ export function useStream(msg: MessageModule, event: EventModule) {
     const question = raw.value?.question;
     const options = raw.value?.options;
 
-    if (typeof question !== 'string' || !Array.isArray(options)) return null;
+    if (typeof question !== 'string') return null;
 
-    const normalizedOptions = options.filter((item): item is string => typeof item === 'string');
-    if (normalizedOptions.length === 0) return null;
+    // options 缺字段 / null / 空数组三种「无选项」一律归一为空数组，交给卡片渲染自由输入；
+    // 不能据此判 null，否则默认澄清会落到 activity 兜底渲染成「活动消息：hitl.interrupt」
+    const normalizedOptions = Array.isArray(options)
+      ? options.filter((item): item is string => typeof item === 'string')
+      : [];
 
     return {
       checkpoint_id: typeof raw.checkpoint_id === 'string' ? raw.checkpoint_id : '',
@@ -282,8 +288,16 @@ export function useStream(msg: MessageModule, event: EventModule) {
       messageId: (raw.id as string) || genId(),
       status: MessageStatus.Complete,
       ...(runId ? { __runId: runId } : {}),
-      ...(raw.toolCalls ? { toolCalls: raw.toolCalls } : {}),
-      ...(raw.toolCallId ? { toolCallId: raw.toolCallId, duration: raw.duration ?? 0 } : {}),
+      ...(raw.toolCalls ? { toolCalls: normalizeToolCallsArguments(raw.toolCalls) } : {}),
+      // 快照里没有工具耗时（前端掐的表重放不出来，见 api.md §3），缺失就不写该字段——工具行省掉耗时段，不显示 0ms
+      ...(raw.toolCallId
+        ? {
+            toolCallId: raw.toolCallId,
+            ...(typeof raw.duration === 'number' && Number.isFinite(raw.duration) && raw.duration > 0
+              ? { duration: raw.duration }
+              : {}),
+          }
+        : {}),
     };
 
     if (role === 'activity' && raw.activityType === 'CUSTOM') {
@@ -359,16 +373,13 @@ export function useStream(msg: MessageModule, event: EventModule) {
       ? (role as MessageRole)
       : MessageRole.Assistant;
 
-    // 历史思考记录默认折叠：chat-x ReasoningMessage 把 message 整包当 props，collapsed 缺省为 false；
-    // history 快照通常不带 duration，无法走组件「有 duration 则自动折叠」的路径。
+    // 历史思考记录默认折叠：chat-x ReasoningMessage 把 message 整包当 props，collapsed 缺省为 false。
+    // 快照重放不出思考耗时（后端 reduce 丢弃 REASONING_END，快照消息只有 id/role/content），
+    // 缺值时不补 0：留空由过程区省掉耗时段，避免展示成「耗时 0ms」。
+    const hasDuration = typeof raw.duration === 'number' && Number.isFinite(raw.duration) && raw.duration > 0;
     const reasoningProps =
       normalizedRole === MessageRole.Reasoning
-        ? {
-            collapsed: true,
-            ...(typeof raw.duration === 'number' && Number.isFinite(raw.duration) && raw.duration > 0
-              ? { duration: raw.duration }
-              : {}),
-          }
+        ? { collapsed: true, ...(hasDuration ? { duration: raw.duration } : {}) }
         : {};
 
     return {
@@ -459,6 +470,7 @@ export function useStream(msg: MessageModule, event: EventModule) {
     const controller = new AbortController();
     abortController = controller;
     isChatting.value = true;
+    stayProcessExpanded.value = false;
 
     try {
       const response = await agentApi.streamChat(
@@ -514,6 +526,7 @@ export function useStream(msg: MessageModule, event: EventModule) {
     if (!isChatting.value) return;
     // 标记为用户主动停止，收尾时保证展示「已停止生成」（覆盖空白气泡场景）
     stoppedByUser = true;
+    stayProcessExpanded.value = true;
     abortController?.abort();
     if (sessionCode.value) {
       agentApi.cancelRun(sessionCode.value);
@@ -557,6 +570,7 @@ export function useStream(msg: MessageModule, event: EventModule) {
           let lastRecommend: HostApplyRecommendMessage | undefined;
           let lastPreorder: HostApplyPreorderMessage | undefined;
           let lastSubmit: HostApplySubmitMessage | undefined;
+          stayProcessExpanded.value = false;
           // 历史 SNAPSHOT 新增：用 activityType=RUN_STARTED/FINISHED 标出每轮 runId（不在 assistant 消息根上）
           let snapshotRunId = '';
           for (const raw of items) {
@@ -571,6 +585,8 @@ export function useStream(msg: MessageModule, event: EventModule) {
               continue;
             }
             if (isInternalActivity(raw)) continue;
+            // 旧协议遗留：history 里曾有平级 tool-intent-* 消息。说明已改读参数 tool_intent，仍丢弃以免再出气泡
+            if (isToolIntentHistoryItem(raw)) continue;
 
             const message = toHistoryMessage(raw);
             stampMessageRunId(message, snapshotRunId);
@@ -619,7 +635,7 @@ export function useStream(msg: MessageModule, event: EventModule) {
     }
   };
 
-  return { isChatting, sessionCode, streamChat, stopGeneration, abortStream, fetchHistory };
+  return { isChatting, stayProcessExpanded, sessionCode, streamChat, stopGeneration, abortStream, fetchHistory };
 }
 
 export type StreamModule = ReturnType<typeof useStream>;

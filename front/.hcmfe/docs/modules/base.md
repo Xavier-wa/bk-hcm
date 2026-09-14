@@ -21,6 +21,8 @@
 
 base 的 `src/components/**` 宽 glob 会把各业务模块的组件一并命中，判断归属见上一节。真正属于共享层、且有**非直觉约束**的接缝记录在此：
 
+> **base 的漂移信号怎么读**（`docs_status` 几乎每个前端改动都会把 base 标 stale）：先按上一节判归属。若本轮命中的文件**全部**属于某业务模块（典型：`src/components/chatbot/**`、`src/hooks/chatbot/**`），那是宽 glob 的**有意重叠**造成的重复计数，不是 base 的文档缺口——正文**不要**补业务内容（那会与业务模块文档重复），更新完业务模块后直接 `docs_deepen({ id: 'base' })` 刷基线即可。只有本轮真的动了共享层文件时，才往下面的列表里增量补接缝。
+
 - **选项类通用组件的 `list` / `list-generator` 必须传稳定函数引用**（`src/components/form/list.vue` = `hcm-form-list`，`src/components/search/list.vue` 转发到它）。组件内部用 `watchEffect` 追踪该 prop 的**函数身份**，模板里写内联箭头函数会导致任意重渲染（改同表单的无关输入框、窗口 resize）都重新拉一次接口。完整机理、正确写法与「为何不会破坏级联刷新」见 [model](model.md) 的「关键约定（务必遵守）」。
 
 ## 架构北极星（目标形态）

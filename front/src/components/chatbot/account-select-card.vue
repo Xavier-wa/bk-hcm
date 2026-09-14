@@ -5,6 +5,7 @@ import { Done } from 'bkui-vue/lib/icon';
 
 import { type AccountSelectInterruptValue, type AccountSelectOption } from '@/hooks/chatbot/types';
 import { getVendorDisplay } from '@/hooks/chatbot/vendor-display';
+import { useFollowScrollOnMount } from '@/hooks/chatbot/use-follow-scroll';
 import CustomMessageCard from './custom-message-card.vue';
 
 interface Props {
@@ -21,6 +22,8 @@ const props = withDefaults(defineProps<Props>(), {
   readonlyValue: '',
   locked: false,
 });
+
+useFollowScrollOnMount();
 
 const selectedId = ref('');
 const isConfirmed = ref(false);
@@ -209,7 +212,8 @@ const handleConfirm = () => {
 
 // 窄容器（浮窗）：厂商卡纵向整行铺满，并整体收紧图标与间距使其更紧凑。
 // 容器基准为外壳 .custom-msg-card（祖先），@container 命中其后代选项即可。
-@container (max-width: 380px) {
+// 阈值与 custom-message-card.vue 保持一致（由浮窗默认宽 500 反推，见那里的说明）
+@container (max-width: 460px) {
   .as-options {
     grid-template-columns: 1fr;
     gap: 8px;

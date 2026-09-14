@@ -47,7 +47,7 @@ const showLockedBanner = computed(() => props.locked && !props.readonly);
 </script>
 
 <template>
-  <div class="custom-msg-card">
+  <div class="custom-msg-card ai-turn-card">
     <!-- 只读收起态：摘要行 -->
     <div v-if="showCollapsedSummary" class="cmc-summary" @click="toggle">
       <Success class="cmc-summary-check" />
@@ -195,8 +195,11 @@ const showLockedBanner = computed(() => props.locked && !props.readonly);
   }
 }
 
-// 窄容器（浮窗）：摘要收紧、头部换行、操作按钮整行铺满
-@container (max-width: 380px) {
+// 窄容器（浮窗）：摘要收紧、头部换行、操作按钮整行铺满。
+// 阈值 460 由浮窗默认宽 500 反推：卡片内容盒 = 窗宽 − 48（普通轮次）/ − 96（过程区轮次），
+// 500 时分别是 452 / 404，都要留在紧凑版式；全页卡片约 900，远在阈值之上不受影响。
+// 三处 @container 共用同一基准（.custom-msg-card 的 container-type），改一处要一起改
+@container (max-width: 460px) {
   .cmc-summary {
     .cmc-summary-text {
       font-size: 12px;

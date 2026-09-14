@@ -181,7 +181,7 @@ defineExpose<AiAssistantExpose>({
       <!-- 可拖拽 + 可缩放容器 -->
       <DraggableContainer
         ref="draggableContainerRef"
-        :default-width="400"
+        :default-width="500"
         :default-y="0"
         :max-width-percent="80"
         :visible="panelVisible"
