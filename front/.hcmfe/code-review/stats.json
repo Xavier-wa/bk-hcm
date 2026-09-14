@@ -36,6 +36,17 @@
       "firstHitAt": "2026-08-20T02:58:51.908Z",
       "lastHitAt": "2026-08-20T02:58:51.908Z",
       "contexts": []
+    },
+    "guard-async-watch-races": {
+      "hits": 1,
+      "accepted": 0,
+      "rejected": 0,
+      "waived": 0,
+      "firstHitAt": "2026-08-31T09:24:57.845Z",
+      "lastHitAt": "2026-08-31T09:24:57.845Z",
+      "contexts": [
+        "mr-3393"
+      ]
     }
   },
   "proposals": {
@@ -109,6 +120,14 @@
       "lastProposedAt": "2026-08-20T11:54:04.750Z",
       "contexts": [
         "29544c089974fe5ee0bdfe0371aeece655cf7abd"
+      ]
+    },
+    "undefined": {
+      "times": 2,
+      "firstProposedAt": "2026-08-31T09:24:57.845Z",
+      "lastProposedAt": "2026-08-31T09:24:57.845Z",
+      "contexts": [
+        "mr-3393"
       ]
     }
   }

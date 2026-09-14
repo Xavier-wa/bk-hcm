@@ -327,8 +327,9 @@ const accountId = computed(() => currentOperateItem.value?.account_id);
 const { accountBizList } = useAccountBusiness(accountId);
 
 const handleSingleDistribution = (lb: any) => {
-  isDialogShow.value = true;
+  selectedBizId.value = 0;
   currentOperateItem.value = lb;
+  isDialogShow.value = true;
 };
 const handleSingleDistributionConfirm = async () => {
   isDialogBtnLoading.value = true;

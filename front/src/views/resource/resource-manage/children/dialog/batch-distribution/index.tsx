@@ -141,7 +141,6 @@ export const BatchDistribution = defineComponent({
           class={'batch-dialog'}
           isShow={isShow.value}
           title={`批量分配/${DResourceTypeMap[props.type].name}分配`}
-          theme={'primary'}
           quickClose
           onClosed={() => (isShow.value = false)}
           onConfirm={handleConfirm}

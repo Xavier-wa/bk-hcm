@@ -1,0 +1,99 @@
+{
+  "id": "feat-cert-assign-biz",
+  "title": "证书管理-支持证书分配给业务-前端",
+  "currentStage": "done",
+  "createdAt": "2026-08-31T08:49:17.764Z",
+  "updatedAt": "2026-08-31T09:09:30.360Z",
+  "artifacts": {
+    "coding": [
+      {
+        "ref": ".hcmfe/workflow/feat-cert-assign-biz/coding.md",
+        "kind": "file",
+        "addedAt": "2026-08-31T09:01:16.331Z"
+      }
+    ],
+    "test": [
+      {
+        "ref": ".hcmfe/workflow/feat-cert-assign-biz/test.md",
+        "kind": "file",
+        "addedAt": "2026-08-31T09:02:14.512Z"
+      }
+    ]
+  },
+  "approvals": {
+    "coding": {
+      "stage": "coding",
+      "approvedAt": "2026-08-31T09:06:31.786Z",
+      "note": "coding 完成：commit 47098a430 含业务代码+workflow 产物并已推送 origin；产物绑定已修正为 projectRoot 相对路径"
+    },
+    "test": {
+      "stage": "test",
+      "approvedAt": "2026-08-31T09:08:00.097Z",
+      "note": "test 阶段完成：手测清单 test.md 已产出（P0x3/P1x3/P2x3，结论统一待 QA 验证）并已随 commit 47098a430 入库；hcm-docs-closeout 收口完成（gaps 为空）"
+    }
+  },
+  "history": [
+    {
+      "from": "init",
+      "to": "coding",
+      "at": "2026-08-31T08:49:17.764Z",
+      "gitHead": "373e12251be9b2f6186eb72347619fce8af38b0d"
+    },
+    {
+      "from": "coding",
+      "to": "test",
+      "at": "2026-08-31T09:06:31.786Z",
+      "note": "coding 完成：commit 47098a430 含业务代码+workflow 产物并已推送 origin；产物绑定已修正为 projectRoot 相对路径"
+    },
+    {
+      "from": "test",
+      "to": "done",
+      "at": "2026-08-31T09:08:00.097Z",
+      "note": "test 阶段完成：手测清单 test.md 已产出（P0x3/P1x3/P2x3，结论统一待 QA 验证）并已随 commit 47098a430 入库；hcm-docs-closeout 收口完成（gaps 为空）"
+    }
+  ],
+  "requirementId": "req-cert-assign-biz",
+  "branch": "feat-cert-assign-biz",
+  "mode": "lite",
+  "stages": [
+    "coding",
+    "test",
+    "done"
+  ],
+  "tapd": {
+    "workspaceId": "69995598",
+    "objectType": "story",
+    "itemId": "1069995598137438280",
+    "parentId": "1069995598136842526"
+  },
+  "nodeRuns": {
+    "tapd-story-clarification-and-evaluation-lite": {
+      "status": "completed",
+      "at": "2026-08-31T08:53:42.918Z",
+      "note": "澄清完成：需求规范化文档落盘 front/docs/reqs/cert-assign-to-biz.md；TAPD 描述已回写（原文快照保留+澄清记录 Q1-Q5）；按任务约定评估以澄清收尾，不产出工时/规模内容"
+    },
+    "hcm-docs-closeout": {
+      "status": "completed",
+      "at": "2026-08-31T09:07:51.754Z",
+      "note": "docs_status: touchedModules=[]（gaps 为空，无 stub/本次漂移模块；blueprint.lock 缺失致逐文件匹配不可用，15 个 stale 均为历史基线遗留非本次改动）；本次改动为共享组件可选扩展+列表加按钮，无新架构知识待沉淀（细节已入 coding.md）。经验捕获：无触发器命中。promotionQueue.pending=1 为历史遗留，不阻塞 done，已在任务报告提示。"
+    },
+    "hcm-tapd-sync-done": {
+      "status": "completed",
+      "at": "2026-08-31T09:09:30.359Z",
+      "note": "story 1069995598137438280：doing→for_test→tested→done（status_14，owner 未变更）；父需求 1069995598136842526：backlog→approved→todo→doing（status_11，rollup 按双子项 done+backlog 计算，owner 未变更）。无 bug 绑定。"
+    }
+  },
+  "artifactFreshness": {
+    "coding": {
+      "boundFiles": [
+        "src/views/resource/resource-manage/children/dialog/batch-distribution/index.tsx",
+        "src/views/business/cert-manager/index.tsx",
+        "front/src/views/resource/resource-manage/children/dialog/batch-distribution/index.tsx",
+        "front/src/views/business/cert-manager/index.tsx"
+      ],
+      "contentFingerprint": "745e138dcc368c2d1dc1b8b6d3cc6934aff92032",
+      "codeBaseline": "00ffc939fbb752611bfdb2c02d92b0d3b9eb90cf",
+      "seatedAt": "2026-08-31T09:06:02.042Z"
+    }
+  }
+}

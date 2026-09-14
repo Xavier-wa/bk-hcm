@@ -1,0 +1,26 @@
+{
+  "id": "req-cert-assign-biz",
+  "title": "证书管理-支持证书分配给业务",
+  "createdAt": "2026-08-31T08:49:13.982Z",
+  "updatedAt": "2026-08-31T08:49:18.824Z",
+  "external": {
+    "tapdParentRequirementId": "1069995598136842526",
+    "tapdUrl": "https://<TAPD_HOST>/tapd_fe/69995598/story/detail/1069995598136842526"
+  },
+  "iterations": [
+    {
+      "wfId": "feat-cert-assign-biz",
+      "status": "coding",
+      "branch": "feat-cert-assign-biz",
+      "title": "证书管理-支持证书分配给业务-前端",
+      "createdAt": "2026-08-31T08:49:17.764Z"
+    }
+  ],
+  "aggregatedArtifacts": {},
+  "codeScope": {
+    "globs": [
+      "front/src/views/**"
+    ],
+    "autoLearned": false
+  }
+}
