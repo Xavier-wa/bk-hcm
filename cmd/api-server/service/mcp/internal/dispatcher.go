@@ -36,6 +36,7 @@ import (
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
+	"hcm/pkg/tools/converter"
 
 	mcpsdk "trpc.group/trpc-go/trpc-mcp-go"
 )
@@ -304,7 +305,7 @@ func buildBackendCallShapeGrouped(backend ToolBackend, args map[string]interface
 		if !ok {
 			return "", nil, fmt.Errorf("path variable %q missing in path_param", name)
 		}
-		finalPath = strings.ReplaceAll(finalPath, "{"+name+"}", fmt.Sprint(val))
+		finalPath = strings.ReplaceAll(finalPath, "{"+name+"}", converter.FormatPlainString(val))
 	}
 
 	var body []byte
@@ -336,7 +337,7 @@ func buildBackendCallShapeFlat(backend ToolBackend, args map[string]interface{})
 		if !ok {
 			return "", nil, fmt.Errorf("path variable %q missing in arguments", name)
 		}
-		finalPath = strings.ReplaceAll(finalPath, "{"+name+"}", fmt.Sprint(val))
+		finalPath = strings.ReplaceAll(finalPath, "{"+name+"}", converter.FormatPlainString(val))
 		delete(leftover, name)
 	}
 

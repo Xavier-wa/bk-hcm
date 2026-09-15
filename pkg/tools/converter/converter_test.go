@@ -20,7 +20,10 @@
 package converter
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestValToPtr(t *testing.T) {
@@ -153,5 +156,41 @@ func TestInt64PtrToInt32Ptr(t *testing.T) {
 	if int32Ptr == nil || *int32Ptr != int32(100) {
 		t.Errorf("test int64 pointer to int32 pointer failed, got: %+v", int32Ptr)
 		return
+	}
+}
+
+func TestFormatPlainString(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input interface{}
+		want  string
+	}{
+		{name: "short int", input: 2, want: "2"},
+		{name: "short int64", input: int64(213), want: "213"},
+		{name: "below scientific threshold", input: float64(999999), want: "999999"},
+		{name: "scientific threshold float64", input: float64(1000000), want: "1000000"},
+		{name: "repro biz id float64", input: float64(5016972), want: "5016972"},
+		{name: "negative int", input: int64(-1), want: "-1"},
+		{name: "negative float64", input: float64(-1), want: "-1"},
+		{name: "decimal string", input: "5016972", want: "5016972"},
+		{name: "scientific string", input: "5.016972e+06", want: "5016972"},
+		{name: "vendor string", input: "tcloud", want: "tcloud"},
+		{name: "non-integer float", input: 1.5, want: "1.5"},
+		{name: "invalid string", input: "abc", want: "abc"},
+		{name: "bool", input: true, want: "true"},
+		{name: "nil", input: nil, want: ""},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := FormatPlainString(tc.input)
+			assert.Equal(t, tc.want, got)
+			assert.False(t, strings.Contains(got, "e+"), "plain string must not use scientific notation: %q", got)
+			assert.False(t, strings.Contains(got, "E+"), "plain string must not use scientific notation: %q", got)
+		})
 	}
 }

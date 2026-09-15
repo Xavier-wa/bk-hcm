@@ -22,6 +22,7 @@ package converter
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -271,4 +272,50 @@ func StrSliceToInterfaceSlice(vals []string) []interface{} {
 	}
 
 	return result
+}
+
+// FormatPlainString converts val to text without scientific notation.
+// JSON numbers decode as float64; fmt.Sprint / %g would emit scientific notation
+// for |n| >= 1e6 (e.g. 5016972 → "5.016972e+06").
+func FormatPlainString(val interface{}) string {
+	switch v := val.(type) {
+	case nil:
+		return ""
+	case string:
+		return formatPlainString(v)
+	case bool:
+		return strconv.FormatBool(v)
+	case float32:
+		return formatPlainFloat(float64(v))
+	case float64:
+		return formatPlainFloat(v)
+	default:
+		// Other types can be printed as-is without conversion.
+		return fmt.Sprint(val)
+	}
+}
+
+// formatPlainFloat writes a float with the 'f' verb so integers stay decimal.
+func formatPlainFloat(v float64) string {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return fmt.Sprint(v)
+	}
+	return strconv.FormatFloat(v, 'f', -1, 64)
+}
+
+// formatPlainString writes a string value.
+// Non-numeric text is kept; a value that is exactly an integer
+// (decimal or scientific notation) is rewritten as full decimal text.
+func formatPlainString(s string) string {
+	if _, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return s
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || math.Trunc(f) != f {
+		return s
+	}
+	if f >= float64(math.MinInt64) && f <= float64(math.MaxInt64) {
+		return strconv.FormatInt(int64(f), 10)
+	}
+	return strconv.FormatFloat(f, 'f', -1, 64)
 }
