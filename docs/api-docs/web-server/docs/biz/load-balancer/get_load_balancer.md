@@ -61,7 +61,24 @@ POST /api/v1/cloud/bizs/{bk_biz_id}/load_balancers/{id}
     "created_at": "2024-01-02T15:04:05Z",
     "updated_at": "2024-01-02T15:04:05Z",
     "extension": {
-      "vip_isp": "BGP"
+      "vip_isp": "BGP",
+      "exclusive": 1,
+      "clusters": [
+        {
+          "cloud_cluster_id": "tgw-38feq8c6",
+          "cluster_id": "00000001",
+          "cluster_name": "ziyan-l4-1",
+          "cluster_tag": "ziyan_chiji",
+          "cluster_type": "TGW"
+        },
+        {
+          "cloud_cluster_id": "stgw-7d81ka3f",
+          "cluster_id": "00000002",
+          "cluster_name": "ziyan-l7-1",
+          "cluster_tag": "ziyan_chiji",
+          "cluster_type": "STGW"
+        }
+      ]
     }
   }
 }
@@ -138,4 +155,31 @@ POST /api/v1/cloud/bizs/{bk_biz_id}/load_balancers/{id}
 | delete_protect               | string | 删除保护                                        |
 | egress                       | string | 网络出口                                        |
 | mix_ip_target                | string | 双栈混绑                                        |
+| exclusive                    | int    | 是否独占型实例：1是、0否                     |
+| clusters                     | array  | 独占集群信息列表，非独占型实例为空数组                       |
+
+说明：
+
+- 详情页「实例规格」由 `exclusive` 与 `sla_type` 合成，后端只返回原始值：`exclusive` 为 1 展示「独占型」；否则 `sla_type` 非空展示对应档位名；否则展示「共享型」。
+- `exclusive`、`clusters` 均为云上同步回来的结果，可能与提单时的入参不完全一致（如七层标签落到共享集群）。
+- 申请单选择「随机分配」时单据 `content` 内没有实际集群与 IP，需从本接口取实际落地值。
+
+##### data.extension.clusters[n]
+
+负载均衡关联的独占集群列表。集群名称与本地ID由服务端用云上集群ID关联本地独占集群表得到，前端无需再查集群接口。通过 `cluster_type` 区分四层（TGW）与七层（STGW）。
+
+| 参数名称             | 参数类型   | 描述                          |
+|------------------|--------|-----------------------------|
+| cloud_cluster_id | string | 集群云上ID，如tgw-38feq8c6        |
+| cluster_id       | string | 集群本地ID，本地表未同步到该集群时为空字符串     |
+| cluster_name     | string | 集群名称，本地表未同步到该集群时为空字符串       |
+| cluster_tag      | string | 集群标签                        |
+| cluster_type     | string | 集群类型（枚举值：TGW、STGW）          |
+
+说明：
+
+- 非独占型实例（`exclusive` 为 0）`clusters` 为空数组。
+- 仅使用四层或七层独占集群时，数组中只返回对应类型的元素。
+- 七层集群由云侧调度决定，若云上未返回具体的 STGW 集群ID，则该元素仅 `cluster_tag`、`cluster_type` 有值，其余字段为空字符串。
+- 集群在本地表被删除或尚未同步时，`cluster_id`、`cluster_name` 为空字符串，`cloud_cluster_id` 仍返回。
 
