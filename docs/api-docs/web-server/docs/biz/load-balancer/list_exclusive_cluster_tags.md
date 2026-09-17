@@ -23,9 +23,9 @@ POST /api/v1/cloud/bizs/{bk_biz_id}/load_balancers/exclusive_clusters/tags/list
 
 - 仅返回已分配给当前业务（`bk_biz_id` 等于路径业务）的公网独占集群。
 - 服务端已过滤集群标签为空的集群，此类集群不可用于购买。
-- 传入 `zones` 时只返回主可用区命中列表的集群；某标签下所有集群都不命中时，该标签不出现在 `details` 中。
+- 传入 `zone` 时只返回主可用区命中该值的集群；某标签下所有集群都不命中时，该标签不出现在 `details` 中。
 - `details` 为空数组时，购买页应隐藏或禁用「独占型」规格。
-- 四层（TGW）返回标签及标签下的集群列表；七层（STGW）云侧不支持指定集群，只返回标签，`clusters` 固定为空数组。
+- 四层（TGW）与七层（STGW）分组的处理方式一致，均返回标签下命中的真实集群列表（见响应示例）。
 - 集群内的闲置 VIP 不在本接口返回，选定具体四层集群后请用该集群的 `cloud_cluster_id` 调用 `/load_balancers/exclusive_clusters/idle_vips/list` 实时查询。
 
 ### 调用示例
@@ -37,7 +37,7 @@ POST /api/v1/cloud/bizs/{bk_biz_id}/load_balancers/exclusive_clusters/tags/list
   "account_id": "00000001",
   "region": "ap-guangzhou",
   "isp": "BGP",
-  "zones": "ap-guangzhou-3",
+  "zone": "ap-guangzhou-3",
   "cluster_type": "",
 }
 ```
@@ -119,7 +119,7 @@ POST /api/v1/cloud/bizs/{bk_biz_id}/load_balancers/exclusive_clusters/tags/list
 |--------------|---------------|-------------------------------|
 | cluster_tag  | string        | 集群标签，购买时作为 `cluster_tag` 传入   |
 | cluster_type | string        | 集群类型（TGW四层、STGW七层），前端映射为四层/七层 |
-| clusters     | cluster array | 该标签下的集群列表，七层固定为空数组            |
+| clusters     | cluster array | 该标签下的集群列表                     |
 
 ##### cluster
 
