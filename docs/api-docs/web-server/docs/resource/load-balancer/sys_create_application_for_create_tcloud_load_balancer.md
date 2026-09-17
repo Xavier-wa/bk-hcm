@@ -64,7 +64,7 @@ POST /api/v1/cloud/vendors/tcloud/system/applications/types/create_load_balancer
 参数组合与校验规则与业务视角提单接口一致，详见 `create_application_for_create_tcloud_load_balancer.md` 的「独占型规格说明」。要点：
 
 - 独占型需传 `exclusive=1`，该字段为纯校验字段、不下传云侧；`exclusive=0` 或不传时 `cluster_tag`、`cloud_cluster_ids` 必须为空。
-- 独占型仅支持公网（`load_balancer_type` 为 `OPEN`），`sla_type` 必须留空，`cluster_tag` 必填。
+- 独占型仅支持公网（`load_balancer_type` 为 `OPEN`），`sla_type` 必须留空，`cluster_tag`、`cloud_cluster_ids` 至少一个非空。
 - `cloud_cluster_ids` 传入多个云上集群ID，会随机从列表中挑选；七层（STGW）标签不支持指定 `cloud_cluster_ids`。
 - 指定 `vip` 时 `cloud_cluster_ids`必须唯一且和vip对应否则云上会报错。
 - `cluster_tag` 必须属于 `bk_biz_id` 对应业务已分配的集群。

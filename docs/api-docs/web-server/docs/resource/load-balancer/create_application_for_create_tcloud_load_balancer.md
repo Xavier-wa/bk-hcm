@@ -66,11 +66,11 @@ POST /api/v1/cloud/vendors/tcloud/applications/types/create_load_balancer
 |-------|-----------|-------------|-------------|-----------------|
 | 共享型    | 0 或不传     | 留空          | 不传          | 不传              |
 | 性能容量型 | 0 或不传     | `clb.c*` 档位 | 不传          | 不传              |
-| 独占型    | 1         | 必须留空        |  七层独占集群填          | 四层独占集群填，填一个:指定集群；填多个:多个里面随机挑一个 |
+| 独占型    | 1         | 必须留空        | 七层独占集群填，与 `cloud_cluster_ids` 至少一个非空 | 四层独占集群填，填一个:指定集群；填多个:多个里面随机挑一个，与 `cluster_tag` 至少一个非空 |
 
 参数取值与校验：
 
-- `exclusive` 为 1 时 `cluster_tag` 必填且 `sla_type` 必须留空；`exclusive` 为 0 或不传时 `cluster_tag`、`cloud_cluster_ids` 必须为空。否则返回 `InvalidParameter`。缺少该字段时，「选了独占型但未选标签」与「选共享型」的报文完全相同，服务端无法区分。
+- `exclusive` 为 1 时 `cluster_tag`、`cloud_cluster_ids` 至少一个非空，`sla_type` 必须留空；`exclusive` 为 0 或不传时 `cluster_tag`、`cloud_cluster_ids` 必须为空。否则返回 `InvalidParameter`。缺少该字段时，「选了独占型但未选标签」与「选共享型」的报文完全相同，服务端无法区分。
 - `cluster_tag` 必须属于当前业务已分配的集群，否则返回 `PermissionDenied`。
 - `cloud_cluster_ids` 填多个云上集群ID，云上会在这个中间随机挑选，用户在页面选择随机匹配集群时，需要把后端返回的标签对应集群云上ID都填进来；集群ID随机匹配不支持指定`vip`。
 - `vip` 指定 `vip` 时 `cloud_cluster_ids` 必填且唯一，且后端创建前会复核该 VIP 仍闲置，否则返回 `InvalidParameter`。
