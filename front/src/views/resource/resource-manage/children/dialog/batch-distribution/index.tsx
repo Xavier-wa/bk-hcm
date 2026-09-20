@@ -4,6 +4,8 @@ import './index.scss';
 import { Senarios, useWhereAmI } from '@/hooks/useWhereAmI';
 import { useResourceStore } from '@/store';
 import { useAccountBusiness } from '@/views/resource/resource-manage/hooks/use-account-business';
+import HcmAuth from '@/components/auth/auth.vue';
+import { AUTH_ASSIGN_IAAS_RESOURCE } from '@/constants/auth-symbols';
 
 export enum DResourceType {
   cvms = 'cvms',
@@ -114,6 +116,12 @@ export const BatchDistribution = defineComponent({
 
     const { accountBizList } = useAccountBusiness(accountId);
 
+    // 分配的权限同时关联云账号与目标业务，未选目标业务时无法鉴权，此时跳过校验由按钮的禁用态兜住
+    const assignSign = computed(() => ({
+      type: AUTH_ASSIGN_IAAS_RESOURCE,
+      relation: [accountId.value, Number(selectedBizId.value)],
+    }));
+
     const handleOpenBatch = () => {
       pendingRows.value = null;
       selectedBizId.value = '';
@@ -184,29 +192,51 @@ export const BatchDistribution = defineComponent({
           class={'batch-dialog'}
           isShow={isShow.value}
           title={isSingle.value ? `${resourceMeta.value.name}分配` : `批量分配/${resourceMeta.value.name}分配`}
-          theme={'primary'}
           quickClose
           onClosed={handleClosed}
-          onConfirm={handleConfirm}
           isLoading={isLoading.value}>
-          {isSingle.value ? (
-            <>
-              <p class='mb16'>
-                当前操作{resourceMeta.value.name}为：{targetRows.value[0]?.name}
-              </p>
-              <p class='mb6'>请选择所需分配的目标业务</p>
-            </>
-          ) : (
-            <>
-              <p class='selected-host-count-tip'>
-                已选择
-                <span class='selected-host-count'>{targetRows.value.length}</span>个{resourceMeta.value.name}
-                ，可选择所需分配的目标业务
-              </p>
-              <p class='mb6'>目标业务</p>
-            </>
-          )}
-          <hcm-form-business data={accountBizList.value} v-model={selectedBizId.value} />
+          {{
+            default: () => (
+              <>
+                {isSingle.value ? (
+                  <>
+                    <p class='mb16'>
+                      当前操作{resourceMeta.value.name}为：{targetRows.value[0]?.name}
+                    </p>
+                    <p class='mb6'>请选择所需分配的目标业务</p>
+                  </>
+                ) : (
+                  <>
+                    <p class='selected-host-count-tip'>
+                      已选择
+                      <span class='selected-host-count'>{targetRows.value.length}</span>个{resourceMeta.value.name}
+                      ，可选择所需分配的目标业务
+                    </p>
+                    <p class='mb6'>目标业务</p>
+                  </>
+                )}
+                <hcm-form-business data={accountBizList.value} v-model={selectedBizId.value} />
+              </>
+            ),
+            footer: () => (
+              <>
+                <HcmAuth class='mr10' sign={assignSign.value} ignore={!selectedBizId.value}>
+                  {{
+                    default: ({ noPerm }: { noPerm: boolean }) => (
+                      <Button
+                        theme='primary'
+                        loading={isLoading.value}
+                        disabled={noPerm || !selectedBizId.value}
+                        onClick={handleConfirm}>
+                        确定
+                      </Button>
+                    ),
+                  }}
+                </HcmAuth>
+                <Button onClick={handleClosed}>取消</Button>
+              </>
+            ),
+          }}
         </Dialog>
       </>
     );
