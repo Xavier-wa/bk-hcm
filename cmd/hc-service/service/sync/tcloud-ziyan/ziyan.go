@@ -55,6 +55,7 @@ func InitService(cap *capability.Capability) {
 	h.Add("SyncRegion", "POST", "/regions/sync", v.SyncRegion)
 	h.Add("SyncArgsTpl", "POST", "/argument_templates/sync", v.SyncArgsTpl)
 	h.Add("SyncCert", "POST", "/certs/sync", v.SyncCert)
+	h.Add("SyncExclusiveCluster", "POST", "/load_balancer_exclusive_clusters/sync", v.SyncExclusiveCluster)
 	h.Add("SyncLoadBalancer", "POST", "/load_balancers/sync", v.SyncLoadBalancer)
 	h.Add("SyncVpc", "POST", "/vpcs/sync", v.SyncVpc)
 	h.Add("SyncSubnet", "POST", "/subnets/sync", v.SyncSubnet)

@@ -135,7 +135,7 @@ func (svc *lbSvc) BatchCreateExclusiveCluster(cts *rest.Contexts) (any, error) {
 	}
 
 	switch vendor {
-	case enumor.TCloud:
+	case enumor.TCloud, enumor.TCloudZiyan:
 		return batchCreateExclusiveCluster[corelb.TCloudExclusiveClusterExtension](cts, svc, vendor)
 	default:
 		return nil, errf.New(errf.InvalidParameter, "unsupported vendor: "+string(vendor))
@@ -226,7 +226,7 @@ func (svc *lbSvc) BatchUpdateExclusiveCluster(cts *rest.Contexts) (any, error) {
 	}
 
 	switch vendor {
-	case enumor.TCloud:
+	case enumor.TCloud, enumor.TCloudZiyan:
 		return batchUpdateExclusiveCluster[corelb.TCloudExclusiveClusterExtension](cts, svc)
 	default:
 		return nil, errf.New(errf.InvalidParameter, "unsupported vendor: "+string(vendor))

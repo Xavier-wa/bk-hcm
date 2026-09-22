@@ -158,6 +158,7 @@ var syncOrder = []syncItem{
 	{enumor.ArgumentTemplateResType, SyncArgsTpl},
 	{enumor.SecurityGroupCloudResType, SyncSG},
 	{enumor.CertCloudResType, SyncCert},
+	{enumor.LoadBalancerExclusiveClusterCloudResType, SyncExclusiveCluster},
 	{enumor.LoadBalancerCloudResType, SyncLoadBalancer},
 	{enumor.SecurityGroupUsageBizRelResType, SyncSGUsageBizRel},
 	{enumor.DeviceType, SyncDeviceType},

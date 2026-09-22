@@ -163,6 +163,7 @@ type CloudResType interface {
 	typeslb.TCloudListener |
 	typeslb.TCloudUrlRule |
 	typeslb.Backend |
+	typeslb.TCloudExclusiveCluster |
 
 	*account.TCloudPolicyDetail |
 	account.TCloudPolicyDetail |
@@ -282,6 +283,7 @@ type DBResType interface {
 	corelb.TCloudLbUrlRule |
 	corelb.TCloudListener |
 	corelb.BaseTarget |
+	corelb.ExclusiveCluster[corelb.TCloudExclusiveClusterExtension] |
 
 	cloudcore.PermissionTemplate[cloudcore.TCloudPermissionTemplateExtension] |
 

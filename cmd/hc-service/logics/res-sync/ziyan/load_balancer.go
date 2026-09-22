@@ -22,6 +22,7 @@ package ziyan
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
@@ -893,6 +894,16 @@ func isLBExtensionChange(cloud typeslb.TCloudClb, db corelb.TCloudLoadBalancer) 
 	}
 
 	if !assert.IsPtrStringEqual(db.Extension.SlaType, cloud.SlaType) {
+		return true
+	}
+	wantExclusive := cvt.PtrToVal(cloud.ClusterTag) != "" || len(cvt.PtrToSlice(cloud.ClusterIds)) != 0
+	if cvt.PtrToVal(db.Extension.Exclusive) != wantExclusive {
+		return true
+	}
+	if !slices.Equal(cvt.PtrToVal(db.Extension.ClusterIds), cvt.PtrToSlice(cloud.ClusterIds)) {
+		return true
+	}
+	if !assert.IsPtrStringEqual(db.Extension.ClusterTag, cloud.ClusterTag) {
 		return true
 	}
 	if !assert.IsPtrStringEqual(db.Extension.VipIsp, cloud.VipIsp) {

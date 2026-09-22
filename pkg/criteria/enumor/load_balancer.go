@@ -304,12 +304,14 @@ const (
 	CTCCClusterIsp ClusterIsp = "CTCC"
 	// InternalClusterIsp 运营商类型-内部
 	InternalClusterIsp ClusterIsp = "INTERNAL"
+	// MIXClusterIsp 运营商类型-混合
+	MIXClusterIsp ClusterIsp = "MIX"
 )
 
 // Validate 校验独占集群运营商类型是否合法，空字符串视为未指定，同样合法
 func (c ClusterIsp) Validate() error {
 	switch c {
-	case "", BGPClusterIsp, CMCCClusterIsp, CUCCClusterIsp, CTCCClusterIsp, InternalClusterIsp:
+	case "", BGPClusterIsp, CMCCClusterIsp, CUCCClusterIsp, CTCCClusterIsp, InternalClusterIsp, MIXClusterIsp:
 		return nil
 	default:
 		return fmt.Errorf("unsupported cluster isp: %s", c)

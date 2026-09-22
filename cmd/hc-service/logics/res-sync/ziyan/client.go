@@ -66,6 +66,11 @@ type Interface interface {
 	RemoveLoadBalancerDeleteFromCloud(kt *kit.Kit, params *SyncRemovedParams) error
 	RemoveLoadBalancerDeleteFromCloudV2(kt *kit.Kit, param *SyncRemovedParams, allCloudIDMap map[string]struct{}) error
 
+	// ExclusiveCluster 同步独占集群，范围固定为自研云公网 TGW/STGW
+	ExclusiveCluster(kt *kit.Kit, params *SyncBaseParams, opt *SyncExclusiveClusterOption) (*SyncResult, error)
+	RemoveExclusiveClusterDeleteFromCloud(kt *kit.Kit, params *SyncRemovedParams,
+		allCloudIDMap map[string]struct{}) error
+
 	// LoadBalancerWithListener 同步负载均衡及监听器
 	LoadBalancerWithListener(kt *kit.Kit, params *SyncBaseParams, opt *SyncLBOption) (*SyncResult, error)
 

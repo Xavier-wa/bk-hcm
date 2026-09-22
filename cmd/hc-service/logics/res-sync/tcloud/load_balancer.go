@@ -22,6 +22,7 @@ package tcloud
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
@@ -639,6 +640,7 @@ func convertTCloudExtension(cloud typeslb.TCloudClb, region string,
 		SnatPro:                  cloud.SnatPro,
 		MixIpTarget:              cloud.MixIpTarget,
 		ChargeType:               cloud.ChargeType,
+		Egress:                   cloud.Egress,
 		ClusterTag:               cloud.ClusterTag,
 		ClusterIds:               cvt.ValToPtr(cvt.PtrToSlice(cloud.ClusterIds)),
 		// 该接口无法获取下列字段
@@ -862,6 +864,16 @@ func isLBExtensionChange(cloud typeslb.TCloudClb, db corelb.TCloudLoadBalancer) 
 	}
 
 	if !assert.IsPtrStringEqual(db.Extension.SlaType, cloud.SlaType) {
+		return true
+	}
+	wantExclusive := cvt.PtrToVal(cloud.ClusterTag) != "" || len(cvt.PtrToSlice(cloud.ClusterIds)) != 0
+	if cvt.PtrToVal(db.Extension.Exclusive) != wantExclusive {
+		return true
+	}
+	if !slices.Equal(cvt.PtrToVal(db.Extension.ClusterIds), cvt.PtrToSlice(cloud.ClusterIds)) {
+		return true
+	}
+	if !assert.IsPtrStringEqual(db.Extension.ClusterTag, cloud.ClusterTag) {
 		return true
 	}
 	if !assert.IsPtrStringEqual(db.Extension.VipIsp, cloud.VipIsp) {

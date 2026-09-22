@@ -5965,6 +5965,10 @@ type LoadBalancer struct {
 	// 网络出口
 	// 注意：此字段可能返回 null，表示取不到有效值。
 	Egress *string `json:"Egress,omitnil,omitempty" name:"Egress"`
+
+	// 实例类型是否为独占型。1：独占型实例。0：非独占型实例。
+	// 注意：此字段可能返回 null，表示取不到有效值。
+	Exclusive *uint64 `json:"Exclusive,omitnil,omitempty" name:"Exclusive"`
 }
 
 type LoadBalancerDetail struct {
