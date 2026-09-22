@@ -42,8 +42,18 @@ export default defineComponent({
       vendor: null,
       account_type: 'STANDARD',
       slaType: '0',
+      // 【自研云】直通 / 免流
       zhi_tong: false,
       tgw_group_name: '',
+      // 独占集群（仅前端使用）
+      exclusive: 0,
+      enable_l4: false,
+      enable_l7: false,
+      l4_cluster_tag: '',
+      l4_cluster_id: '',
+      l4_vip: '',
+      cluster_tag: '',
+      exclusive_cluster_tags: [],
       egress: undefined,
     });
 

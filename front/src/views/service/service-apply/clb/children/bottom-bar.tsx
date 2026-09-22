@@ -5,6 +5,7 @@ import { AUTH_BIZ_CREATE_CLB, AUTH_CREATE_CLB } from '@/constants/auth-symbols';
 import type { ApplyClbModel } from '@/api/load_balancers/apply-clb/types';
 import { VendorEnum } from '@/common/constant';
 import { BGP_VIP_ISP_TYPES } from '@/constants';
+import { RANDOM_ALLOCATION } from '../hooks/useExclusiveCluster';
 
 export default defineComponent({
   props: {
@@ -59,21 +60,42 @@ export default defineComponent({
           zones = formModel.zones ? (Array.isArray(formModel.zones) ? formModel.zones : [formModel.zones]) : [];
           tgwGroupName = undefined;
           vipIsp = undefined;
-        } else {
+        } else if (BGP_VIP_ISP_TYPES.includes(vipIsp)) {
           // VipIsp不传就是BGP/限速CAP
-          if (BGP_VIP_ISP_TYPES.includes(vipIsp)) {
-            tgwGroupName = vipIsp;
-            vipIsp = undefined;
-          }
+          tgwGroupName = vipIsp;
+          vipIsp = undefined;
         }
       } else {
         tgwGroupName = undefined;
+      }
+
+      const isExclusive = formModel.slaType === '2';
+      // 独占型与自研云免流互斥：独占型不提交免流标签。
+      // 统一置空串（空串与不传等价，已与后端确认），与表单侧「不可见即清空」的口径保持一致
+      if (isExclusive) tgwGroupName = '';
+      const l4Tag = formModel.exclusive_cluster_tags?.find(
+        (item) => item.cluster_type === 'TGW' && item.cluster_tag === formModel.l4_cluster_tag,
+      );
+      let cloudClusterIds: string[] | undefined;
+      let vip: string | undefined;
+      if (isExclusive && formModel.enable_l4) {
+        cloudClusterIds =
+          formModel.l4_cluster_id === RANDOM_ALLOCATION
+            ? l4Tag?.clusters.map(({ cloud_cluster_id }) => cloud_cluster_id) ?? []
+            : [formModel.l4_cluster_id].filter(Boolean);
+        vip = formModel.l4_vip === RANDOM_ALLOCATION ? '' : formModel.l4_vip;
       }
 
       return {
         ...formModel,
         bk_biz_id: isBusinessPage ? formModel.bk_biz_id : undefined,
         sla_type: formModel.sla_type === 'shared' ? '' : formModel.sla_type,
+        exclusive: isExclusive ? 1 : 0,
+        cloud_cluster_ids: cloudClusterIds,
+        cluster_tag: isExclusive && formModel.enable_l7 ? formModel.cluster_tag : undefined,
+        // 独占型：四层启用时 VIP 由四层选择决定（随机下发空串），未启用四层时不传；
+        // 非独占型保持原值透传，避免覆盖内部既有的绑定 EIP 等逻辑
+        vip: isExclusive ? vip : formModel.vip,
         // 只有公网下可以配置
         address_ip_version: isOpenVal ? formModel.address_ip_version : undefined,
         vip_isp: vipIsp,
@@ -109,6 +131,12 @@ export default defineComponent({
         account_type: undefined as undefined,
         zoneType: undefined as undefined,
         slaType: undefined as undefined,
+        enable_l4: undefined as undefined,
+        enable_l7: undefined as undefined,
+        l4_cluster_tag: undefined as undefined,
+        l4_cluster_id: undefined as undefined,
+        l4_vip: undefined as undefined,
+        exclusive_cluster_tags: undefined as undefined,
       };
     };
     const handleConfirm = async () => {

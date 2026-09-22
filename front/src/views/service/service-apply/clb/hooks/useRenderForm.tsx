@@ -1,6 +1,6 @@
 import { computed, defineComponent, ref, watch, nextTick, Reactive, reactive } from 'vue';
 // import components
-import { Button, Form, Input, Select, Slider, Switcher } from 'bkui-vue';
+import { Button, Checkbox, Form, Input, Select, Slider, Switcher } from 'bkui-vue';
 import { BkRadioButton, BkRadioGroup } from 'bkui-vue/lib/radio';
 import { EditLine, Plus } from 'bkui-vue/lib/icon';
 import ZoneSelector from '@/components/zone-selector/index.vue';
@@ -41,9 +41,21 @@ import RegionSelector from '../../components/common/region-selector.vue';
 import { cloneDeep } from 'lodash';
 import CalcPrice from '../children/calc-price';
 import cssModule from '../index.module.scss';
+import useExclusiveCluster, { RANDOM_ALLOCATION, isExclusiveClusterIsp } from './useExclusiveCluster';
 
 const { Option } = Select;
 const { FormItem } = Form;
+
+interface ClbFormItemOption {
+  label: string;
+  content: () => any;
+  required?: boolean;
+  property?: string;
+  description?: string;
+  hidden?: boolean;
+  simpleShow?: boolean;
+  rules?: Array<Record<string, any>>;
+}
 
 // apply-clb, 渲染表单
 export default (formModel: Reactive<ApplyClbModel>) => {
@@ -53,6 +65,21 @@ export default (formModel: Reactive<ApplyClbModel>) => {
   const resourceStore = useResourceStore();
   const businessStore = useBusinessStore();
   const originalFormModel = cloneDeep(formModel);
+  const {
+    l4TagList,
+    l7TagList,
+    selectedL4Tag,
+    idleVips,
+    isTagsLoading,
+    isIdleVipsLoading,
+    isTagsLoadFailed,
+    isIdleVipsLoadFailed,
+    isExclusiveAvailable,
+    effectiveEgresses,
+    egressFilterKey,
+    handleL4TagChange,
+    loadIdleVips,
+  } = useExclusiveCluster(formModel, isBusinessPage, () => noResetParams.value);
 
   // define data
   const sideSliderOptions = ref<{
@@ -145,6 +172,22 @@ export default (formModel: Reactive<ApplyClbModel>) => {
       .find(({ Isp }) => Isp === formModel.vip_isp)
       ?.TypeSet.find(({ Type, Availability }: any) => Type === 'ziyan_mianliu' && Availability === 'Available');
   });
+  // 免流开关是否可见：仅自研云公网、已选运营商且非独占型时展示
+  const isMianliuVisible = computed(
+    () =>
+      formModel.vendor === VendorEnum.ZIYAN &&
+      !isIntranet.value &&
+      Boolean(formModel.vip_isp) &&
+      formModel.slaType !== '2',
+  );
+  // 免流开关不可见时同步清空其值：页面上看不到的选项不应参与校验与提交
+  watch(
+    isMianliuVisible,
+    (visible) => {
+      if (!visible) formModel.tgw_group_name = '';
+    },
+    { immediate: true },
+  );
 
   const rules = {
     name: [
@@ -157,10 +200,100 @@ export default (formModel: Reactive<ApplyClbModel>) => {
     ],
   };
 
+  // 独占集群校验：独占配置由「勾选状态 + 标签 + 集群 + IP」多个字段组合而成，
+  // 没有单一模型字段可表达，因此用 FormItem 的项级 rules 承载校验，
+  // 不依赖不存在的 exclusive_config 字段判空。
+  const isExclusiveConfigLoading = computed(
+    () => formModel.slaType === '2' && (isTagsLoading.value || (formModel.enable_l4 && isIdleVipsLoading.value)),
+  );
+  const exclusiveConfigRules = [
+    {
+      validator: () => {
+        if (formModel.slaType !== '2') return true;
+        // 运营商仅支持三网直连时才能选择独占型，防止克隆配置等入口带入独占态
+        if (!isExclusiveClusterIsp(formModel.vip_isp)) return false;
+        if (!formModel.enable_l4 && !formModel.enable_l7) return false;
+        if (formModel.enable_l4 && (!formModel.l4_cluster_tag || !formModel.l4_cluster_id || !formModel.l4_vip)) {
+          return false;
+        }
+        if (formModel.enable_l4 && !selectedL4Tag.value) return false;
+        if (
+          formModel.enable_l4 &&
+          formModel.l4_cluster_id !== RANDOM_ALLOCATION &&
+          !selectedL4Tag.value?.clusters.some(({ cloud_cluster_id }) => cloud_cluster_id === formModel.l4_cluster_id)
+        ) {
+          return false;
+        }
+        if (
+          formModel.enable_l7 &&
+          (!formModel.cluster_tag || !l7TagList.value.some(({ cluster_tag }) => cluster_tag === formModel.cluster_tag))
+        ) {
+          return false;
+        }
+        // 注意：不要把 isIdleVipsLoading（选择集群后的瞬时加载态）当作「配置错误」。
+        // change 触发的校验会在请求返回前跑一次，误判会让用户刚选完集群就看到报错，
+        // 而保存时（请求已完成）又校验通过——错误信息还会残留到下一次 change 才消失。
+        return true;
+      },
+      message: '请至少启用并完整配置一个独占集群',
+      trigger: 'change',
+    },
+    {
+      // 「接口失败」与「配置不完整」是两回事，单独一条规则给出准确提示
+      validator: () => {
+        if (formModel.slaType !== '2') return true;
+        if (isTagsLoadFailed.value) return false;
+        return !(formModel.enable_l4 && formModel.l4_cluster_id !== RANDOM_ALLOCATION && isIdleVipsLoadFailed.value);
+      },
+      message: '独占集群信息获取失败，请重新选择或稍后重试',
+      trigger: 'change',
+    },
+    {
+      validator: () => {
+        if (
+          formModel.slaType !== '2' ||
+          !formModel.enable_l4 ||
+          isIdleVipsLoading.value ||
+          isIdleVipsLoadFailed.value ||
+          formModel.l4_vip === RANDOM_ALLOCATION
+        ) {
+          return true;
+        }
+        return formModel.l4_cluster_id !== RANDOM_ALLOCATION && idleVips.value.includes(formModel.l4_vip);
+      },
+      message: '所选 IP 已不在当前集群的空闲 IP 列表中，请重新选择',
+      trigger: 'change',
+    },
+  ];
+
+  watch(
+    [isTagsLoading, isIdleVipsLoading],
+    ([tagsLoading, vipsLoading], [wasTagsLoading, wasVipsLoading]) => {
+      if (!sideSliderOptions.value.show || formModel.slaType !== '2' || isExclusiveConfigLoading.value) return;
+      if ((wasTagsLoading && !tagsLoading) || (wasVipsLoading && !vipsLoading)) {
+        // 异步结果不触发 Select change，完成后刷新组合字段校验，保留各规则的独立错误提示。
+        formRef.value?.validate(['exclusive_config']).catch(() => undefined);
+      }
+    },
+    { flush: 'post' },
+  );
+
   // change-handle - 更新 sla_type
-  const handleSlaTypeChange = (v: '0' | '1') => {
+  const handleSlaTypeChange = (v: '0' | '1' | '2') => {
     if (v === '0') formModel.sla_type = 'shared';
+    if (v === '2') formModel.sla_type = '';
+    formModel.exclusive = v === '2' ? 1 : 0;
   };
+
+  watch(
+    () => formModel.slaType,
+    (value) => {
+      formModel.exclusive = value === '2' ? 1 : 0;
+      if (value === '0') formModel.sla_type = 'shared';
+      if (value === '2') formModel.sla_type = '';
+      // 切到独占型会隐藏免流开关，其值由 isMianliuVisible 的 watch 统一清空
+    },
+  );
 
   const handleLoadBalancerTypeChange = (val: 'OPEN' | 'INTERNAL') => {
     formModel.zones = undefined;
@@ -172,7 +305,9 @@ export default (formModel: Reactive<ApplyClbModel>) => {
   };
 
   // form item options
-  const formItemOptions = computed(() => [
+  const formItemOptions = computed<
+    Array<{ id: string; title: string; children: Array<ClbFormItemOption | ClbFormItemOption[]> }>
+  >(() => [
     {
       id: 'config',
       title: '配置信息',
@@ -497,6 +632,7 @@ export default (formModel: Reactive<ApplyClbModel>) => {
                   filterable>
                   <Option id='0' name={t('共享型')} />
                   <Option id='1' name={t('性能容量型')} />
+                  {isExclusiveAvailable.value && <Option id='2' name={t('独占型')} />}
                 </Select>
               );
             },
@@ -533,7 +669,7 @@ export default (formModel: Reactive<ApplyClbModel>) => {
           label: t('免流'),
           property: 'tgw_group_name',
           description: t('移动、电信、联调运营商支持免流线路'),
-          hidden: formModel.vendor !== VendorEnum.ZIYAN || isIntranet.value || !formModel.vip_isp,
+          hidden: !isMianliuVisible.value,
           content: () => (
             <div class='flex-row align-items-center'>
               <Switcher
@@ -550,6 +686,65 @@ export default (formModel: Reactive<ApplyClbModel>) => {
                   return t('未开启免流功能');
                 })()}
               </span>
+            </div>
+          ),
+        },
+        {
+          label: '独占集群',
+          property: 'exclusive_config',
+          rules: exclusiveConfigRules,
+          hidden: formModel.slaType !== '2',
+          content: () => (
+            <div class={cssModule['exclusive-cluster-config']}>
+              <div class={cssModule['exclusive-cluster-row']}>
+                <Checkbox v-model={formModel.enable_l4}>四层集群</Checkbox>
+                <Select
+                  v-model={formModel.l4_cluster_tag}
+                  class='w220'
+                  disabled={!formModel.enable_l4}
+                  loading={isTagsLoading.value}
+                  clearable={false}
+                  onChange={handleL4TagChange}>
+                  {l4TagList.value.map(({ cluster_tag }) => (
+                    <Option id={cluster_tag} name={cluster_tag} />
+                  ))}
+                </Select>
+                <Select
+                  v-model={formModel.l4_cluster_id}
+                  class='w220'
+                  disabled={!formModel.enable_l4 || !formModel.l4_cluster_tag}
+                  clearable={false}
+                  onChange={(value: string) => loadIdleVips(value).catch(() => undefined)}>
+                  <Option id={RANDOM_ALLOCATION} name={t('随机分配')} />
+                  {selectedL4Tag.value?.clusters.map(({ cloud_cluster_id, cluster_name }) => (
+                    <Option id={cloud_cluster_id} name={cluster_name || cloud_cluster_id} />
+                  ))}
+                </Select>
+                <Select
+                  v-model={formModel.l4_vip}
+                  class='w220'
+                  disabled={!formModel.enable_l4 || !formModel.l4_cluster_id}
+                  loading={isIdleVipsLoading.value}
+                  clearable={false}>
+                  <Option id={RANDOM_ALLOCATION} name={t('随机分配')} />
+                  {idleVips.value.map((vip) => (
+                    <Option id={vip} name={vip} />
+                  ))}
+                </Select>
+              </div>
+              <div class={cssModule['exclusive-cluster-row']}>
+                <Checkbox v-model={formModel.enable_l7}>七层标签</Checkbox>
+                <Select
+                  v-model={formModel.cluster_tag}
+                  class='w220'
+                  disabled={!formModel.enable_l7}
+                  loading={isTagsLoading.value}
+                  clearable={false}>
+                  {l7TagList.value.map(({ cluster_tag }) => (
+                    <Option id={cluster_tag} name={cluster_tag} />
+                  ))}
+                </Select>
+              </div>
             </div>
           ),
         },
@@ -612,6 +807,8 @@ export default (formModel: Reactive<ApplyClbModel>) => {
               region={formModel.region}
               zones={formModel.zones as string}
               vipIsp={formModel.vip_isp}
+              egresses={formModel.slaType === '2' ? effectiveEgresses.value : undefined}
+              reloadKey={formModel.slaType === '2' ? egressFilterKey.value : ''}
               onChange={(bandwidthPackage: IBandwidthPackage) => (formModel.egress = bandwidthPackage.egress)}
             />
           ),
@@ -697,6 +894,7 @@ export default (formModel: Reactive<ApplyClbModel>) => {
   };
   const handleConfirm = async () => {
     await formRef.value.validate();
+    if (isExclusiveConfigLoading.value) return;
     if (sideSliderOptions.value.type === 'add') {
       configureList.push({ ...formModel, rowKey: new Date().getTime() });
     } else {
@@ -818,6 +1016,7 @@ export default (formModel: Reactive<ApplyClbModel>) => {
                                 label={item.label}
                                 required={item.required}
                                 property={item.property}
+                                rules={item.rules}
                                 description={item.description}>
                                 {item.content()}
                               </FormItem>
@@ -833,7 +1032,11 @@ export default (formModel: Reactive<ApplyClbModel>) => {
               footer: (
                 <>
                   <div>
-                    <Button theme='primary' onClick={handleConfirm} class={'mr10'}>
+                    <Button
+                      theme='primary'
+                      onClick={handleConfirm}
+                      disabled={isExclusiveConfigLoading.value}
+                      class={'mr10'}>
                       {t('保存')}
                     </Button>
                     <Button onClick={handleClose}>{t('取消')}</Button>
@@ -930,6 +1133,8 @@ export default (formModel: Reactive<ApplyClbModel>) => {
       address_ip_version: 'IPV4',
       zoneType: '0',
       sla_type: 'shared',
+      slaType: '0',
+      exclusive: 0,
       internet_charge_type: 'TRAFFIC_POSTPAID_BY_HOUR',
     });
     handleClearValidate();
@@ -951,6 +1156,8 @@ export default (formModel: Reactive<ApplyClbModel>) => {
           address_ip_version: 'IPV4',
           zoneType: '0',
           sla_type: 'shared',
+          slaType: '0',
+          exclusive: 0,
           internet_charge_type: 'TRAFFIC_POSTPAID_BY_HOUR',
         });
       }
@@ -969,6 +1176,12 @@ export default (formModel: Reactive<ApplyClbModel>) => {
       }
     },
   );
+
+  watch(isExclusiveAvailable, (available) => {
+    if (!available && formModel.slaType === '2') {
+      Object.assign(formModel, { slaType: '0', sla_type: 'shared', exclusive: 0 });
+    }
+  });
 
   watch(
     () => formModel.zoneType,
