@@ -169,3 +169,10 @@ export enum RsInstType {
 }
 
 export const DOMAIN_REGEX = /^([a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/;
+
+export const LOAD_BALANCER_SUBTYPE = {
+  CLB: 'clb',
+  EXCLUSIVE_CLUSTER: 'exclusive-cluster',
+} as const;
+
+export type LoadBalancerSubtype = (typeof LOAD_BALANCER_SUBTYPE)[keyof typeof LOAD_BALANCER_SUBTYPE];

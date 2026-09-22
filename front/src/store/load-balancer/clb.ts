@@ -53,6 +53,8 @@ export interface ILoadBalancerWithDeleteProtectionItem {
   created_at: string;
   updated_at: string;
   delete_protect: boolean;
+  exclusive?: number; // 是否独占型实例（1是、0否），仅tcloud
+  sla_type?: string; // 性能容量型规格档位，空字符串表示非性能容量型，仅tcloud
   listener_count?: number; // 异步加载
   [key: string]: any;
 }

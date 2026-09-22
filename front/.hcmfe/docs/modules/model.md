@@ -120,3 +120,8 @@ views/<模块>/
 - 这是本系统区别于普通 CRUD 页面的**特色能力**：新增列表/表单/详情前，先判断能否用「模型 + 通用组件」落地，再决定是否手写。
 - 分步落地严格以三个 skill 为准（含可复制的 assets 模板）；本文档负责「原理与全景 + 何时用」。
 - 改造老模块不删老文件，新建迁移并加 `@deprecated`。
+
+## 任务模型接缝（外部更新）
+
+- 任务列表账号字段：`account_ids` 查询 op 为 `json_overlaps`（数组字段重叠，不是 `in`）。模型在 `src/model/task/search.view.ts`。
+- 同步任务详情列由 detail 模型 / action-list fields 对齐 `cloud_lb_id` 等协议字段，不混用其它任务类型的 `cloud_clb_id`。

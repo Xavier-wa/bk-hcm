@@ -62,7 +62,7 @@ auth: { view: (to) => ({ type: AUTH_ACCESS_BIZ, relation: [Number(to.params.bizI
 - **资源场景**：`AUTH_*` + `relation: [accountId]`（从资源详情数据 `detail.account_id` 取）。
 - **业务场景**：`AUTH_BIZ_*` + `relation: [bizId]`。列表页可用 `getAuthSignByBusinessId(bizId, AUTH_*, AUTH_BIZ_*)` 简化。
 
-工作机制：相同 sign 的多个实例 CombineRequest 批量合并；无权限自动遮罩并弹权限申请；HTTP 层 403（code 2030403）全局兜底弹窗。
+工作机制：相同 sign 的多个实例 CombineRequest 批量合并；无权限自动遮罩并弹权限申请。HTTP 层 403（code 2030403）会 `bus.$emit('show-forbidden')` 且 `app.vue` 挂了 `window.hcmPermissionDialog`，但当前没有消费方——接口返回无权限时并没有全局兜底弹窗，新增操作必须自己做预鉴权。
 
 ## Deprecated 约束（新代码禁止继续扩散）
 
@@ -86,3 +86,24 @@ auth: { view: (to) => ({ type: AUTH_ACCESS_BIZ, relation: [Number(to.params.bizI
 
 - 本文档提炼自 `.cursor/rules/fe-auth-migration.mdc`；完整迁移清单、待迁移文件优先级以该规则为准。
 - 视图级/操作级权限与路由守卫强相关，改动时对照 menu-route 模块。
+
+## 分配预鉴权（外部更新，#2081）
+
+### 分配（resource_assign）是唯一的双资源实例权限
+
+- 后端所有资源的分配都收敛到同一个 IAM action `resource_assign`：`genIaaSResourceResource` 命中 `meta.Assign` 时直接转 `genCloudResResource`，主机、CLB、VPC、证书、独占集群概不例外。
+- 权限定义里的 `resourceType` 只决定后端用哪个生成函数（`cmd/auth-server/service/auth/adaptor.go` 的 `genResourceFuncMap`），不参与 IAM 判定。分配统一用 `cloud_resource`——后端 `meta.CloudResource` 是「涵盖全部云资源」的特殊类型，直连 `genCloudResResource`。写具体类型（如 `cvm`）也能通，但要靠 `genCvmResource` 的 `default` 兜回 `genIaaSResourceResource`，绕且容易让人误以为只管主机。
+- 它在 IAM 注册的 `RelatedResourceTypes` 是**云账号 + CMDB 业务**两个实例（`pkg/iam/sys/initial_actions.go`），所以鉴权必须同时给出账号与**目标业务**：`relation: [accountId, targetBizId]`，transform 产出 `resource_id` + `bk_biz_id`。
+- 由此时机上有硬约束：目标业务是在分配弹窗里选的，**在打开弹窗前的按钮上鉴权必然不通过**（BizID 为 0，IAM 侧按业务实例 "0" 判定）。鉴权点应落在弹窗的「确定」上，未选业务时用 `hcm-auth` 的 `ignore` 跳过校验、由按钮禁用兜住。实现见 `views/resource/resource-manage/children/dialog/batch-distribution/index.tsx`，该组件是负载均衡、VPC、子网、云硬盘、弹性IP、参数模板、GCP 防火墙、证书、独占集群共用的分配入口。
+- 主机与安全组不走这个组件（各有自研弹窗和专属接口）。安全组分配不选目标业务，取的是安全组自身的管理业务，接入鉴权时 relation 里的业务来源不同。
+
+### 无权限弹窗的展示口径
+
+- 表格一行对应一个 action；「关联的资源实例」格把该 action 下**全部** `related_resource_types` 的 instances 打平去重后逐行展示，分配场景即【账号】与【业务】两行。
+- `instances` 是形如 A-B/C-D 的多层级路径结构，当前统一打平；注册的资源类型都还没有真实父链，故多层级未支持（代码内留 TODO）。
+- 多个资源鉴同一权限时后端会返回重复实例，按 `type + id` 去重。
+- 「去申请」提交的是未裁剪的整个 `permission` payload，展示层的裁剪不影响申请链接的内容。
+
+### 现存缺口
+
+`app.vue` 把弹窗实例挂到 `window.hcmPermissionDialog`、`http/index.ts` 在 403 时 `bus.$emit('show-forbidden')`，但两者都没有消费方——接口返回无权限时并没有全局兜底弹窗，只会落到各自的错误提示。因此新增操作必须自己做预鉴权，不能指望兜底。

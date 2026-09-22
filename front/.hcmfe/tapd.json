@@ -68,7 +68,7 @@
           }
         ]
       },
-      "syncedAt": "2026-09-10T06:55:12.514Z",
+      "syncedAt": "2026-09-15T02:00:07.713Z",
       "statusOptions": {
         "story": {
           "status_8": "backlog(新)",
@@ -142,7 +142,8 @@
             "label": "approved",
             "satisfies": [
               "backlog"
-            ]
+            ],
+            "nextSemantic": "todo"
           },
           "status_19": {
             "key": "status_19",

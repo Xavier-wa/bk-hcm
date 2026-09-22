@@ -19,6 +19,10 @@ const optionMap = new Map<ResourceTypeEnum, ISearchItem[]>();
 
 export const base: ISearchItem[] = [
   {
+    name: '名称',
+    id: 'name',
+  },
+  {
     name: '云厂商',
     id: 'vendor',
     multiple: true,
@@ -45,10 +49,6 @@ export const cvm: ISearchItem[] = [
   {
     name: '主机ID',
     id: 'cloud_id',
-  },
-  {
-    name: '实例名称',
-    id: 'name',
   },
   {
     name: '固资号',
@@ -81,10 +81,6 @@ export const securityGroup: ISearchItem[] = [
   {
     name: '安全组ID',
     id: 'cloud_id',
-  },
-  {
-    name: '名称',
-    id: 'name',
   },
   ...base,
   {
@@ -146,10 +142,6 @@ export const argumentTemplate: ISearchItem[] = [
     name: '模板ID',
     id: 'cloud_id',
   },
-  {
-    name: '名称',
-    id: 'name',
-  },
   ...base,
 ];
 
@@ -173,11 +165,12 @@ export const getAccountList = async (keyword: string) => {
 
 const getBusinessList = async (keyword: string) => {
   const list = await businessGlobalStore.getBusinessFullList();
-  const children = list.map(({ id, name }) => ({ id, name }));
+  const options = list.map((biz) => ({ id: String(biz.id), name: biz.name }));
   if (!keyword) {
-    return children;
+    return options;
   }
-  return children.filter(({ name }) => name.includes(keyword));
+  const kw = keyword.toLowerCase();
+  return options.filter((opt) => opt.name.toLowerCase().includes(kw) || opt.id.includes(keyword));
 };
 
 const getOptionMenu = async (item: ISearchItem, keyword: string): Promise<any[]> => {
@@ -195,7 +188,7 @@ const getOptionMenu = async (item: ISearchItem, keyword: string): Promise<any[]>
     return cloudAreaStore.fetchAllCloudAreas();
   }
 
-  if (id === 'usage_biz_id' || id === 'mgmt_biz_id') {
+  if (id === 'usage_biz_id' || id === 'mgmt_biz_id' || id === 'bk_biz_id') {
     return getBusinessList(keyword);
   }
 
@@ -207,7 +200,7 @@ const getOptionMenu = async (item: ISearchItem, keyword: string): Promise<any[]>
 };
 
 const getOptionData = (type: ResourceTypeEnum) => {
-  return optionMap.get(type);
+  return optionMap.get(type) ?? [];
 };
 
 const factory = {
