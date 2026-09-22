@@ -294,6 +294,7 @@ func (s *Service) apiSet() *restful.Container {
 	argstpl.InitService(capability)
 	cert.InitService(capability)
 	loadbalancer.InitService(capability)
+	loadbalancer.InitExclusiveClusterService(capability)
 	sgcomrel.InitService(capability)
 	mainaccount.InitService(capability)
 	rootaccount.InitService(capability)

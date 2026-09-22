@@ -44,6 +44,14 @@ func (svc *clbSvc) initTCloudZiyanClbService(cap *capability.Capability) {
 		"/vendors/tcloud-ziyan/load_balancers/quota", svc.ListTCloudZiyanLBQuota)
 	h.Add("TCloudZiyanDescribeSlaCapacity", http.MethodPost,
 		"/vendors/tcloud-ziyan/load_balancers/sla/capacity/describe", svc.TCloudZiyanDescribeSlaCapacity)
+	// 内部测试端点：查询独占集群资源（含VIP闲置状态），仅供联调/测试直接验证，不对外暴露
+	h.Add("TCloudZiyanDescribeClusterIdleVipsRaw", http.MethodPost,
+		"/vendors/tcloud-ziyan/load_balancers/exclusive_clusters/idle_vips/query",
+		svc.TCloudZiyanDescribeClusterIdleVipsRaw)
+	// 业务视角闲置VIP查询接口用：自动翻页取全并去重后返回
+	h.Add("TCloudZiyanDescribeClusterIdleVips", http.MethodPost,
+		"/vendors/tcloud-ziyan/load_balancers/exclusive_clusters/idle_vips/describe",
+		svc.TCloudZiyanDescribeClusterIdleVips)
 
 	h.Add("ZiyanCreateSnatIps", http.MethodPost,
 		"/vendors/tcloud-ziyan/load_balancers/snat_ips/create", svc.ZiyanCreateSnatIps)

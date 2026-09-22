@@ -67,7 +67,6 @@ func (svc *clbSvc) BatchCreateTCloudZiyanClb(cts *rest.Contexts) (any, error) {
 			LoadBalancerName: req.Name,
 			VpcID:            req.CloudVpcID,
 			SubnetID:         req.CloudSubnetID,
-			Vip:              req.Vip,
 			VipIsp:           req.VipIsp,
 
 			InternetChargeType:      req.InternetChargeType,
@@ -85,7 +84,9 @@ func (svc *clbSvc) BatchCreateTCloudZiyanClb(cts *rest.Contexts) (any, error) {
 		Zones:        req.Zones,
 		TgwGroupName: req.TgwGroupName,
 	}
-
+	if cvt.PtrToVal(req.Vip) != "" {
+		createOpt.Vip = req.Vip
+	}
 	if cvt.PtrToVal(req.CloudEipID) != "" {
 		createOpt.EipAddressID = req.CloudEipID
 	}
@@ -112,6 +113,21 @@ func (svc *clbSvc) BatchCreateTCloudZiyanClb(cts *rest.Contexts) (any, error) {
 	// TODO: 指定ip 待确认
 	if len(req.ClusterIDs) > 0 {
 		createOpt.ClusterIds = cvt.SliceToPtr(req.ClusterIDs)
+	}
+	// 独占型：cloud_cluster_ids/cluster_tag 原样透传给云侧四层/七层集群参数；exclusive 本身不下传云侧
+	if len(req.CloudClusterIDs) != 0 {
+		createOpt.ClusterIds = cvt.SliceToPtr(req.CloudClusterIDs)
+	}
+	if cvt.PtrToVal(req.ClusterTag) != "" {
+		createOpt.ClusterTag = req.ClusterTag
+	}
+
+	if req.IsExclusive() {
+		if err := svc.recheckExclusiveBeforeDeliver(cts.Kit, tcloudAdpt, &req.TCloudLoadBalancerCreateReq); err != nil {
+			logs.Errorf("recheck exclusive cluster before deliver failed, err: %v, req: %+v, rid: %s",
+				err, req, cts.Kit.Rid)
+			return nil, err
+		}
 	}
 
 	result, err := tcloudAdpt.CreateZiyanLoadBalancer(cts.Kit, createOpt)
@@ -222,6 +238,51 @@ func (svc *clbSvc) TCloudZiyanDescribeResources(cts *rest.Contexts) (any, error)
 	}
 
 	return client.DescribeResources(cts.Kit, req.TCloudDescribeResourcesOption)
+}
+
+// TCloudZiyanDescribeClusterIdleVipsRaw 查询独占集群内的资源（含VIP闲置状态），仅供内部联调/测试使用，不经
+// cloud-server/web-server 对外暴露。复用集群资源列表查询能力（DescribeClusterResources），原样透传云端响应。
+func (svc *clbSvc) TCloudZiyanDescribeClusterIdleVipsRaw(cts *rest.Contexts) (any, error) {
+	req := new(protolb.TCloudDescribeClusterIdleVipsRawReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	client, err := svc.ad.TCloudZiyan(cts.Kit, req.AccountID)
+	if err != nil {
+		return nil, err
+	}
+
+	return client.DescribeClusterResources(cts.Kit, req.TCloudDescribeClusterResourcesOption)
+}
+
+// TCloudZiyanDescribeClusterIdleVips 查询独占集群当前闲置的VIP列表，内部自动翻页取全并对结果去重，供
+// cloud-server 业务视角闲置VIP查询接口（N-05）调用，实时查云、不落库。
+func (svc *clbSvc) TCloudZiyanDescribeClusterIdleVips(cts *rest.Contexts) (any, error) {
+	req := new(protolb.TCloudDescribeClusterIdleVipsReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	client, err := svc.ad.TCloudZiyan(cts.Kit, req.AccountID)
+	if err != nil {
+		return nil, err
+	}
+
+	vips, err := listAllClusterIdleVips(cts.Kit, client, req.Region, req.ClusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &protolb.TCloudDescribeClusterIdleVipsResult{Count: uint64(len(vips)), Details: vips}, nil
 }
 
 // TCloudZiyanUpdateCLB 更新clb属性

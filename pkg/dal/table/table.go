@@ -176,6 +176,8 @@ const (
 	ResourceFlowRelTable Name = "resource_flow_rel"
 	// ResourceFlowLockTable is resource_flow_lock table's name.
 	ResourceFlowLockTable Name = "resource_flow_lock"
+	// LoadBalancerExclusiveClusterTable is load_balancer_exclusive_cluster table's name.
+	LoadBalancerExclusiveClusterTable Name = "load_balancer_exclusive_cluster"
 	// TCloudZiyanRegionTable 腾讯自研云地域表名
 	TCloudZiyanRegionTable Name = "tcloud_ziyan_region"
 	// TCloudZiyanSecurityGroupRuleTable 腾讯自研云安全组规则表名
@@ -430,30 +432,31 @@ var TableMap = map[Name]TableConfig{
 
 	ArgumentTemplateTable: {EnableTenant: true},
 
-	AccountBillMonthTaskTable:       {},
-	AccountBillDailyPullTaskTable:   {},
-	AccountBillSummaryTable:         {},
-	AccountBillSummaryMainTable:     {},
-	AccountBillSummaryVersionTable:  {},
-	AccountBillSummaryDailyTable:    {},
-	AccountBillItemTable:            {},
-	AccountBillAdjustmentItemTable:  {},
-	AccountBillPrepaidItemTable:     {},
-	AccountBillSummaryRootTable:     {},
-	RootAccountBillConfigTable:      {EnableTenant: true},
-	AccountBillExchangeRateTable:    {EnableTenant: true},
-	AccountBillSyncRecordTable:      {EnableTenant: true},
-	AccountBillRegionCityRelTable:   {},
-	LoadBalancerTable:               {EnableTenant: true},
-	SecurityGroupCommonRelTable:     {},
-	LoadBalancerListenerTable:       {},
-	TCloudLbUrlRuleTable:            {},
-	TCloudZiyanLbUrlRuleTable:       {},
-	LoadBalancerTargetTable:         {},
-	LoadBalancerTargetGroupTable:    {},
-	TargetGroupListenerRuleRelTable: {},
-	ResourceFlowRelTable:            {},
-	ResourceFlowLockTable:           {},
+	AccountBillMonthTaskTable:         {},
+	AccountBillDailyPullTaskTable:     {},
+	AccountBillSummaryTable:           {},
+	AccountBillSummaryMainTable:       {},
+	AccountBillSummaryVersionTable:    {},
+	AccountBillSummaryDailyTable:      {},
+	AccountBillItemTable:              {},
+	AccountBillAdjustmentItemTable:    {},
+	AccountBillPrepaidItemTable:       {},
+	AccountBillSummaryRootTable:       {},
+	RootAccountBillConfigTable:        {EnableTenant: true},
+	AccountBillExchangeRateTable:      {EnableTenant: true},
+	AccountBillSyncRecordTable:        {EnableTenant: true},
+	AccountBillRegionCityRelTable:     {},
+	LoadBalancerTable:                 {EnableTenant: true},
+	SecurityGroupCommonRelTable:       {},
+	LoadBalancerListenerTable:         {},
+	TCloudLbUrlRuleTable:              {},
+	TCloudZiyanLbUrlRuleTable:         {},
+	LoadBalancerTargetTable:           {},
+	LoadBalancerTargetGroupTable:      {},
+	TargetGroupListenerRuleRelTable:   {},
+	ResourceFlowRelTable:              {},
+	ResourceFlowLockTable:             {},
+	LoadBalancerExclusiveClusterTable: {EnableTenant: true},
 
 	// TODO 内部版独有的表，有待梳理是否启用多租户
 	ResPlanTicketTable:                {},
@@ -524,8 +527,8 @@ var TableMap = map[Name]TableConfig{
 
 	AiagentSessionTable:     {},
 	AiagentRunFeedbackTable: {},
-	AiagentRunTable:     {},
-	AiagentRunEvalTable: {},
+	AiagentRunTable:         {},
+	AiagentRunEvalTable:     {},
 }
 
 // Register 注册表名

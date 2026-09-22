@@ -37,6 +37,9 @@ import (
 func (a *applicationSvc) buildApplicationResponse(cts *rest.Contexts,
 	application *dsProto.ApplicationResp) (*proto.ApplicationGetResp, error) {
 
+	content := RemoveSenseField(application.Content)
+	content = a.enrichExclusiveClusterContent(cts.Kit, application.Type, content)
+
 	resp := &proto.ApplicationGetResp{
 		ID:             application.ID,
 		Source:         application.Source,
@@ -45,7 +48,7 @@ func (a *applicationSvc) buildApplicationResponse(cts *rest.Contexts,
 		Operation:      application.Operation,
 		Status:         application.Status,
 		Applicant:      application.Applicant,
-		Content:        RemoveSenseField(application.Content),
+		Content:        content,
 		DeliveryDetail: application.DeliveryDetail,
 		Memo:           application.Memo,
 		Revision:       application.Revision,
