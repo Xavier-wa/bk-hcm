@@ -136,7 +136,6 @@ func (svc *clbSvc) BatchCreateTCloudClb(cts *rest.Contexts) (interface{}, error)
 		LoadBalancerName:         req.Name,
 		VpcID:                    req.CloudVpcID,
 		SubnetID:                 req.CloudSubnetID,
-		Vip:                      req.Vip,
 		VipIsp:                   req.VipIsp,
 		InternetChargeType:       req.InternetChargeType,
 		InternetMaxBandwidthOut:  req.InternetMaxBandwidthOut,
@@ -148,6 +147,9 @@ func (svc *clbSvc) BatchCreateTCloudClb(cts *rest.Contexts) (interface{}, error)
 		BandwidthpkgSubType:      req.BandwidthpkgSubType,
 		Tags:                     req.Tags,
 		LoadBalancerPassToTarget: req.LoadBalancerPassToTarget,
+	}
+	if cvt.PtrToVal(req.Vip) != "" {
+		createOpt.Vip = req.Vip
 	}
 	// 独占型：cloud_cluster_ids/cluster_tag 原样透传给云侧四层/七层集群参数；exclusive 本身不下传云侧
 	if len(req.CloudClusterIDs) != 0 {
