@@ -6,7 +6,7 @@
 ## 2. 枚举与常量注册
 
 - [x] 2.1 `pkg/criteria/enumor/load_balancer.go` 新增 `ClusterType`（`TGW`/`STGW`/`VPCGW`）枚举类型 + `Validate()`
-- [x] 2.2 同文件新增 `ClusterNetwork`（`Public`/`Private`）枚举类型 + `Validate()`
+- [x] 2.2 同文件新增 `ClusterNetwork`（`Public`/`Private`/`Hybrid`）枚举类型 + `Validate()`
 - [x] 2.3 `pkg/criteria/enumor/cloud_resource_type.go` 新增 `LoadBalancerExclusiveClusterCloudResType`，并在 `typeMapping` 映射到 `table.LoadBalancerExclusiveClusterTable`
 - [x] 2.4 `pkg/criteria/enumor/audit.go` 新增 `LoadBalancerExclusiveClusterAuditResType` 常量并注册进 `AuditResourceTypeEnums`
 

@@ -1,5 +1,8 @@
-## ADDED Requirements
+# load-balancer-exclusive-cluster-crud Specification
 
+## Purpose
+TBD - created by archiving change load-balancer-exclusive-cluster-dao. Update Purpose after archive.
+## Requirements
 ### Requirement: 独占集群表 DDL
 
 系统 SHALL 提供 `load_balancer_exclusive_cluster` 表的 SQL DDL 迁移脚本，包含以下字段：`id`, `cloud_id`, `name`, `vendor`, `account_id`, `bk_biz_id`, `region`, `zone`, `cluster_type`, `cluster_tag`, `network`, `isp`, `egress`, `ip_version`, `max_conn`（nullable）, `clb_resource_count`, `extension`, `memo`, `tenant_id`, `creator`, `reviser`, `created_at`, `updated_at`。唯一键 `(cloud_id, account_id, tenant_id)`，索引含 `bk_biz_id`、`cluster_tag`、`(region, cluster_type)`。DDL 文件 SHALL 在同一事务内完成建表、`id_generator` 插入种子记录、`hcm_version` 视图更新。`pkg/dal/table/table.go` SHALL 新增 `LoadBalancerExclusiveClusterTable` 表名枚举并在 `TableMap` 注册 `{EnableTenant: true}`。
@@ -18,7 +21,7 @@
 
 ### Requirement: 集群相关枚举与常量注册
 
-`pkg/criteria/enumor/load_balancer.go` SHALL 新增 `ClusterType`（取值 `TGW`、`STGW`、`VPCGW`）与 `ClusterNetwork`（取值 `Public`、`Private`）两个枚举类型，均提供 `Validate()` 方法。`pkg/criteria/enumor/cloud_resource_type.go` SHALL 新增 `LoadBalancerExclusiveClusterCloudResType` 并在 `typeMapping` 中映射到 `table.LoadBalancerExclusiveClusterTable`。`pkg/criteria/enumor/audit.go` SHALL 新增 `LoadBalancerExclusiveClusterAuditResType` 常量并注册进 `AuditResourceTypeEnums`。
+`pkg/criteria/enumor/load_balancer.go` SHALL 新增 `ClusterType`（取值 `TGW`、`STGW`、`VPCGW`）与 `ClusterNetwork`（取值 `Public`、`Private`、`Hybrid`）两个枚举类型，均提供 `Validate()` 方法。`pkg/criteria/enumor/cloud_resource_type.go` SHALL 新增 `LoadBalancerExclusiveClusterCloudResType` 并在 `typeMapping` 中映射到 `table.LoadBalancerExclusiveClusterTable`。`pkg/criteria/enumor/audit.go` SHALL 新增 `LoadBalancerExclusiveClusterAuditResType` 常量并注册进 `AuditResourceTypeEnums`。
 
 #### Scenario: ClusterType 校验合法值
 - **WHEN** 调用 `ClusterType("TGW").Validate()`
@@ -120,6 +123,10 @@
 - **WHEN** 发送 POST 请求，`filter` 指定 `region=ap-guangzhou AND cluster_type=TGW`，`page.count=false`
 - **THEN** 返回匹配记录列表，每条记录的 `extension` 完整返回 12 个子字段
 
+#### Scenario: fields 未包含 extension
+- **WHEN** 发送 POST 请求，`fields` 未包含 `extension`
+- **THEN** 正常返回记录列表，每条记录的 `extension` 为 `{}`
+
 #### Scenario: Count 模式
 - **WHEN** 发送 POST 请求，`page.count=true`
 - **THEN** 返回 `{count: N}`，`details` 为空数组
@@ -191,3 +198,4 @@
 #### Scenario: Global client 调用 BatchUpdateBizID
 - **WHEN** 调用 `global.LoadBalancerExclusiveCluster.BatchUpdateBizID(kt, req)`
 - **THEN** 发送 PATCH 到 `/load_balancer_exclusive_clusters/biz`
+

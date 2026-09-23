@@ -275,12 +275,14 @@ const (
 	PublicClusterNetwork ClusterNetwork = "Public"
 	// PrivateClusterNetwork 网络类型-内网
 	PrivateClusterNetwork ClusterNetwork = "Private"
+	// HybridClusterNetwork 网络类型-混合
+	HybridClusterNetwork ClusterNetwork = "Hybrid"
 )
 
 // Validate 校验独占集群网络类型是否合法，空字符串视为未指定，同样合法
 func (c ClusterNetwork) Validate() error {
 	switch c {
-	case "", PublicClusterNetwork, PrivateClusterNetwork:
+	case "", PublicClusterNetwork, PrivateClusterNetwork, HybridClusterNetwork:
 		return nil
 	default:
 		return fmt.Errorf("unsupported cluster network: %s", c)
@@ -302,12 +304,14 @@ const (
 	CTCCClusterIsp ClusterIsp = "CTCC"
 	// InternalClusterIsp 运营商类型-内部
 	InternalClusterIsp ClusterIsp = "INTERNAL"
+	// MIXClusterIsp 运营商类型-混合
+	MIXClusterIsp ClusterIsp = "MIX"
 )
 
 // Validate 校验独占集群运营商类型是否合法，空字符串视为未指定，同样合法
 func (c ClusterIsp) Validate() error {
 	switch c {
-	case "", BGPClusterIsp, CMCCClusterIsp, CUCCClusterIsp, CTCCClusterIsp, InternalClusterIsp:
+	case "", BGPClusterIsp, CMCCClusterIsp, CUCCClusterIsp, CTCCClusterIsp, InternalClusterIsp, MIXClusterIsp:
 		return nil
 	default:
 		return fmt.Errorf("unsupported cluster isp: %s", c)

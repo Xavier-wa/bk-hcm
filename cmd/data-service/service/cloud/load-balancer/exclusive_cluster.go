@@ -49,8 +49,8 @@ func InitExclusiveClusterService(cap *capability.Capability) {
 	h := rest.NewHandler()
 
 	h.Add("ListExclusiveCluster", http.MethodPost, "/load_balancer_exclusive_clusters/list", svc.ListExclusiveCluster)
-	h.Add("BatchCreateExclusiveCluster", http.MethodPost, "/vendors/{vendor}/load_balancer_exclusive_clusters/batch/create",
-		svc.BatchCreateExclusiveCluster)
+	h.Add("BatchCreateExclusiveCluster", http.MethodPost,
+		"/vendors/{vendor}/load_balancer_exclusive_clusters/batch/create", svc.BatchCreateExclusiveCluster)
 	h.Add("BatchUpdateExclusiveCluster", http.MethodPatch, "/vendors/{vendor}/load_balancer_exclusive_clusters",
 		svc.BatchUpdateExclusiveCluster)
 	h.Add("BatchUpdateExclusiveClusterBizID", http.MethodPatch, "/load_balancer_exclusive_clusters/biz",
@@ -92,11 +92,21 @@ func (svc *lbSvc) ListExclusiveCluster(cts *rest.Contexts) (any, error) {
 	for _, one := range result.Details {
 		details = append(details, corelb.ExclusiveClusterRaw{
 			BaseExclusiveCluster: *convExclusiveClusterTableToBase(&one),
-			Extension:            rawjson.RawMessage(one.Extension),
+			Extension:            convExclusiveClusterExtensionToRaw(one.Extension),
 		})
 	}
 
 	return &dataproto.ExclusiveClusterListResult{Details: details}, nil
+}
+
+// convExclusiveClusterExtensionToRaw converts the extension column to raw json.
+// When fields does not include extension, the column is not selected and stays empty.
+// An empty string is not valid json and fails response encoding, so fall back to {}.
+func convExclusiveClusterExtensionToRaw(ext tabletype.JsonField) rawjson.RawMessage {
+	if len(ext) == 0 {
+		return rawjson.RawMessage("{}")
+	}
+	return rawjson.RawMessage(ext)
 }
 
 // convExclusiveClusterTableToBase convert LoadBalancerExclusiveClusterTable to BaseExclusiveCluster.

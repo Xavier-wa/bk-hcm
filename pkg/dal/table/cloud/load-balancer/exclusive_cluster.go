@@ -80,9 +80,9 @@ type LoadBalancerExclusiveClusterTable struct {
 	ClusterType enumor.ClusterType `db:"cluster_type" validate:"lte=16" json:"cluster_type"`
 	// ClusterTag 集群标签，空表示未打标签
 	ClusterTag string `db:"cluster_tag" validate:"lte=128" json:"cluster_tag"`
-	// Network 网络类型：Public/Private
+	// Network 网络类型：Public/Private/Hybrid
 	Network enumor.ClusterNetwork `db:"network" validate:"lte=16" json:"network"`
-	// Isp 运营商：BGP/CMCC/CUCC/CTCC/INTERNAL
+	// Isp 运营商：BGP/CMCC/CUCC/CTCC/INTERNAL/MIX
 	Isp enumor.ClusterIsp `db:"isp" validate:"lte=16" json:"isp"`
 	// Egress 网络出口，如center_egress1
 	Egress string `db:"egress" validate:"lte=64" json:"egress"`
