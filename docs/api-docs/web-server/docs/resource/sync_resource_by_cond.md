@@ -59,7 +59,7 @@ POST /api/v1/cloud/vendors/{vendor}/accounts/{account_id}/resources/{res}/sync_b
 }
 ```
 
-1. 同步'ap-guangzhou'地域下，标签biz='1234'的资源
+2. 同步'ap-guangzhou'地域下，标签biz='1234'的资源
 
 ```json
 {
@@ -100,7 +100,7 @@ POST /api/v1/cloud/vendors/{vendor}/accounts/{account_id}/resources/{res}/sync_b
 ### 响应参数说明
 
 | 参数名称    | 参数类型   | 描述   |
-| ------- | ------ | ---- |
+|---------|--------|------|
 | code    | int32  | 状态码  |
 | message | string | 请求信息 |
 | data    | object | CLB 异步同步时返回任务信息，其他资源为空 |
