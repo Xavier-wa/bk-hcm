@@ -47,6 +47,7 @@ import (
 	mainaccount "hcm/cmd/hc-service/service/main-account"
 	"hcm/cmd/hc-service/service/monitoring"
 	"hcm/cmd/hc-service/service/permission-template"
+	"hcm/cmd/hc-service/service/plugin"
 	routetable "hcm/cmd/hc-service/service/route-table"
 	sagemaker "hcm/cmd/hc-service/service/sagemaker"
 	securitygroup "hcm/cmd/hc-service/service/security-group"
@@ -199,6 +200,8 @@ func (s *Service) apiSet() *restful.Container {
 	cos.InitCosService(c)
 	monitoring.InitMonitoringService(c)
 	permissiontemplate.InitService(c)
+	// TODO(temp_delete): 合并正式插件注册与北向协议后删除该调用。
+	plugin.InitService(c)
 
 	return restful.NewContainer().Add(c.WebService)
 }
