@@ -78,7 +78,6 @@ import (
 	"hcm/cmd/data-service/service/cloud/zone"
 	"hcm/cmd/data-service/service/cos"
 	globalconfig "hcm/cmd/data-service/service/global-config"
-	"hcm/cmd/data-service/service/plugin"
 	recyclerecord "hcm/cmd/data-service/service/recycle-record"
 	"hcm/cmd/data-service/service/task"
 	"hcm/cmd/data-service/service/tenant"
@@ -286,7 +285,6 @@ func (s *Service) apiSet() *restful.Container {
 	resusagebizrel.InitService(capability)
 	permissiontemplate.InitService(capability)
 	permpolicylib.InitService(capability)
-	plugin.InitService(capability)
 
 	return restful.NewContainer().Add(capability.WebService)
 }

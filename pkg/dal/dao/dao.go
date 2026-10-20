@@ -64,7 +64,6 @@ import (
 	globalconfig "hcm/pkg/dal/dao/global-config"
 	idgenerator "hcm/pkg/dal/dao/id-generator"
 	"hcm/pkg/dal/dao/orm"
-	daoplugin "hcm/pkg/dal/dao/plugin"
 	recyclerecord "hcm/pkg/dal/dao/recycle-record"
 	"hcm/pkg/dal/dao/task"
 	"hcm/pkg/dal/dao/tenant"
@@ -155,9 +154,6 @@ type Set interface {
 	Tenant() tenant.Tenant
 	PermissionTemplate() permissiontemplate.PermissionTemplate
 	PermissionPolicyLibrary() permissionpolicylibrary.PermissionPolicyLibrary
-	IacPluginSchema() daoplugin.IacPluginSchema
-	// TODO(temp_delete): 合并插件注册分支后删除该接口方法
-	IacPluginTempDelete() daoplugin.IacPluginTempDelete
 
 	Txn() *Txn
 }

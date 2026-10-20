@@ -76,10 +76,6 @@ type Client struct {
 	PermissionTemplate *PermissionTemplateClient
 
 	PermissionPolicyLibrary *PermissionPolicyLibraryClient
-
-	IacPluginSchema *IacPluginSchemaClient
-	// TODO(temp_delete): 合并插件注册分支后删除该字段
-	IacPluginTempDelete *IacPluginTempDeleteClient
 }
 
 type restClient struct {
@@ -125,15 +121,13 @@ func NewClient(client rest.ClientInterface) *Client {
 		RootAccount:    NewRootAccountClient(client),
 		Cos:            NewCosClient(client),
 
-		TaskDetail:              NewTaskDetailClient(client),
-		TaskManagement:          NewTaskManagementClient(client),
-		Tenant:                  NewTenantClient(client),
-		AccountSecret:           NewAccountSecretClient(client),
-		GlobalConfig:            NewGlobalConfigClient(client),
-		ResUsageBizRel:          NewResUsageBizRelRelClient(client),
-		PermissionTemplate:      NewPermissionTemplateClient(client),
+		TaskDetail:     NewTaskDetailClient(client),
+		TaskManagement: NewTaskManagementClient(client),
+		Tenant:         NewTenantClient(client),
+		AccountSecret: NewAccountSecretClient(client),
+		GlobalConfig:       NewGlobalConfigClient(client),
+		ResUsageBizRel:     NewResUsageBizRelRelClient(client),
+		PermissionTemplate: NewPermissionTemplateClient(client),
 		PermissionPolicyLibrary: NewPermissionPolicyLibraryClient(client),
-		IacPluginSchema:         NewIacPluginSchemaClient(client),
-		IacPluginTempDelete:     NewIacPluginTempDeleteClient(client),
 	}
 }

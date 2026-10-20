@@ -221,13 +221,6 @@ const (
 
 	// PermissionPolicyLibraryTable is permission_policy_library table's name.
 	PermissionPolicyLibraryTable Name = "permission_policy_library"
-
-	// IacPluginSchemaTable iac_plugin_schema 表名。
-	IacPluginSchemaTable Name = "iac_plugin_schema"
-
-	// IacPluginTempDeleteTable iac_plugin_temp_delete 临时测试表名。
-	// TODO(temp_delete): 合并插件注册分支后删除该常量。
-	IacPluginTempDeleteTable Name = "iac_plugin_temp_delete"
 )
 
 // Validate whether the table name is valid or not.
@@ -348,11 +341,6 @@ var TableMap = map[Name]TableConfig{
 	PermissionTemplateTable: {EnableTenant: true},
 
 	PermissionPolicyLibraryTable: {EnableTenant: true},
-
-	IacPluginSchemaTable: {},
-
-	// TODO(temp_delete): 合并插件注册分支后删除该配置
-	IacPluginTempDeleteTable: {},
 }
 
 // Register 注册表名
