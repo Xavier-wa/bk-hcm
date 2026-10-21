@@ -42,6 +42,13 @@ func InitService(cap *capability.Capability) {
 	// TODO(temp_delete): 合并插件注册分支后删除该调用。
 	svc.initIacPluginTempDeleteRoutes(h)
 
+	// 注册表只增不删：下线通过把 state 置为 disabled 完成，不提供删除接口。
+	h.Add("CreateIaCPlugin", http.MethodPost, "/iac_plugins/create", svc.CreateIaCPlugin)
+	h.Add("UpdateIaCPlugin", http.MethodPatch, "/iac_plugins/update", svc.UpdateIaCPlugin)
+	h.Add("BatchUpdateIaCPluginState", http.MethodPatch, "/iac_plugins/batch/update_state",
+		svc.BatchUpdateIaCPluginState)
+	h.Add("ListIaCPlugin", http.MethodPost, "/iac_plugins/list", svc.ListIaCPlugin)
+
 	h.Load(cap.WebService)
 }
 

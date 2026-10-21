@@ -228,6 +228,9 @@ const (
 	// IacPluginTempDeleteTable iac_plugin_temp_delete 临时测试表名。
 	// TODO(temp_delete): 合并插件注册分支后删除该常量。
 	IacPluginTempDeleteTable Name = "iac_plugin_temp_delete"
+
+	// IaCPluginTable is iac_plugin table's name.
+	IaCPluginTable Name = "iac_plugin"
 )
 
 // Validate whether the table name is valid or not.
@@ -353,6 +356,9 @@ var TableMap = map[Name]TableConfig{
 
 	// TODO(temp_delete): 合并插件注册分支后删除该配置
 	IacPluginTempDeleteTable: {},
+
+	// IaC 插件是平台级资源，不区分租户
+	IaCPluginTable: {},
 }
 
 // Register 注册表名

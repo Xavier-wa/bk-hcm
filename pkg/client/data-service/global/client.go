@@ -80,6 +80,8 @@ type Client struct {
 	IacPluginSchema *IacPluginSchemaClient
 	// TODO(temp_delete): 合并插件注册分支后删除该字段
 	IacPluginTempDelete *IacPluginTempDeleteClient
+
+	IaCPlugin *IaCPluginClient
 }
 
 type restClient struct {
@@ -135,5 +137,6 @@ func NewClient(client rest.ClientInterface) *Client {
 		PermissionPolicyLibrary: NewPermissionPolicyLibraryClient(client),
 		IacPluginSchema:         NewIacPluginSchemaClient(client),
 		IacPluginTempDelete:     NewIacPluginTempDeleteClient(client),
+		IaCPlugin:               NewIaCPluginClient(client),
 	}
 }

@@ -30,3 +30,12 @@ func (s *set) IacPluginSchema() daoplugin.IacPluginSchema {
 		IDGen: s.idGen,
 	}
 }
+
+// IaCPlugin return iac plugin dao.
+func (s *set) IaCPlugin() daoplugin.IaCPlugin {
+	return &daoplugin.Dao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+		Audit: s.audit,
+	}
+}
