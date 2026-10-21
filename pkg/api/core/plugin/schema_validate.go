@@ -23,10 +23,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"regexp"
+	"strings"
 
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/tools/json"
+
+	tfjson "github.com/hashicorp/terraform-json"
 )
 
 const (
@@ -38,27 +41,23 @@ const (
 
 var schemaHashRegexp = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
-var validCapabilities = map[string]struct{}{
-	CapabilityApply:      {},
-	CapabilityPlan:       {},
-	CapabilityRefresh:    {},
-	CapabilityReadData:   {},
-	CapabilityAsyncApply: {},
-	CapabilityStop:       {},
-	CapabilityValidate:   {},
-	CapabilityImport:     {},
-	CapabilityList:       {},
-}
-
-// ComputeRawSchemaHash 计算 RawSchema 的规范 SHA-256（"sha256:" + 64 位小写 hex）。
-func ComputeRawSchemaHash(raw *RawSchema) (string, error) {
-	if raw == nil {
-		return "", errf.New(errf.InvalidParameter, "raw schema is nil")
+// ComputeSchemaHash 计算包含插件标识（plugin.name、plugin.version）与 SchemaDetail 的规范 SHA-256（"sha256:" + 64 位小写 hex）。
+func ComputeSchemaHash(plugin PluginInfo, detail *SchemaDetail) (string, error) {
+	if detail == nil {
+		return "", errf.New(errf.InvalidParameter, "schema detail is nil")
 	}
 
-	rawBytes, err := json.Marshal(raw)
+	payload := struct {
+		Plugin       PluginInfo `json:"plugin"`
+		SchemaDetail `json:",inline"`
+	}{
+		Plugin:       plugin,
+		SchemaDetail: *detail,
+	}
+
+	rawBytes, err := json.Marshal(payload)
 	if err != nil {
-		return "", errf.Newf(errf.InvalidParameter, "marshal raw schema failed, err: %v", err)
+		return "", errf.Newf(errf.InvalidParameter, "marshal schema detail failed, err: %v", err)
 	}
 
 	sum := sha256.Sum256(rawBytes)
@@ -74,79 +73,144 @@ func ValidateSchemaHashFormat(schemaHash string) error {
 	return nil
 }
 
-// ValidateCapabilities 按南向协议能力位规则校验 RawSchema.Capabilities。
-func ValidateCapabilities(raw *RawSchema) error {
-	if raw == nil {
-		return errf.New(errf.InvalidParameter, "raw schema is nil")
+// ValidateCapabilities 按南向协议能力位正反向约束校验 SchemaDetail.Capabilities。
+func ValidateCapabilities(detail *SchemaDetail) error {
+	if detail == nil {
+		return errf.New(errf.InvalidParameter, "schema detail is nil")
 	}
 
-	if len(raw.Capabilities) == 0 {
+	if detail.Capabilities == (Capabilities{}) {
 		return errf.New(errf.InvalidParameter, "capabilities cannot be empty")
 	}
 
-	for key := range raw.Capabilities {
-		if _, ok := validCapabilities[key]; !ok {
-			return errf.Newf(errf.InvalidParameter, "unsupported capability key: %s", key)
-		}
+	if err := validateResourceCapabilities(detail); err != nil {
+		return err
 	}
 
-	if len(raw.ResourceSchemas) > 0 {
-		requiredCaps := []string{CapabilityApply, CapabilityPlan, CapabilityRefresh}
-		for _, capKey := range requiredCaps {
-			if !raw.Capabilities[capKey] {
-				return errf.Newf(errf.InvalidParameter,
-					"capability %q must be true when resource_schemas is non-empty", capKey)
-			}
-		}
-	}
-
-	if len(raw.DataSourceSchemas) > 0 {
-		if !raw.Capabilities[CapabilityReadData] {
-			return errf.New(errf.InvalidParameter,
-				"capability \"read_data\" must be true when data_source_schemas is non-empty")
-		}
-	} else {
-		if _, declared := raw.Capabilities[CapabilityReadData]; declared {
-			return errf.New(errf.InvalidParameter,
-				"capability \"read_data\" must not be declared when data_source_schemas is empty")
-		}
-	}
-
-	if raw.Capabilities[CapabilityStop] && !raw.Capabilities[CapabilityAsyncApply] {
+	if len(detail.DataSourceSchemas) > 0 && !detail.Capabilities.ReadData {
 		return errf.New(errf.InvalidParameter,
-			"capability \"async_apply\" must be true when capability \"stop\" is true")
+			"capabilities.read_data must be true when data_source_schemas is not empty")
+	}
+	if len(detail.DataSourceSchemas) == 0 && detail.Capabilities.ReadData {
+		return errf.New(errf.InvalidParameter,
+			"capabilities.read_data must not be true when data_source_schemas is empty")
+	}
+
+	if detail.Capabilities.Stop && !detail.Capabilities.AsyncApply {
+		return errf.New(errf.InvalidParameter,
+			"capabilities.async_apply must be true when capabilities.stop is true")
 	}
 
 	return nil
 }
 
-// ValidatePluginSchema 按期望插件身份与协议规则校验 PluginSchema 全部字段。
-func ValidatePluginSchema(schema *PluginSchema, expectedPluginName, expectedPluginVersion string,
-	protocol enumor.IaCPluginProtocol) error {
+func validateResourceCapabilities(detail *SchemaDetail) error {
+	if len(detail.ResourceSchemas) > 0 {
+		if !detail.Capabilities.Apply {
+			return errf.New(errf.InvalidParameter,
+				"capabilities.apply must be true when resource_schemas is not empty")
+		}
+		if !detail.Capabilities.Plan {
+			return errf.New(errf.InvalidParameter,
+				"capabilities.plan must be true when resource_schemas is not empty")
+		}
+		if !detail.Capabilities.Refresh {
+			return errf.New(errf.InvalidParameter,
+				"capabilities.refresh must be true when resource_schemas is not empty")
+		}
+		return nil
+	}
 
+	if detail.Capabilities.Apply || detail.Capabilities.Plan || detail.Capabilities.Refresh ||
+		detail.Capabilities.AsyncApply || detail.Capabilities.Stop ||
+		detail.Capabilities.Import || detail.Capabilities.List {
+		return errf.New(errf.InvalidParameter,
+			"resource capabilities must not be true when resource_schemas is empty")
+	}
+	return nil
+}
+
+// Validate 校验南向协议返回的 PluginSchema 结构与能力位规则。
+func (s *PluginSchema) Validate() error {
+	if s == nil {
+		return errf.New(errf.InvalidParameter, "plugin schema is nil")
+	}
+	if strings.TrimSpace(s.ProtocolVersion) == "" {
+		return errf.New(errf.InvalidParameter, "protocol_version is required")
+	}
+	if strings.TrimSpace(s.Plugin.Name) == "" {
+		return errf.New(errf.InvalidParameter, "plugin.name is required")
+	}
+	if strings.TrimSpace(s.Plugin.Version) == "" {
+		return errf.New(errf.InvalidParameter, "plugin.version is required")
+	}
+	if strings.TrimSpace(s.SchemaHash) == "" {
+		return errf.New(errf.InvalidParameter, "schema_hash is required")
+	}
+	if err := validateSchemaBlock(s.ConfigSchema, "provider"); err != nil {
+		return err
+	}
+	if err := s.validateTypeSchemas(); err != nil {
+		return err
+	}
+	return ValidateCapabilities(&s.SchemaDetail)
+}
+
+func (s *PluginSchema) validateTypeSchemas() error {
+	prefix := s.Plugin.Name + "_"
+	for typeName, resSchema := range s.ResourceSchemas {
+		if !strings.HasPrefix(typeName, prefix) {
+			return errf.Newf(errf.InvalidParameter,
+				"resource type_name %q must start with %q", typeName, prefix)
+		}
+		if err := validateSchemaBlock(resSchema, "resource_schemas."+typeName); err != nil {
+			return err
+		}
+	}
+	for typeName, dsSchema := range s.DataSourceSchemas {
+		if !strings.HasPrefix(typeName, prefix) {
+			return errf.Newf(errf.InvalidParameter,
+				"data_source type_name %q must start with %q", typeName, prefix)
+		}
+		if err := validateSchemaBlock(dsSchema, "data_source_schemas."+typeName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateSchemaBlock(s *tfjson.Schema, path string) error {
+	if s == nil || s.Block == nil {
+		return errf.Newf(errf.InvalidParameter, "%s.block is required", path)
+	}
+	return nil
+}
+
+// ValidatePluginSchema 按期望插件身份与协议规则校验 PluginSchema 全部字段。
+func ValidatePluginSchema(schema *PluginSchema, expectedPlugin PluginInfo, protocol enumor.IaCPluginProtocol) error {
 	if schema == nil {
 		return errf.New(errf.InvalidParameter, "plugin schema is nil")
 	}
 
-	if len(schema.PluginName) == 0 {
-		return errf.New(errf.InvalidParameter, "plugin_name is required")
+	if strings.TrimSpace(schema.Plugin.Name) == "" {
+		return errf.New(errf.InvalidParameter, "plugin.name is required")
 	}
-	if len(schema.PluginVersion) == 0 {
-		return errf.New(errf.InvalidParameter, "plugin_version is required")
+	if strings.TrimSpace(schema.Plugin.Version) == "" {
+		return errf.New(errf.InvalidParameter, "plugin.version is required")
 	}
 
-	if schema.PluginName != expectedPluginName {
+	if schema.Plugin.Name != expectedPlugin.Name {
 		return errf.Newf(errf.InvalidParameter,
-			"plugin_name mismatch: schema has %q, expected %q", schema.PluginName, expectedPluginName)
+			"plugin.name mismatch: schema has %q, expected %q", schema.Plugin.Name, expectedPlugin.Name)
 	}
-	if schema.PluginVersion != expectedPluginVersion {
+	if schema.Plugin.Version != expectedPlugin.Version {
 		return errf.Newf(errf.InvalidParameter,
-			"plugin_version mismatch: schema has %q, expected %q", schema.PluginVersion, expectedPluginVersion)
+			"plugin.version mismatch: schema has %q, expected %q", schema.Plugin.Version, expectedPlugin.Version)
 	}
 
 	switch protocol {
 	case enumor.IaCPluginProtocolHTTP:
-		if len(schema.ProtocolVersion) == 0 {
+		if strings.TrimSpace(schema.ProtocolVersion) == "" {
 			return errf.New(errf.InvalidParameter, "protocol_version is required for http protocol plugin")
 		}
 	case enumor.IaCPluginProtocolTFProvider:
@@ -159,7 +223,7 @@ func ValidatePluginSchema(schema *PluginSchema, expectedPluginName, expectedPlug
 		return err
 	}
 
-	computedHash, err := ComputeRawSchemaHash(&schema.RawSchema)
+	computedHash, err := ComputeSchemaHash(schema.Plugin, &schema.SchemaDetail)
 	if err != nil {
 		return err
 	}
@@ -168,13 +232,11 @@ func ValidatePluginSchema(schema *PluginSchema, expectedPluginName, expectedPlug
 			"schema_hash mismatch: declared %s, computed %s", schema.SchemaHash, computedHash)
 	}
 
-	if err := ValidateCapabilities(&schema.RawSchema); err != nil {
+	if err := validateSchemaBlock(schema.ConfigSchema, "provider"); err != nil {
 		return err
 	}
-
-	if schema.Provider == nil || schema.Provider.Block == nil {
-		return errf.New(errf.InvalidParameter, "provider and provider.block are required")
+	if err := schema.validateTypeSchemas(); err != nil {
+		return err
 	}
-
-	return nil
+	return ValidateCapabilities(&schema.SchemaDetail)
 }
