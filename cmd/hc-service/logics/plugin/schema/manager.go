@@ -208,19 +208,27 @@ func (m *SchemaManager) createSchema(kt *kit.Kit, schema *coreplugin.PluginSchem
 		return "", err
 	}
 
-	req := &dataplugin.IacPluginSchemaCreateReq{
-		PluginName:    schema.Plugin.Name,
-		PluginVersion: schema.Plugin.Version,
-		SchemaHash:    schema.SchemaHash,
-		SchemaDetail:  types.JsonField(detailBytes),
+	req := &dataplugin.IacPluginSchemaBatchCreateReq{
+		Items: []dataplugin.IacPluginSchemaCreateField{
+			{
+				PluginName:    schema.Plugin.Name,
+				PluginVersion: schema.Plugin.Version,
+				SchemaHash:    schema.SchemaHash,
+				SchemaDetail:  types.JsonField(detailBytes),
+			},
+		},
 	}
 
-	res, err := m.dataCli.Global.IacPluginSchema.Create(kt, req)
+	res, err := m.dataCli.Global.IacPluginSchema.BatchCreate(kt, req)
 	if err != nil {
 		logs.Errorf("create iac_plugin_schema in data-service failed, plugin: %s@%s, err: %v, rid: %s",
 			schema.Plugin.Name, schema.Plugin.Version, err, kt.Rid)
 		return "", err
 	}
+	if len(res.IDs) == 0 {
+		return "", fmt.Errorf("create iac_plugin_schema returned empty ids for %s@%s",
+			schema.Plugin.Name, schema.Plugin.Version)
+	}
 
-	return res.ID, nil
+	return res.IDs[0], nil
 }

@@ -39,24 +39,24 @@ func NewIacPluginInstanceClient(client rest.ClientInterface) *IacPluginInstanceC
 	}
 }
 
-// Create 创建 iac_plugin_instance 记录。
-func (c *IacPluginInstanceClient) Create(kt *kit.Kit, req *dataplugin.IacPluginInstanceCreateReq) (
-	*core.CreateResult, error) {
+// BatchCreate 批量创建 iac_plugin_instance 记录。
+func (c *IacPluginInstanceClient) BatchCreate(kt *kit.Kit, req *dataplugin.IacPluginInstanceBatchCreateReq) (
+	*core.BatchCreateResult, error) {
 
-	return common.Request[dataplugin.IacPluginInstanceCreateReq, core.CreateResult](
-		c.client, rest.POST, kt, req, "/iac_plugin_instances/create")
+	return common.Request[dataplugin.IacPluginInstanceBatchCreateReq, core.BatchCreateResult](
+		c.client, rest.POST, kt, req, "/iac_plugin_instance/batch/create")
 }
 
-// Update 更新 iac_plugin_instance 记录。
-func (c *IacPluginInstanceClient) Update(kt *kit.Kit, req *dataplugin.IacPluginInstanceUpdateReq) error {
-	return common.RequestNoResp[dataplugin.IacPluginInstanceUpdateReq](
-		c.client, rest.PATCH, kt, req, "/iac_plugin_instances/update")
+// BatchUpdate 批量更新 iac_plugin_instance 记录。
+func (c *IacPluginInstanceClient) BatchUpdate(kt *kit.Kit, req *dataplugin.IacPluginInstanceBatchUpdateReq) error {
+	return common.RequestNoResp[dataplugin.IacPluginInstanceBatchUpdateReq](
+		c.client, rest.PATCH, kt, req, "/iac_plugin_instance/batch/update")
 }
 
-// Delete 删除 iac_plugin_instance 记录。
-func (c *IacPluginInstanceClient) Delete(kt *kit.Kit, req *dataplugin.IacPluginInstanceDeleteReq) error {
-	return common.RequestNoResp[dataplugin.IacPluginInstanceDeleteReq](
-		c.client, rest.DELETE, kt, req, "/iac_plugin_instances/batch")
+// BatchDelete 批量删除 iac_plugin_instance 记录。
+func (c *IacPluginInstanceClient) BatchDelete(kt *kit.Kit, req *dataplugin.IacPluginInstanceBatchDeleteReq) error {
+	return common.RequestNoResp[dataplugin.IacPluginInstanceBatchDeleteReq](
+		c.client, rest.DELETE, kt, req, "/iac_plugin_instance/batch")
 }
 
 // List 列表查询 iac_plugin_instance 记录。
@@ -64,5 +64,5 @@ func (c *IacPluginInstanceClient) List(kt *kit.Kit, req *dataplugin.IacPluginIns
 	*dataplugin.IacPluginInstanceListResult, error) {
 
 	return common.Request[dataplugin.IacPluginInstanceListReq, dataplugin.IacPluginInstanceListResult](
-		c.client, rest.POST, kt, req, "/iac_plugin_instances/list")
+		c.client, rest.POST, kt, req, "/iac_plugin_instance/list")
 }

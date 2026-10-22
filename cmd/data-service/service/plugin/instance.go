@@ -42,156 +42,172 @@ import (
 )
 
 func (svc *service) initIacPluginInstanceRoutes(h *rest.Handler) {
-	h.Add("CreateIacPluginInstance", http.MethodPost, "/iac_plugin_instances/create", svc.CreateIacPluginInstance)
-	h.Add("UpdateIacPluginInstance", http.MethodPatch, "/iac_plugin_instances/update", svc.UpdateIacPluginInstance)
-	h.Add("DeleteIacPluginInstance", http.MethodDelete, "/iac_plugin_instances/batch", svc.DeleteIacPluginInstance)
-	h.Add("ListIacPluginInstances", http.MethodPost, "/iac_plugin_instances/list", svc.ListIacPluginInstances)
+	h.Add("BatchCreateIacPluginInstance", http.MethodPost,
+		"/iac_plugin_instance/batch/create", svc.BatchCreateIacPluginInstance)
+	h.Add("BatchUpdateIacPluginInstance", http.MethodPatch,
+		"/iac_plugin_instance/batch/update", svc.BatchUpdateIacPluginInstance)
+	h.Add("BatchDeleteIacPluginInstance", http.MethodDelete,
+		"/iac_plugin_instance/batch", svc.BatchDeleteIacPluginInstance)
+	h.Add("ListIacPluginInstance", http.MethodPost, "/iac_plugin_instance/list", svc.ListIacPluginInstance)
 }
 
-// CreateIacPluginInstance 创建 iac_plugin_instance 记录，入库前对 secret_attrs 标量叶子值加密。
-func (svc *service) CreateIacPluginInstance(cts *rest.Contexts) (any, error) {
-	req := new(dataplugin.IacPluginInstanceCreateReq)
+// BatchCreateIacPluginInstance 批量创建 iac_plugin_instance 记录，入库前对 secret_attrs 标量叶子值加密。
+func (svc *service) BatchCreateIacPluginInstance(cts *rest.Contexts) (any, error) {
+	req := new(dataplugin.IacPluginInstanceBatchCreateReq)
 	if err := cts.DecodeInto(req); err != nil {
-		logs.Errorf("create iac plugin instance decode request failed, err: %v, rid: %s", err, cts.Kit.Rid)
-		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+		logs.Errorf("batch create iac plugin instance decode request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
 	}
 
 	if err := req.Validate(); err != nil {
-		logs.Errorf("create iac plugin instance validate request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		logs.Errorf("batch create iac plugin instance validate request failed, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	attrsField, err := marshalJSONMap(req.Attrs)
-	if err != nil {
-		logs.Errorf("marshal iac plugin instance attrs failed, err: %v, rid: %s", err, cts.Kit.Rid)
-		return nil, errf.NewFromErr(errf.InvalidParameter, err)
-	}
+	models := make([]tableplugin.IacPluginInstanceTable, 0, len(req.Items))
+	for _, item := range req.Items {
+		attrsField, err := marshalJSONMap(item.Attrs)
+		if err != nil {
+			logs.Errorf("marshal iac plugin instance attrs failed, err: %v, rid: %s", err, cts.Kit.Rid)
+			return nil, errf.NewFromErr(errf.InvalidParameter, err)
+		}
 
-	secretAttrsField, err := encryptSecretAttrs(req.SecretAttrs, svc.cipher)
-	if err != nil {
-		logs.Errorf("encrypt iac plugin instance secret_attrs failed, err: %v, rid: %s", err, cts.Kit.Rid)
-		return nil, errf.NewFromErr(errf.Aborted, err)
-	}
+		secretAttrsField, err := encryptSecretAttrs(item.SecretAttrs, svc.cipher)
+		if err != nil {
+			logs.Errorf("encrypt iac plugin instance secret_attrs failed, err: %v, rid: %s", err, cts.Kit.Rid)
+			return nil, errf.NewFromErr(errf.Aborted, err)
+		}
 
-	extField, err := marshalJSONMap(req.Extension)
-	if err != nil {
-		logs.Errorf("marshal iac plugin instance extension failed, err: %v, rid: %s", err, cts.Kit.Rid)
-		return nil, errf.NewFromErr(errf.InvalidParameter, err)
-	}
+		extField, err := marshalJSONMap(item.Extension)
+		if err != nil {
+			logs.Errorf("marshal iac plugin instance extension failed, err: %v, rid: %s", err, cts.Kit.Rid)
+			return nil, errf.NewFromErr(errf.InvalidParameter, err)
+		}
 
-	createdID, err := svc.dao.Txn().AutoTxn(cts.Kit, func(txn *sqlx.Tx, opt *orm.TxnOption) (any, error) {
-		model := &tableplugin.IacPluginInstanceTable{
-			PluginName:  req.PluginName,
-			Name:        req.Name,
+		models = append(models, tableplugin.IacPluginInstanceTable{
+			PluginName:  item.PluginName,
+			Name:        item.Name,
 			Attrs:       attrsField,
 			SecretAttrs: secretAttrsField,
 			Extension:   extField,
-			Memo:        req.Memo,
+			Memo:        item.Memo,
 			Creator:     cts.Kit.User,
 			Reviser:     cts.Kit.User,
-		}
+		})
+	}
 
-		id, err := svc.dao.IacPluginInstance().CreateWithTx(cts.Kit, txn, model)
+	createdIDs, err := svc.dao.Txn().AutoTxn(cts.Kit, func(txn *sqlx.Tx, opt *orm.TxnOption) (any, error) {
+		ids, err := svc.dao.IacPluginInstance().BatchCreateWithTx(cts.Kit, txn, models)
 		if err != nil {
-			logs.Errorf("create iac plugin instance in db failed, plugin: %s, name: %s, err: %v, rid: %s",
-				req.PluginName, req.Name, err, cts.Kit.Rid)
+			logs.Errorf("batch create iac plugin instance in db failed, err: %v, rid: %s", err, cts.Kit.Rid)
 			return nil, err
 		}
 
-		return id, nil
+		return ids, nil
 	})
 	if err != nil {
-		logs.Errorf("create iac plugin instance transaction failed, plugin: %s, name: %s, err: %v, rid: %s",
-			req.PluginName, req.Name, err, cts.Kit.Rid)
+		logs.Errorf("batch create iac plugin instance transaction failed, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(errf.Aborted, err)
 	}
 
-	id, ok := createdID.(string)
+	ids, ok := createdIDs.([]string)
 	if !ok {
-		return nil, fmt.Errorf("create iac plugin instance return id type is not string: %v",
-			reflect.TypeOf(createdID).String())
+		return nil, fmt.Errorf("batch create iac plugin instance return ids type is not []string: %v",
+			reflect.TypeOf(createdIDs).String())
 	}
 
-	return &core.CreateResult{ID: id}, nil
+	return &core.BatchCreateResult{IDs: ids}, nil
 }
 
-// UpdateIacPluginInstance 更新 iac_plugin_instance 记录，若传入 secret_attrs 则对标量叶子值加密后全量覆盖。
-func (svc *service) UpdateIacPluginInstance(cts *rest.Contexts) (any, error) {
-	req := new(dataplugin.IacPluginInstanceUpdateReq)
+// BatchUpdateIacPluginInstance 批量更新 iac_plugin_instance 记录，若传入 secret_attrs 则对标量叶子值加密后全量覆盖。
+func (svc *service) BatchUpdateIacPluginInstance(cts *rest.Contexts) (any, error) {
+	req := new(dataplugin.IacPluginInstanceBatchUpdateReq)
 	if err := cts.DecodeInto(req); err != nil {
-		logs.Errorf("update iac plugin instance decode request failed, err: %v, rid: %s", err, cts.Kit.Rid)
-		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+		logs.Errorf("batch update iac plugin instance decode request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
 	}
 
 	if err := req.Validate(); err != nil {
-		logs.Errorf("update iac plugin instance validate request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		logs.Errorf("batch update iac plugin instance validate request failed, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	model := &tableplugin.IacPluginInstanceTable{
-		Name:    req.Name,
-		Memo:    req.Memo,
-		Reviser: cts.Kit.User,
-	}
-
-	if req.Attrs != nil {
-		attrsField, err := marshalJSONMap(req.Attrs)
-		if err != nil {
-			logs.Errorf("marshal update iac plugin instance attrs failed, id: %s, err: %v, rid: %s",
-				req.ID, err, cts.Kit.Rid)
-			return nil, errf.NewFromErr(errf.InvalidParameter, err)
-		}
-		model.Attrs = attrsField
-	}
-
-	if req.SecretAttrs != nil {
-		secretAttrsField, err := encryptSecretAttrs(req.SecretAttrs, svc.cipher)
-		if err != nil {
-			logs.Errorf("encrypt update iac plugin instance secret_attrs failed, id: %s, err: %v, rid: %s",
-				req.ID, err, cts.Kit.Rid)
-			return nil, errf.NewFromErr(errf.Aborted, err)
-		}
-		model.SecretAttrs = secretAttrsField
-	}
-
-	if req.Extension != nil {
-		extField, err := marshalJSONMap(req.Extension)
-		if err != nil {
-			logs.Errorf("marshal update iac plugin instance extension failed, id: %s, err: %v, rid: %s",
-				req.ID, err, cts.Kit.Rid)
-			return nil, errf.NewFromErr(errf.InvalidParameter, err)
-		}
-		model.Extension = extField
-	}
-
 	_, err := svc.dao.Txn().AutoTxn(cts.Kit, func(txn *sqlx.Tx, opt *orm.TxnOption) (any, error) {
-		if err := svc.dao.IacPluginInstance().UpdateWithTx(cts.Kit, txn,
-			tools.EqualExpression("id", req.ID), model); err != nil {
-			logs.Errorf("update iac plugin instance in db failed, id: %s, err: %v, rid: %s",
-				req.ID, err, cts.Kit.Rid)
-			return nil, err
+		for _, item := range req.Items {
+			model, convErr := svc.buildUpdateInstanceModel(cts, item)
+			if convErr != nil {
+				return nil, convErr
+			}
+
+			if err := svc.dao.IacPluginInstance().UpdateWithTx(cts.Kit, txn,
+				tools.EqualExpression("id", item.ID), model); err != nil {
+				logs.Errorf("update iac plugin instance in db failed, id: %s, err: %v, rid: %s",
+					item.ID, err, cts.Kit.Rid)
+				return nil, err
+			}
 		}
 		return nil, nil
 	})
 	if err != nil {
-		logs.Errorf("update iac plugin instance transaction failed, id: %s, err: %v, rid: %s",
-			req.ID, err, cts.Kit.Rid)
+		logs.Errorf("batch update iac plugin instance transaction failed, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(errf.Aborted, err)
 	}
 
 	return nil, nil
 }
 
-// DeleteIacPluginInstance 删除 iac_plugin_instance 记录。
-func (svc *service) DeleteIacPluginInstance(cts *rest.Contexts) (any, error) {
-	req := new(dataplugin.IacPluginInstanceDeleteReq)
+func (svc *service) buildUpdateInstanceModel(cts *rest.Contexts,
+	item dataplugin.IacPluginInstanceUpdateField) (*tableplugin.IacPluginInstanceTable, error) {
+
+	model := &tableplugin.IacPluginInstanceTable{
+		Name:    item.Name,
+		Memo:    item.Memo,
+		Reviser: cts.Kit.User,
+	}
+
+	if item.Attrs != nil {
+		attrsField, err := marshalJSONMap(item.Attrs)
+		if err != nil {
+			logs.Errorf("marshal update iac plugin instance attrs failed, id: %s, err: %v, rid: %s",
+				item.ID, err, cts.Kit.Rid)
+			return nil, errf.NewFromErr(errf.InvalidParameter, err)
+		}
+		model.Attrs = attrsField
+	}
+
+	if item.SecretAttrs != nil {
+		secretAttrsField, err := encryptSecretAttrs(item.SecretAttrs, svc.cipher)
+		if err != nil {
+			logs.Errorf("encrypt update iac plugin instance secret_attrs failed, id: %s, err: %v, rid: %s",
+				item.ID, err, cts.Kit.Rid)
+			return nil, errf.NewFromErr(errf.Aborted, err)
+		}
+		model.SecretAttrs = secretAttrsField
+	}
+
+	if item.Extension != nil {
+		extField, err := marshalJSONMap(item.Extension)
+		if err != nil {
+			logs.Errorf("marshal update iac plugin instance extension failed, id: %s, err: %v, rid: %s",
+				item.ID, err, cts.Kit.Rid)
+			return nil, errf.NewFromErr(errf.InvalidParameter, err)
+		}
+		model.Extension = extField
+	}
+
+	return model, nil
+}
+
+// BatchDeleteIacPluginInstance 批量删除 iac_plugin_instance 记录。
+func (svc *service) BatchDeleteIacPluginInstance(cts *rest.Contexts) (any, error) {
+	req := new(dataplugin.IacPluginInstanceBatchDeleteReq)
 	if err := cts.DecodeInto(req); err != nil {
-		logs.Errorf("delete iac plugin instance decode request failed, err: %v, rid: %s", err, cts.Kit.Rid)
-		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+		logs.Errorf("batch delete iac plugin instance decode request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
 	}
 
 	if err := req.Validate(); err != nil {
-		logs.Errorf("delete iac plugin instance validate request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		logs.Errorf("batch delete iac plugin instance validate request failed, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
@@ -203,23 +219,23 @@ func (svc *service) DeleteIacPluginInstance(cts *rest.Contexts) (any, error) {
 		return nil, nil
 	})
 	if err != nil {
-		logs.Errorf("delete iac plugin instance transaction failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		logs.Errorf("batch delete iac plugin instance transaction failed, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(errf.Aborted, err)
 	}
 
 	return nil, nil
 }
 
-// ListIacPluginInstances 列表查询 iac_plugin_instance 记录并解密 secret_attrs 标量叶子值。
-func (svc *service) ListIacPluginInstances(cts *rest.Contexts) (any, error) {
+// ListIacPluginInstance 列表查询 iac_plugin_instance 记录并解密 secret_attrs 标量叶子值。
+func (svc *service) ListIacPluginInstance(cts *rest.Contexts) (any, error) {
 	req := new(dataplugin.IacPluginInstanceListReq)
 	if err := cts.DecodeInto(req); err != nil {
-		logs.Errorf("list iac plugin instances decode request failed, err: %v, rid: %s", err, cts.Kit.Rid)
-		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+		logs.Errorf("list iac plugin instance decode request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
 	}
 
 	if err := req.Validate(); err != nil {
-		logs.Errorf("list iac plugin instances validate request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		logs.Errorf("list iac plugin instance validate request failed, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
@@ -230,7 +246,7 @@ func (svc *service) ListIacPluginInstances(cts *rest.Contexts) (any, error) {
 	}
 	res, err := svc.dao.IacPluginInstance().List(cts.Kit, opt)
 	if err != nil {
-		logs.Errorf("list iac plugin instances failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		logs.Errorf("list iac plugin instance failed, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(errf.Aborted, err)
 	}
 

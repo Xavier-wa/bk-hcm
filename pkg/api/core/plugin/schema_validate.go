@@ -20,9 +20,10 @@
 package plugin
 
 import (
-	"crypto/sha256"
+	"crypto"
+	_ "crypto/sha256" // 注册 SHA-256 到 crypto.Hash
+	_ "crypto/sha512" // 注册 SHA-384 / SHA-512 到 crypto.Hash
 	"encoding/hex"
-	"regexp"
 	"strings"
 
 	"hcm/pkg/criteria/enumor"
@@ -33,18 +34,75 @@ import (
 )
 
 const (
-	// SchemaHashPrefix 合法 schema_hash 前缀。
-	SchemaHashPrefix = "sha256:"
-	// SchemaHashLength 合法 schema_hash 总长度（"sha256:" + 64 位 hex）。
+	// SchemaHashAlgoSHA256 SHA-256 算法标识。
+	SchemaHashAlgoSHA256 = "sha256"
+	// SchemaHashAlgoSHA384 SHA-384 算法标识。
+	SchemaHashAlgoSHA384 = "sha384"
+	// SchemaHashAlgoSHA512 SHA-512 算法标识。
+	SchemaHashAlgoSHA512 = "sha512"
+	// DefaultSchemaHashAlgo 默认 Schema 哈希算法。
+	DefaultSchemaHashAlgo = SchemaHashAlgoSHA256
+
+	// SchemaHashPrefix 默认 schema_hash 前缀（"sha256:"）。
+	SchemaHashPrefix = DefaultSchemaHashAlgo + ":"
+	// SchemaHashLength 默认 sha256 schema_hash 总长度（"sha256:" + 64 位 hex）。
 	SchemaHashLength = 71
 )
 
-var schemaHashRegexp = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+// supportedSchemaHashAlgos 支持的 schema_hash 算法白名单，映射到标准库 crypto.Hash。
+var supportedSchemaHashAlgos = map[string]crypto.Hash{
+	SchemaHashAlgoSHA256: crypto.SHA256,
+	SchemaHashAlgoSHA384: crypto.SHA384,
+	SchemaHashAlgoSHA512: crypto.SHA512,
+}
 
-// ComputeSchemaHash 计算包含插件标识（plugin.name、plugin.version）与 SchemaDetail 的规范 SHA-256（"sha256:" + 64 位小写 hex）。
-func ComputeSchemaHash(plugin PluginInfo, detail *SchemaDetail) (string, error) {
+// ParseSchemaHash 解析 "<algo>:<hex>" 格式的 schema_hash，校验算法是否在支持列表内且摘要为对应长度的小写 hex。
+func ParseSchemaHash(schemaHash string) (string, string, crypto.Hash, error) {
+	algo, hexDigest, ok := strings.Cut(schemaHash, ":")
+	if !ok || len(algo) == 0 || len(hexDigest) == 0 {
+		return "", "", 0, errf.Newf(errf.InvalidParameter,
+			"invalid schema_hash format: %q, expected <algo>:<lowercase hex>", schemaHash)
+	}
+
+	hashFunc, supported := supportedSchemaHashAlgos[algo]
+	if !supported || !hashFunc.Available() {
+		return "", "", 0, errf.Newf(errf.InvalidParameter,
+			"unsupported schema_hash algorithm: %q, supported algorithms: [sha256, sha384, sha512]", algo)
+	}
+
+	expectedHexLen := hashFunc.Size() * 2
+	if len(hexDigest) != expectedHexLen || !isLowerHex(hexDigest) {
+		return "", "", 0, errf.Newf(errf.InvalidParameter,
+			"invalid %s schema_hash digest: %q, expected %d lowercase hex chars",
+			algo, hexDigest, expectedHexLen)
+	}
+
+	return algo, hexDigest, hashFunc, nil
+}
+
+func isLowerHex(s string) bool {
+	if _, err := hex.DecodeString(s); err != nil {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 'A' && s[i] <= 'F' {
+			return false
+		}
+	}
+	return true
+}
+
+// ComputeSchemaHashByAlgo 按指定算法（如 sha256、sha384、sha512）计算包含插件标识（plugin.name、plugin.version）
+// 与 SchemaDetail 的规范哈希（"<algo>:<lowercase hex>"）。
+func ComputeSchemaHashByAlgo(algo string, plugin PluginInfo, detail *SchemaDetail) (string, error) {
 	if detail == nil {
 		return "", errf.New(errf.InvalidParameter, "schema detail is nil")
+	}
+
+	hashFunc, supported := supportedSchemaHashAlgos[algo]
+	if !supported || !hashFunc.Available() {
+		return "", errf.Newf(errf.InvalidParameter,
+			"unsupported schema_hash algorithm: %q, supported algorithms: [sha256, sha384, sha512]", algo)
 	}
 
 	payload := struct {
@@ -60,17 +118,21 @@ func ComputeSchemaHash(plugin PluginInfo, detail *SchemaDetail) (string, error) 
 		return "", errf.Newf(errf.InvalidParameter, "marshal schema detail failed, err: %v", err)
 	}
 
-	sum := sha256.Sum256(rawBytes)
-	return SchemaHashPrefix + hex.EncodeToString(sum[:]), nil
+	hasher := hashFunc.New()
+	_, _ = hasher.Write(rawBytes)
+	sum := hasher.Sum(nil)
+	return algo + ":" + hex.EncodeToString(sum), nil
 }
 
-// ValidateSchemaHashFormat 校验 schemaHash 是否符合 "sha256:" + 64 位小写 hex。
+// ComputeSchemaHash 使用默认算法（sha256）计算包含插件标识（plugin.name、plugin.version）与 SchemaDetail 的规范哈希。
+func ComputeSchemaHash(plugin PluginInfo, detail *SchemaDetail) (string, error) {
+	return ComputeSchemaHashByAlgo(DefaultSchemaHashAlgo, plugin, detail)
+}
+
+// ValidateSchemaHashFormat 按前缀算法校验 schemaHash 格式是否合法且算法受支持。
 func ValidateSchemaHashFormat(schemaHash string) error {
-	if len(schemaHash) != SchemaHashLength || !schemaHashRegexp.MatchString(schemaHash) {
-		return errf.Newf(errf.InvalidParameter,
-			"invalid schema_hash format: %q, expected sha256:<64 lowercase hex chars>", schemaHash)
-	}
-	return nil
+	_, _, _, err := ParseSchemaHash(schemaHash)
+	return err
 }
 
 // ValidateCapabilities 按南向协议能力位正反向约束校验 SchemaDetail.Capabilities。
@@ -219,11 +281,12 @@ func ValidatePluginSchema(schema *PluginSchema, expectedPlugin PluginInfo, proto
 		return errf.Newf(errf.InvalidParameter, "unsupported plugin protocol: %s", protocol)
 	}
 
-	if err := ValidateSchemaHashFormat(schema.SchemaHash); err != nil {
+	algo, _, _, err := ParseSchemaHash(schema.SchemaHash)
+	if err != nil {
 		return err
 	}
 
-	computedHash, err := ComputeSchemaHash(schema.Plugin, &schema.SchemaDetail)
+	computedHash, err := ComputeSchemaHashByAlgo(algo, schema.Plugin, &schema.SchemaDetail)
 	if err != nil {
 		return err
 	}

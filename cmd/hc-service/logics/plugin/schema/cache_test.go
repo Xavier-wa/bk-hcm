@@ -95,7 +95,7 @@ func newMockDataServiceClient(data *mockSchemaData) *dataservice.Client {
 			}
 			writeMockOK(w, &dataplugin.IaCPluginListResult{Details: details})
 
-		case strings.HasSuffix(path, "/iac_plugin_schemas/list"):
+		case strings.HasSuffix(path, "/iac_plugin_schema/list"):
 			req := new(dataplugin.IacPluginSchemaListReq)
 			_ = json.NewDecoder(r.Body).Decode(req)
 			key := extractCacheKeyFromFilter(req.Filter)
@@ -130,10 +130,18 @@ func newMockDataServiceClient(data *mockSchemaData) *dataservice.Client {
 			}
 			writeMockOK(w, &dataplugin.IacPluginSchemaListResult{Details: details})
 
-		case strings.HasSuffix(path, "/iac_plugin_schemas/create"):
-			req := new(dataplugin.IacPluginSchemaCreateReq)
+		case strings.HasSuffix(path, "/iac_plugin_schema/batch/create"):
+			req := new(dataplugin.IacPluginSchemaBatchCreateReq)
 			_ = json.NewDecoder(r.Body).Decode(req)
-			key := coreplugin.PluginInfo{Name: req.PluginName, Version: req.PluginVersion}
+			if len(req.Items) == 0 {
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"code":    errf.InvalidParameter,
+					"message": "empty items",
+				})
+				return
+			}
+			item := req.Items[0]
+			key := coreplugin.PluginInfo{Name: item.PluginName, Version: item.PluginVersion}
 
 			data.mu.Lock()
 			if _, exists := data.schemas[key]; exists {
@@ -145,15 +153,15 @@ func newMockDataServiceClient(data *mockSchemaData) *dataservice.Client {
 				return
 			}
 			var detail coreplugin.SchemaDetail
-			_ = json.Unmarshal([]byte(req.SchemaDetail), &detail)
+			_ = json.Unmarshal([]byte(item.SchemaDetail), &detail)
 			data.schemas[key] = &coreplugin.PluginSchema{
 				Plugin:       key,
-				SchemaHash:   req.SchemaHash,
+				SchemaHash:   item.SchemaHash,
 				SchemaDetail: detail,
 			}
 			data.mu.Unlock()
 
-			writeMockOK(w, &core.CreateResult{ID: "1"})
+			writeMockOK(w, &core.BatchCreateResult{IDs: []string{"1"}})
 		}
 	}
 

@@ -27,48 +27,69 @@ import (
 )
 
 func TestIacPluginInstanceReqValidate(t *testing.T) {
-	createReq := &IacPluginInstanceCreateReq{
-		PluginName:  "tencentcloud",
-		Name:        "tcloud-prod",
-		Attrs:       map[string]any{"secret_id": "AKID-xxx"},
-		SecretAttrs: map[string]any{"secret_key": "SK-xxx"},
-		Extension:   map[string]any{"account_id": "acc-001"},
-		Memo:        converter.ValToPtr("memo"),
+	createReq := &IacPluginInstanceBatchCreateReq{
+		Items: []IacPluginInstanceCreateField{
+			{
+				PluginName:  "tencentcloud",
+				Name:        "tcloud-prod",
+				Attrs:       map[string]any{"secret_id": "AKID-xxx"},
+				SecretAttrs: map[string]any{"secret_key": "SK-xxx"},
+				Extension:   map[string]any{"account_id": "acc-001"},
+				Memo:        converter.ValToPtr("memo"),
+			},
+		},
 	}
 	if err := createReq.Validate(); err != nil {
-		t.Fatalf("expected valid IacPluginInstanceCreateReq to pass, got: %v", err)
+		t.Fatalf("expected valid IacPluginInstanceBatchCreateReq to pass, got: %v", err)
 	}
 
-	badCreateReq := &IacPluginInstanceCreateReq{
-		Name: "tcloud-prod",
+	emptyCreateReq := &IacPluginInstanceBatchCreateReq{}
+	if err := emptyCreateReq.Validate(); err == nil {
+		t.Fatalf("expected empty items to fail validation")
+	}
+
+	badCreateReq := &IacPluginInstanceBatchCreateReq{
+		Items: []IacPluginInstanceCreateField{
+			{
+				Name: "tcloud-prod",
+			},
+		},
 	}
 	if err := badCreateReq.Validate(); err == nil {
 		t.Fatalf("expected missing plugin_name to fail validation")
 	}
 
-	updateReq := &IacPluginInstanceUpdateReq{
-		ID:   "inst-001",
-		Name: "tcloud-prod-v2",
+	updateReq := &IacPluginInstanceBatchUpdateReq{
+		Items: []IacPluginInstanceUpdateField{
+			{
+				ID:   "inst-001",
+				Name: "tcloud-prod-v2",
+			},
+		},
 	}
 	if err := updateReq.Validate(); err != nil {
-		t.Fatalf("expected valid IacPluginInstanceUpdateReq to pass, got: %v", err)
+		t.Fatalf("expected valid IacPluginInstanceBatchUpdateReq to pass, got: %v", err)
 	}
 
-	emptyUpdateReq := &IacPluginInstanceUpdateReq{
-		ID: "inst-001",
+	emptyUpdateReq := &IacPluginInstanceBatchUpdateReq{
+		Items: []IacPluginInstanceUpdateField{
+			{
+				ID: "inst-001",
+			},
+		},
 	}
 	if err := emptyUpdateReq.Validate(); err == nil {
 		t.Fatalf("expected empty update fields to fail validation")
 	}
 
-	deleteReq := &IacPluginInstanceDeleteReq{
+	deleteReq := &IacPluginInstanceBatchDeleteReq{
 		Filter: tools.EqualExpression("id", "inst-001"),
 	}
 	if err := deleteReq.Validate(); err != nil {
-		t.Fatalf("expected valid IacPluginInstanceDeleteReq to pass, got: %v", err)
+		t.Fatalf("expected valid IacPluginInstanceBatchDeleteReq to pass, got: %v", err)
 	}
 
-	badDeleteReq := &IacPluginInstanceDeleteReq{}
+	badDeleteReq := &IacPluginInstanceBatchDeleteReq{}
 	if err := badDeleteReq.Validate(); err == nil {
 		t.Fatalf("expected nil filter to fail validation")
 	}

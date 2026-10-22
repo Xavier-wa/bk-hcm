@@ -21,24 +21,55 @@
 package dataplugin
 
 import (
+	"errors"
+	"fmt"
+
 	"hcm/pkg/api/core"
 	coreplugin "hcm/pkg/api/core/plugin"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/validator"
 	tableplugin "hcm/pkg/dal/table/plugin"
 	"hcm/pkg/dal/table/types"
 	"hcm/pkg/rest"
+	"hcm/pkg/runtime/filter"
 )
 
-// IacPluginSchemaCreateReq 创建 iac_plugin_schema 请求。
-type IacPluginSchemaCreateReq struct {
+// -------------------------- Create --------------------------
+
+// IacPluginSchemaBatchCreateReq 批量创建 iac_plugin_schema 请求。
+type IacPluginSchemaBatchCreateReq struct {
+	Items []IacPluginSchemaCreateField `json:"items" validate:"required,min=1"`
+}
+
+// Validate 校验 IacPluginSchemaBatchCreateReq。
+func (req *IacPluginSchemaBatchCreateReq) Validate() error {
+	if len(req.Items) > constant.BatchOperationMaxLimit {
+		return fmt.Errorf("items count should <= %d", constant.BatchOperationMaxLimit)
+	}
+
+	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+
+	for i := range req.Items {
+		if err := req.Items[i].Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// IacPluginSchemaCreateField 单条 iac_plugin_schema 创建字段。
+type IacPluginSchemaCreateField struct {
 	PluginName    string          `json:"plugin_name" validate:"required,lte=64"`
 	PluginVersion string          `json:"plugin_version" validate:"required,lte=64"`
 	SchemaHash    string          `json:"schema_hash" validate:"required,lte=80"`
 	SchemaDetail  types.JsonField `json:"schema_detail" validate:"required"`
 }
 
-// Validate 校验 IacPluginSchemaCreateReq。
-func (req *IacPluginSchemaCreateReq) Validate() error {
+// Validate 校验 IacPluginSchemaCreateField。
+func (req *IacPluginSchemaCreateField) Validate() error {
 	if err := validator.Validate.Struct(req); err != nil {
 		return err
 	}
@@ -49,6 +80,72 @@ func (req *IacPluginSchemaCreateReq) Validate() error {
 
 	return nil
 }
+
+// -------------------------- Update --------------------------
+
+// IacPluginSchemaBatchUpdateReq 批量更新 iac_plugin_schema 请求。
+type IacPluginSchemaBatchUpdateReq struct {
+	Items []IacPluginSchemaUpdateField `json:"items" validate:"required,min=1"`
+}
+
+// Validate 校验 IacPluginSchemaBatchUpdateReq。
+func (req *IacPluginSchemaBatchUpdateReq) Validate() error {
+	if len(req.Items) > constant.BatchOperationMaxLimit {
+		return fmt.Errorf("items count should <= %d", constant.BatchOperationMaxLimit)
+	}
+
+	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+
+	for i := range req.Items {
+		if err := req.Items[i].Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// IacPluginSchemaUpdateField 单条 iac_plugin_schema 更新字段。
+type IacPluginSchemaUpdateField struct {
+	ID           string          `json:"id" validate:"required,lte=64"`
+	SchemaHash   string          `json:"schema_hash" validate:"omitempty,lte=80"`
+	SchemaDetail types.JsonField `json:"schema_detail"`
+}
+
+// Validate 校验 IacPluginSchemaUpdateField。
+func (req *IacPluginSchemaUpdateField) Validate() error {
+	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+
+	if len(req.SchemaHash) == 0 && len(req.SchemaDetail) == 0 {
+		return errors.New("at least one of schema_hash, schema_detail must be set")
+	}
+
+	if len(req.SchemaHash) != 0 {
+		if err := coreplugin.ValidateSchemaHashFormat(req.SchemaHash); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// -------------------------- Delete --------------------------
+
+// IacPluginSchemaBatchDeleteReq 批量删除 iac_plugin_schema 请求。
+type IacPluginSchemaBatchDeleteReq struct {
+	Filter *filter.Expression `json:"filter" validate:"required"`
+}
+
+// Validate 校验 IacPluginSchemaBatchDeleteReq。
+func (req *IacPluginSchemaBatchDeleteReq) Validate() error {
+	return validator.Validate.Struct(req)
+}
+
+// -------------------------- List --------------------------
 
 // IacPluginSchemaListReq 列表查询 iac_plugin_schema 请求。
 type IacPluginSchemaListReq = core.ListReq

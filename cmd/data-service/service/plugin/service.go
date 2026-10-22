@@ -45,9 +45,7 @@ func InitService(cap *capability.Capability) {
 		svc.BatchUpdateIaCPluginState)
 	h.Add("ListIaCPlugin", http.MethodPost, "/iac_plugins/list", svc.ListIaCPlugin)
 
-	h.Add("CreateIacPluginSchema", http.MethodPost, "/iac_plugin_schemas/create", svc.CreateIacPluginSchema)
-	h.Add("ListIacPluginSchemas", http.MethodPost, "/iac_plugin_schemas/list", svc.ListIacPluginSchemas)
-
+	svc.initIacPluginSchemaRoutes(h)
 	svc.initIacPluginInstanceRoutes(h)
 
 	h.Load(cap.WebService)

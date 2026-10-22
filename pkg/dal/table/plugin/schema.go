@@ -140,6 +140,12 @@ func (t IacPluginSchemaTable) UpdateValidate() error {
 		return errors.New("creator can not be updated")
 	}
 
+	if len(t.SchemaHash) != 0 {
+		if err := coreplugin.ValidateSchemaHashFormat(t.SchemaHash); err != nil {
+			return err
+		}
+	}
+
 	if len(t.Reviser) == 0 {
 		return errors.New("reviser is required")
 	}

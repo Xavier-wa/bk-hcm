@@ -23,27 +23,93 @@ import (
 	"strings"
 	"testing"
 
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/dal/table/types"
 )
 
-func TestIacPluginSchemaCreateReqValidate(t *testing.T) {
-	req := &IacPluginSchemaCreateReq{
-		PluginName:    "tencentcloud",
-		PluginVersion: "1.81.5",
-		SchemaHash:    "sha256:" + strings.Repeat("b", 64),
-		SchemaDetail:  types.JsonField(`{"capabilities":{"apply":true}}`),
+func TestIacPluginSchemaReqValidate(t *testing.T) {
+	validHash := "sha256:" + strings.Repeat("b", 64)
+
+	createReq := &IacPluginSchemaBatchCreateReq{
+		Items: []IacPluginSchemaCreateField{
+			{
+				PluginName:    "tencentcloud",
+				PluginVersion: "1.81.5",
+				SchemaHash:    validHash,
+				SchemaDetail:  types.JsonField(`{"capabilities":{"apply":true}}`),
+			},
+		},
 	}
-	if err := req.Validate(); err != nil {
-		t.Fatalf("expected valid IacPluginSchemaCreateReq to pass, got: %v", err)
+	if err := createReq.Validate(); err != nil {
+		t.Fatalf("expected valid IacPluginSchemaBatchCreateReq to pass, got: %v", err)
 	}
 
-	invalidHashReq := &IacPluginSchemaCreateReq{
-		PluginName:    "tencentcloud",
-		PluginVersion: "1.81.5",
-		SchemaHash:    "bad",
-		SchemaDetail:  types.JsonField(`{}`),
+	emptyCreateReq := &IacPluginSchemaBatchCreateReq{}
+	if err := emptyCreateReq.Validate(); err == nil {
+		t.Fatalf("expected empty items to fail validation")
+	}
+
+	invalidHashReq := &IacPluginSchemaBatchCreateReq{
+		Items: []IacPluginSchemaCreateField{
+			{
+				PluginName:    "tencentcloud",
+				PluginVersion: "1.81.5",
+				SchemaHash:    "bad",
+				SchemaDetail:  types.JsonField(`{}`),
+			},
+		},
 	}
 	if err := invalidHashReq.Validate(); err == nil {
 		t.Fatalf("expected invalid schema_hash to fail validation")
+	}
+
+	unsupportedAlgoReq := &IacPluginSchemaBatchCreateReq{
+		Items: []IacPluginSchemaCreateField{
+			{
+				PluginName:    "tencentcloud",
+				PluginVersion: "1.81.5",
+				SchemaHash:    "md5:" + strings.Repeat("b", 32),
+				SchemaDetail:  types.JsonField(`{}`),
+			},
+		},
+	}
+	if err := unsupportedAlgoReq.Validate(); err == nil || !strings.Contains(err.Error(), "unsupported") {
+		t.Fatalf("expected unsupported algorithm to fail validation, got: %v", err)
+	}
+
+	updateReq := &IacPluginSchemaBatchUpdateReq{
+		Items: []IacPluginSchemaUpdateField{
+			{
+				ID:           "schema-001",
+				SchemaHash:   validHash,
+				SchemaDetail: types.JsonField(`{"capabilities":{"apply":true}}`),
+			},
+		},
+	}
+	if err := updateReq.Validate(); err != nil {
+		t.Fatalf("expected valid IacPluginSchemaBatchUpdateReq to pass, got: %v", err)
+	}
+
+	emptyUpdateReq := &IacPluginSchemaBatchUpdateReq{
+		Items: []IacPluginSchemaUpdateField{
+			{
+				ID: "schema-001",
+			},
+		},
+	}
+	if err := emptyUpdateReq.Validate(); err == nil {
+		t.Fatalf("expected empty update fields to fail validation")
+	}
+
+	deleteReq := &IacPluginSchemaBatchDeleteReq{
+		Filter: tools.EqualExpression("id", "schema-001"),
+	}
+	if err := deleteReq.Validate(); err != nil {
+		t.Fatalf("expected valid IacPluginSchemaBatchDeleteReq to pass, got: %v", err)
+	}
+
+	badDeleteReq := &IacPluginSchemaBatchDeleteReq{}
+	if err := badDeleteReq.Validate(); err == nil {
+		t.Fatalf("expected nil filter to fail validation")
 	}
 }

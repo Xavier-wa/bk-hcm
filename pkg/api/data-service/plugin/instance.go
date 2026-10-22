@@ -22,16 +22,44 @@ package dataplugin
 
 import (
 	"errors"
+	"fmt"
 
 	"hcm/pkg/api/core"
 	coreplugin "hcm/pkg/api/core/plugin"
+	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/validator"
 	"hcm/pkg/rest"
 	"hcm/pkg/runtime/filter"
 )
 
-// IacPluginInstanceCreateReq 创建 iac_plugin_instance 请求。
-type IacPluginInstanceCreateReq struct {
+// -------------------------- Create --------------------------
+
+// IacPluginInstanceBatchCreateReq 批量创建 iac_plugin_instance 请求。
+type IacPluginInstanceBatchCreateReq struct {
+	Items []IacPluginInstanceCreateField `json:"items" validate:"required,min=1"`
+}
+
+// Validate 校验 IacPluginInstanceBatchCreateReq。
+func (req *IacPluginInstanceBatchCreateReq) Validate() error {
+	if len(req.Items) > constant.BatchOperationMaxLimit {
+		return fmt.Errorf("items count should <= %d", constant.BatchOperationMaxLimit)
+	}
+
+	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+
+	for i := range req.Items {
+		if err := req.Items[i].Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// IacPluginInstanceCreateField 单条 iac_plugin_instance 创建字段。
+type IacPluginInstanceCreateField struct {
 	PluginName  string         `json:"plugin_name" validate:"required,lte=64"`
 	Name        string         `json:"name" validate:"required,lte=128"`
 	Attrs       map[string]any `json:"attrs"`
@@ -40,8 +68,8 @@ type IacPluginInstanceCreateReq struct {
 	Memo        *string        `json:"memo"`
 }
 
-// Validate 校验 IacPluginInstanceCreateReq。
-func (req *IacPluginInstanceCreateReq) Validate() error {
+// Validate 校验 IacPluginInstanceCreateField。
+func (req *IacPluginInstanceCreateField) Validate() error {
 	if err := validator.Validate.Struct(req); err != nil {
 		return err
 	}
@@ -53,8 +81,34 @@ func (req *IacPluginInstanceCreateReq) Validate() error {
 	return nil
 }
 
-// IacPluginInstanceUpdateReq 更新 iac_plugin_instance 请求。
-type IacPluginInstanceUpdateReq struct {
+// -------------------------- Update --------------------------
+
+// IacPluginInstanceBatchUpdateReq 批量更新 iac_plugin_instance 请求。
+type IacPluginInstanceBatchUpdateReq struct {
+	Items []IacPluginInstanceUpdateField `json:"items" validate:"required,min=1"`
+}
+
+// Validate 校验 IacPluginInstanceBatchUpdateReq。
+func (req *IacPluginInstanceBatchUpdateReq) Validate() error {
+	if len(req.Items) > constant.BatchOperationMaxLimit {
+		return fmt.Errorf("items count should <= %d", constant.BatchOperationMaxLimit)
+	}
+
+	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+
+	for i := range req.Items {
+		if err := req.Items[i].Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// IacPluginInstanceUpdateField 单条 iac_plugin_instance 更新字段。
+type IacPluginInstanceUpdateField struct {
 	ID          string         `json:"id" validate:"required,lte=64"`
 	Name        string         `json:"name" validate:"omitempty,lte=128"`
 	Attrs       map[string]any `json:"attrs"`
@@ -63,8 +117,8 @@ type IacPluginInstanceUpdateReq struct {
 	Memo        *string        `json:"memo"`
 }
 
-// Validate 校验 IacPluginInstanceUpdateReq。
-func (req *IacPluginInstanceUpdateReq) Validate() error {
+// Validate 校验 IacPluginInstanceUpdateField。
+func (req *IacPluginInstanceUpdateField) Validate() error {
 	if err := validator.Validate.Struct(req); err != nil {
 		return err
 	}
@@ -80,15 +134,19 @@ func (req *IacPluginInstanceUpdateReq) Validate() error {
 	return nil
 }
 
-// IacPluginInstanceDeleteReq 删除 iac_plugin_instance 请求。
-type IacPluginInstanceDeleteReq struct {
+// -------------------------- Delete --------------------------
+
+// IacPluginInstanceBatchDeleteReq 批量删除 iac_plugin_instance 请求。
+type IacPluginInstanceBatchDeleteReq struct {
 	Filter *filter.Expression `json:"filter" validate:"required"`
 }
 
-// Validate 校验 IacPluginInstanceDeleteReq。
-func (req *IacPluginInstanceDeleteReq) Validate() error {
+// Validate 校验 IacPluginInstanceBatchDeleteReq。
+func (req *IacPluginInstanceBatchDeleteReq) Validate() error {
 	return validator.Validate.Struct(req)
 }
+
+// -------------------------- List --------------------------
 
 // IacPluginInstanceListReq 列表查询 iac_plugin_instance 请求。
 type IacPluginInstanceListReq = core.ListReq

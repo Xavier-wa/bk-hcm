@@ -41,7 +41,7 @@ import (
 
 // IacPluginInstance iac_plugin_instance 表 DAO 接口。
 type IacPluginInstance interface {
-	CreateWithTx(kt *kit.Kit, tx *sqlx.Tx, model *tableplugin.IacPluginInstanceTable) (string, error)
+	BatchCreateWithTx(kt *kit.Kit, tx *sqlx.Tx, models []tableplugin.IacPluginInstanceTable) ([]string, error)
 	UpdateWithTx(kt *kit.Kit, tx *sqlx.Tx, filterExpr *filter.Expression,
 		model *tableplugin.IacPluginInstanceTable) error
 	List(kt *kit.Kit, opt *types.ListOption) (*types.ListIacPluginInstanceDetails, error)
@@ -56,38 +56,42 @@ type IacPluginInstanceDao struct {
 	IDGen idgenerator.IDGenInterface
 }
 
-// CreateWithTx 在事务中创建单条 iac_plugin_instance 记录。
-func (d *IacPluginInstanceDao) CreateWithTx(kt *kit.Kit, tx *sqlx.Tx,
-	model *tableplugin.IacPluginInstanceTable) (string, error) {
+// BatchCreateWithTx 在事务中批量创建 iac_plugin_instance 记录。
+func (d *IacPluginInstanceDao) BatchCreateWithTx(kt *kit.Kit, tx *sqlx.Tx,
+	models []tableplugin.IacPluginInstanceTable) ([]string, error) {
 
-	if model == nil {
-		return "", errf.New(errf.InvalidParameter, "iac plugin instance model is nil")
+	if len(models) == 0 {
+		return nil, errf.New(errf.InvalidParameter, "iac plugin instance models to create cannot be empty")
 	}
 
-	if err := model.InsertValidate(); err != nil {
-		logs.Errorf("insert validate iac_plugin_instance failed, err: %v, rid: %s", err, kt.Rid)
-		return "", err
+	for index := range models {
+		if err := models[index].InsertValidate(); err != nil {
+			logs.Errorf("insert validate iac_plugin_instance failed, err: %v, rid: %s", err, kt.Rid)
+			return nil, err
+		}
 	}
 
-	id, err := d.IDGen.One(kt, model.TableName())
+	ids, err := d.IDGen.Batch(kt, table.IacPluginInstanceTable, len(models))
 	if err != nil {
-		logs.Errorf("generate id for %s failed, err: %v, rid: %s", model.TableName(), err, kt.Rid)
-		return "", err
+		logs.Errorf("generate id for %s failed, err: %v, rid: %s", table.IacPluginInstanceTable, err, kt.Rid)
+		return nil, err
 	}
-	model.ID = id
+	for index := range models {
+		models[index].ID = ids[index]
+	}
 
 	sql := fmt.Sprintf(`INSERT INTO %s (%s) VALUES(%s)`,
-		model.TableName(),
+		table.IacPluginInstanceTable,
 		tableplugin.IacPluginInstanceTableColumns.ColumnExpr(),
 		tableplugin.IacPluginInstanceTableColumns.ColonNameExpr())
 
-	err = d.Orm.ModifySQLOpts(orm.NewInjectTenantIDOpt(kt.TenantID)).Txn(tx).Insert(kt.Ctx, sql, model)
+	err = d.Orm.ModifySQLOpts(orm.NewInjectTenantIDOpt(kt.TenantID)).Txn(tx).BulkInsert(kt.Ctx, sql, models)
 	if err != nil {
-		logs.Errorf("insert %s failed, sql: %s, err: %v, rid: %s", model.TableName(), sql, err, kt.Rid)
-		return "", fmt.Errorf("insert %s failed, err: %w", model.TableName(), err)
+		logs.Errorf("insert %s failed, sql: %s, err: %v, rid: %s", table.IacPluginInstanceTable, sql, err, kt.Rid)
+		return nil, fmt.Errorf("insert %s failed, err: %w", table.IacPluginInstanceTable, err)
 	}
 
-	return id, nil
+	return ids, nil
 }
 
 // UpdateWithTx 在事务中按过滤条件更新 iac_plugin_instance 记录。

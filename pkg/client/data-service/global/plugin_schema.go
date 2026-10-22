@@ -39,12 +39,24 @@ func NewIacPluginSchemaClient(client rest.ClientInterface) *IacPluginSchemaClien
 	}
 }
 
-// Create 创建 iac_plugin_schema 记录。
-func (c *IacPluginSchemaClient) Create(kt *kit.Kit, req *dataplugin.IacPluginSchemaCreateReq) (
-	*core.CreateResult, error) {
+// BatchCreate 批量创建 iac_plugin_schema 记录。
+func (c *IacPluginSchemaClient) BatchCreate(kt *kit.Kit, req *dataplugin.IacPluginSchemaBatchCreateReq) (
+	*core.BatchCreateResult, error) {
 
-	return common.Request[dataplugin.IacPluginSchemaCreateReq, core.CreateResult](
-		c.client, rest.POST, kt, req, "/iac_plugin_schemas/create")
+	return common.Request[dataplugin.IacPluginSchemaBatchCreateReq, core.BatchCreateResult](
+		c.client, rest.POST, kt, req, "/iac_plugin_schema/batch/create")
+}
+
+// BatchUpdate 批量更新 iac_plugin_schema 记录。
+func (c *IacPluginSchemaClient) BatchUpdate(kt *kit.Kit, req *dataplugin.IacPluginSchemaBatchUpdateReq) error {
+	return common.RequestNoResp[dataplugin.IacPluginSchemaBatchUpdateReq](
+		c.client, rest.PATCH, kt, req, "/iac_plugin_schema/batch/update")
+}
+
+// BatchDelete 批量删除 iac_plugin_schema 记录。
+func (c *IacPluginSchemaClient) BatchDelete(kt *kit.Kit, req *dataplugin.IacPluginSchemaBatchDeleteReq) error {
+	return common.RequestNoResp[dataplugin.IacPluginSchemaBatchDeleteReq](
+		c.client, rest.DELETE, kt, req, "/iac_plugin_schema/batch")
 }
 
 // List 列表查询 iac_plugin_schema，支持 fields 投影。
@@ -52,5 +64,5 @@ func (c *IacPluginSchemaClient) List(kt *kit.Kit, req *dataplugin.IacPluginSchem
 	*dataplugin.IacPluginSchemaListResult, error) {
 
 	return common.Request[dataplugin.IacPluginSchemaListReq, dataplugin.IacPluginSchemaListResult](
-		c.client, rest.POST, kt, req, "/iac_plugin_schemas/list")
+		c.client, rest.POST, kt, req, "/iac_plugin_schema/list")
 }

@@ -79,10 +79,19 @@ func TestIacPluginSchemaTableValidate(t *testing.T) {
 
 	// UpdateValidate tests
 	updateRow := IacPluginSchemaTable{
-		Reviser: "admin",
+		SchemaHash: validHash,
+		Reviser:    "admin",
 	}
 	if err := updateRow.UpdateValidate(); err != nil {
 		t.Fatalf("expected valid updateRow to pass UpdateValidate, got: %v", err)
+	}
+
+	badUpdateHash := IacPluginSchemaTable{
+		SchemaHash: "invalid",
+		Reviser:    "admin",
+	}
+	if err := badUpdateHash.UpdateValidate(); err == nil {
+		t.Fatalf("expected UpdateValidate to fail when schema_hash is invalid")
 	}
 
 	badUpdate := IacPluginSchemaTable{

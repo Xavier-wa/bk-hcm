@@ -193,6 +193,25 @@ func TestValidatePluginSchemaAndCapabilities(t *testing.T) {
 		t.Fatalf("expected invalid schema_hash format to fail")
 	}
 
+	// unsupported schema_hash algorithm fails
+	unsupportedAlgo := newValidTestPluginSchema(t)
+	unsupportedAlgo.SchemaHash = "md5:" + strings.Repeat("a", 32)
+	if err := ValidatePluginSchema(unsupportedAlgo, expectedPlugin, ProtocolHTTP); err == nil ||
+		!strings.Contains(err.Error(), "unsupported schema_hash algorithm") {
+		t.Fatalf("expected unsupported schema_hash algorithm to fail, got: %v", err)
+	}
+
+	// sha512 prefix algorithm is dispatched and validated properly
+	sha512Schema := newValidTestPluginSchema(t)
+	sha512Hash, err := ComputeSchemaHashByAlgo(SchemaHashAlgoSHA512, sha512Schema.Plugin, &sha512Schema.SchemaDetail)
+	if err != nil {
+		t.Fatalf("compute sha512 schema hash failed: %v", err)
+	}
+	sha512Schema.SchemaHash = sha512Hash
+	if err := ValidatePluginSchema(sha512Schema, expectedPlugin, ProtocolHTTP); err != nil {
+		t.Fatalf("expected valid sha512 schema_hash to pass, got: %v", err)
+	}
+
 	// schema_hash does not match SchemaDetail content
 	badDigest := newValidTestPluginSchema(t)
 	badDigest.SchemaHash = "sha256:" + strings.Repeat("a", 64)

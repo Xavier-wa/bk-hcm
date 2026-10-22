@@ -21,12 +21,14 @@ package plugin
 
 import (
 	"fmt"
+	"net/http"
 	"reflect"
 
 	"hcm/pkg/api/core"
 	dataplugin "hcm/pkg/api/data-service/plugin"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/orm"
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/dal/dao/types"
 	tableplugin "hcm/pkg/dal/table/plugin"
 	"hcm/pkg/logs"
@@ -35,59 +37,137 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// CreateIacPluginSchema 创建 iac_plugin_schema 记录。
-func (svc *service) CreateIacPluginSchema(cts *rest.Contexts) (interface{}, error) {
-	req := new(dataplugin.IacPluginSchemaCreateReq)
+func (svc *service) initIacPluginSchemaRoutes(h *rest.Handler) {
+	h.Add("BatchCreateIacPluginSchema", http.MethodPost,
+		"/iac_plugin_schema/batch/create", svc.BatchCreateIacPluginSchema)
+	h.Add("BatchUpdateIacPluginSchema", http.MethodPatch,
+		"/iac_plugin_schema/batch/update", svc.BatchUpdateIacPluginSchema)
+	h.Add("BatchDeleteIacPluginSchema", http.MethodDelete,
+		"/iac_plugin_schema/batch", svc.BatchDeleteIacPluginSchema)
+	h.Add("ListIacPluginSchema", http.MethodPost, "/iac_plugin_schema/list", svc.ListIacPluginSchema)
+}
+
+// BatchCreateIacPluginSchema 批量创建 iac_plugin_schema 记录。
+func (svc *service) BatchCreateIacPluginSchema(cts *rest.Contexts) (interface{}, error) {
+	req := new(dataplugin.IacPluginSchemaBatchCreateReq)
 	if err := cts.DecodeInto(req); err != nil {
-		logs.Errorf("create iac plugin schema decode request failed, err: %v, rid: %s", err, cts.Kit.Rid)
-		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+		logs.Errorf("batch create iac plugin schema decode request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
 	}
 
 	if err := req.Validate(); err != nil {
-		logs.Errorf("create iac plugin schema validate request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		logs.Errorf("batch create iac plugin schema validate request failed, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	createdID, err := svc.dao.Txn().AutoTxn(cts.Kit, func(txn *sqlx.Tx, opt *orm.TxnOption) (interface{}, error) {
-		model := &tableplugin.IacPluginSchemaTable{
-			PluginName:    req.PluginName,
-			PluginVersion: req.PluginVersion,
-			SchemaHash:    req.SchemaHash,
-			SchemaDetail:  req.SchemaDetail,
-			Creator:       cts.Kit.User,
-			Reviser:       cts.Kit.User,
+	createdIDs, err := svc.dao.Txn().AutoTxn(cts.Kit, func(txn *sqlx.Tx, opt *orm.TxnOption) (interface{}, error) {
+		models := make([]tableplugin.IacPluginSchemaTable, 0, len(req.Items))
+		for _, item := range req.Items {
+			models = append(models, tableplugin.IacPluginSchemaTable{
+				PluginName:    item.PluginName,
+				PluginVersion: item.PluginVersion,
+				SchemaHash:    item.SchemaHash,
+				SchemaDetail:  item.SchemaDetail,
+				Creator:       cts.Kit.User,
+				Reviser:       cts.Kit.User,
+			})
 		}
 
-		id, err := svc.dao.IacPluginSchema().CreateWithTx(cts.Kit, txn, model)
+		ids, err := svc.dao.IacPluginSchema().BatchCreateWithTx(cts.Kit, txn, models)
 		if err != nil {
-			logs.Errorf("create iac plugin schema in db failed, plugin: %s@%s, err: %v, rid: %s",
-				req.PluginName, req.PluginVersion, err, cts.Kit.Rid)
+			logs.Errorf("batch create iac plugin schema in db failed, err: %v, rid: %s", err, cts.Kit.Rid)
 			return nil, err
 		}
 
-		return id, nil
+		return ids, nil
 	})
 	if err != nil {
-		logs.Errorf("create iac plugin schema transaction failed, plugin: %s@%s, err: %v, rid: %s",
-			req.PluginName, req.PluginVersion, err, cts.Kit.Rid)
+		logs.Errorf("batch create iac plugin schema transaction failed, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(errf.Aborted, err)
 	}
 
-	id, ok := createdID.(string)
+	ids, ok := createdIDs.([]string)
 	if !ok {
-		return nil, fmt.Errorf("create iac plugin schema return id type is not string: %v",
-			reflect.TypeOf(createdID).String())
+		return nil, fmt.Errorf("batch create iac plugin schema return ids type is not []string: %v",
+			reflect.TypeOf(createdIDs).String())
 	}
 
-	return &core.CreateResult{ID: id}, nil
+	return &core.BatchCreateResult{IDs: ids}, nil
 }
 
-// ListIacPluginSchemas 列表查询 iac_plugin_schema，支持 fields 投影。
-func (svc *service) ListIacPluginSchemas(cts *rest.Contexts) (interface{}, error) {
+// BatchUpdateIacPluginSchema 批量更新 iac_plugin_schema 记录。
+func (svc *service) BatchUpdateIacPluginSchema(cts *rest.Contexts) (interface{}, error) {
+	req := new(dataplugin.IacPluginSchemaBatchUpdateReq)
+	if err := cts.DecodeInto(req); err != nil {
+		logs.Errorf("batch update iac plugin schema decode request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		logs.Errorf("batch update iac plugin schema validate request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	_, err := svc.dao.Txn().AutoTxn(cts.Kit, func(txn *sqlx.Tx, opt *orm.TxnOption) (interface{}, error) {
+		for _, item := range req.Items {
+			model := &tableplugin.IacPluginSchemaTable{
+				SchemaHash:   item.SchemaHash,
+				SchemaDetail: item.SchemaDetail,
+				Reviser:      cts.Kit.User,
+			}
+
+			if err := svc.dao.IacPluginSchema().UpdateWithTx(cts.Kit, txn,
+				tools.EqualExpression("id", item.ID), model); err != nil {
+				logs.Errorf("update iac plugin schema in db failed, id: %s, err: %v, rid: %s",
+					item.ID, err, cts.Kit.Rid)
+				return nil, err
+			}
+		}
+
+		return nil, nil
+	})
+	if err != nil {
+		logs.Errorf("batch update iac plugin schema transaction failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.Aborted, err)
+	}
+
+	return nil, nil
+}
+
+// BatchDeleteIacPluginSchema 批量删除 iac_plugin_schema 记录。
+func (svc *service) BatchDeleteIacPluginSchema(cts *rest.Contexts) (interface{}, error) {
+	req := new(dataplugin.IacPluginSchemaBatchDeleteReq)
+	if err := cts.DecodeInto(req); err != nil {
+		logs.Errorf("batch delete iac plugin schema decode request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		logs.Errorf("batch delete iac plugin schema validate request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	_, err := svc.dao.Txn().AutoTxn(cts.Kit, func(txn *sqlx.Tx, opt *orm.TxnOption) (interface{}, error) {
+		if err := svc.dao.IacPluginSchema().DeleteWithTx(cts.Kit, txn, req.Filter); err != nil {
+			logs.Errorf("delete iac plugin schema in db failed, err: %v, rid: %s", err, cts.Kit.Rid)
+			return nil, err
+		}
+		return nil, nil
+	})
+	if err != nil {
+		logs.Errorf("batch delete iac plugin schema transaction failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.Aborted, err)
+	}
+
+	return nil, nil
+}
+
+// ListIacPluginSchema 列表查询 iac_plugin_schema，支持 fields 投影。
+func (svc *service) ListIacPluginSchema(cts *rest.Contexts) (interface{}, error) {
 	req := new(dataplugin.IacPluginSchemaListReq)
 	if err := cts.DecodeInto(req); err != nil {
 		logs.Errorf("list iac plugin schema decode request failed, err: %v, rid: %s", err, cts.Kit.Rid)
-		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
 	}
 
 	if err := req.Validate(); err != nil {

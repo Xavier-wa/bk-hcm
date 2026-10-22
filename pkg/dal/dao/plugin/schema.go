@@ -31,6 +31,7 @@ import (
 	"hcm/pkg/dal/dao/types"
 	"hcm/pkg/dal/table"
 	tableplugin "hcm/pkg/dal/table/plugin"
+	"hcm/pkg/dal/table/utils"
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/runtime/filter"
@@ -40,7 +41,9 @@ import (
 
 // IacPluginSchema iac_plugin_schema 表 DAO 接口。
 type IacPluginSchema interface {
-	CreateWithTx(kt *kit.Kit, tx *sqlx.Tx, model *tableplugin.IacPluginSchemaTable) (string, error)
+	BatchCreateWithTx(kt *kit.Kit, tx *sqlx.Tx, models []tableplugin.IacPluginSchemaTable) ([]string, error)
+	UpdateWithTx(kt *kit.Kit, tx *sqlx.Tx, filterExpr *filter.Expression,
+		model *tableplugin.IacPluginSchemaTable) error
 	List(kt *kit.Kit, opt *types.ListOption) (*types.ListIacPluginSchemaDetails, error)
 	DeleteWithTx(kt *kit.Kit, tx *sqlx.Tx, expr *filter.Expression) error
 }
@@ -53,37 +56,82 @@ type IacPluginSchemaDao struct {
 	IDGen idgenerator.IDGenInterface
 }
 
-// CreateWithTx 在事务中创建单条 iac_plugin_schema 记录。
-func (d *IacPluginSchemaDao) CreateWithTx(kt *kit.Kit, tx *sqlx.Tx, model *tableplugin.IacPluginSchemaTable) (
-	string, error) {
+// BatchCreateWithTx 在事务中批量创建 iac_plugin_schema 记录。
+func (d *IacPluginSchemaDao) BatchCreateWithTx(kt *kit.Kit, tx *sqlx.Tx,
+	models []tableplugin.IacPluginSchemaTable) ([]string, error) {
 
-	if model == nil {
-		return "", errf.New(errf.InvalidParameter, "iac plugin schema model is nil")
+	if len(models) == 0 {
+		return nil, errf.New(errf.InvalidParameter, "iac plugin schema models to create cannot be empty")
 	}
 
-	if err := model.InsertValidate(); err != nil {
-		logs.Errorf("insert validate iac_plugin_schema failed, err: %v, rid: %s", err, kt.Rid)
-		return "", err
+	for index := range models {
+		if err := models[index].InsertValidate(); err != nil {
+			logs.Errorf("insert validate iac_plugin_schema failed, err: %v, rid: %s", err, kt.Rid)
+			return nil, err
+		}
 	}
 
-	id, err := d.IDGen.One(kt, model.TableName())
+	ids, err := d.IDGen.Batch(kt, table.IacPluginSchemaTable, len(models))
 	if err != nil {
-		logs.Errorf("generate id for %s failed, err: %v, rid: %s", model.TableName(), err, kt.Rid)
-		return "", err
+		logs.Errorf("generate id for %s failed, err: %v, rid: %s", table.IacPluginSchemaTable, err, kt.Rid)
+		return nil, err
 	}
-	model.ID = id
+	for index := range models {
+		models[index].ID = ids[index]
+	}
 
 	sql := fmt.Sprintf(`INSERT INTO %s (%s) VALUES(%s)`,
-		model.TableName(),
+		table.IacPluginSchemaTable,
 		tableplugin.IacPluginSchemaTableColumns.ColumnExpr(),
 		tableplugin.IacPluginSchemaTableColumns.ColonNameExpr())
 
-	if err = d.Orm.Txn(tx).Insert(kt.Ctx, sql, model); err != nil {
-		logs.Errorf("insert %s failed, sql: %s, err: %v, rid: %s", model.TableName(), sql, err, kt.Rid)
-		return "", fmt.Errorf("insert %s failed, err: %w", model.TableName(), err)
+	if err = d.Orm.Txn(tx).BulkInsert(kt.Ctx, sql, models); err != nil {
+		logs.Errorf("insert %s failed, sql: %s, err: %v, rid: %s", table.IacPluginSchemaTable, sql, err, kt.Rid)
+		return nil, fmt.Errorf("insert %s failed, err: %w", table.IacPluginSchemaTable, err)
 	}
 
-	return id, nil
+	return ids, nil
+}
+
+// UpdateWithTx 在事务中按过滤条件更新 iac_plugin_schema 记录。
+func (d *IacPluginSchemaDao) UpdateWithTx(kt *kit.Kit, tx *sqlx.Tx, filterExpr *filter.Expression,
+	model *tableplugin.IacPluginSchemaTable) error {
+
+	if filterExpr == nil {
+		return errf.New(errf.InvalidParameter, "filter expr is nil")
+	}
+	if model == nil {
+		return errf.New(errf.InvalidParameter, "iac plugin schema update model is nil")
+	}
+
+	if err := model.UpdateValidate(); err != nil {
+		logs.Errorf("update validate iac_plugin_schema failed, err: %v, rid: %s", err, kt.Rid)
+		return err
+	}
+
+	whereExpr, whereValue, err := filterExpr.SQLWhereExpr(tools.DefaultSqlWhereOption)
+	if err != nil {
+		logs.Errorf("generate update where expr for iac_plugin_schema failed, err: %v, rid: %s", err, kt.Rid)
+		return err
+	}
+
+	opts := utils.NewFieldOptions().
+		AddIgnoredFields(types.DefaultIgnoredFields...).
+		AddIgnoredFields("plugin_name", "plugin_version")
+
+	setExpr, toUpdate, err := utils.RearrangeSQLDataWithOption(model, opts)
+	if err != nil {
+		logs.Errorf("rearrange sql data for iac_plugin_schema failed, err: %v, rid: %s", err, kt.Rid)
+		return fmt.Errorf("prepare parsed sql set filter expr failed, err: %w", err)
+	}
+
+	sql := fmt.Sprintf(`UPDATE %s %s %s`, model.TableName(), setExpr, whereExpr)
+	if _, err = d.Orm.Txn(tx).Update(kt.Ctx, sql, tools.MapMerge(toUpdate, whereValue)); err != nil {
+		logs.ErrorJson("update iac_plugin_schema failed, filter: %v, err: %v, rid: %s", filterExpr, err, kt.Rid)
+		return err
+	}
+
+	return nil
 }
 
 // List 查询 iac_plugin_schema 记录，支持 fields 投影（如仅 schema_hash 或完整记录）。
