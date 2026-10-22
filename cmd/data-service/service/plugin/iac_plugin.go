@@ -20,6 +20,8 @@
 package plugin
 
 import (
+	"encoding/json"
+
 	"hcm/pkg/api/core"
 	coreplugin "hcm/pkg/api/core/plugin"
 	dataplugin "hcm/pkg/api/data-service/plugin"
@@ -164,7 +166,7 @@ func convTableToIaCPlugin(one tableplugin.IaCPluginTable) coreplugin.IaCPlugin {
 		Protocol:      one.Protocol,
 		State:         one.State,
 		Message:       cvt.PtrToVal(one.Message),
-		Extension:     []byte(one.Extension),
+		Extension:     convExtensionToRaw(one.Extension),
 		Memo:          one.Memo,
 		Revision: &core.Revision{
 			Creator:   one.Creator,
@@ -173,4 +175,11 @@ func convTableToIaCPlugin(one tableplugin.IaCPluginTable) coreplugin.IaCPlugin {
 			UpdatedAt: one.UpdatedAt.String(),
 		},
 	}
+}
+
+func convExtensionToRaw(ext tabletypes.JsonField) json.RawMessage {
+	if len(ext) == 0 {
+		return json.RawMessage("{}")
+	}
+	return json.RawMessage(ext)
 }

@@ -163,6 +163,9 @@ func (s *Service) listHTTPPluginNames(kt *kit.Kit) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		if res == nil {
+			break
+		}
 
 		names = append(names, slice.Map(res.Details, func(one coreplugin.IaCPlugin) string { return one.PluginName })...)
 		if uint(len(res.Details)) < req.Page.Limit {
