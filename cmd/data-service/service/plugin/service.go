@@ -17,21 +17,23 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-// Package plugin 提供 iac_plugin 与 iac_plugin_schema 的 data-service REST 接口。
+// Package plugin 提供 iac_plugin、iac_plugin_schema 与 iac_plugin_instance 的 data-service REST 接口。
 package plugin
 
 import (
 	"net/http"
 
 	"hcm/cmd/data-service/service/capability"
+	"hcm/pkg/cryptography"
 	"hcm/pkg/dal/dao"
 	"hcm/pkg/rest"
 )
 
-// InitService 初始化插件与插件 Schema 服务路由。
+// InitService 初始化插件、插件 Schema 与插件实例服务路由。
 func InitService(cap *capability.Capability) {
 	svc := &service{
-		dao: cap.Dao,
+		dao:    cap.Dao,
+		cipher: cap.Cipher,
 	}
 
 	h := rest.NewHandler()
@@ -46,9 +48,12 @@ func InitService(cap *capability.Capability) {
 	h.Add("CreateIacPluginSchema", http.MethodPost, "/iac_plugin_schemas/create", svc.CreateIacPluginSchema)
 	h.Add("ListIacPluginSchemas", http.MethodPost, "/iac_plugin_schemas/list", svc.ListIacPluginSchemas)
 
+	svc.initIacPluginInstanceRoutes(h)
+
 	h.Load(cap.WebService)
 }
 
 type service struct {
-	dao dao.Set
+	dao    dao.Set
+	cipher cryptography.Crypto
 }

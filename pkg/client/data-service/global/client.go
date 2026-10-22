@@ -77,8 +77,9 @@ type Client struct {
 
 	PermissionPolicyLibrary *PermissionPolicyLibraryClient
 
-	IaCPlugin       *IaCPluginClient
-	IacPluginSchema *IacPluginSchemaClient
+	IaCPlugin         *IaCPluginClient
+	IacPluginSchema   *IacPluginSchemaClient
+	IacPluginInstance *IacPluginInstanceClient
 }
 
 type restClient struct {
@@ -124,15 +125,16 @@ func NewClient(client rest.ClientInterface) *Client {
 		RootAccount:    NewRootAccountClient(client),
 		Cos:            NewCosClient(client),
 
-		TaskDetail:     NewTaskDetailClient(client),
-		TaskManagement: NewTaskManagementClient(client),
-		Tenant:         NewTenantClient(client),
-		AccountSecret: NewAccountSecretClient(client),
-		GlobalConfig:       NewGlobalConfigClient(client),
-		ResUsageBizRel:     NewResUsageBizRelRelClient(client),
-		PermissionTemplate: NewPermissionTemplateClient(client),
+		TaskDetail:              NewTaskDetailClient(client),
+		TaskManagement:          NewTaskManagementClient(client),
+		Tenant:                  NewTenantClient(client),
+		AccountSecret:           NewAccountSecretClient(client),
+		GlobalConfig:            NewGlobalConfigClient(client),
+		ResUsageBizRel:          NewResUsageBizRelRelClient(client),
+		PermissionTemplate:      NewPermissionTemplateClient(client),
 		PermissionPolicyLibrary: NewPermissionPolicyLibraryClient(client),
 		IaCPlugin:               NewIaCPluginClient(client),
 		IacPluginSchema:         NewIacPluginSchemaClient(client),
+		IacPluginInstance:       NewIacPluginInstanceClient(client),
 	}
 }

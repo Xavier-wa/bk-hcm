@@ -1,0 +1,75 @@
+/*
+ * TencentBlueKing is pleased to support the open source community by making
+ * 蓝鲸智云 - 混合云管理平台 (BlueKing - Hybrid Cloud Management System) available.
+ * Copyright (C) 2022 THL A29 Limited,
+ * a Tencent company. All rights reserved.
+ * Licensed under the MIT License (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://opensource.org/licenses/MIT
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ *
+ * We undertake not to change the open source license (MIT license) applicable
+ *
+ * to the current version of the project delivered to anyone in the future.
+ */
+
+package global
+
+import (
+	"hcm/pkg/api/core"
+	coreplugin "hcm/pkg/api/core/plugin"
+	dataplugin "hcm/pkg/api/data-service/plugin"
+	"hcm/pkg/client/common"
+	"hcm/pkg/kit"
+	"hcm/pkg/rest"
+)
+
+// IacPluginInstanceClient data-service iac_plugin_instance API 客户端。
+type IacPluginInstanceClient struct {
+	client rest.ClientInterface
+}
+
+// NewIacPluginInstanceClient 创建 IacPluginInstanceClient。
+func NewIacPluginInstanceClient(client rest.ClientInterface) *IacPluginInstanceClient {
+	return &IacPluginInstanceClient{
+		client: client,
+	}
+}
+
+// Create 创建 iac_plugin_instance 记录。
+func (c *IacPluginInstanceClient) Create(kt *kit.Kit, req *dataplugin.IacPluginInstanceCreateReq) (
+	*core.CreateResult, error) {
+
+	return common.Request[dataplugin.IacPluginInstanceCreateReq, core.CreateResult](
+		c.client, rest.POST, kt, req, "/iac_plugin_instances/create")
+}
+
+// Update 更新 iac_plugin_instance 记录。
+func (c *IacPluginInstanceClient) Update(kt *kit.Kit, req *dataplugin.IacPluginInstanceUpdateReq) error {
+	return common.RequestNoResp[dataplugin.IacPluginInstanceUpdateReq](
+		c.client, rest.PATCH, kt, req, "/iac_plugin_instances/update")
+}
+
+// Delete 删除 iac_plugin_instance 记录。
+func (c *IacPluginInstanceClient) Delete(kt *kit.Kit, req *dataplugin.IacPluginInstanceDeleteReq) error {
+	return common.RequestNoResp[dataplugin.IacPluginInstanceDeleteReq](
+		c.client, rest.DELETE, kt, req, "/iac_plugin_instances/batch")
+}
+
+// List 列表查询 iac_plugin_instance 记录。
+func (c *IacPluginInstanceClient) List(kt *kit.Kit, req *dataplugin.IacPluginInstanceListReq) (
+	*dataplugin.IacPluginInstanceListResult, error) {
+
+	return common.Request[dataplugin.IacPluginInstanceListReq, dataplugin.IacPluginInstanceListResult](
+		c.client, rest.POST, kt, req, "/iac_plugin_instances/list")
+}
+
+// Get 获取单条 iac_plugin_instance 记录。
+func (c *IacPluginInstanceClient) Get(kt *kit.Kit, id string) (*coreplugin.IacPluginInstance, error) {
+	return common.Request[common.Empty, coreplugin.IacPluginInstance](
+		c.client, rest.GET, kt, common.NoData, "/iac_plugin_instances/%s", id)
+}

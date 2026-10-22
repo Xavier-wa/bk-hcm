@@ -227,6 +227,9 @@ const (
 
 	// IacPluginSchemaTable iac_plugin_schema 表名。
 	IacPluginSchemaTable Name = "iac_plugin_schema"
+
+	// IacPluginInstanceTable iac_plugin_instance 表名。
+	IacPluginInstanceTable Name = "iac_plugin_instance"
 )
 
 // Validate whether the table name is valid or not.
@@ -352,6 +355,8 @@ var TableMap = map[Name]TableConfig{
 	IaCPluginTable: {},
 
 	IacPluginSchemaTable: {},
+
+	IacPluginInstanceTable: {EnableTenant: true},
 }
 
 // Register 注册表名

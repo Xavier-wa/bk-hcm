@@ -39,3 +39,11 @@ func (s *set) IacPluginSchema() daoplugin.IacPluginSchema {
 		IDGen: s.idGen,
 	}
 }
+
+// IacPluginInstance 返回 IacPluginInstance DAO。
+func (s *set) IacPluginInstance() daoplugin.IacPluginInstance {
+	return &daoplugin.IacPluginInstanceDao{
+		Orm:   s.orm,
+		IDGen: s.idGen,
+	}
+}
