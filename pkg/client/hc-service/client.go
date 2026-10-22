@@ -43,7 +43,8 @@ type Client struct {
 	Azure  *azure.Client
 	Other  *other.Client
 	// IaCPlugin 与云厂商无关的 IaC 插件接口。
-	IaCPlugin *iacplugin.Client
+	IaCPlugin      *iacplugin.Client
+	PluginInstance *PluginInstanceClient
 }
 
 // NewClient create a new hc-service api client.
@@ -68,6 +69,9 @@ func NewClient(c *client.Capability, version string) *Client {
 		),
 		Other: other.NewClient(
 			rest.NewClient(c, fmt.Sprintf("%s/%s", prefixPath, enumor.Other)),
+		),
+		PluginInstance: NewPluginInstanceClient(
+			rest.NewClient(c, fmt.Sprintf("/api/%s/hc", version)),
 		),
 	}
 }

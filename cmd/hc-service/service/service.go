@@ -52,6 +52,7 @@ import (
 	mainaccount "hcm/cmd/hc-service/service/main-account"
 	"hcm/cmd/hc-service/service/monitoring"
 	"hcm/cmd/hc-service/service/permission-template"
+	"hcm/cmd/hc-service/service/plugin"
 	routetable "hcm/cmd/hc-service/service/route-table"
 	sagemaker "hcm/cmd/hc-service/service/sagemaker"
 	securitygroup "hcm/cmd/hc-service/service/security-group"
@@ -223,6 +224,7 @@ func (s *Service) apiSet() *restful.Container {
 	monitoring.InitMonitoringService(c)
 	permissiontemplate.InitService(c)
 	iacpluginsvc.InitService(c)
+	plugin.InitService(c)
 
 	return restful.NewContainer().Add(c.WebService)
 }
