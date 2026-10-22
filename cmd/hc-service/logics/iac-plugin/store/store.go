@@ -30,7 +30,6 @@ import (
 	dataplugin "hcm/pkg/api/data-service/plugin"
 	dataservice "hcm/pkg/client/data-service"
 	"hcm/pkg/criteria/enumor"
-	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
 	cvt "hcm/pkg/tools/converter"
@@ -47,22 +46,6 @@ func List(kt *kit.Kit, cli *dataservice.Client, pluginName string) ([]coreplugin
 	}
 
 	return res.Details, nil
-}
-
-// Get 按 ID 读取记录，不存在返回 RecordNotFound。
-func Get(kt *kit.Kit, cli *dataservice.Client, id string) (*coreplugin.IaCPlugin, error) {
-	res, err := cli.Global.IaCPlugin.List(kt, &core.ListReq{
-		Filter: tools.EqualExpression("id", id),
-		Page:   core.NewDefaultBasePage(),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("get plugin record %s failed: %w", id, err)
-	}
-	if len(res.Details) == 0 {
-		return nil, errf.Newf(errf.RecordNotFound, "iac plugin %s not found", id)
-	}
-
-	return &res.Details[0], nil
 }
 
 // Insert 插入一条 init 记录，返回记录 ID。

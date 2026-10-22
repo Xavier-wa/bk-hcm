@@ -35,13 +35,22 @@ import (
 // pluginNameRegexp 插件名：字母或数字开头，只含字母、数字、_、-、.，最长 64。插件名也是锁 key 的一部分，不能含 /。
 var pluginNameRegexp = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$`)
 
+func validatePluginName(name string) error {
+	if !pluginNameRegexp.MatchString(name) {
+		return errors.New("plugin_name should start with a letter or digit, contain only letters, digits, " +
+			"'_', '-', '.', and be at most 64 characters")
+	}
+
+	return nil
+}
+
 // HTTPRegisterReq 注册 http 插件请求。插件版本取自探活结果，不由请求传入。
 type HTTPRegisterReq struct {
-	PluginName   string                    `json:"plugin_name" validate:"required"`
-	APIPath      string                    `json:"api_path" validate:"required,max=255"`
-	CryptoType   string                    `json:"crypto_type" validate:"required"`
+	PluginName   string                       `json:"plugin_name" validate:"required"`
+	APIPath      string                       `json:"api_path" validate:"required,max=255"`
+	CryptoType   string                       `json:"crypto_type" validate:"required"`
 	CryptoConfig *coreplugin.HTTPCryptoConfig `json:"crypto_config" validate:"required"`
-	Memo         *string                   `json:"memo" validate:"omitempty,max=255"`
+	Memo         *string                      `json:"memo" validate:"omitempty,max=255"`
 }
 
 // Validate HTTPRegisterReq.
@@ -50,9 +59,8 @@ func (req *HTTPRegisterReq) Validate() error {
 		return err
 	}
 
-	if !pluginNameRegexp.MatchString(req.PluginName) {
-		return errors.New("plugin_name should start with a letter or digit, contain only letters, digits, " +
-			"'_', '-', '.', and be at most 64 characters")
+	if err := validatePluginName(req.PluginName); err != nil {
+		return err
 	}
 
 	if err := iacplugin.ValidateAPIPath(req.APIPath); err != nil {
@@ -62,18 +70,37 @@ func (req *HTTPRegisterReq) Validate() error {
 	return iacplugin.ValidateCrypto(req.CryptoType, req.CryptoConfig)
 }
 
-// HTTPUpdateReq 修改 http 插件请求，至少传一个字段，未传的保持不变。
+// HTTPUpgradeReq 升级 http 插件请求。按插件名找到版本最高的记录再探活。
+type HTTPUpgradeReq struct {
+	PluginName string `json:"plugin_name" validate:"required"`
+}
+
+// Validate HTTPUpgradeReq.
+func (req *HTTPUpgradeReq) Validate() error {
+	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+
+	return validatePluginName(req.PluginName)
+}
+
+// HTTPUpdateReq 修改 http 插件请求，作用于该插件名下版本最高的记录。除 plugin_name 外至少再传一个字段，未传的保持不变。
 // 加密配置的合法性要与记录里的已有值合并后才能判断，在 hc-service 合并后校验。
 type HTTPUpdateReq struct {
-	APIPath      *string                   `json:"api_path" validate:"omitempty,max=255"`
-	CryptoType   *string                   `json:"crypto_type" validate:"omitempty"`
+	PluginName   string                       `json:"plugin_name" validate:"required"`
+	APIPath      *string                      `json:"api_path" validate:"omitempty,max=255"`
+	CryptoType   *string                      `json:"crypto_type" validate:"omitempty"`
 	CryptoConfig *coreplugin.HTTPCryptoConfig `json:"crypto_config" validate:"omitempty"`
-	Memo         *string                   `json:"memo" validate:"omitempty,max=255"`
+	Memo         *string                      `json:"memo" validate:"omitempty,max=255"`
 }
 
 // Validate HTTPUpdateReq.
 func (req *HTTPUpdateReq) Validate() error {
 	if err := validator.Validate.Struct(req); err != nil {
+		return err
+	}
+
+	if err := validatePluginName(req.PluginName); err != nil {
 		return err
 	}
 

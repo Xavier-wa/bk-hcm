@@ -38,8 +38,8 @@ func InitService(c *capability.Capability) {
 	h := rest.NewHandler()
 
 	h.Add("RegisterHTTPIaCPlugin", http.MethodPost, "/iac_plugins/http/register", s.RegisterHTTPIaCPlugin)
-	h.Add("UpgradeHTTPIaCPlugin", http.MethodPost, "/iac_plugins/http/{id}/upgrade", s.UpgradeHTTPIaCPlugin)
-	h.Add("UpdateHTTPIaCPlugin", http.MethodPost, "/iac_plugins/http/{id}/update", s.UpdateHTTPIaCPlugin)
+	h.Add("UpgradeHTTPIaCPlugin", http.MethodPost, "/iac_plugins/http/upgrade", s.UpgradeHTTPIaCPlugin)
+	h.Add("UpdateHTTPIaCPlugin", http.MethodPost, "/iac_plugins/http/update", s.UpdateHTTPIaCPlugin)
 
 	h.Load(c.WebService)
 }
@@ -70,14 +70,18 @@ func (s *svc) RegisterHTTPIaCPlugin(cts *rest.Contexts) (any, error) {
 
 // UpgradeHTTPIaCPlugin 触发 http 插件的升级检查或异常恢复。
 func (s *svc) UpgradeHTTPIaCPlugin(cts *rest.Contexts) (any, error) {
-	id := cts.PathParameter("id").String()
-	if len(id) == 0 {
-		return nil, errf.New(errf.InvalidParameter, "id is required")
+	req := new(proto.HTTPUpgradeReq)
+	if err := cts.DecodeInto(req); err != nil {
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
 	}
 
-	result, err := s.httpPlugin.Upgrade(cts.Kit, id)
+	if err := req.Validate(); err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
+	}
+
+	result, err := s.httpPlugin.Upgrade(cts.Kit, req.PluginName)
 	if err != nil {
-		logs.Errorf("upgrade http iac plugin %s failed, err: %v, rid: %s", id, err, cts.Kit.Rid)
+		logs.Errorf("upgrade http iac plugin %s failed, err: %v, rid: %s", req.PluginName, err, cts.Kit.Rid)
 		return nil, err
 	}
 
@@ -86,11 +90,6 @@ func (s *svc) UpgradeHTTPIaCPlugin(cts *rest.Contexts) (any, error) {
 
 // UpdateHTTPIaCPlugin 修改 http 插件。
 func (s *svc) UpdateHTTPIaCPlugin(cts *rest.Contexts) (any, error) {
-	id := cts.PathParameter("id").String()
-	if len(id) == 0 {
-		return nil, errf.New(errf.InvalidParameter, "id is required")
-	}
-
 	req := new(proto.HTTPUpdateReq)
 	if err := cts.DecodeInto(req); err != nil {
 		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
@@ -100,9 +99,9 @@ func (s *svc) UpdateHTTPIaCPlugin(cts *rest.Contexts) (any, error) {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	result, err := s.httpPlugin.Update(cts.Kit, id, req)
+	result, err := s.httpPlugin.Update(cts.Kit, req)
 	if err != nil {
-		logs.Errorf("update http iac plugin %s failed, err: %v, rid: %s", id, err, cts.Kit.Rid)
+		logs.Errorf("update http iac plugin %s failed, err: %v, rid: %s", req.PluginName, err, cts.Kit.Rid)
 		return nil, err
 	}
 

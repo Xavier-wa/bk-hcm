@@ -43,14 +43,14 @@ func (c *Client) RegisterHTTP(kt *kit.Kit, req *proto.HTTPRegisterReq) (*proto.H
 		"/iac_plugins/http/register")
 }
 
-// UpgradeHTTP 升级 http 插件，id 为该插件任一版本记录的 ID。
-func (c *Client) UpgradeHTTP(kt *kit.Kit, id string) (*proto.HTTPPluginResult, error) {
-	return common.Request[common.Empty, proto.HTTPPluginResult](c.client, rest.POST, kt, common.NoData,
-		"/iac_plugins/http/%s/upgrade", id)
+// UpgradeHTTP 升级 http 插件，按插件名作用于版本最高的记录。
+func (c *Client) UpgradeHTTP(kt *kit.Kit, req *proto.HTTPUpgradeReq) (*proto.HTTPPluginResult, error) {
+	return common.Request[proto.HTTPUpgradeReq, proto.HTTPPluginResult](c.client, rest.POST, kt, req,
+		"/iac_plugins/http/upgrade")
 }
 
-// UpdateHTTP 修改 http 插件，id 为该插件任一版本记录的 ID。
-func (c *Client) UpdateHTTP(kt *kit.Kit, id string, req *proto.HTTPUpdateReq) (*proto.HTTPPluginResult, error) {
+// UpdateHTTP 修改 http 插件，按插件名作用于版本最高的记录。
+func (c *Client) UpdateHTTP(kt *kit.Kit, req *proto.HTTPUpdateReq) (*proto.HTTPPluginResult, error) {
 	return common.Request[proto.HTTPUpdateReq, proto.HTTPPluginResult](c.client, rest.POST, kt, req,
-		"/iac_plugins/http/%s/update", id)
+		"/iac_plugins/http/update")
 }

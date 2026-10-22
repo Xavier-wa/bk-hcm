@@ -170,26 +170,21 @@ func (s *Service) Register(kt *kit.Kit, req *proto.HTTPRegisterReq) (*proto.HTTP
 	return &proto.HTTPPluginResult{ID: id, PluginName: req.PluginName, PluginVersion: version, State: state}, nil
 }
 
-// Upgrade 管理员在插件方发版后触发升级检查，或在插件 failed 时触发恢复。id 为该插件任一版本记录的 ID。
-func (s *Service) Upgrade(kt *kit.Kit, id string) (*proto.HTTPPluginResult, error) {
-	rec, err := store.Get(kt, s.dataCli, id)
+// Upgrade 管理员在插件方发版后触发升级检查，或在插件 failed 时触发恢复。按插件名作用于版本最高的记录。
+func (s *Service) Upgrade(kt *kit.Kit, pluginName string) (*proto.HTTPPluginResult, error) {
+	leaseID, err := s.tryLock(kt, pluginName)
 	if err != nil {
 		return nil, err
 	}
-	if rec.Protocol != enumor.IaCPluginProtocolHTTP {
+	defer s.unlock(kt, pluginName, leaseID)
+
+	records, latest, err := s.listAndGetLatest(kt, pluginName)
+	if err != nil {
+		return nil, err
+	}
+	if latest.Protocol != enumor.IaCPluginProtocolHTTP {
 		return nil, errf.Newf(errf.InvalidParameter, "iac plugin %s is a %s plugin, upgrade it by adding a new "+
-			"version directory and rolling restart hc-service", rec.PluginName, rec.Protocol)
-	}
-
-	leaseID, err := s.tryLock(kt, rec.PluginName)
-	if err != nil {
-		return nil, err
-	}
-	defer s.unlock(kt, rec.PluginName, leaseID)
-
-	records, latest, err := s.listAndGetLatest(kt, rec.PluginName)
-	if err != nil {
-		return nil, err
+			"version directory and rolling restart hc-service", latest.PluginName, latest.Protocol)
 	}
 
 	ext, err := parseExtension(latest)
@@ -281,28 +276,23 @@ func (s *Service) upgradeTo(kt *kit.Kit, records []coreplugin.IaCPlugin, latest 
 	return res, nil
 }
 
-// Update 修改 http 插件，作用于该插件名下版本最高的记录。id 为该插件任一版本记录的 ID。
+// Update 修改 http 插件，作用于该插件名下版本最高的记录。
 //   - 只改加密配置 / 备注：校验后直接条件更新，不改状态、不同步；
 //   - 改 api_path：探活新地址，版本更高走升级（新记录用新地址），相同则重新同步成功后再更新，更低拒绝。
-func (s *Service) Update(kt *kit.Kit, id string, req *proto.HTTPUpdateReq) (*proto.HTTPPluginResult, error) {
-	rec, err := store.Get(kt, s.dataCli, id)
+func (s *Service) Update(kt *kit.Kit, req *proto.HTTPUpdateReq) (*proto.HTTPPluginResult, error) {
+	leaseID, err := s.tryLock(kt, req.PluginName)
 	if err != nil {
 		return nil, err
 	}
-	if rec.Protocol != enumor.IaCPluginProtocolHTTP {
+	defer s.unlock(kt, req.PluginName, leaseID)
+
+	records, latest, err := s.listAndGetLatest(kt, req.PluginName)
+	if err != nil {
+		return nil, err
+	}
+	if latest.Protocol != enumor.IaCPluginProtocolHTTP {
 		return nil, errf.Newf(errf.InvalidParameter, "iac plugin %s is a %s plugin, its config is decided by "+
-			"the plugin directory and the global config", rec.PluginName, rec.Protocol)
-	}
-
-	leaseID, err := s.tryLock(kt, rec.PluginName)
-	if err != nil {
-		return nil, err
-	}
-	defer s.unlock(kt, rec.PluginName, leaseID)
-
-	records, latest, err := s.listAndGetLatest(kt, rec.PluginName)
-	if err != nil {
-		return nil, err
+			"the plugin directory and the global config", latest.PluginName, latest.Protocol)
 	}
 
 	if latest.State != enumor.IaCPluginStateEnabled && latest.State != enumor.IaCPluginStateDisabled {

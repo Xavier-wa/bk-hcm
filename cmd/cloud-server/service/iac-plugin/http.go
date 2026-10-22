@@ -57,18 +57,23 @@ func (s *svc) RegisterIaCPlugin(cts *rest.Contexts) (interface{}, error) {
 
 // UpgradeIaCPlugin 触发 http 插件的升级检查（探活发现新版本则注册并同步 Schema，failed 时重做同步以恢复）。同步执行，完成后才响应。
 func (s *svc) UpgradeIaCPlugin(cts *rest.Contexts) (interface{}, error) {
-	id := cts.PathParameter("id").String()
-	if len(id) == 0 {
-		return nil, errf.New(errf.InvalidParameter, "id is required")
+	req := new(hciac.HTTPUpgradeReq)
+	if err := cts.DecodeInto(req); err != nil {
+		logs.Errorf("decode upgrade iac plugin request failed, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
 	if err := s.authorizeIaCPlugin(cts.Kit, meta.Update); err != nil {
 		return nil, err
 	}
 
-	result, err := s.client.HCService().IaCPlugin.UpgradeHTTP(cts.Kit, id)
+	result, err := s.client.HCService().IaCPlugin.UpgradeHTTP(cts.Kit, req)
 	if err != nil {
-		logs.Errorf("upgrade iac plugin %s failed, err: %v, rid: %s", id, err, cts.Kit.Rid)
+		logs.Errorf("upgrade iac plugin %s failed, err: %v, rid: %s", req.PluginName, err, cts.Kit.Rid)
 		return nil, err
 	}
 
@@ -77,11 +82,6 @@ func (s *svc) UpgradeIaCPlugin(cts *rest.Contexts) (interface{}, error) {
 
 // UpdateIaCPlugin 修改 http 插件的地址、加密配置或备注。同步执行，完成后才响应。
 func (s *svc) UpdateIaCPlugin(cts *rest.Contexts) (interface{}, error) {
-	id := cts.PathParameter("id").String()
-	if len(id) == 0 {
-		return nil, errf.New(errf.InvalidParameter, "id is required")
-	}
-
 	req := new(hciac.HTTPUpdateReq)
 	if err := cts.DecodeInto(req); err != nil {
 		logs.Errorf("decode update iac plugin request failed, err: %v, rid: %s", err, cts.Kit.Rid)
@@ -96,9 +96,9 @@ func (s *svc) UpdateIaCPlugin(cts *rest.Contexts) (interface{}, error) {
 		return nil, err
 	}
 
-	result, err := s.client.HCService().IaCPlugin.UpdateHTTP(cts.Kit, id, req)
+	result, err := s.client.HCService().IaCPlugin.UpdateHTTP(cts.Kit, req)
 	if err != nil {
-		logs.Errorf("update iac plugin %s failed, err: %v, rid: %s", id, err, cts.Kit.Rid)
+		logs.Errorf("update iac plugin %s failed, err: %v, rid: %s", req.PluginName, err, cts.Kit.Rid)
 		return nil, err
 	}
 

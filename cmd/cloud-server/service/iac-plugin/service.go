@@ -41,8 +41,8 @@ func InitService(c *capability.Capability) {
 	h.Add("ListIaCPlugin", http.MethodPost, "/iac_plugins/list", s.ListIaCPlugin)
 	h.Add("SwitchIaCPlugin", http.MethodPost, "/iac_plugins/switch", s.SwitchIaCPlugin)
 	h.Add("RegisterIaCPlugin", http.MethodPost, "/iac_plugins/register", s.RegisterIaCPlugin)
-	h.Add("UpgradeIaCPlugin", http.MethodPost, "/iac_plugins/{id}/upgrade", s.UpgradeIaCPlugin)
-	h.Add("UpdateIaCPlugin", http.MethodPost, "/iac_plugins/{id}/update", s.UpdateIaCPlugin)
+	h.Add("UpgradeIaCPlugin", http.MethodPost, "/iac_plugins/upgrade", s.UpgradeIaCPlugin)
+	h.Add("UpdateIaCPlugin", http.MethodPost, "/iac_plugins/update", s.UpdateIaCPlugin)
 
 	h.Load(c.WebService)
 }

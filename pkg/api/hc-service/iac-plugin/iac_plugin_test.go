@@ -75,10 +75,13 @@ func TestHTTPUpdateReqValidate(t *testing.T) {
 	if err := (&HTTPUpdateReq{}).Validate(); err == nil {
 		t.Errorf("empty update: expect error")
 	}
-	if err := (&HTTPUpdateReq{Memo: cvt.ValToPtr("m")}).Validate(); err != nil {
+	if err := (&HTTPUpdateReq{PluginName: "http-demo"}).Validate(); err == nil {
+		t.Errorf("plugin name only: expect error")
+	}
+	if err := (&HTTPUpdateReq{PluginName: "http-demo", Memo: cvt.ValToPtr("m")}).Validate(); err != nil {
 		t.Errorf("memo only: unexpected err: %v", err)
 	}
-	if err := (&HTTPUpdateReq{APIPath: cvt.ValToPtr("/a/../b")}).Validate(); err == nil {
+	if err := (&HTTPUpdateReq{PluginName: "http-demo", APIPath: cvt.ValToPtr("/a/../b")}).Validate(); err == nil {
 		t.Errorf("invalid api_path: expect error")
 	}
 }
