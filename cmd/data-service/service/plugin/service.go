@@ -17,7 +17,7 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-// Package plugin 提供 iac_plugin 与 iac_plugin_schema 的 data-service REST 接口。
+// Package plugin provides data-service REST handlers for iac_plugin.
 package plugin
 
 import (
@@ -28,19 +28,13 @@ import (
 	"hcm/pkg/rest"
 )
 
-// InitService 初始化插件与插件 Schema 服务路由。
+// InitService initial the iac plugin service.
 func InitService(cap *capability.Capability) {
 	svc := &service{
 		dao: cap.Dao,
 	}
 
 	h := rest.NewHandler()
-
-	h.Add("CreateIacPluginSchema", http.MethodPost, "/iac_plugin_schemas/create", svc.CreateIacPluginSchema)
-	h.Add("ListIacPluginSchemas", http.MethodPost, "/iac_plugin_schemas/list", svc.ListIacPluginSchemas)
-
-	// TODO(temp_delete): 合并插件注册分支后删除该调用。
-	svc.initIacPluginTempDeleteRoutes(h)
 
 	// 注册表只增不删：下线通过把 state 置为 disabled 完成，不提供删除接口。
 	h.Add("CreateIaCPlugin", http.MethodPost, "/iac_plugins/create", svc.CreateIaCPlugin)

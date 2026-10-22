@@ -155,9 +155,6 @@ type Set interface {
 	Tenant() tenant.Tenant
 	PermissionTemplate() permissiontemplate.PermissionTemplate
 	PermissionPolicyLibrary() permissionpolicylibrary.PermissionPolicyLibrary
-	IacPluginSchema() daoplugin.IacPluginSchema
-	// TODO(temp_delete): 合并插件注册分支后删除该接口方法
-	IacPluginTempDelete() daoplugin.IacPluginTempDelete
 	IaCPlugin() daoplugin.IaCPlugin
 
 	Txn() *Txn

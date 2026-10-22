@@ -224,3 +224,4 @@ func (a *AuditClient) BatchCreateAudit(kt *kit.Kit, req *protoaudit.BatchCreateA
 	return common.RequestNoResp[protoaudit.BatchCreateAuditReq](
 		a.client, rest.POST, kt, req, "/audits/batch/create")
 }
+

@@ -191,15 +191,14 @@ func MergeColumns(opt *mergeColumnOption, all ...ColumnDescriptors) *Columns {
 	columns := make([]string, 0)
 	for _, nc := range all {
 		for _, col := range nc {
-			rawCol := strings.Trim(col.Column, "`")
 			tc.descriptors = append(tc.descriptors, col)
-			tc.columnType[rawCol] = col.Type
-			tc.columns = append(tc.columns, rawCol)
+			tc.columnType[col.Column] = col.Type
+			tc.columns = append(tc.columns, col.Column)
 
-			if _, exist := insertWithout[rawCol]; !exist {
+			if _, exist := insertWithout[col.Column]; !exist {
 				columns = append(columns, col.Column)
 
-				if _, yes := timeFieldFilter[rawCol]; yes {
+				if _, yes := timeFieldFilter[col.Column]; yes {
 					colonExpr = append(colonExpr, "now()")
 				} else {
 					colonExpr = append(colonExpr, col.NamedC)
@@ -207,16 +206,13 @@ func MergeColumns(opt *mergeColumnOption, all ...ColumnDescriptors) *Columns {
 			}
 
 			colNamedExpr := ""
-			if rawCol == col.NamedC {
+			if col.Column == col.NamedC {
 				colNamedExpr = col.Column
 			} else {
 				colNamedExpr = fmt.Sprintf("%s as '%s'", col.Column, col.NamedC)
 			}
 			namedExpr = append(namedExpr, colNamedExpr)
-			fieldsNamedExpr[rawCol] = colNamedExpr
-			if col.Column != rawCol {
-				fieldsNamedExpr[col.Column] = colNamedExpr
-			}
+			fieldsNamedExpr[col.Column] = colNamedExpr
 		}
 	}
 
