@@ -50,6 +50,7 @@ import (
 	"hcm/cmd/cloud-server/service/disk"
 	"hcm/cmd/cloud-server/service/eip"
 	"hcm/cmd/cloud-server/service/firewall"
+	iacpluginsvc "hcm/cmd/cloud-server/service/iac-plugin"
 	"hcm/cmd/cloud-server/service/image"
 	instancetype "hcm/cmd/cloud-server/service/instance-type"
 	loadbalancer "hcm/cmd/cloud-server/service/load-balancer"
@@ -79,6 +80,7 @@ import (
 	"hcm/pkg/cryptography"
 	"hcm/pkg/handler"
 	"hcm/pkg/iam/auth"
+	pkglock "hcm/pkg/lock"
 	"hcm/pkg/logs"
 	"hcm/pkg/metrics"
 	"hcm/pkg/rest"
@@ -122,6 +124,9 @@ func NewService(sd serviced.ServiceDiscover) (*Service, error) {
 	}
 	err = lock.InitManger(etcdCfg, int64(cc.CloudServer().CloudResource.Sync.SyncFrequencyLimitingTimeMin)*60)
 	if err != nil {
+		return nil, err
+	}
+	if err = pkglock.InitManager(etcdCfg, int64(cc.CloudServer().CloudResource.Sync.SyncFrequencyLimitingTimeMin)*60); err != nil {
 		return nil, err
 	}
 
@@ -353,6 +358,7 @@ func (s *Service) apiSet(bkHcmUrl string) *restful.Container {
 	admin.InitAdminService(c)
 	permissionpolicylibrary.InitService(c)
 	permissiontemplates.InitService(c)
+	iacpluginsvc.InitService(c)
 
 	return restful.NewContainer().Add(c.WebService)
 }

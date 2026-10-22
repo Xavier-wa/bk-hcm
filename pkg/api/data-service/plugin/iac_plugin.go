@@ -61,12 +61,12 @@ func (req *IaCPluginCreateReq) Validate() error {
 // ExpectState 不为空时，仅当记录当前状态等于它才会更新，否则返回 errf.Aborted。
 type IaCPluginUpdateReq struct {
 	ID          string                `json:"id" validate:"required"`
-	ExpectState enumor.IaCPluginState `json:"expect_state" validate:"omitempty"`
-	State       enumor.IaCPluginState `json:"state" validate:"omitempty"`
+	ExpectState enumor.IaCPluginState `json:"expect_state,omitempty" validate:"omitempty"`
+	State       enumor.IaCPluginState `json:"state,omitempty" validate:"omitempty"`
 	// Message 为 nil 表示不更新；指向空字符串表示清空。
-	Message   *string         `json:"message" validate:"omitempty,max=255"`
-	Extension json.RawMessage `json:"extension" validate:"omitempty"`
-	Memo      *string         `json:"memo" validate:"omitempty,max=255"`
+	Message   *string         `json:"message,omitempty" validate:"omitempty,max=255"`
+	Extension json.RawMessage `json:"extension,omitempty" validate:"omitempty"`
+	Memo      *string         `json:"memo,omitempty" validate:"omitempty,max=255"`
 }
 
 // Validate IaCPluginUpdateReq.

@@ -48,9 +48,17 @@ func Run(opt *options.Option) error {
 		return err
 	}
 
+	if err := hs.svc.RegisterPlugins(); err != nil {
+		return err
+	}
+
 	if err := hs.register(); err != nil {
 		return err
 	}
+
+	hs.svc.SetPluginReady()
+	hs.svc.StartPluginVersionWatch()
+	hs.svc.StartHTTPPluginCheck()
 
 	shutdown.RegisterFirstShutdown(hs.finalizer)
 	shutdown.WaitShutdown(20)
@@ -116,6 +124,8 @@ func (ds *hcService) register() error {
 }
 
 func (ds *hcService) finalizer() {
+	ds.svc.StopPluginTasks()
+
 	if err := ds.sd.Deregister(); err != nil {
 		logs.Errorf("process service shutdown, but deregister failed, err: %v", err)
 		return

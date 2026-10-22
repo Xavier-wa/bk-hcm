@@ -131,6 +131,9 @@ const (
 
 	// PermissionPolicyLibrary 权限策略库
 	PermissionPolicyLibrary ResourceType = "permission_policy_library"
+
+	// IaCPlugin IaC 插件（平台级）
+	IaCPlugin ResourceType = "iac_plugin"
 )
 
 // resourceTypes 所有合法的 ResourceType 枚举值
@@ -180,6 +183,7 @@ var resourceTypes = map[ResourceType]struct{}{
 	GlobalConfig:             {},
 	PermissionPolicyLibrary:  {},
 	Region:                   {},
+	IaCPlugin:                {},
 }
 
 // Validate 验证 ResourceType
