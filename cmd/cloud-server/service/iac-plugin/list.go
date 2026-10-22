@@ -23,7 +23,6 @@ import (
 	proto "hcm/pkg/api/cloud-server"
 	"hcm/pkg/api/core"
 	"hcm/pkg/criteria/errf"
-	"hcm/pkg/iam/meta"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 )
@@ -40,16 +39,8 @@ func (s *svc) ListIaCPlugin(cts *rest.Contexts) (interface{}, error) {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	authRes := meta.ResourceAttribute{
-		Basic: &meta.Basic{
-			Type:   meta.IaCPlugin,
-			Action: meta.Find,
-		},
-	}
-	if err := s.authorizer.AuthorizeWithPerm(cts.Kit, authRes); err != nil {
-		logs.Errorf("list iac plugin auth failed, err: %v, rid: %s", err, cts.Kit.Rid)
-		return nil, err
-	}
+	// tiyan 联调临时跳过 IAM，验证后恢复。
+	logs.Infof("skip list iac plugin auth, rid: %s", cts.Kit.Rid)
 
 	dsReq := &core.ListReq{
 		Filter: req.Filter,

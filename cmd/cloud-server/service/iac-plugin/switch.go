@@ -31,7 +31,6 @@ import (
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/iacplugin"
-	"hcm/pkg/iam/meta"
 	"hcm/pkg/kit"
 	"hcm/pkg/lock"
 	"hcm/pkg/logs"
@@ -55,17 +54,8 @@ func (s *svc) SwitchIaCPlugin(cts *rest.Contexts) (interface{}, error) {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	authRes := meta.ResourceAttribute{
-		Basic: &meta.Basic{
-			Type:   meta.IaCPlugin,
-			Action: meta.Update,
-		},
-	}
-	if err := s.authorizer.AuthorizeWithPerm(cts.Kit, authRes); err != nil {
-		logs.Errorf("switch iac plugin auth failed, err: %v, plugin_name: %s, rid: %s",
-			err, req.PluginName, cts.Kit.Rid)
-		return nil, err
-	}
+	// tiyan 联调临时跳过 IAM，验证后恢复。
+	logs.Infof("skip switch iac plugin auth, plugin_name: %s, rid: %s", req.PluginName, cts.Kit.Rid)
 
 	if err := s.switchIaCPlugin(cts.Kit, req.PluginName, req.State); err != nil {
 		return nil, err

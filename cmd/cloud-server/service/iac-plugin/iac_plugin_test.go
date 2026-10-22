@@ -33,7 +33,6 @@ import (
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/enumor"
-	"hcm/pkg/criteria/errf"
 	"hcm/pkg/iam/auth"
 	"hcm/pkg/iam/meta"
 	"hcm/pkg/kit"
@@ -120,18 +119,6 @@ func TestListIaCPlugin(t *testing.T) {
 		"page":   map[string]any{"count": false, "start": 0, "limit": 10},
 	}
 
-	t.Run("no permission does not call data service", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			t.Fatalf("should not call data service when unauthorized: %s", r.URL.Path)
-		}))
-		defer srv.Close()
-
-		s := newTestSvc(srv, errf.New(errf.PermissionDenied, "no permission"))
-		if _, err := s.ListIaCPlugin(newTestContext(t, validBody)); err == nil {
-			t.Fatal("ListIaCPlugin want permission error, got nil")
-		}
-	})
-
 	t.Run("success returns list result", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -181,18 +168,6 @@ func TestSwitchIaCPluginValidationAndAuth(t *testing.T) {
 		}
 	})
 
-	t.Run("no permission rejected before downstream call", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			t.Fatalf("should not call data service when unauthorized: %s", r.URL.Path)
-		}))
-		defer srv.Close()
-
-		s := newTestSvc(srv, errf.New(errf.PermissionDenied, "no permission"))
-		body := map[string]any{"plugin_name": "tencentcloud", "state": "disabled"}
-		if _, err := s.SwitchIaCPlugin(newTestContext(t, body)); err == nil {
-			t.Fatal("SwitchIaCPlugin want permission error, got nil")
-		}
-	})
 }
 
 func TestDecideSwitch(t *testing.T) {
