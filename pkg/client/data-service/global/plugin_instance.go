@@ -21,7 +21,6 @@ package global
 
 import (
 	"hcm/pkg/api/core"
-	coreplugin "hcm/pkg/api/core/plugin"
 	dataplugin "hcm/pkg/api/data-service/plugin"
 	"hcm/pkg/client/common"
 	"hcm/pkg/kit"
@@ -66,10 +65,4 @@ func (c *IacPluginInstanceClient) List(kt *kit.Kit, req *dataplugin.IacPluginIns
 
 	return common.Request[dataplugin.IacPluginInstanceListReq, dataplugin.IacPluginInstanceListResult](
 		c.client, rest.POST, kt, req, "/iac_plugin_instances/list")
-}
-
-// Get 获取单条 iac_plugin_instance 记录。
-func (c *IacPluginInstanceClient) Get(kt *kit.Kit, id string) (*coreplugin.IacPluginInstance, error) {
-	return common.Request[common.Empty, coreplugin.IacPluginInstance](
-		c.client, rest.GET, kt, common.NoData, "/iac_plugin_instances/%s", id)
 }

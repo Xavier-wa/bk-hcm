@@ -45,7 +45,6 @@ func (svc *service) initIacPluginInstanceRoutes(h *rest.Handler) {
 	h.Add("CreateIacPluginInstance", http.MethodPost, "/iac_plugin_instances/create", svc.CreateIacPluginInstance)
 	h.Add("UpdateIacPluginInstance", http.MethodPatch, "/iac_plugin_instances/update", svc.UpdateIacPluginInstance)
 	h.Add("DeleteIacPluginInstance", http.MethodDelete, "/iac_plugin_instances/batch", svc.DeleteIacPluginInstance)
-	h.Add("GetIacPluginInstance", http.MethodGet, "/iac_plugin_instances/{id}", svc.GetIacPluginInstance)
 	h.Add("ListIacPluginInstances", http.MethodPost, "/iac_plugin_instances/list", svc.ListIacPluginInstances)
 }
 
@@ -209,35 +208,6 @@ func (svc *service) DeleteIacPluginInstance(cts *rest.Contexts) (any, error) {
 	}
 
 	return nil, nil
-}
-
-// GetIacPluginInstance 查询单条 iac_plugin_instance 记录并解密 secret_attrs 标量叶子值。
-func (svc *service) GetIacPluginInstance(cts *rest.Contexts) (any, error) {
-	id := cts.PathParameter("id").String()
-	if id == "" {
-		return nil, errf.New(errf.InvalidParameter, "id is required")
-	}
-
-	opt := &types.ListOption{
-		Filter: tools.EqualExpression("id", id),
-		Page:   &core.BasePage{Start: 0, Limit: 1},
-	}
-	res, err := svc.dao.IacPluginInstance().List(cts.Kit, opt)
-	if err != nil {
-		logs.Errorf("get iac plugin instance failed, id: %s, err: %v, rid: %s", id, err, cts.Kit.Rid)
-		return nil, errf.NewFromErr(errf.Aborted, err)
-	}
-	if len(res.Details) == 0 {
-		return nil, errf.Newf(errf.RecordNotFound, "iac plugin instance %s not found", id)
-	}
-
-	inst, err := convertTableToIacPluginInstance(&res.Details[0], svc.cipher)
-	if err != nil {
-		logs.Errorf("convert iac plugin instance failed, id: %s, err: %v, rid: %s", id, err, cts.Kit.Rid)
-		return nil, errf.NewFromErr(errf.Aborted, err)
-	}
-
-	return inst, nil
 }
 
 // ListIacPluginInstances 列表查询 iac_plugin_instance 记录并解密 secret_attrs 标量叶子值。

@@ -101,9 +101,3 @@ type IacPluginInstanceListResp struct {
 	rest.BaseResp `json:",inline"`
 	Data          *IacPluginInstanceListResult `json:"data"`
 }
-
-// IacPluginInstanceGetResp 查询单条 iac_plugin_instance 响应。
-type IacPluginInstanceGetResp struct {
-	rest.BaseResp `json:",inline"`
-	Data          *coreplugin.IacPluginInstance `json:"data"`
-}
