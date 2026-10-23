@@ -295,6 +295,7 @@ type HCServiceSetting struct {
 	Cmdb          ApiGateway      `yaml:"cmdb"`
 	CCHostPoolBiz int64           `yaml:"ccHostPoolBiz"`
 	IaCPlugin     IaCPluginConfig `yaml:"iacPlugin"`
+	TFPlugin      TFPluginSetting `yaml:"tfPlugin"` // TODO 合并
 	// IaCGateway 访问 http 插件的蓝鲸 API 网关。endpoints 为空表示不使用 http 插件，tf_provider 插件不受影响。
 	IaCGateway ApiGateway `yaml:"iacGateway"`
 }
@@ -311,6 +312,7 @@ func (s *HCServiceSetting) trySetDefault() {
 	s.Log.trySetDefault()
 	s.SyncConfig.trySetDefault()
 	s.IaCPlugin.trySetDefault()
+	s.TFPlugin.trySetDefault()
 
 	return
 }
@@ -330,6 +332,10 @@ func (s HCServiceSetting) Validate() error {
 	}
 
 	if err := s.Cmdb.validate(); err != nil {
+		return err
+	}
+
+	if err := s.TFPlugin.validate(s.Network.Port); err != nil {
 		return err
 	}
 
