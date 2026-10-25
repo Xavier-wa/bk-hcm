@@ -107,7 +107,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sagemaker v1.246.0
 	github.com/hashicorp/terraform-json v0.29.0
 	github.com/zclconf/go-cty v1.16.4
-	github.com/hashicorp/go-hclog v0.14.1
+	github.com/hashicorp/go-hclog v1.5.0
 	github.com/hashicorp/go-plugin v1.6.3
 )
 
