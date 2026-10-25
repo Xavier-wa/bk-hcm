@@ -109,6 +109,7 @@ require (
 	github.com/zclconf/go-cty v1.16.4
 	github.com/hashicorp/go-hclog v1.5.0
 	github.com/hashicorp/go-plugin v1.6.3
+	github.com/hashicorp/terraform-plugin-go v0.28.0
 )
 
 require (
@@ -131,6 +132,8 @@ require (
 	github.com/oklog/run v1.0.0 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.3 // indirect
+	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
+	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/xuri/efp v0.0.0-20231025114914-d1ff6096ae53 // indirect
 	github.com/xuri/nfp v0.0.0-20230919160717-d98342af3f05 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
