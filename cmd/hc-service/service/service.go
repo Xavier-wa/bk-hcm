@@ -32,6 +32,7 @@ import (
 	cloudadaptor "hcm/cmd/hc-service/logics/cloud-adaptor"
 	httpplugin "hcm/cmd/hc-service/logics/iac-plugin/http-plugin"
 	"hcm/cmd/hc-service/logics/iac-plugin/tf-plugin/discovery"
+	"hcm/cmd/hc-service/logics/iac-plugin/tf-plugin/pool"
 	pluginschema "hcm/cmd/hc-service/logics/plugin/schema"
 	ressync "hcm/cmd/hc-service/logics/res-sync"
 	"hcm/cmd/hc-service/service/account"
@@ -91,6 +92,7 @@ type Service struct {
 	schemaMgr              *pluginschema.SchemaManager
 	stopPluginVersionWatch context.CancelFunc
 	stopHTTPPluginCheck    context.CancelFunc
+	poolRegistry           *pool.PluginRegistry
 }
 
 // NewService create a service instance.

@@ -1374,6 +1374,40 @@ type IaCPluginConfig struct {
 	HTTPCheckIntervalSeconds uint `yaml:"httpCheckIntervalSeconds"`
 	// HTTPCheckFailureThreshold enabled 的 http 插件连续探活失败多少次后置为 failed。
 	HTTPCheckFailureThreshold uint `yaml:"httpCheckFailureThreshold"`
+	// Pool tf_provider 插件进程池配置。每个 tf 插件各自一个池，目前所有池使用这一份参数，
+	// 后续可能按插件类型差异化配置。
+	Pool IaCPluginPoolConfig `yaml:"pool"`
+}
+
+// IaCPluginPoolConfig tf_provider 插件进程池配置。
+//
+// 除 Enabled、MaxProcesses、MaxQueueLength、RegistryCheckIntervalSeconds 外，值为 0 表示使用进程池包内的默认值，
+// 具体含义见 pool.PoolConfig；取值范围由进程池在创建时统一校验，不合法则建池失败。
+type IaCPluginPoolConfig struct {
+	// Enabled 是否启用进程池，默认开启。关闭时不创建池、不拉起任何插件进程。
+	Enabled bool `yaml:"enabled"`
+	// MaxProcesses 每个插件池内的进程数上限。
+	MaxProcesses int `yaml:"maxProcesses"`
+	// MaxLeasesPerProcess 单个进程同时交付的 lease 上限，provider 支持并发 RPC 确认之前建议为 1。
+	MaxLeasesPerProcess int `yaml:"maxLeasesPerProcess"`
+	// MinIdleProcesses 保持的最少空闲进程数。
+	MinIdleProcesses int `yaml:"minIdleProcesses"`
+	// MaxRetries 进程侧失败后请求的最大重试次数。
+	MaxRetries int `yaml:"maxRetries"`
+	// MaxQueueLength 每个插件池等待队列的长度上限。
+	MaxQueueLength int `yaml:"maxQueueLength"`
+	// MaxQueueWaitSeconds 单个请求的最长排队时间（秒）。
+	MaxQueueWaitSeconds uint `yaml:"maxQueueWaitSeconds"`
+	// ConfigureTimeoutSeconds 一次 ConfigureProvider 的超时（秒）。
+	ConfigureTimeoutSeconds uint `yaml:"configureTimeoutSeconds"`
+	// IdleReclaimSeconds 空闲超过该时长且空闲数高于 MinIdleProcesses 的进程会被回收（秒）。
+	IdleReclaimSeconds uint `yaml:"idleReclaimSeconds"`
+	// MaxConfigAgeSeconds 一次配置可被复用的时长（秒），须短于云凭证有效期。
+	MaxConfigAgeSeconds uint `yaml:"maxConfigAgeSeconds"`
+	// CheckIntervalSeconds 池内巡检周期（秒）。
+	CheckIntervalSeconds uint `yaml:"checkIntervalSeconds"`
+	// RegistryCheckIntervalSeconds 按已启用插件建池、关池的检查周期（秒）。
+	RegistryCheckIntervalSeconds uint `yaml:"registryCheckIntervalSeconds"`
 }
 
 const (
@@ -1385,6 +1419,10 @@ const (
 	defaultIaCPluginHTTPProbeTimeout      = 10
 	defaultIaCPluginHTTPCheckSeconds      = 60
 	defaultIaCPluginHTTPCheckThreshold    = 3
+
+	defaultIaCPluginPoolMaxProcesses   = 4
+	defaultIaCPluginPoolMaxQueueLength = 100
+	defaultIaCPluginPoolSyncSeconds    = 5
 )
 
 func (c *IaCPluginConfig) trySetDefault() {
@@ -1412,6 +1450,29 @@ func (c *IaCPluginConfig) trySetDefault() {
 	if c.HTTPCheckFailureThreshold == 0 {
 		c.HTTPCheckFailureThreshold = defaultIaCPluginHTTPCheckThreshold
 	}
+	c.Pool.trySetDefault()
+}
+
+func (c *IaCPluginPoolConfig) trySetDefault() {
+	if c.MaxProcesses == 0 {
+		c.MaxProcesses = defaultIaCPluginPoolMaxProcesses
+	}
+	if c.MaxQueueLength == 0 {
+		c.MaxQueueLength = defaultIaCPluginPoolMaxQueueLength
+	}
+	if c.RegistryCheckIntervalSeconds == 0 {
+		c.RegistryCheckIntervalSeconds = defaultIaCPluginPoolSyncSeconds
+	}
+}
+
+// Validate IaCPluginPoolConfig，只拒绝负数，其余取值范围由进程池统一校验。
+func (c IaCPluginPoolConfig) Validate() error {
+	if c.MaxProcesses < 0 || c.MaxLeasesPerProcess < 0 || c.MinIdleProcesses < 0 || c.MaxRetries < 0 ||
+		c.MaxQueueLength < 0 {
+
+		return errors.New("iacPlugin.pool counts should not be negative")
+	}
+	return nil
 }
 
 // Validate IaCPluginConfig.
@@ -1439,6 +1500,9 @@ func (c IaCPluginConfig) Validate() error {
 	}
 	if c.HTTPCheckFailureThreshold == 0 {
 		return errors.New("iacPlugin.httpCheckFailureThreshold should be greater than 0")
+	}
+	if err := c.Pool.Validate(); err != nil {
+		return err
 	}
 	return nil
 }

@@ -32,8 +32,27 @@ import (
 	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/kit"
+	"hcm/pkg/runtime/filter"
 	cvt "hcm/pkg/tools/converter"
 )
+
+// ListByFilter 按过滤条件翻页读出全部插件记录。
+func ListByFilter(kt *kit.Kit, cli *dataservice.Client, flt *filter.Expression) ([]coreplugin.IaCPlugin, error) {
+	var records []coreplugin.IaCPlugin
+	page := core.NewDefaultBasePage()
+	for {
+		res, err := cli.Global.IaCPlugin.List(kt, &core.ListReq{Filter: flt, Page: page})
+		if err != nil {
+			return nil, fmt.Errorf("list plugin records failed: %w", err)
+		}
+
+		records = append(records, res.Details...)
+		if uint(len(res.Details)) < page.Limit {
+			return records, nil
+		}
+		page.Start += uint32(page.Limit)
+	}
+}
 
 // List 列出插件名下的全部记录。
 func List(kt *kit.Kit, cli *dataservice.Client, pluginName string) ([]coreplugin.IaCPlugin, error) {
