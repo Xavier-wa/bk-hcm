@@ -26,10 +26,15 @@ import (
 	"time"
 
 	"hcm/cmd/hc-service/logics/iac-plugin/tf-plugin/pool"
+	"hcm/pkg/api/core"
 	protocore "hcm/pkg/api/core/cloud"
+	protocloud "hcm/pkg/api/data-service/cloud"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/criteria/errf"
+	"hcm/pkg/dal/dao/tools"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
+	"hcm/pkg/runtime/filter"
 )
 
 const (
@@ -145,14 +150,11 @@ func (s *svc) ConfigurePluginPool(cts *rest.Contexts) (any, error) {
 }
 
 func (s *svc) realAccountJob(cts *rest.Contexts, index int, accountID string) (configureJob, error) {
-	account, err := s.dataCli.TCloud.Account.Get(cts.Kit.Ctx, cts.Kit.Header(), accountID)
+	ext, err := s.loadTCloudAccountExtension(cts, accountID)
 	if err != nil {
-		return configureJob{}, errf.NewFromErr(errf.Aborted, err)
+		return configureJob{}, err
 	}
-	if account == nil || account.Extension == nil {
-		return configureJob{}, errf.Newf(errf.RecordNotFound, "account %s extension is empty", accountID)
-	}
-	secretID, secretKey := account.Extension.CloudSecretID, account.Extension.CloudSecretKey
+	secretID, secretKey := ext.CloudSecretID, ext.CloudSecretKey
 	if secretID == "" || secretKey == "" {
 		return configureJob{}, errf.Newf(errf.InvalidParameter, "account %s secret is empty", accountID)
 	}
@@ -161,8 +163,37 @@ func (s *svc) realAccountJob(cts *rest.Contexts, index int, accountID string) (c
 		accountID: accountID,
 		real:      true,
 		config:    providerConfig(secretID, secretKey),
-		secrets:   secretValues(account.Extension),
+		secrets:   secretValues(ext),
 	}, nil
+}
+
+// loadTCloudAccountExtension 先按云侧主账号 ID 查，没有命中再按 HCM 账号主键查。
+func (s *svc) loadTCloudAccountExtension(cts *rest.Contexts, accountID string) (*protocore.TCloudAccountExtension,
+	error) {
+
+	listResp, err := s.dataCli.Global.Account.List(cts.Kit.Ctx, cts.Kit.Header(), &protocloud.AccountListReq{
+		Filter: tools.ExpressionAnd(
+			tools.RuleEqual("vendor", enumor.TCloud),
+			&filter.AtomRule{Field: "extension.cloud_main_account_id", Op: filter.JSONEqual.Factory(), Value: accountID},
+		),
+		Page: &core.BasePage{Limit: 1},
+	})
+	if err != nil {
+		return nil, errf.NewFromErr(errf.Aborted, err)
+	}
+	resolvedID := accountID
+	if listResp != nil && len(listResp.Details) > 0 {
+		resolvedID = listResp.Details[0].ID
+	}
+
+	account, err := s.dataCli.TCloud.Account.Get(cts.Kit.Ctx, cts.Kit.Header(), resolvedID)
+	if err != nil {
+		return nil, errf.NewFromErr(errf.Aborted, err)
+	}
+	if account == nil || account.Extension == nil {
+		return nil, errf.Newf(errf.RecordNotFound, "account %s extension is empty", accountID)
+	}
+	return account.Extension, nil
 }
 
 func fakeJob(index int) configureJob {
