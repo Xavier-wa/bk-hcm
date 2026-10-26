@@ -114,6 +114,16 @@ func NewPluginPool(opts Options) (*PluginPool, error) {
 	return p, nil
 }
 
+// Name 返回这个池对应的插件名。
+func (p *PluginPool) Name() string {
+	return p.pluginName
+}
+
+// Version 返回这个池对应的插件版本。
+func (p *PluginPool) Version() string {
+	return p.pluginVersion
+}
+
 // Acquire 申请一个已按 config 配好的进程名额。
 //
 // 请求进入队尾，按入队顺序被分配。以下情况返回错误：池已关闭（ErrPoolClosed）、队列已满（ErrTooManyWaiters）、

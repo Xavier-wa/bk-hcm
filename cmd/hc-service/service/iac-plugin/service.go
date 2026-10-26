@@ -24,8 +24,10 @@ import (
 	"net/http"
 
 	httpplugin "hcm/cmd/hc-service/logics/iac-plugin/http-plugin"
+	"hcm/cmd/hc-service/logics/iac-plugin/tf-plugin/pool"
 	"hcm/cmd/hc-service/service/capability"
 	proto "hcm/pkg/api/hc-service/iac-plugin"
+	dataservice "hcm/pkg/client/data-service"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
@@ -33,19 +35,22 @@ import (
 
 // InitService initialize the iac plugin service.
 func InitService(c *capability.Capability) {
-	s := &svc{httpPlugin: c.HTTPPlugin}
+	s := &svc{httpPlugin: c.HTTPPlugin, pools: c.PluginRegistry, dataCli: c.ClientSet.DataService()}
 
 	h := rest.NewHandler()
 
 	h.Add("RegisterHTTPIaCPlugin", http.MethodPost, "/iac_plugins/http/register", s.RegisterHTTPIaCPlugin)
 	h.Add("UpgradeHTTPIaCPlugin", http.MethodPost, "/iac_plugins/http/upgrade", s.UpgradeHTTPIaCPlugin)
 	h.Add("UpdateHTTPIaCPlugin", http.MethodPost, "/iac_plugins/http/update", s.UpdateHTTPIaCPlugin)
+	h.Add("ConfigurePluginPool", http.MethodPost, "/iac_plugins/pool/configure", s.ConfigurePluginPool)
 
 	h.Load(c.WebService)
 }
 
 type svc struct {
 	httpPlugin *httpplugin.Service
+	pools      *pool.PluginRegistry
+	dataCli    *dataservice.Client
 }
 
 // RegisterHTTPIaCPlugin 注册 http 插件。

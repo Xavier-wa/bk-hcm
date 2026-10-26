@@ -195,11 +195,12 @@ func (s *Service) apiSet() *restful.Container {
 	ws.Produces(restful.MIME_JSON)
 
 	c := &capability.Capability{
-		WebService:   ws,
-		ClientSet:    s.clientSet,
-		CloudAdaptor: s.cloudAdaptor,
-		ResSyncCli:   ressync.NewClient(s.cloudAdaptor, s.clientSet.DataService()),
-		HTTPPlugin:   s.httpPlugin,
+		WebService:     ws,
+		ClientSet:      s.clientSet,
+		CloudAdaptor:   s.cloudAdaptor,
+		ResSyncCli:     ressync.NewClient(s.cloudAdaptor, s.clientSet.DataService()),
+		HTTPPlugin:     s.httpPlugin,
+		PluginRegistry: s.poolRegistry,
 	}
 
 	account.InitAccountService(c)
