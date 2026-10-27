@@ -108,3 +108,61 @@ func (r IaCPluginHashResult) Validate() error {
 		return fmt.Errorf("unsupported iac plugin hash result: %s", r)
 	}
 }
+
+// IaCPluginOperationType defines the northbound plugin runtime operation type.
+type IaCPluginOperationType string
+
+const (
+	// IaCPluginOperationExecute represents the POST /iac_plugins/execute operation.
+	IaCPluginOperationExecute IaCPluginOperationType = "execute"
+	// IaCPluginOperationGetResult represents the POST /iac_plugins/result operation.
+	IaCPluginOperationGetResult IaCPluginOperationType = "result"
+	// IaCPluginOperationStop represents the POST /iac_plugins/stop operation.
+	IaCPluginOperationStop IaCPluginOperationType = "stop"
+	// IaCPluginOperationPlan represents the POST /iac_plugins/plan operation.
+	IaCPluginOperationPlan IaCPluginOperationType = "plan"
+	// IaCPluginOperationValidate represents the POST /iac_plugins/validate operation.
+	IaCPluginOperationValidate IaCPluginOperationType = "validate"
+	// IaCPluginOperationImport represents the POST /iac_plugins/import operation.
+	IaCPluginOperationImport IaCPluginOperationType = "import"
+	// IaCPluginOperationRefresh represents the POST /iac_plugins/refresh operation.
+	IaCPluginOperationRefresh IaCPluginOperationType = "refresh"
+	// IaCPluginOperationReadData represents the POST /iac_plugins/read_data operation.
+	IaCPluginOperationReadData IaCPluginOperationType = "read_data"
+	// IaCPluginOperationList represents the POST /iac_plugins/list operation.
+	IaCPluginOperationList IaCPluginOperationType = "list"
+)
+
+// Validate 校验北向插件操作类型是否合法。
+func (op IaCPluginOperationType) Validate() error {
+	switch op {
+	case IaCPluginOperationExecute, IaCPluginOperationGetResult, IaCPluginOperationStop,
+		IaCPluginOperationPlan, IaCPluginOperationValidate, IaCPluginOperationImport,
+		IaCPluginOperationRefresh, IaCPluginOperationReadData, IaCPluginOperationList:
+		return nil
+	default:
+		return fmt.Errorf("unsupported iac plugin operation type: %s", op)
+	}
+}
+
+// IaCPluginTaskStatus represents the execution status of Apply/Execute, GetResult, and Stop.
+type IaCPluginTaskStatus string
+
+const (
+	// IaCPluginTaskStatusRunning indicates the async apply task is still running.
+	IaCPluginTaskStatusRunning IaCPluginTaskStatus = "running"
+	// IaCPluginTaskStatusSucceeded indicates the apply task finished normally.
+	IaCPluginTaskStatusSucceeded IaCPluginTaskStatus = "succeeded"
+	// IaCPluginTaskStatusFailed indicates the apply task failed.
+	IaCPluginTaskStatusFailed IaCPluginTaskStatus = "failed"
+)
+
+// Validate 校验插件任务执行状态是否合法。
+func (s IaCPluginTaskStatus) Validate() error {
+	switch s {
+	case IaCPluginTaskStatusRunning, IaCPluginTaskStatusSucceeded, IaCPluginTaskStatusFailed:
+		return nil
+	default:
+		return fmt.Errorf("unsupported iac plugin task status: %s", s)
+	}
+}

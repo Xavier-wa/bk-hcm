@@ -24,93 +24,45 @@ import (
 	"fmt"
 	"strings"
 
-	cvt "hcm/pkg/tools/converter"
+	coreplugin "hcm/pkg/api/core/plugin"
+	"hcm/pkg/criteria/enumor"
 
 	tfjson "github.com/hashicorp/terraform-json"
 )
 
 const (
 	// MinListLimit is the minimum allowed limit for POST /list.
-	MinListLimit = 1
+	MinListLimit = coreplugin.MinListLimit
 	// MaxListLimit is the maximum allowed limit for POST /list.
-	MaxListLimit = 500
-)
-
-// TaskStatus represents the execution status of Apply, GetResult, and Stop.
-type TaskStatus string
-
-const (
-	// TaskStatusRunning indicates the async apply task is still running.
-	TaskStatusRunning TaskStatus = "running"
-	// TaskStatusSucceeded indicates the apply task finished normally.
-	TaskStatusSucceeded TaskStatus = "succeeded"
-	// TaskStatusFailed indicates the apply task failed.
-	TaskStatusFailed TaskStatus = "failed"
+	MaxListLimit = coreplugin.MaxListLimit
 )
 
 // PathStep represents a single step in a Diagnostic attribute path.
-// Exactly one of Attribute, Key, or Index must be set.
-type PathStep struct {
-	// Attribute selects an object attribute or nested block by schema field name.
-	Attribute *string `json:"attribute,omitempty"`
-	// Key selects an element of a map by key string.
-	Key *string `json:"key,omitempty"`
-	// Index selects an element of a list by 0-based index.
-	Index *int `json:"index,omitempty"`
-}
+type PathStep = coreplugin.PathStep
 
 // NewAttributeStep creates a PathStep for an attribute or nested block name.
 func NewAttributeStep(attr string) PathStep {
-	return PathStep{Attribute: cvt.ValToPtr(attr)}
+	return coreplugin.NewAttributeStep(attr)
 }
 
 // NewKeyStep creates a PathStep for a map key.
 func NewKeyStep(key string) PathStep {
-	return PathStep{Key: cvt.ValToPtr(key)}
+	return coreplugin.NewKeyStep(key)
 }
 
 // NewIndexStep creates a PathStep for a 0-based list index.
 func NewIndexStep(index int) PathStep {
-	return PathStep{Index: cvt.ValToPtr(index)}
+	return coreplugin.NewIndexStep(index)
 }
 
 // Diagnostic describes a single validation issue in user configuration.
-// It embeds tfjson.Diagnostic to stay consistent with Terraform diagnostic JSON format,
-// and supplements southbound protocol fields Path and Message.
-type Diagnostic struct {
-	tfjson.Diagnostic
-
-	// Path is the ordered path from the root of config; empty array means not tied to a single field.
-	Path []PathStep `json:"path"`
-	// Message is the human-readable issue description without repeating the field name.
-	Message string `json:"message"`
-}
-
-// EffectiveSeverity returns the diagnostic severity, defaulting to "error" when empty.
-func (d Diagnostic) EffectiveSeverity() tfjson.DiagnosticSeverity {
-	if d.Severity == "" {
-		return tfjson.DiagnosticSeverityError
-	}
-	return d.Severity
-}
+type Diagnostic = coreplugin.Diagnostic
 
 // HealthData is the response data of GET /health.
-type HealthData struct {
-	// PluginVersion is the current version of the plugin.
-	PluginVersion string `json:"plugin_version"`
-}
+type HealthData = coreplugin.HealthData
 
 // Progress represents the optional execution progress in Apply, GetResult, and Stop responses.
-type Progress struct {
-	// Total is the optional total item/stage count.
-	Total *int `json:"total,omitempty"`
-	// Succeeded is the optional succeeded item/stage count.
-	Succeeded *int `json:"succeeded,omitempty"`
-	// Failed is the optional failed item/stage count.
-	Failed *int `json:"failed,omitempty"`
-	// Description is the optional display message for progress.
-	Description string `json:"description,omitempty"`
-}
+type Progress = coreplugin.Progress
 
 func validateCommonReq(typeName, launchConfig string) error {
 	if strings.TrimSpace(typeName) == "" {
@@ -151,7 +103,7 @@ func (r *ApplyReq) Validate() error {
 // ApplyData is the response data of POST /apply, POST /result, and POST /stop.
 type ApplyData struct {
 	// Status is the task status: enumeration values such as: running/succeeded/failed.
-	Status TaskStatus `json:"status"`
+	Status enumor.IaCPluginTaskStatus `json:"status"`
 	// Message is the task failure reason (required when status=failed) or status note.
 	Message string `json:"message,omitempty"`
 	// ApplyID is the async execution identifier (required when status=running).
@@ -394,17 +346,7 @@ func (r *ListReq) Validate() error {
 }
 
 // ListItem represents a single resource item returned by POST /list.
-type ListItem struct {
-	// ImportID is the external object ID that can be passed to Import.
-	ImportID string `json:"import_id"`
-	// State is the complete state of the resource object.
-	State map[string]any `json:"state"`
-}
+type ListItem = coreplugin.ListItem
 
 // ListData is the response data of POST /list.
-type ListData struct {
-	// Items contains the resource objects on the current page.
-	Items []ListItem `json:"items"`
-	// NextPageToken is the cursor for the next page; empty string indicates the last page.
-	NextPageToken string `json:"next_page_token"`
-}
+type ListData = coreplugin.ListData

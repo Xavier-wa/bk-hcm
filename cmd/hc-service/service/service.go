@@ -31,6 +31,7 @@ import (
 
 	cloudadaptor "hcm/cmd/hc-service/logics/cloud-adaptor"
 	httpplugin "hcm/cmd/hc-service/logics/iac-plugin/http-plugin"
+	"hcm/cmd/hc-service/logics/iac-plugin/router"
 	"hcm/cmd/hc-service/logics/iac-plugin/tf-plugin/discovery"
 	"hcm/cmd/hc-service/logics/iac-plugin/tf-plugin/pool"
 	pluginschema "hcm/cmd/hc-service/logics/plugin/schema"
@@ -89,6 +90,7 @@ type Service struct {
 	sd                     serviced.ServiceDiscover
 	iacMutex               *lock.EtcdMutex
 	httpPlugin             *httpplugin.Service
+	pluginRouter           *router.Service
 	schemaMgr              *pluginschema.SchemaManager
 	stopPluginVersionWatch context.CancelFunc
 	stopHTTPPluginCheck    context.CancelFunc
@@ -201,6 +203,7 @@ func (s *Service) apiSet() *restful.Container {
 		ResSyncCli:     ressync.NewClient(s.cloudAdaptor, s.clientSet.DataService()),
 		HTTPPlugin:     s.httpPlugin,
 		PluginRegistry: s.poolRegistry,
+		PluginRouter:   s.pluginRouter,
 	}
 
 	account.InitAccountService(c)

@@ -17,7 +17,7 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-// Package httpplugin 实现 http 插件的注册、升级、修改与巡检，插件经蓝鲸 API 网关访问。
+// Package httpplugin 实现 http 插件的注册、升级、修改、巡检及北向运行态执行，插件经蓝鲸 API 网关访问。
 package httpplugin
 
 import (
@@ -72,7 +72,7 @@ type Options struct {
 	FailureThreshold int
 }
 
-// Service 实现 http 插件的注册、升级、修改与巡检。
+// Service 实现 http 插件的注册、升级、修改、巡检及北向运行态执行。
 //
 // 注册 / 升级 / 修改 / 巡检与 P3 的启停共用插件名锁 lock.IaCPluginKey；接口拿不到锁立即返回，巡检跳过本轮。
 // 状态推进一律走 expect_state 条件更新，审计由 data-service 在同一事务内写入，操作人取自 kit。
@@ -83,6 +83,7 @@ type Service struct {
 	schemaMgr    *pluginschema.SchemaManager
 	opts         Options
 	pluginCliMap sync.Map
+	encryptorMap sync.Map
 }
 
 // New 创建 Service。schemaMgr 与 tf_provider 注册共用同一个实例。
@@ -100,6 +101,9 @@ func (s *Service) getPluginClient(pluginName, apiPath string) (plugin.Client, er
 	key := pluginClientInfo{pluginName: pluginName, apiPath: apiPath}
 	if cli, ok := s.pluginCliMap.Load(key); ok {
 		return cli.(plugin.Client), nil
+	}
+	if s.gateway == nil || len(s.gateway.Endpoints) == 0 {
+		return nil, errf.New(errf.Aborted, "iac gateway endpoints are not configured")
 	}
 
 	baseURL, err := key.baseURL(s.gateway.Endpoints[0])

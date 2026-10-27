@@ -32,6 +32,7 @@ import (
 	"testing"
 
 	"hcm/pkg/cc"
+	"hcm/pkg/criteria/enumor"
 	"hcm/pkg/kit"
 	cvt "hcm/pkg/tools/converter"
 
@@ -339,7 +340,7 @@ func TestClient_HealthSchemaAndApplyLifecycle(t *testing.T) {
 		ProposedState: map[string]any{"service_id": 368},
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, TaskStatusRunning, asyncRes.Status)
+	assert.Equal(t, enumor.IaCPluginTaskStatusRunning, asyncRes.Status)
 	assert.Equal(t, "REQ001", asyncRes.ApplyID)
 
 	// Task failed with partial state and data.message (result=true, code=0)
@@ -349,18 +350,18 @@ func TestClient_HealthSchemaAndApplyLifecycle(t *testing.T) {
 		ProposedState: map[string]any{"bk_host_innerip": "10.0.0.1"},
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, TaskStatusFailed, failedRes.Status)
+	assert.Equal(t, enumor.IaCPluginTaskStatusFailed, failedRes.Status)
 	assert.Equal(t, "transfer module 5002 failed", failedRes.Message)
 	assert.Equal(t, float64(10086), failedRes.State["bk_host_id"])
 
 	// GetResult & Stop
 	pollRes, err := cli.GetResult(kt, &GetResultReq{TypeName: "itsm_ticket", LaunchConfig: "cipher", ApplyID: "REQ001"})
 	assert.NoError(t, err)
-	assert.Equal(t, TaskStatusSucceeded, pollRes.Status)
+	assert.Equal(t, enumor.IaCPluginTaskStatusSucceeded, pollRes.Status)
 
 	stopRes, err := cli.Stop(kt, &StopReq{TypeName: "itsm_ticket", LaunchConfig: "cipher", ApplyID: "REQ001"})
 	assert.NoError(t, err)
-	assert.Equal(t, TaskStatusFailed, stopRes.Status)
+	assert.Equal(t, enumor.IaCPluginTaskStatusFailed, stopRes.Status)
 	assert.Equal(t, "ticket revoked", stopRes.Message)
 }
 

@@ -23,6 +23,7 @@ package capability
 import (
 	cloudclient "hcm/cmd/hc-service/logics/cloud-adaptor"
 	httpplugin "hcm/cmd/hc-service/logics/iac-plugin/http-plugin"
+	"hcm/cmd/hc-service/logics/iac-plugin/router"
 	"hcm/cmd/hc-service/logics/iac-plugin/tf-plugin/pool"
 	ressync "hcm/cmd/hc-service/logics/res-sync"
 	"hcm/pkg/client"
@@ -40,4 +41,6 @@ type Capability struct {
 	HTTPPlugin *httpplugin.Service
 	// PluginRegistry 本进程已启动的 tf 插件进程池。未启用进程池时为 nil。
 	PluginRegistry *pool.PluginRegistry
+	// PluginRouter IaC 插件北向协议路由器。
+	PluginRouter *router.Service
 }

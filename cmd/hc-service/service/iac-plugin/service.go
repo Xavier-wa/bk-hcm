@@ -17,13 +17,14 @@
  * to the current version of the project delivered to anyone in the future.
  */
 
-// Package iacplugin hc-service 的 http 插件内部路由，供 cloud-server 鉴权后转发。
+// Package iacplugin hc-service 的 http 插件与北向协议内部路由。
 package iacplugin
 
 import (
 	"net/http"
 
 	httpplugin "hcm/cmd/hc-service/logics/iac-plugin/http-plugin"
+	"hcm/cmd/hc-service/logics/iac-plugin/router"
 	"hcm/cmd/hc-service/logics/iac-plugin/tf-plugin/pool"
 	"hcm/cmd/hc-service/service/capability"
 	proto "hcm/pkg/api/hc-service/iac-plugin"
@@ -35,7 +36,12 @@ import (
 
 // InitService initialize the iac plugin service.
 func InitService(c *capability.Capability) {
-	s := &svc{httpPlugin: c.HTTPPlugin, pools: c.PluginRegistry, dataCli: c.ClientSet.DataService()}
+	s := &svc{
+		httpPlugin: c.HTTPPlugin,
+		pools:      c.PluginRegistry,
+		dataCli:    c.ClientSet.DataService(),
+		router:     c.PluginRouter,
+	}
 
 	h := rest.NewHandler()
 
@@ -44,6 +50,8 @@ func InitService(c *capability.Capability) {
 	h.Add("UpdateHTTPIaCPlugin", http.MethodPost, "/iac_plugins/http/update", s.UpdateHTTPIaCPlugin)
 	h.Add("ConfigurePluginPool", http.MethodPost, "/iac_plugins/pool/configure", s.ConfigurePluginPool)
 
+	s.initNorthboundRoutes(h)
+
 	h.Load(c.WebService)
 }
 
@@ -51,6 +59,7 @@ type svc struct {
 	httpPlugin *httpplugin.Service
 	pools      *pool.PluginRegistry
 	dataCli    *dataservice.Client
+	router     *router.Service
 }
 
 // RegisterHTTPIaCPlugin 注册 http 插件。

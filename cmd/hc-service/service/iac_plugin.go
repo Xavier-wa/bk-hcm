@@ -25,6 +25,7 @@ import (
 	"time"
 
 	httpplugin "hcm/cmd/hc-service/logics/iac-plugin/http-plugin"
+	"hcm/cmd/hc-service/logics/iac-plugin/router"
 	"hcm/cmd/hc-service/logics/iac-plugin/tf-plugin/discovery"
 	"hcm/cmd/hc-service/logics/iac-plugin/tf-plugin/pool"
 	"hcm/cmd/hc-service/logics/iac-plugin/tf-plugin/register"
@@ -82,6 +83,7 @@ func (s *Service) initIaCPlugin() error {
 			CheckInterval:    time.Duration(cfg.HTTP.CheckIntervalSeconds) * time.Second,
 			FailureThreshold: int(cfg.HTTP.CheckFailureThreshold),
 		})
+	s.pluginRouter = router.New(s.clientSet.DataService(), s.schemaMgr, s.httpPlugin)
 
 	poolRegistry, err := newPluginRegistry(s.clientSet.DataService(), s.plugins)
 	if err != nil {
