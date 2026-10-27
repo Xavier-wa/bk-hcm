@@ -48,7 +48,11 @@ type request struct {
 	enqueuedAt time.Time
 	// attempts 进程侧失败后的重试次数。
 	attempts int
-	state    requestState
+	// act 最终选中这个请求时的调度动作。
+	act action
+	// dequeuedAt 最终离开等待队列的时间，用于计算排队时长。
+	dequeuedAt time.Time
+	state      requestState
 	// ch 容量为 1，每个请求只写入一次（由 requestDone 保证），所以在锁内写入不会阻塞。
 	ch chan result
 }

@@ -35,68 +35,85 @@ import (
 	"hcm/pkg/logs"
 	"hcm/pkg/rest"
 	"hcm/pkg/runtime/filter"
+	cvt "hcm/pkg/tools/converter"
 )
 
 const (
 	defaultPoolConcurrency = 32
 	maxPoolConcurrency     = 128
+	maxLeaseHoldMS         = 60000
 	providerRegion         = "ap-guangzhou"
 )
 
 // poolConfigureReq 对已启动的进程池并发 Acquire。
-// AccountIDs 是云账号 ID，认证字段从账号扩展里读取。Concurrency 是总并发数，超出账号数的请求使用假配置。
+//   - AccountIDs 是云账号 ID（云侧主账号 ID 或 HCM 账号主键），认证字段从账号扩展里读取；
+//   - Concurrency 是总并发数，默认 32，上限 128；
+//   - FakeConfigs 是不同假配置的个数。传 nil 时兼容旧行为，超出 AccountIDs 的并发各自一份假配置；
+//     传 0 表示全部并发只轮询 AccountIDs（测同配置复用与预约）；传 N > 0 表示后 N 个并发用假配置，其余轮询 AccountIDs；
+//   - InvalidConfigs 是混入的坏配置个数（字段类型错误），用于确认坏配置不会拖死进程；
+//   - HoldMS 是拿到 lease 后持有多久再归还，毫秒。用于测持有期间不被别的账号重配，以及排队等待。
 type poolConfigureReq struct {
-	PluginName    string   `json:"plugin_name"`
-	PluginVersion string   `json:"plugin_version"`
-	AccountIDs    []string `json:"account_ids"`
-	Concurrency   int      `json:"concurrency"`
+	PluginName     string   `json:"plugin_name"`
+	PluginVersion  string   `json:"plugin_version"`
+	AccountIDs     []string `json:"account_ids"`
+	Concurrency    int      `json:"concurrency"`
+	FakeConfigs    *int     `json:"fake_configs"`
+	InvalidConfigs int      `json:"invalid_configs"`
+	HoldMS         int      `json:"hold_ms"`
 }
 
-// poolConfigureResp 每个并发请求的 Acquire 结果。
+// poolConfigureResp 并发 Acquire 的汇总与明细。
 type poolConfigureResp struct {
+	Summary poolConfigureSummary  `json:"summary"`
 	Details []poolConfigureResult `json:"details"`
 }
 
-// poolConfigureResult 一次 Acquire 的结果。Real 为 true 表示使用了库里的认证配置。
+// poolConfigureSummary 本轮并发的动作与进程分布。
+type poolConfigureSummary struct {
+	Total     int            `json:"total"`
+	Succeeded int            `json:"succeeded"`
+	Failed    int            `json:"failed"`
+	Actions   map[string]int `json:"actions"`
+	Processes map[uint64]int `json:"processes"`
+}
+
+// poolConfigureResult 一次 Acquire 的结果。
+// Kind 取值：real（真实账号）、fake（假密钥）、invalid（字段类型错误）。
 type poolConfigureResult struct {
-	Index     int    `json:"index"`
-	AccountID string `json:"account_id,omitempty"`
-	Real      bool   `json:"real"`
-	CostMS    int64  `json:"cost_ms"`
-	Error     string `json:"error,omitempty"`
+	Index       int    `json:"index"`
+	Kind        string `json:"kind"`
+	AccountID   string `json:"account_id,omitempty"`
+	Real        bool   `json:"real"`
+	ProcID      uint64 `json:"proc_id,omitempty"`
+	Action      string `json:"action,omitempty"`
+	QueueWaitMS int64  `json:"queue_wait_ms"`
+	CostMS      int64  `json:"cost_ms"`
+	HoldMS      int64  `json:"hold_ms,omitempty"`
+	Retries     int    `json:"retries,omitempty"`
+	Error       string `json:"error,omitempty"`
 }
 
 // configureJob 一次 Acquire。secrets 只用于把错误信息里的认证字段替换掉，禁止写入日志。
 type configureJob struct {
 	index     int
+	kind      string
 	accountID string
 	real      bool
+	hold      time.Duration
 	config    map[string]any
 	secrets   []string
 }
 
-// ConfigurePluginPool 并发 Acquire 已启动的进程池，成功后立即归还。ConfigureProvider 在 Acquire 内部完成。
+// ConfigurePluginPool 并发 Acquire 已启动的进程池，按 HoldMS 持有后归还。ConfigureProvider 在 Acquire 内部完成。
 func (s *svc) ConfigurePluginPool(cts *rest.Contexts) (any, error) {
 	req := new(poolConfigureReq)
 	if err := cts.DecodeInto(req); err != nil {
 		logs.Errorf("configure plugin pool decode request failed, err: %v, rid: %s", err, cts.Kit.Rid)
 		return nil, errf.NewFromErr(errf.DecodeRequestFailed, err)
 	}
-	if req.PluginName == "" || req.PluginVersion == "" || len(req.AccountIDs) == 0 {
-		logs.Errorf("configure plugin pool invalid parameter, plugin: %s, version: %s, account_count: %d, rid: %s",
-			req.PluginName, req.PluginVersion, len(req.AccountIDs), cts.Kit.Rid)
-		return nil, errf.New(errf.InvalidParameter, "plugin_name, plugin_version and account_ids are required")
-	}
-	concurrency := req.Concurrency
-	if concurrency == 0 {
-		concurrency = defaultPoolConcurrency
-	}
-	if concurrency < len(req.AccountIDs) {
-		concurrency = len(req.AccountIDs)
-	}
-	if concurrency > maxPoolConcurrency {
-		logs.Errorf("configure plugin pool invalid concurrency: %d, rid: %s", concurrency, cts.Kit.Rid)
-		return nil, errf.Newf(errf.InvalidParameter, "concurrency should be between 1 and %d", maxPoolConcurrency)
+	if err := validatePoolConfigureReq(req); err != nil {
+		logs.Errorf("configure plugin pool invalid parameter, err: %v, rid: %s", err, cts.Kit.Rid)
+		return nil, err
 	}
 	if s.pools == nil {
 		logs.Errorf("configure plugin pool failed, pool is not started, plugin: %s, rid: %s",
@@ -116,24 +133,16 @@ func (s *svc) ConfigurePluginPool(cts *rest.Contexts) (any, error) {
 		return nil, errf.Newf(errf.InvalidParameter, "running pool version is %s", pluginPool.Version())
 	}
 
-	jobs := make([]configureJob, concurrency)
-	for i, accountID := range req.AccountIDs {
-		job, err := s.realAccountJob(cts, i, accountID)
-		if err != nil {
-			logs.Errorf("load account secret failed, account_id: %s, err: %v, rid: %s", accountID, err, cts.Kit.Rid)
-			return nil, err
-		}
-		jobs[i] = job
-		logs.Infof("load account secret success, account_id: %s, rid: %s", accountID, cts.Kit.Rid)
-	}
-	for i := len(req.AccountIDs); i < concurrency; i++ {
-		jobs[i] = fakeJob(i)
+	jobs, err := s.buildConfigureJobs(cts, req)
+	if err != nil {
+		return nil, err
 	}
 
-	logs.Infof("configure plugin pool start, plugin: %s, version: %s, account_count: %d, concurrency: %d, rid: %s",
-		req.PluginName, req.PluginVersion, len(req.AccountIDs), concurrency, cts.Kit.Rid)
+	logs.Infof("configure plugin pool start, plugin: %s, version: %s, account_count: %d, concurrency: %d, "+
+		"hold_ms: %d, rid: %s", req.PluginName, req.PluginVersion, len(req.AccountIDs), len(jobs), req.HoldMS,
+		cts.Kit.Rid)
 
-	results := make([]poolConfigureResult, concurrency)
+	results := make([]poolConfigureResult, len(jobs))
 	var wg sync.WaitGroup
 	for i := range jobs {
 		wg.Add(1)
@@ -144,9 +153,97 @@ func (s *svc) ConfigurePluginPool(cts *rest.Contexts) (any, error) {
 	}
 	wg.Wait()
 
-	logs.Infof("configure plugin pool finish, plugin: %s, version: %s, concurrency: %d, rid: %s",
-		req.PluginName, req.PluginVersion, concurrency, cts.Kit.Rid)
-	return &poolConfigureResp{Details: results}, nil
+	summary := summarizeConfigureResults(results)
+	logs.Infof("configure plugin pool finish, plugin: %s, version: %s, total: %d, succeeded: %d, failed: %d, "+
+		"actions: %v, processes: %v, rid: %s", req.PluginName, req.PluginVersion, summary.Total, summary.Succeeded,
+		summary.Failed, summary.Actions, summary.Processes, cts.Kit.Rid)
+	return &poolConfigureResp{Summary: summary, Details: results}, nil
+}
+
+func validatePoolConfigureReq(req *poolConfigureReq) error {
+	if req.PluginName == "" || req.PluginVersion == "" || len(req.AccountIDs) == 0 {
+		return errf.New(errf.InvalidParameter, "plugin_name, plugin_version and account_ids are required")
+	}
+	if req.Concurrency == 0 {
+		req.Concurrency = defaultPoolConcurrency
+	}
+	if req.Concurrency < len(req.AccountIDs) {
+		req.Concurrency = len(req.AccountIDs)
+	}
+	if req.Concurrency > maxPoolConcurrency {
+		return errf.Newf(errf.InvalidParameter, "concurrency should be between 1 and %d", maxPoolConcurrency)
+	}
+	if req.HoldMS < 0 || req.HoldMS > maxLeaseHoldMS {
+		return errf.Newf(errf.InvalidParameter, "hold_ms should be between 0 and %d", maxLeaseHoldMS)
+	}
+	if req.InvalidConfigs < 0 {
+		return errf.New(errf.InvalidParameter, "invalid_configs should not be negative")
+	}
+	if req.FakeConfigs == nil {
+		defaultFakes := max(req.Concurrency-len(req.AccountIDs)-req.InvalidConfigs, 0)
+		req.FakeConfigs = cvt.ValToPtr(defaultFakes)
+	}
+	if *req.FakeConfigs < 0 {
+		return errf.New(errf.InvalidParameter, "fake_configs should not be negative")
+	}
+	if *req.FakeConfigs+req.InvalidConfigs > req.Concurrency {
+		return errf.New(errf.InvalidParameter, "fake_configs + invalid_configs should not exceed concurrency")
+	}
+	return nil
+}
+
+func (s *svc) buildConfigureJobs(cts *rest.Contexts, req *poolConfigureReq) ([]configureJob, error) {
+	realTemplates := make([]configureJob, len(req.AccountIDs))
+	for i, accountID := range req.AccountIDs {
+		job, err := s.realAccountJob(cts, i, accountID)
+		if err != nil {
+			logs.Errorf("load account secret failed, account_id: %s, err: %v, rid: %s", accountID, err, cts.Kit.Rid)
+			return nil, err
+		}
+		realTemplates[i] = job
+		logs.Infof("load account secret success, account_id: %s, rid: %s", accountID, cts.Kit.Rid)
+	}
+
+	hold := time.Duration(req.HoldMS) * time.Millisecond
+	realSlots := req.Concurrency - *req.FakeConfigs - req.InvalidConfigs
+	jobs := make([]configureJob, req.Concurrency)
+	for i := 0; i < realSlots; i++ {
+		tpl := realTemplates[i%len(realTemplates)]
+		tpl.index = i
+		tpl.hold = hold
+		jobs[i] = tpl
+	}
+	for i := 0; i < *req.FakeConfigs; i++ {
+		idx := realSlots + i
+		jobs[idx] = fakeJob(idx, hold)
+	}
+	for i := 0; i < req.InvalidConfigs; i++ {
+		idx := realSlots + *req.FakeConfigs + i
+		jobs[idx] = invalidJob(idx)
+	}
+	return jobs, nil
+}
+
+func summarizeConfigureResults(results []poolConfigureResult) poolConfigureSummary {
+	s := poolConfigureSummary{
+		Total:     len(results),
+		Actions:   make(map[string]int),
+		Processes: make(map[uint64]int),
+	}
+	for _, r := range results {
+		if r.Error != "" {
+			s.Failed++
+			continue
+		}
+		s.Succeeded++
+		if r.Action != "" {
+			s.Actions[r.Action]++
+		}
+		if r.ProcID > 0 {
+			s.Processes[r.ProcID]++
+		}
+	}
+	return s
 }
 
 func (s *svc) realAccountJob(cts *rest.Contexts, index int, accountID string) (configureJob, error) {
@@ -160,6 +257,7 @@ func (s *svc) realAccountJob(cts *rest.Contexts, index int, accountID string) (c
 	}
 	return configureJob{
 		index:     index,
+		kind:      "real",
 		accountID: accountID,
 		real:      true,
 		config:    providerConfig(secretID, secretKey),
@@ -196,37 +294,77 @@ func (s *svc) loadTCloudAccountExtension(cts *rest.Contexts, accountID string) (
 	return account.Extension, nil
 }
 
-func fakeJob(index int) configureJob {
+func fakeJob(index int, hold time.Duration) configureJob {
 	secretID := fmt.Sprintf("fake-secret-id-%d", index)
 	secretKey := "fake-secret-key"
 	return configureJob{
 		index:   index,
+		kind:    "fake",
 		real:    false,
+		hold:    hold,
 		config:  providerConfig(secretID, secretKey),
 		secrets: []string{secretID, secretKey},
 	}
 }
 
+// invalidJob 构造字段类型错误的配置：secret_id 传整数，编码阶段即被拒绝，用来验证进程不会被坏配置拖死。
+func invalidJob(index int) configureJob {
+	return configureJob{
+		index: index,
+		kind:  "invalid",
+		real:  false,
+		config: map[string]any{
+			"secret_id":  index,
+			"secret_key": "invalid-type-test",
+		},
+	}
+}
+
 func acquireOnce(cts *rest.Contexts, pluginPool *pool.PluginPool, job configureJob) poolConfigureResult {
 	start := time.Now()
-	logs.Infof("acquire plugin pool start, plugin: %s, index: %d, account_id: %s, real: %t, rid: %s",
-		pluginPool.Name(), job.index, job.accountID, job.real, cts.Kit.Rid)
+	logs.Infof("acquire plugin pool start, plugin: %s, index: %d, kind: %s, account_id: %s, hold_ms: %d, rid: %s",
+		pluginPool.Name(), job.index, job.kind, job.accountID, job.hold.Milliseconds(), cts.Kit.Rid)
 
 	lease, err := pluginPool.Acquire(cts.Kit, job.config)
 	cost := time.Since(start).Milliseconds()
 	if err != nil {
 		safeErr := redact(err.Error(), job.secrets)
-		logs.Errorf("acquire plugin pool failed, plugin: %s, index: %d, account_id: %s, real: %t, err: %s, "+
-			"cost_ms: %d, rid: %s", pluginPool.Name(), job.index, job.accountID, job.real, safeErr, cost, cts.Kit.Rid)
-		return poolConfigureResult{Index: job.index, AccountID: job.accountID, Real: job.real, CostMS: cost, Error: safeErr}
+		logs.Errorf("acquire plugin pool failed, plugin: %s, index: %d, kind: %s, account_id: %s, err: %s, "+
+			"cost_ms: %d, rid: %s", pluginPool.Name(), job.index, job.kind, job.accountID, safeErr, cost, cts.Kit.Rid)
+		return poolConfigureResult{
+			Index: job.index, Kind: job.kind, AccountID: job.accountID, Real: job.real, CostMS: cost, Error: safeErr,
+		}
 	}
 
-	logs.Infof("acquire plugin pool success, plugin: %s, index: %d, account_id: %s, real: %t, cost_ms: %d, rid: %s",
-		pluginPool.Name(), job.index, job.accountID, job.real, cost, cts.Kit.Rid)
+	res := poolConfigureResult{
+		Index:       job.index,
+		Kind:        job.kind,
+		AccountID:   job.accountID,
+		Real:        job.real,
+		ProcID:      lease.ProcID(),
+		Action:      lease.Action(),
+		QueueWaitMS: lease.QueueWaitMS(),
+		CostMS:      cost,
+		Retries:     lease.Retries(),
+	}
+	logs.Infof("acquire plugin pool success, plugin: %s, index: %d, kind: %s, account_id: %s, proc_id: %d, "+
+		"action: %s, queue_wait_ms: %d, cost_ms: %d, retries: %d, rid: %s", pluginPool.Name(), job.index, job.kind,
+		job.accountID, res.ProcID, res.Action, res.QueueWaitMS, res.CostMS, res.Retries, cts.Kit.Rid)
+
+	if job.hold > 0 {
+		holdStart := time.Now()
+		select {
+		case <-time.After(job.hold):
+		case <-cts.Kit.Ctx.Done():
+		}
+		res.HoldMS = time.Since(holdStart).Milliseconds()
+	}
+
 	lease.Release()
-	logs.Infof("release plugin pool lease, plugin: %s, index: %d, account_id: %s, real: %t, rid: %s",
-		pluginPool.Name(), job.index, job.accountID, job.real, cts.Kit.Rid)
-	return poolConfigureResult{Index: job.index, AccountID: job.accountID, Real: job.real, CostMS: cost}
+	logs.Infof("release plugin pool lease, plugin: %s, index: %d, kind: %s, account_id: %s, proc_id: %d, "+
+		"hold_ms: %d, rid: %s", pluginPool.Name(), job.index, job.kind, job.accountID, res.ProcID, res.HoldMS,
+		cts.Kit.Rid)
+	return res
 }
 
 // providerConfig 是 ConfigureProvider 的 Provider 配置。gRPC Configure 只消费 schema 里的字段，

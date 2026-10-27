@@ -40,6 +40,21 @@ const (
 	actionCreate
 )
 
+func (a action) String() string {
+	switch a {
+	case actionDeliver:
+		return "deliver"
+	case actionReserve:
+		return "reserve"
+	case actionConfigure:
+		return "configure"
+	case actionCreate:
+		return "create"
+	default:
+		return "hold"
+	}
+}
+
 // scheduleLocked 只看队首：为它选进程并派发，再看下一个；选不出就结束，不越过队首。
 //
 // 慢操作都交给协程，这里只做内存读写。整轮只取一次当前时间，避免配置在一轮中途过期导致判断不一致。
@@ -62,6 +77,8 @@ func (p *PluginPool) scheduleLocked() {
 
 		p.queue.PopFront()
 		w.state = requestPending
+		w.act = act
+		w.dequeuedAt = now
 
 		switch act {
 		case actionDeliver:
@@ -135,7 +152,15 @@ func (p *PluginPool) pickLocked(now time.Time, key string) (*pluginProcess, acti
 
 // deliverLocked 把进程上的一个名额交给请求。已结束的请求不占名额。
 func (p *PluginPool) deliverLocked(proc *pluginProcess, w *request) {
-	lease := &Lease{pool: p, procID: proc.id, exec: proc.exec, acquiredAt: p.now()}
+	lease := &Lease{
+		pool:        p,
+		procID:      proc.id,
+		exec:        proc.exec,
+		acquiredAt:  p.now(),
+		action:      w.act.String(),
+		queueWaitMS: w.dequeuedAt.Sub(w.enqueuedAt).Milliseconds(),
+		retries:     w.attempts,
+	}
 	if finishRequestLocked(w, result{lease: lease}) {
 		proc.inflight++
 	}

@@ -62,9 +62,24 @@ type Lease struct {
 	procID uint64
 	exec   executor.Executor
 	// acquiredAt 交付时间，归还时用于记录持有时长。
-	acquiredAt time.Time
-	released   atomic.Bool
+	acquiredAt  time.Time
+	action      string
+	queueWaitMS int64
+	retries     int
+	released    atomic.Bool
 }
+
+// ProcID 返回本次分配到的进程 ID。
+func (l *Lease) ProcID() uint64 { return l.procID }
+
+// Action 返回本次命中的调度动作：deliver / reserve / configure / create。
+func (l *Lease) Action() string { return l.action }
+
+// QueueWaitMS 返回在等待队列里排队的毫秒数。
+func (l *Lease) QueueWaitMS() int64 { return l.queueWaitMS }
+
+// Retries 返回本次 Acquire 在交付前经历的进程侧重试次数。
+func (l *Lease) Retries() int { return l.retries }
 
 // Release 归还 lease，幂等、不阻塞。进程是否仍可用由池判断，调用方无需也无法告知。
 func (l *Lease) Release() {
