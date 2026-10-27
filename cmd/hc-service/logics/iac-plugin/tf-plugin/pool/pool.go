@@ -29,9 +29,11 @@
 package pool
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -122,6 +124,50 @@ func (p *PluginPool) Name() string {
 // Version 返回这个池对应的插件版本。
 func (p *PluginPool) Version() string {
 	return p.pluginVersion
+}
+
+// KillProcesses 强制终止池中最多 limit 个进程，并立即执行一轮巡检与调度，返回被终止的进程 ID。
+// 优先选正在配置且挂着等待请求的进程，用于验证进程异常退出后的自动重试与补建。
+func (p *PluginPool) KillProcesses(limit int) []uint64 {
+	if limit <= 0 {
+		return nil
+	}
+
+	p.poolLock.Lock()
+	if p.closed {
+		p.poolLock.Unlock()
+		return nil
+	}
+	candidates := make([]*pluginProcess, 0, len(p.procs))
+	for _, proc := range p.procs {
+		if proc.manager != nil && proc.state != stateClosing {
+			candidates = append(candidates, proc)
+		}
+	}
+	p.poolLock.Unlock()
+
+	slices.SortFunc(candidates, func(a, b *pluginProcess) int {
+		aConfiguring := a.state == stateConfiguring
+		bConfiguring := b.state == stateConfiguring
+		if aConfiguring != bConfiguring {
+			if aConfiguring {
+				return -1
+			}
+			return 1
+		}
+		return cmp.Compare(a.id, b.id)
+	})
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+
+	killed := make([]uint64, 0, len(candidates))
+	for _, proc := range candidates {
+		proc.manager.Kill()
+		killed = append(killed, proc.id)
+	}
+	p.checkOnce()
+	return killed
 }
 
 // Acquire 申请一个已按 config 配好的进程名额。

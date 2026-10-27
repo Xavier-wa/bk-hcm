@@ -228,6 +228,16 @@ func (m *ProcessManager) Exited() bool {
 	return exec.Exited()
 }
 
+// Kill terminates this manager's plugin process immediately without calling StopProvider.
+func (m *ProcessManager) Kill() {
+	m.mu.Lock()
+	exec := m.executor
+	m.mu.Unlock()
+	if exec != nil {
+		exec.Kill()
+	}
+}
+
 // CheckHealth reports whether the plugin gRPC connection is still healthy.
 // It fails when the process is not running or Ping fails. The wait is bounded by tfPlugin.healthCheckTimeout.
 func (m *ProcessManager) CheckHealth() error {

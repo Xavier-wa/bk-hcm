@@ -106,6 +106,13 @@ func (e *PluginExecutor) Exited() bool {
 	return e.client.Exited()
 }
 
+// Kill terminates the attached plugin process immediately without calling StopProvider.
+func (e *PluginExecutor) Kill() {
+	if e.client != nil {
+		e.client.Kill()
+	}
+}
+
 // CheckHealth reports whether the plugin gRPC connection is still healthy.
 // It fails when the process is not running or Ping fails within timeout.
 func (e *PluginExecutor) CheckHealth(timeout time.Duration) error {

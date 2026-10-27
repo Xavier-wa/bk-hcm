@@ -20,6 +20,7 @@
 package iacplugin
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -42,6 +43,7 @@ const (
 	defaultPoolConcurrency = 32
 	maxPoolConcurrency     = 128
 	maxLeaseHoldMS         = 60000
+	maxStaggerMS           = 1000
 	providerRegion         = "ap-guangzhou"
 )
 
@@ -51,15 +53,23 @@ const (
 //   - FakeConfigs 是不同假配置的个数。传 nil 时兼容旧行为，超出 AccountIDs 的并发各自一份假配置；
 //     传 0 表示全部并发只轮询 AccountIDs（测同配置复用与预约）；传 N > 0 表示后 N 个并发用假配置，其余轮询 AccountIDs；
 //   - InvalidConfigs 是混入的坏配置个数（字段类型错误），用于确认坏配置不会拖死进程；
-//   - HoldMS 是拿到 lease 后持有多久再归还，毫秒。用于测持有期间不被别的账号重配，以及排队等待。
+//   - HoldMS 是拿到 lease 后持有多久再归还，毫秒；
+//   - AcquireTimeoutMS 是单个 Acquire 的超时时间，毫秒。传 > 0 时用来验证排队超时取消后不会泄漏名额；
+//   - StaggerMS 是相邻两个请求启动的间隔，毫秒。传 > 0 时保证入队顺序严格按 index，不再靠协程随机抢锁；
+//   - KillProcs 是在请求发出一小段时间后强制杀掉的池内进程数，用于验证进程崩溃后的自动重试与重建；
+//   - KillDelayMS 是从发请求到执行 KillProcs 的等待时间，毫秒，默认 20ms（容易命中正在配置或刚交付的进程）。
 type poolConfigureReq struct {
-	PluginName     string   `json:"plugin_name"`
-	PluginVersion  string   `json:"plugin_version"`
-	AccountIDs     []string `json:"account_ids"`
-	Concurrency    int      `json:"concurrency"`
-	FakeConfigs    *int     `json:"fake_configs"`
-	InvalidConfigs int      `json:"invalid_configs"`
-	HoldMS         int      `json:"hold_ms"`
+	PluginName       string   `json:"plugin_name"`
+	PluginVersion    string   `json:"plugin_version"`
+	AccountIDs       []string `json:"account_ids"`
+	Concurrency      int      `json:"concurrency"`
+	FakeConfigs      *int     `json:"fake_configs"`
+	InvalidConfigs   int      `json:"invalid_configs"`
+	HoldMS           int      `json:"hold_ms"`
+	AcquireTimeoutMS int      `json:"acquire_timeout_ms"`
+	StaggerMS        int      `json:"stagger_ms"`
+	KillProcs        int      `json:"kill_procs"`
+	KillDelayMS      int      `json:"kill_delay_ms"`
 }
 
 // poolConfigureResp 并发 Acquire 的汇总与明细。
@@ -68,13 +78,15 @@ type poolConfigureResp struct {
 	Details []poolConfigureResult `json:"details"`
 }
 
-// poolConfigureSummary 本轮并发的动作与进程分布。
+// poolConfigureSummary 本轮并发的动作、重试与进程分布。
 type poolConfigureSummary struct {
-	Total     int            `json:"total"`
-	Succeeded int            `json:"succeeded"`
-	Failed    int            `json:"failed"`
-	Actions   map[string]int `json:"actions"`
-	Processes map[uint64]int `json:"processes"`
+	Total       int            `json:"total"`
+	Succeeded   int            `json:"succeeded"`
+	Failed      int            `json:"failed"`
+	Retried     int            `json:"retried"`
+	KilledProcs []uint64       `json:"killed_procs,omitempty"`
+	Actions     map[string]int `json:"actions"`
+	Processes   map[uint64]int `json:"processes"`
 }
 
 // poolConfigureResult 一次 Acquire 的结果。
@@ -95,13 +107,14 @@ type poolConfigureResult struct {
 
 // configureJob 一次 Acquire。secrets 只用于把错误信息里的认证字段替换掉，禁止写入日志。
 type configureJob struct {
-	index     int
-	kind      string
-	accountID string
-	real      bool
-	hold      time.Duration
-	config    map[string]any
-	secrets   []string
+	index          int
+	kind           string
+	accountID      string
+	real           bool
+	hold           time.Duration
+	acquireTimeout time.Duration
+	config         map[string]any
+	secrets        []string
 }
 
 // ConfigurePluginPool 并发 Acquire 已启动的进程池，按 HoldMS 持有后归还。ConfigureProvider 在 Acquire 内部完成。
@@ -139,12 +152,46 @@ func (s *svc) ConfigurePluginPool(cts *rest.Contexts) (any, error) {
 	}
 
 	logs.Infof("configure plugin pool start, plugin: %s, version: %s, account_count: %d, concurrency: %d, "+
-		"hold_ms: %d, rid: %s", req.PluginName, req.PluginVersion, len(req.AccountIDs), len(jobs), req.HoldMS,
-		cts.Kit.Rid)
+		"hold_ms: %d, acquire_timeout_ms: %d, stagger_ms: %d, kill_procs: %d, rid: %s", req.PluginName,
+		req.PluginVersion, len(req.AccountIDs), len(jobs), req.HoldMS, req.AcquireTimeoutMS, req.StaggerMS,
+		req.KillProcs, cts.Kit.Rid)
+
+	results, killed := runConfigureBatch(cts, pluginPool, jobs, req)
+
+	summary := summarizeConfigureResults(results, killed)
+	logs.Infof("configure plugin pool finish, plugin: %s, version: %s, total: %d, succeeded: %d, failed: %d, "+
+		"retried: %d, killed_procs: %v, actions: %v, processes: %v, rid: %s", req.PluginName, req.PluginVersion,
+		summary.Total, summary.Succeeded, summary.Failed, summary.Retried, summary.KilledProcs, summary.Actions,
+		summary.Processes, cts.Kit.Rid)
+	return &poolConfigureResp{Summary: summary, Details: results}, nil
+}
+
+func runConfigureBatch(cts *rest.Contexts, pluginPool *pool.PluginPool, jobs []configureJob,
+	req *poolConfigureReq) ([]poolConfigureResult, []uint64) {
 
 	results := make([]poolConfigureResult, len(jobs))
 	var wg sync.WaitGroup
+	var killed []uint64
+
+	if req.KillProcs > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case <-time.After(time.Duration(req.KillDelayMS) * time.Millisecond):
+				killed = pluginPool.KillProcesses(req.KillProcs)
+				logs.Infof("killed plugin pool processes, plugin: %s, killed_procs: %v, rid: %s",
+					pluginPool.Name(), killed, cts.Kit.Rid)
+			case <-cts.Kit.Ctx.Done():
+			}
+		}()
+	}
+
+	stagger := time.Duration(req.StaggerMS) * time.Millisecond
 	for i := range jobs {
+		if i > 0 && stagger > 0 {
+			time.Sleep(stagger)
+		}
 		wg.Add(1)
 		go func(job configureJob) {
 			defer wg.Done()
@@ -152,12 +199,7 @@ func (s *svc) ConfigurePluginPool(cts *rest.Contexts) (any, error) {
 		}(jobs[i])
 	}
 	wg.Wait()
-
-	summary := summarizeConfigureResults(results)
-	logs.Infof("configure plugin pool finish, plugin: %s, version: %s, total: %d, succeeded: %d, failed: %d, "+
-		"actions: %v, processes: %v, rid: %s", req.PluginName, req.PluginVersion, summary.Total, summary.Succeeded,
-		summary.Failed, summary.Actions, summary.Processes, cts.Kit.Rid)
-	return &poolConfigureResp{Summary: summary, Details: results}, nil
+	return results, killed
 }
 
 func validatePoolConfigureReq(req *poolConfigureReq) error {
@@ -175,6 +217,21 @@ func validatePoolConfigureReq(req *poolConfigureReq) error {
 	}
 	if req.HoldMS < 0 || req.HoldMS > maxLeaseHoldMS {
 		return errf.Newf(errf.InvalidParameter, "hold_ms should be between 0 and %d", maxLeaseHoldMS)
+	}
+	if req.AcquireTimeoutMS < 0 || req.AcquireTimeoutMS > maxLeaseHoldMS {
+		return errf.Newf(errf.InvalidParameter, "acquire_timeout_ms should be between 0 and %d", maxLeaseHoldMS)
+	}
+	if req.StaggerMS < 0 || req.StaggerMS > maxStaggerMS {
+		return errf.Newf(errf.InvalidParameter, "stagger_ms should be between 0 and %d", maxStaggerMS)
+	}
+	if req.KillProcs < 0 || req.KillProcs > maxPoolConcurrency {
+		return errf.New(errf.InvalidParameter, "kill_procs should not be negative")
+	}
+	if req.KillDelayMS < 0 || req.KillDelayMS > maxLeaseHoldMS {
+		return errf.Newf(errf.InvalidParameter, "kill_delay_ms should be between 0 and %d", maxLeaseHoldMS)
+	}
+	if req.KillProcs > 0 && req.KillDelayMS == 0 {
+		req.KillDelayMS = 20
 	}
 	if req.InvalidConfigs < 0 {
 		return errf.New(errf.InvalidParameter, "invalid_configs should not be negative")
@@ -205,32 +262,42 @@ func (s *svc) buildConfigureJobs(cts *rest.Contexts, req *poolConfigureReq) ([]c
 	}
 
 	hold := time.Duration(req.HoldMS) * time.Millisecond
+	acquireTimeout := time.Duration(req.AcquireTimeoutMS) * time.Millisecond
 	realSlots := req.Concurrency - *req.FakeConfigs - req.InvalidConfigs
 	jobs := make([]configureJob, req.Concurrency)
 	for i := 0; i < realSlots; i++ {
 		tpl := realTemplates[i%len(realTemplates)]
 		tpl.index = i
 		tpl.hold = hold
+		tpl.acquireTimeout = acquireTimeout
 		jobs[i] = tpl
 	}
 	for i := 0; i < *req.FakeConfigs; i++ {
 		idx := realSlots + i
-		jobs[idx] = fakeJob(idx, hold)
+		job := fakeJob(idx, hold)
+		job.acquireTimeout = acquireTimeout
+		jobs[idx] = job
 	}
 	for i := 0; i < req.InvalidConfigs; i++ {
 		idx := realSlots + *req.FakeConfigs + i
-		jobs[idx] = invalidJob(idx)
+		job := invalidJob(idx)
+		job.acquireTimeout = acquireTimeout
+		jobs[idx] = job
 	}
 	return jobs, nil
 }
 
-func summarizeConfigureResults(results []poolConfigureResult) poolConfigureSummary {
+func summarizeConfigureResults(results []poolConfigureResult, killed []uint64) poolConfigureSummary {
 	s := poolConfigureSummary{
-		Total:     len(results),
-		Actions:   make(map[string]int),
-		Processes: make(map[uint64]int),
+		Total:       len(results),
+		KilledProcs: killed,
+		Actions:     make(map[string]int),
+		Processes:   make(map[uint64]int),
 	}
 	for _, r := range results {
+		if r.Retries > 0 {
+			s.Retried++
+		}
 		if r.Error != "" {
 			s.Failed++
 			continue
@@ -325,7 +392,14 @@ func acquireOnce(cts *rest.Contexts, pluginPool *pool.PluginPool, job configureJ
 	logs.Infof("acquire plugin pool start, plugin: %s, index: %d, kind: %s, account_id: %s, hold_ms: %d, rid: %s",
 		pluginPool.Name(), job.index, job.kind, job.accountID, job.hold.Milliseconds(), cts.Kit.Rid)
 
-	lease, err := pluginPool.Acquire(cts.Kit, job.config)
+	kt := *cts.Kit
+	if job.acquireTimeout > 0 {
+		ctx, cancel := context.WithTimeout(cts.Kit.Ctx, job.acquireTimeout)
+		defer cancel()
+		kt.Ctx = ctx
+	}
+
+	lease, err := pluginPool.Acquire(&kt, job.config)
 	cost := time.Since(start).Milliseconds()
 	if err != nil {
 		safeErr := redact(err.Error(), job.secrets)
