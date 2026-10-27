@@ -48,8 +48,22 @@ import (
 	etcd3 "go.etcd.io/etcd/client/v3"
 )
 
+const pluginNamePlaceholder = "{plugin_name}"
+
+type pluginClientInfo struct {
+	pluginName string
+	apiPath    string
+}
+
+func (k pluginClientInfo) baseURL(endpoint string) (string, error) {
+	prefix := strings.ReplaceAll(endpoint, pluginNamePlaceholder, k.pluginName)
+	return iacplugin.JoinPluginURL(prefix, k.apiPath)
+}
+
 // Options http 插件流程参数。
 type Options struct {
+	// Enabled 是否启用 http 插件。
+	Enabled bool
 	// LockLeaseSeconds 插件名锁租约（秒），需大于一次注册 / 升级的最长耗时。
 	LockLeaseSeconds int64
 	// CheckInterval 巡检间隔。
@@ -78,12 +92,17 @@ func New(dataCli *dataservice.Client, mutex *lock.EtcdMutex, gateway *cc.ApiGate
 	return &Service{dataCli: dataCli, mutex: mutex, gateway: gateway, schemaMgr: schemaMgr, opts: opts}
 }
 
-func (s *Service) getPluginClient(apiPath string) (plugin.Client, error) {
-	if cli, ok := s.pluginCliMap.Load(apiPath); ok {
+func (s *Service) getPluginClient(pluginName, apiPath string) (plugin.Client, error) {
+	if !s.opts.Enabled {
+		return nil, errf.New(errf.Aborted, "http iac plugin is not enabled")
+	}
+
+	key := pluginClientInfo{pluginName: pluginName, apiPath: apiPath}
+	if cli, ok := s.pluginCliMap.Load(key); ok {
 		return cli.(plugin.Client), nil
 	}
 
-	baseURL, err := iacplugin.JoinPluginURL(s.gateway.Endpoints[0], apiPath)
+	baseURL, err := key.baseURL(s.gateway.Endpoints[0])
 	if err != nil {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
@@ -93,7 +112,7 @@ func (s *Service) getPluginClient(apiPath string) (plugin.Client, error) {
 		return nil, errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	actual, _ := s.pluginCliMap.LoadOrStore(apiPath, cli)
+	actual, _ := s.pluginCliMap.LoadOrStore(key, cli)
 	return actual.(plugin.Client), nil
 }
 
@@ -117,7 +136,7 @@ func (s *Service) Register(kt *kit.Kit, req *proto.HTTPRegisterReq) (*proto.HTTP
 		}
 	}
 
-	version, err := s.probe(kt, req.APIPath)
+	version, err := s.probe(kt, req.PluginName, req.APIPath)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +211,7 @@ func (s *Service) Upgrade(kt *kit.Kit, pluginName string) (*proto.HTTPPluginResu
 		return nil, err
 	}
 
-	version, err := s.probe(kt, ext.APIPath)
+	version, err := s.probe(kt, latest.PluginName, ext.APIPath)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +350,7 @@ func (s *Service) Update(kt *kit.Kit, req *proto.HTTPUpdateReq) (*proto.HTTPPlug
 func (s *Service) updateAPIPath(kt *kit.Kit, records []coreplugin.IaCPlugin, latest *coreplugin.IaCPlugin,
 	apiPath string, extRaw json.RawMessage, reqMemo *string) (*proto.HTTPPluginResult, error) {
 
-	version, err := s.probe(kt, apiPath)
+	version, err := s.probe(kt, latest.PluginName, apiPath)
 	if err != nil {
 		return nil, err
 	}
@@ -444,16 +463,10 @@ func (s *Service) syncSchema(kt *kit.Kit, pluginName, version, apiPath string) e
 	return nil
 }
 
-// schemaGetter 返回按 apiPath 取 Schema 的方法。网关未配置时返回内嵌的静态 Schema，便于本地联调。
+// schemaGetter 返回按 pluginName 与 apiPath 取 Schema 的方法。
 func (s *Service) schemaGetter(pluginName, version, apiPath string) pluginschema.SchemaGetter {
 	return integration.SchemaGetterFunc(func(kt *kit.Kit) (*coreplugin.PluginSchema, error) {
-		if s.gateway == nil || len(s.gateway.Endpoints) == 0 {
-			logs.Warnf("iacGateway.endpoints is empty, return static schema for plugin %s@%s, api_path: %s, rid: %s",
-				pluginName, version, apiPath, kt.Rid)
-			return integration.LoadStaticSchema(pluginName, version)
-		}
-
-		cli, err := s.getPluginClient(apiPath)
+		cli, err := s.getPluginClient(pluginName, apiPath)
 		if err != nil {
 			return nil, err
 		}
@@ -470,37 +483,30 @@ func (s *Service) schemaGetter(pluginName, version, apiPath string) pluginschema
 	})
 }
 
-// probe 探活取版本，并校验版本号格式。当网关未配置时打印告警并返回默认版本，便于本地联调。
-func (s *Service) probe(kt *kit.Kit, apiPath string) (string, error) {
+// probe 探活取版本，并校验版本号格式。
+func (s *Service) probe(kt *kit.Kit, pluginName, apiPath string) (string, error) {
 	if err := iacplugin.ValidateAPIPath(apiPath); err != nil {
 		return "", errf.NewFromErr(errf.InvalidParameter, err)
 	}
 
-	version := "1.0.0"
-	if s.gateway == nil || len(s.gateway.Endpoints) == 0 {
-		logs.Warnf("iacGateway.endpoints is empty, return stub plugin version for api_path: %s, rid: %s",
-			apiPath, kt.Rid)
-	} else {
-		cli, err := s.getPluginClient(apiPath)
-		if err != nil {
-			return "", err
-		}
-
-		health, err := cli.Health(kt)
-		if err != nil {
-			return "", errf.Newf(errf.Aborted, "probe http plugin failed, err: %v", err)
-		}
-		if health == nil || len(health.PluginVersion) == 0 {
-			return "", errf.New(errf.Aborted, "plugin probe response has no plugin_version")
-		}
-		version = health.PluginVersion
+	cli, err := s.getPluginClient(pluginName, apiPath)
+	if err != nil {
+		return "", err
 	}
 
-	if _, err := iacplugin.ParseVersion(version); err != nil {
+	health, err := cli.Health(kt)
+	if err != nil {
+		return "", errf.Newf(errf.Aborted, "probe http plugin failed, err: %v", err)
+	}
+	if health == nil || len(health.PluginVersion) == 0 {
+		return "", errf.New(errf.Aborted, "plugin probe response has no plugin_version")
+	}
+
+	if _, err = iacplugin.ParseVersion(health.PluginVersion); err != nil {
 		return "", errf.Newf(errf.Aborted, "plugin probe returned an invalid version: %v", err)
 	}
 
-	return version, nil
+	return health.PluginVersion, nil
 }
 
 func (s *Service) listAndGetLatest(kt *kit.Kit, pluginName string) ([]coreplugin.IaCPlugin, *coreplugin.IaCPlugin, error) {

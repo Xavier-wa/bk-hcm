@@ -44,7 +44,7 @@ import (
 
 // scanPlugins 扫描本副本的 tf 插件目录。目录不合法时返回错误，进程不应启动服务。
 func (s *Service) scanPlugins() error {
-	pluginDir := cc.HCService().IaCPlugin.PluginDir
+	pluginDir := cc.HCService().IaCPlugin.TF.PluginDir
 
 	entries, err := discovery.Scan(pluginDir)
 	if err != nil {
@@ -75,11 +75,12 @@ func (s *Service) initIaCPlugin() error {
 	}
 
 	s.schemaMgr = pluginschema.NewSchemaManager(s.clientSet.DataService(), 0)
-	s.httpPlugin = httpplugin.New(s.clientSet.DataService(), s.iacMutex, cvt.ValToPtr(cc.HCService().IaCGateway),
+	s.httpPlugin = httpplugin.New(s.clientSet.DataService(), s.iacMutex, cvt.ValToPtr(cfg.HTTP.Gateway),
 		s.schemaMgr, httpplugin.Options{
+			Enabled:          cfg.HTTP.Enabled,
 			LockLeaseSeconds: cfg.LockLeaseSeconds,
-			CheckInterval:    time.Duration(cfg.HTTPCheckIntervalSeconds) * time.Second,
-			FailureThreshold: int(cfg.HTTPCheckFailureThreshold),
+			CheckInterval:    time.Duration(cfg.HTTP.CheckIntervalSeconds) * time.Second,
+			FailureThreshold: int(cfg.HTTP.CheckFailureThreshold),
 		})
 
 	poolRegistry, err := newPluginRegistry(s.clientSet.DataService(), s.plugins)
@@ -130,7 +131,7 @@ func (s *Service) StartPluginVersionWatch() {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.stopPluginVersionWatch = cancel
 
-	cfg := cc.HCService().IaCPlugin
+	cfg := cc.HCService().IaCPlugin.TF
 	w := watch.New(s.clientSet.DataService().Global.IaCPlugin, s.plugins,
 		shutdown.SignalShutdownGracefully,
 		watch.Options{
@@ -140,8 +141,12 @@ func (s *Service) StartPluginVersionWatch() {
 	go w.Run(ctx)
 }
 
-// StartHTTPPluginCheck 启动 http 插件巡检：仅 master 副本执行，随服务退出停止。
+// StartHTTPPluginCheck 启动 http 插件巡检：仅 master 副本执行，随服务退出停止。未启用 http 插件时不启动。
 func (s *Service) StartHTTPPluginCheck() {
+	if !cc.HCService().IaCPlugin.HTTP.Enabled {
+		return
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	s.stopHTTPPluginCheck = cancel
 
@@ -151,7 +156,7 @@ func (s *Service) StartHTTPPluginCheck() {
 // newPluginRegistry 创建 tf 插件进程池的索引，此时不建池。池参数不合法时返回错误，进程不应启动服务。
 // 开关关闭或没有本地 tf 插件时不创建。
 func newPluginRegistry(dataCli *dataservice.Client, entries []discovery.Entry) (*pool.PluginRegistry, error) {
-	cfg := cc.HCService().IaCPlugin.Pool
+	cfg := cc.HCService().IaCPlugin.TF.Pool
 	if !cfg.Enabled || len(entries) == 0 {
 		return nil, nil
 	}

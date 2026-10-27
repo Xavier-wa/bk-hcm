@@ -1358,25 +1358,41 @@ func (c AsyncFlowAndTaskCleanup) validate() error {
 
 // IaCPluginConfig defines iac plugin related config used by hc-service.
 type IaCPluginConfig struct {
-	// PluginDir 插件根目录，按 {PluginDir}/{插件名}/{版本}/{os}_{arch}/ 约定存放 tf_provider 插件可执行文件。
-	PluginDir string `yaml:"pluginDir"`
 	// LockLeaseSeconds 注册 / 升级时持有插件名锁的租约时长（秒），需大于一次注册的最长耗时。
 	LockLeaseSeconds int64 `yaml:"lockLeaseSeconds"`
 	// LockWaitTimeoutSeconds 等待插件名锁的最长时间（秒），等不到则按注册失败处理。
 	LockWaitTimeoutSeconds uint `yaml:"lockWaitTimeoutSeconds"`
+	// TF tf_provider 插件配置。
+	TF IaCPluginTFConfig `yaml:"tf"`
+	// HTTP http 插件配置。
+	HTTP IaCPluginHTTPConfig `yaml:"http"`
+}
+
+// IaCPluginTFConfig defines tf_provider iac plugin config.
+type IaCPluginTFConfig struct {
+	// PluginDir 插件根目录，按 {PluginDir}/{插件名}/{版本}/{os}_{arch}/ 约定存放 tf_provider 插件可执行文件。
+	PluginDir string `yaml:"pluginDir"`
 	// VersionCheckIntervalSeconds 运行期版本检查周期（秒）。
 	VersionCheckIntervalSeconds uint `yaml:"versionCheckIntervalSeconds"`
 	// VersionCheckThreshold 运行期版本检查连续落后多少个周期后退出。
 	VersionCheckThreshold uint `yaml:"versionCheckThreshold"`
-	// HTTPProbeTimeoutSeconds 探活 http 插件的超时时间（秒）。
-	HTTPProbeTimeoutSeconds uint `yaml:"httpProbeTimeoutSeconds"`
-	// HTTPCheckIntervalSeconds http 插件巡检间隔（秒），仅 master 副本巡检。
-	HTTPCheckIntervalSeconds uint `yaml:"httpCheckIntervalSeconds"`
-	// HTTPCheckFailureThreshold enabled 的 http 插件连续探活失败多少次后置为 failed。
-	HTTPCheckFailureThreshold uint `yaml:"httpCheckFailureThreshold"`
 	// Pool tf_provider 插件进程池配置。每个 tf 插件各自一个池，目前所有池使用这一份参数，
 	// 后续可能按插件类型差异化配置。
 	Pool IaCPluginPoolConfig `yaml:"pool"`
+}
+
+// IaCPluginHTTPConfig defines http iac plugin config.
+type IaCPluginHTTPConfig struct {
+	// Enabled 是否启用 http 插件。关闭时不校验 gateway、不启动巡检。
+	Enabled bool `yaml:"enabled"`
+	// ProbeTimeoutSeconds 探活 http 插件的超时时间（秒）。
+	ProbeTimeoutSeconds uint `yaml:"probeTimeoutSeconds"`
+	// CheckIntervalSeconds http 插件巡检间隔（秒），仅 master 副本巡检。
+	CheckIntervalSeconds uint `yaml:"checkIntervalSeconds"`
+	// CheckFailureThreshold enabled 的 http 插件连续探活失败多少次后置为 failed。
+	CheckFailureThreshold uint `yaml:"checkFailureThreshold"`
+	// Gateway 访问 http 插件的蓝鲸 API 网关配置。
+	Gateway ApiGateway `yaml:"gateway"`
 }
 
 // IaCPluginPoolConfig tf_provider 插件进程池配置。
@@ -1418,7 +1434,7 @@ const (
 	defaultIaCPluginVersionCheckThreshold = 3
 	defaultIaCPluginHTTPProbeTimeout      = 10
 	defaultIaCPluginHTTPCheckSeconds      = 60
-	defaultIaCPluginHTTPCheckThreshold    = 3
+	defaultIaCPluginHTTPCheckThreshold    = 5
 
 	defaultIaCPluginPoolMaxProcesses   = 4
 	defaultIaCPluginPoolMaxQueueLength = 100
@@ -1426,14 +1442,19 @@ const (
 )
 
 func (c *IaCPluginConfig) trySetDefault() {
-	if len(c.PluginDir) == 0 {
-		c.PluginDir = defaultIaCPluginDir
-	}
 	if c.LockLeaseSeconds == 0 {
 		c.LockLeaseSeconds = defaultIaCPluginLockLeaseSeconds
 	}
 	if c.LockWaitTimeoutSeconds == 0 {
 		c.LockWaitTimeoutSeconds = defaultIaCPluginLockWaitSeconds
+	}
+	c.TF.trySetDefault()
+	c.HTTP.trySetDefault()
+}
+
+func (c *IaCPluginTFConfig) trySetDefault() {
+	if len(c.PluginDir) == 0 {
+		c.PluginDir = defaultIaCPluginDir
 	}
 	if c.VersionCheckIntervalSeconds == 0 {
 		c.VersionCheckIntervalSeconds = defaultIaCPluginVersionCheckSeconds
@@ -1441,16 +1462,19 @@ func (c *IaCPluginConfig) trySetDefault() {
 	if c.VersionCheckThreshold == 0 {
 		c.VersionCheckThreshold = defaultIaCPluginVersionCheckThreshold
 	}
-	if c.HTTPProbeTimeoutSeconds == 0 {
-		c.HTTPProbeTimeoutSeconds = defaultIaCPluginHTTPProbeTimeout
-	}
-	if c.HTTPCheckIntervalSeconds == 0 {
-		c.HTTPCheckIntervalSeconds = defaultIaCPluginHTTPCheckSeconds
-	}
-	if c.HTTPCheckFailureThreshold == 0 {
-		c.HTTPCheckFailureThreshold = defaultIaCPluginHTTPCheckThreshold
-	}
 	c.Pool.trySetDefault()
+}
+
+func (c *IaCPluginHTTPConfig) trySetDefault() {
+	if c.ProbeTimeoutSeconds == 0 {
+		c.ProbeTimeoutSeconds = defaultIaCPluginHTTPProbeTimeout
+	}
+	if c.CheckIntervalSeconds == 0 {
+		c.CheckIntervalSeconds = defaultIaCPluginHTTPCheckSeconds
+	}
+	if c.CheckFailureThreshold == 0 {
+		c.CheckFailureThreshold = defaultIaCPluginHTTPCheckThreshold
+	}
 }
 
 func (c *IaCPluginPoolConfig) trySetDefault() {
@@ -1470,39 +1494,64 @@ func (c IaCPluginPoolConfig) Validate() error {
 	if c.MaxProcesses < 0 || c.MaxLeasesPerProcess < 0 || c.MinIdleProcesses < 0 || c.MaxRetries < 0 ||
 		c.MaxQueueLength < 0 {
 
-		return errors.New("iacPlugin.pool counts should not be negative")
+		return errors.New("iacPlugin.tf.pool counts should not be negative")
 	}
 	return nil
 }
 
 // Validate IaCPluginConfig.
 func (c IaCPluginConfig) Validate() error {
-	if len(c.PluginDir) == 0 {
-		return errors.New("iacPlugin.pluginDir should not be empty")
-	}
 	if c.LockLeaseSeconds <= 0 {
 		return errors.New("iacPlugin.lockLeaseSeconds should be greater than 0")
 	}
 	if c.LockLeaseSeconds <= int64(c.LockWaitTimeoutSeconds) {
 		return errors.New("iacPlugin.lockLeaseSeconds should be greater than lockWaitTimeoutSeconds")
 	}
+	if err := c.TF.Validate(); err != nil {
+		return err
+	}
+	if err := c.HTTP.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Validate IaCPluginTFConfig.
+func (c IaCPluginTFConfig) Validate() error {
+	if len(c.PluginDir) == 0 {
+		return errors.New("iacPlugin.tf.pluginDir should not be empty")
+	}
 	if c.VersionCheckIntervalSeconds == 0 {
-		return errors.New("iacPlugin.versionCheckIntervalSeconds should be greater than 0")
+		return errors.New("iacPlugin.tf.versionCheckIntervalSeconds should be greater than 0")
 	}
 	if c.VersionCheckThreshold == 0 {
-		return errors.New("iacPlugin.versionCheckThreshold should be greater than 0")
-	}
-	if c.HTTPProbeTimeoutSeconds == 0 {
-		return errors.New("iacPlugin.httpProbeTimeoutSeconds should be greater than 0")
-	}
-	if c.HTTPCheckIntervalSeconds == 0 {
-		return errors.New("iacPlugin.httpCheckIntervalSeconds should be greater than 0")
-	}
-	if c.HTTPCheckFailureThreshold == 0 {
-		return errors.New("iacPlugin.httpCheckFailureThreshold should be greater than 0")
+		return errors.New("iacPlugin.tf.versionCheckThreshold should be greater than 0")
 	}
 	if err := c.Pool.Validate(); err != nil {
 		return err
+	}
+	return nil
+}
+
+// Validate IaCPluginHTTPConfig.
+func (c IaCPluginHTTPConfig) Validate() error {
+	if c.ProbeTimeoutSeconds == 0 {
+		return errors.New("iacPlugin.http.probeTimeoutSeconds should be greater than 0")
+	}
+	if c.CheckIntervalSeconds == 0 {
+		return errors.New("iacPlugin.http.checkIntervalSeconds should be greater than 0")
+	}
+	if c.CheckFailureThreshold == 0 {
+		return errors.New("iacPlugin.http.checkFailureThreshold should be greater than 0")
+	}
+	if !c.Enabled {
+		return nil
+	}
+	if err := c.Gateway.validate(); err != nil {
+		return fmt.Errorf("iacPlugin.http.gateway validate error: %w", err)
+	}
+	if len(c.Gateway.Endpoints) > 1 {
+		return errors.New("iacPlugin.http.gateway.endpoints should have exactly one address")
 	}
 	return nil
 }
