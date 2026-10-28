@@ -22,6 +22,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	httpplugin "hcm/cmd/hc-service/logics/iac-plugin/http-plugin"
@@ -43,75 +44,86 @@ import (
 	cvt "hcm/pkg/tools/converter"
 )
 
-// scanPlugins 扫描本副本的 tf 插件目录。目录不合法时返回错误，进程不应启动服务。
-func (s *Service) scanPlugins() error {
-	pluginDir := cc.HCService().IaCPlugin.TF.PluginDir
+// iacPluginManager 汇总 IaC 插件在 hc-service 内的组件与运行期生命周期。
+type iacPluginManager struct {
+	// plugins 启动时扫描到的本副本 tf 插件（以插件名为 key），之后只读。
+	plugins map[string]discovery.Entry
+	// ready 为 true 表示 IaC 插件已注册完成，可以接收流量；在此之前 /healthz 返回 503，/alivez 不受影响。
+	ready atomic.Bool
 
-	entries, err := discovery.Scan(pluginDir)
+	tfRegister *register.Service
+	httpPlugin *httpplugin.Service
+	// pluginRouter 北向执行路由。体验环境在注册组件之外还要把 http 插件接到资源接口。
+	pluginRouter *router.Service
+	// poolRegistry tf 插件进程池。体验环境在注册完成之后按已启用插件建池。
+	poolRegistry *pool.PluginRegistry
+
+	// stopVersionWatch 停止运行期插件版本检查，没有本地 tf 插件时为 nil。
+	stopVersionWatch context.CancelFunc
+	// stopHTTPCheck 停止 http 插件巡检，未启动时为 nil。
+	stopHTTPCheck context.CancelFunc
+}
+
+// initIaCPlugin 扫描本地 tf 插件目录，并初始化插件注册、Schema 同步与 http 插件。
+// 目录不合法、网关 TLS 配置错误或 etcd 配置错误时返回错误，进程不应启动服务。
+func (s *Service) initIaCPlugin() error {
+	cfg := cc.HCService().IaCPlugin
+
+	entries, err := discovery.Scan(cfg.TF.PluginDir)
 	if err != nil {
-		return fmt.Errorf("scan iac plugin dir %s failed, err: %v", pluginDir, err)
+		return fmt.Errorf("scan iac plugin dir %s failed, err: %v", cfg.TF.PluginDir, err)
 	}
-
 	for _, entry := range entries {
 		logs.Infof("found tf plugin %s@%s (%s), sha256: %s", entry.PluginName, entry.PluginVersion, entry.Arch,
 			entry.SHA256)
 	}
-	s.plugins = entries
-
-	return nil
-}
-
-// initIaCPlugin 初始化插件注册与升级共用的依赖：插件名锁、Schema 同步入口、http 插件流程。
-// 网关 TLS 配置错误、etcd 配置错误时返回错误，进程不应启动服务。
-func (s *Service) initIaCPlugin() error {
-	cfg := cc.HCService().IaCPlugin
 
 	etcdCfg, err := cc.HCService().Service.Etcd.ToConfig()
 	if err != nil {
 		return fmt.Errorf("get etcd config failed, err: %v", err)
 	}
-	s.iacMutex, err = lock.New(etcdCfg, cfg.LockLeaseSeconds)
+	iacMutex, err := lock.New(etcdCfg, cfg.LockLeaseSeconds)
 	if err != nil {
 		return fmt.Errorf("new etcd mutex failed, err: %v", err)
 	}
 
-	s.schemaMgr = pluginschema.NewSchemaManager(s.clientSet.DataService(), 0)
-	s.httpPlugin = httpplugin.New(s.clientSet.DataService(), s.iacMutex, cvt.ValToPtr(cfg.HTTP.Gateway),
-		s.schemaMgr, httpplugin.Options{
-			Enabled:          cfg.HTTP.Enabled,
-			LockLeaseSeconds: cfg.LockLeaseSeconds,
-			CheckInterval:    time.Duration(cfg.HTTP.CheckIntervalSeconds) * time.Second,
-			FailureThreshold: int(cfg.HTTP.CheckFailureThreshold),
-		})
-	s.pluginRouter = router.New(s.clientSet.DataService(), s.schemaMgr, s.httpPlugin)
-
-	poolRegistry, err := newPluginRegistry(s.clientSet.DataService(), pluginEntries(s.plugins))
+	dataCli := s.clientSet.DataService()
+	schemaMgr := pluginschema.NewSchemaManager(dataCli, 0)
+	tfRegister := register.New(dataCli, iacMutex, schemaMgr, processStarter{}, register.Options{
+		LockLeaseSeconds: cfg.LockLeaseSeconds,
+		LockWaitTimeout:  time.Duration(cfg.LockWaitTimeoutSeconds) * time.Second,
+	})
+	httpPlugin := httpplugin.New(dataCli, iacMutex, cvt.ValToPtr(cfg.HTTP.Gateway), schemaMgr, httpplugin.Options{
+		Enabled:          cfg.HTTP.Enabled,
+		LockLeaseSeconds: cfg.LockLeaseSeconds,
+		CheckInterval:    time.Duration(cfg.HTTP.CheckIntervalSeconds) * time.Second,
+		FailureThreshold: int(cfg.HTTP.CheckFailureThreshold),
+	})
+	poolRegistry, err := newPluginRegistry(dataCli, pluginEntries(entries))
 	if err != nil {
 		return err
 	}
-	s.poolRegistry = poolRegistry
 
+	s.iacPlugin = &iacPluginManager{
+		plugins:      entries,
+		tfRegister:   tfRegister,
+		httpPlugin:   httpPlugin,
+		pluginRouter: router.New(dataCli, schemaMgr, httpPlugin),
+		poolRegistry: poolRegistry,
+	}
 	return nil
 }
 
 // RegisterPlugins 逐个注册本副本扫描到的 tf 插件，再检查注册表里已启用的 tf 插件本副本是否都有。
 // 任何一步失败都返回错误，由 Run 让进程非 0 退出。
 func (s *Service) RegisterPlugins() error {
-	cfg := cc.HCService().IaCPlugin
-
-	r := register.New(s.clientSet.DataService(), s.iacMutex, s.schemaMgr, processStarter{},
-		register.Options{
-			LockLeaseSeconds: cfg.LockLeaseSeconds,
-			LockWaitTimeout:  time.Duration(cfg.LockWaitTimeoutSeconds) * time.Second,
-		})
-
-	for _, entry := range s.plugins {
-		if err := r.Register(core.NewBackendKit(), entry); err != nil {
+	for _, entry := range s.iacPlugin.plugins {
+		if err := s.iacPlugin.tfRegister.Register(core.NewBackendKit(), entry); err != nil {
 			return fmt.Errorf("register tf plugin %s@%s failed, err: %v", entry.PluginName, entry.PluginVersion, err)
 		}
 	}
 
-	if err := r.CheckRegistered(core.NewBackendKit(), s.plugins); err != nil {
+	if err := s.iacPlugin.tfRegister.CheckRegistered(core.NewBackendKit(), s.iacPlugin.plugins); err != nil {
 		return fmt.Errorf("check registered tf plugins failed, err: %v", err)
 	}
 
@@ -120,21 +132,21 @@ func (s *Service) RegisterPlugins() error {
 
 // SetPluginReady 标记 IaC 插件已完成注册，之后 /healthz 返回 200。
 func (s *Service) SetPluginReady() {
-	s.pluginReady.Store(true)
+	s.iacPlugin.ready.Store(true)
 }
 
 // StartPluginVersionWatch 启动运行期插件版本检查：本副本二进制落后于注册表已完成最高版本并持续数个周期后，通知进程优雅退出。
 // 检查随服务退出停止。没有本地 tf 插件时无需检查。
 func (s *Service) StartPluginVersionWatch() {
-	if len(s.plugins) == 0 {
+	if len(s.iacPlugin.plugins) == 0 {
 		return
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s.stopPluginVersionWatch = cancel
+	s.iacPlugin.stopVersionWatch = cancel
 
 	cfg := cc.HCService().IaCPlugin.TF
-	w := watch.New(s.clientSet.DataService().Global.IaCPlugin, s.plugins,
+	w := watch.New(s.clientSet.DataService().Global.IaCPlugin, s.iacPlugin.plugins,
 		shutdown.SignalShutdownGracefully,
 		watch.Options{
 			Interval:  time.Duration(cfg.VersionCheckIntervalSeconds) * time.Second,
@@ -150,9 +162,9 @@ func (s *Service) StartHTTPPluginCheck() {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s.stopHTTPPluginCheck = cancel
+	s.iacPlugin.stopHTTPCheck = cancel
 
-	go s.httpPlugin.RunCheck(ctx, s.sd.IsMaster)
+	go s.iacPlugin.httpPlugin.RunCheck(ctx, s.sd.IsMaster)
 }
 
 // newPluginRegistry 创建 tf 插件进程池的索引，此时不建池。池参数不合法时返回错误，进程不应启动服务。
@@ -201,8 +213,8 @@ func toPoolConfig(cfg cc.IaCPluginPoolConfig) pool.PoolConfig {
 
 // StartPluginPools 启动 tf 插件进程池的后台检查：按插件表里已启用的插件建池、关池。未启用进程池时什么也不做。
 func (s *Service) StartPluginPools() {
-	if s.poolRegistry != nil {
-		s.poolRegistry.StartSync()
+	if s.iacPlugin.poolRegistry != nil {
+		s.iacPlugin.poolRegistry.StartSync()
 	}
 }
 
@@ -211,24 +223,24 @@ const pluginPoolShutdownTimeout = 10 * time.Second
 
 // ClosePluginPools 关闭全部 tf 插件进程池，结束池内的插件进程。应在摘除流量之后调用。
 func (s *Service) ClosePluginPools() {
-	if s.poolRegistry == nil {
+	if s.iacPlugin.poolRegistry == nil {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), pluginPoolShutdownTimeout)
 	defer cancel()
-	if err := s.poolRegistry.Close(ctx); err != nil {
+	if err := s.iacPlugin.poolRegistry.Close(ctx); err != nil {
 		logs.Errorf("close plugin pools failed, err: %v", err)
 	}
 }
 
 // StopPluginTasks 停止运行期插件版本检查与 http 插件巡检。
 func (s *Service) StopPluginTasks() {
-	if s.stopPluginVersionWatch != nil {
-		s.stopPluginVersionWatch()
+	if s.iacPlugin.stopVersionWatch != nil {
+		s.iacPlugin.stopVersionWatch()
 	}
-	if s.stopHTTPPluginCheck != nil {
-		s.stopHTTPPluginCheck()
+	if s.iacPlugin.stopHTTPCheck != nil {
+		s.iacPlugin.stopHTTPCheck()
 	}
 }
 

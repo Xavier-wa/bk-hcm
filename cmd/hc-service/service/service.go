@@ -26,15 +26,9 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	cloudadaptor "hcm/cmd/hc-service/logics/cloud-adaptor"
-	httpplugin "hcm/cmd/hc-service/logics/iac-plugin/http-plugin"
-	"hcm/cmd/hc-service/logics/iac-plugin/router"
-	"hcm/cmd/hc-service/logics/iac-plugin/tf-plugin/discovery"
-	"hcm/cmd/hc-service/logics/iac-plugin/tf-plugin/pool"
-	pluginschema "hcm/cmd/hc-service/logics/plugin/schema"
 	ressync "hcm/cmd/hc-service/logics/res-sync"
 	"hcm/cmd/hc-service/service/account"
 	argstpl "hcm/cmd/hc-service/service/argument-template"
@@ -66,7 +60,6 @@ import (
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/errf"
 	"hcm/pkg/handler"
-	"hcm/pkg/lock"
 	"hcm/pkg/logs"
 	"hcm/pkg/metrics"
 	"hcm/pkg/rest"
@@ -82,19 +75,11 @@ import (
 
 // Service do all the hc service's work
 type Service struct {
-	serve                  *http.Server
-	clientSet              *client.ClientSet
-	cloudAdaptor           *cloudadaptor.CloudAdaptorClient
-	plugins                map[string]discovery.Entry
-	pluginReady            atomic.Bool
-	sd                     serviced.ServiceDiscover
-	iacMutex               *lock.EtcdMutex
-	httpPlugin             *httpplugin.Service
-	pluginRouter           *router.Service
-	schemaMgr              *pluginschema.SchemaManager
-	stopPluginVersionWatch context.CancelFunc
-	stopHTTPPluginCheck    context.CancelFunc
-	poolRegistry           *pool.PluginRegistry
+	serve        *http.Server
+	clientSet    *client.ClientSet
+	cloudAdaptor *cloudadaptor.CloudAdaptorClient
+	sd           serviced.ServiceDiscover
+	iacPlugin    *iacPluginManager
 }
 
 // NewService create a service instance.
@@ -123,9 +108,6 @@ func NewService(sd serviced.ServiceDiscover) (*Service, error) {
 		sd:           sd,
 	}
 
-	if err = svr.scanPlugins(); err != nil {
-		return nil, err
-	}
 	if err = svr.initIaCPlugin(); err != nil {
 		return nil, err
 	}
@@ -201,9 +183,9 @@ func (s *Service) apiSet() *restful.Container {
 		ClientSet:      s.clientSet,
 		CloudAdaptor:   s.cloudAdaptor,
 		ResSyncCli:     ressync.NewClient(s.cloudAdaptor, s.clientSet.DataService()),
-		HTTPPlugin:     s.httpPlugin,
-		PluginRegistry: s.poolRegistry,
-		PluginRouter:   s.pluginRouter,
+		HTTPPlugin:     s.iacPlugin.httpPlugin,
+		PluginRegistry: s.iacPlugin.poolRegistry,
+		PluginRouter:   s.iacPlugin.pluginRouter,
 	}
 
 	account.InitAccountService(c)
@@ -245,7 +227,7 @@ func (s *Service) Healthz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !s.pluginReady.Load() {
+	if !s.iacPlugin.ready.Load() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		rest.WriteResp(w, rest.NewBaseResp(errf.UnHealthy, "iac plugins are not registered yet"))
 		return
