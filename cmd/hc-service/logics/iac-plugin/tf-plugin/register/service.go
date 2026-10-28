@@ -30,7 +30,6 @@ import (
 	"hcm/cmd/hc-service/logics/iac-plugin/store"
 	"hcm/cmd/hc-service/logics/iac-plugin/tf-plugin/discovery"
 	pluginschema "hcm/cmd/hc-service/logics/plugin/schema"
-	"hcm/pkg/api/core"
 	coreplugin "hcm/pkg/api/core/plugin"
 	dataservice "hcm/pkg/client/data-service"
 	"hcm/pkg/criteria/enumor"
@@ -242,15 +241,12 @@ func (s *Service) markFailed(kt *kit.Kit, entry discovery.Entry, id string, caus
 //
 // 它只读，不加锁。要在所有插件注册完成之后调用：本副本刚注册的插件此时已经在注册表里，不会被误判。
 func (s *Service) CheckRegistered(kt *kit.Kit, entries map[string]discovery.Entry) error {
-	res, err := s.dataCli.Global.IaCPlugin.List(kt, &core.ListReq{
-		Filter: tools.EqualExpression("protocol", enumor.IaCPluginProtocolTFProvider),
-		Page:   core.NewDefaultBasePage(),
-	})
+	records, err := store.ListByFilter(kt, s.dataCli, tools.EqualExpression("protocol", enumor.IaCPluginProtocolTFProvider))
 	if err != nil {
 		return fmt.Errorf("list tf_provider plugins failed: %w", err)
 	}
 
-	missing, err := FindMissing(res.Details, entries)
+	missing, err := FindMissing(records, entries)
 	if err != nil {
 		return err
 	}
