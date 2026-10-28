@@ -85,7 +85,7 @@ type Service struct {
 	serve                  *http.Server
 	clientSet              *client.ClientSet
 	cloudAdaptor           *cloudadaptor.CloudAdaptorClient
-	plugins                []discovery.Entry
+	plugins                map[string]discovery.Entry
 	pluginReady            atomic.Bool
 	sd                     serviced.ServiceDiscover
 	iacMutex               *lock.EtcdMutex

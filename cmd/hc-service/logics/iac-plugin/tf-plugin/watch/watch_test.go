@@ -150,7 +150,7 @@ func TestWatcherCheck(t *testing.T) {
 	}, "/"))
 
 	called := 0
-	w := New(cli, []discovery.Entry{{PluginName: "tc", PluginVersion: "1.0.0"}},
+	w := New(cli, map[string]discovery.Entry{"tc": {PluginName: "tc", PluginVersion: "1.0.0"}},
 		func() { called++ }, Options{})
 
 	for i := 0; i < len(rounds)-1; i++ {

@@ -56,8 +56,8 @@ type Options struct {
 
 // Watcher 周期性检查本副本版本是否落后。
 type Watcher struct {
-	cli     *global.IaCPluginClient
-	entries []discovery.Entry
+	cli      *global.IaCPluginClient
+	entries  map[string]discovery.Entry
 	onBehind func()
 	opts     Options
 
@@ -66,7 +66,7 @@ type Watcher struct {
 }
 
 // New 创建 Watcher。entries 是启动时目录检查的结果（只读）；onBehind 用于通知退出。
-func New(cli *global.IaCPluginClient, entries []discovery.Entry,
+func New(cli *global.IaCPluginClient, entries map[string]discovery.Entry,
 	onBehind func(), opts Options) *Watcher {
 
 	if opts.Interval <= 0 {

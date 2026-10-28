@@ -85,7 +85,7 @@ func (s *Service) initIaCPlugin() error {
 		})
 	s.pluginRouter = router.New(s.clientSet.DataService(), s.schemaMgr, s.httpPlugin)
 
-	poolRegistry, err := newPluginRegistry(s.clientSet.DataService(), s.plugins)
+	poolRegistry, err := newPluginRegistry(s.clientSet.DataService(), pluginEntries(s.plugins))
 	if err != nil {
 		return err
 	}
@@ -157,6 +157,14 @@ func (s *Service) StartHTTPPluginCheck() {
 
 // newPluginRegistry 创建 tf 插件进程池的索引，此时不建池。池参数不合法时返回错误，进程不应启动服务。
 // 开关关闭或没有本地 tf 插件时不创建。
+func pluginEntries(plugins map[string]discovery.Entry) []discovery.Entry {
+	entries := make([]discovery.Entry, 0, len(plugins))
+	for _, entry := range plugins {
+		entries = append(entries, entry)
+	}
+	return entries
+}
+
 func newPluginRegistry(dataCli *dataservice.Client, entries []discovery.Entry) (*pool.PluginRegistry, error) {
 	cfg := cc.HCService().IaCPlugin.TF.Pool
 	if !cfg.Enabled || len(entries) == 0 {

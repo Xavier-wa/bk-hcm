@@ -40,7 +40,6 @@ import (
 	"hcm/pkg/kit"
 	"hcm/pkg/lock"
 	"hcm/pkg/logs"
-	cvt "hcm/pkg/tools/converter"
 	"hcm/pkg/tools/slice"
 )
 
@@ -242,7 +241,7 @@ func (s *Service) markFailed(kt *kit.Kit, entry discovery.Entry, id string, caus
 // CheckRegistered 读取注册表并检查是否有已启用的 tf 插件在本副本目录里缺失；缺失时返回 ErrMissingPlugin。
 //
 // 它只读，不加锁。要在所有插件注册完成之后调用：本副本刚注册的插件此时已经在注册表里，不会被误判。
-func (s *Service) CheckRegistered(kt *kit.Kit, entries []discovery.Entry) error {
+func (s *Service) CheckRegistered(kt *kit.Kit, entries map[string]discovery.Entry) error {
 	res, err := s.dataCli.Global.IaCPlugin.List(kt, &core.ListReq{
 		Filter: tools.EqualExpression("protocol", enumor.IaCPluginProtocolTFProvider),
 		Page:   core.NewDefaultBasePage(),
@@ -269,9 +268,7 @@ func (s *Service) CheckRegistered(kt *kit.Kit, entries []discovery.Entry) error 
 //   - init / failed：注册没成功，没有可用版本可言，缺失不是新问题，由注册流程自己收敛。
 //
 // 本副本目录里有该插件（不论版本）就不算缺失：版本是否匹配由 Decide 负责。
-func FindMissing(records []coreplugin.IaCPlugin, entries []discovery.Entry) ([]string, error) {
-	local := cvt.StringSliceToMap(slice.Map(entries, func(e discovery.Entry) string { return e.PluginName }))
-
+func FindMissing(records []coreplugin.IaCPlugin, entries map[string]discovery.Entry) ([]string, error) {
 	// 按插件名分组：同一插件名可能有多条版本记录。
 	byName := make(map[string][]coreplugin.IaCPlugin, len(records))
 	for _, rec := range slice.Filter(records, func(rec coreplugin.IaCPlugin) bool {
@@ -282,7 +279,7 @@ func FindMissing(records []coreplugin.IaCPlugin, entries []discovery.Entry) ([]s
 
 	missing := make([]string, 0)
 	for name, recs := range byName {
-		if _, ok := local[name]; ok {
+		if _, ok := entries[name]; ok {
 			continue
 		}
 
