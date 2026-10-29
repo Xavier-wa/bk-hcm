@@ -22,7 +22,9 @@ package adaptor
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"math/big"
 	"os"
 	"path/filepath"
 	"sync"
@@ -185,6 +187,7 @@ func buildTestPluginSchema() *coreplugin.PluginSchema {
 			"id":            {AttributeType: cty.String, Computed: true},
 			"instance_name": {AttributeType: cty.String, Required: true},
 			"image_id":      {AttributeType: cty.String, Optional: true, Computed: true},
+			"project_id":    {AttributeType: cty.Number, Optional: true, Computed: true},
 			"password":      {AttributeType: cty.String, Optional: true, Sensitive: true},
 		},
 		NestedBlocks: map[string]*tfjson.SchemaBlockType{
@@ -759,4 +762,70 @@ func TestTFPluginAdaptor_50GoroutinesConcurrentAllEndpoints(t *testing.T) {
 	}
 	wg.Wait()
 	assert.Equal(t, int32(workers), mp.releaseCalls.Load())
+}
+
+func TestTFPluginAdaptor_BigFloatNormalizationAndDriftEquality(t *testing.T) {
+	kt := kit.New()
+	common := proto.CommonInstanceReq{
+		Plugin: "tencentcloud", PluginInstanceID: "inst-001", TypeName: "tencentcloud_instance",
+	}
+
+	mp := &mockProvider{
+		readResFn: func(_ string, _ map[string]any, priv []byte) (*types.ReadResourceResult, error) {
+			return &types.ReadResourceResult{
+				NewState: map[string]any{
+					"id":            "sg-100",
+					"instance_name": "sg-test",
+					"project_id":    big.NewFloat(0),
+				},
+				Private: priv,
+			}, nil
+		},
+		applyFn: func(_ string, _, planned, _ map[string]any, priv []byte) (*types.ApplyResult, error) {
+			return &types.ApplyResult{
+				NewState: map[string]any{
+					"id":            "sg-100",
+					"instance_name": planned["instance_name"],
+					"project_id":    big.NewFloat(0),
+				},
+				Private: priv,
+			}, nil
+		},
+	}
+
+	adp := newTestAdaptor(mp)
+
+	// 1. Execute 返回的 *big.Float(0) 被归一化为 int64(0)，JSON 序列化后仍为数字 0 而非字符串 "0"
+	execRes, err := adp.Execute(kt, &proto.ExecuteReq{
+		CommonInstanceReq: common,
+		Config:            map[string]any{"instance_name": "sg-test"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), execRes.State["project_id"])
+
+	rawJSON, err := json.Marshal(execRes.State)
+	require.NoError(t, err)
+	assert.Contains(t, string(rawJSON), `"project_id":0`)
+
+	var roundTripState map[string]any
+	require.NoError(t, json.Unmarshal(rawJSON, &roundTripState))
+	assert.Equal(t, float64(0), roundTripState["project_id"])
+
+	// 2. 将 JSON 反序列化后的 roundTripState（float64(0)）作为 prior_state 传入：
+	// 与 ReadResource 返回的 *big.Float(0) 数值相等，不应误判为 drifted
+	errDiag := makeErrorDiag("Apply failed", "simulated failure")
+	mp.applyFn = func(_ string, _, _, _ map[string]any, _ []byte) (*types.ApplyResult, error) {
+		return &types.ApplyResult{
+			NewState:    nil,
+			Diagnostics: []*tfplugin5.Diagnostic{errDiag},
+		}, executor.ErrDiagnostic
+	}
+	failedNoDrift, err := adp.Execute(kt, &proto.ExecuteReq{
+		CommonInstanceReq: common,
+		PriorState:        roundTripState,
+		Config:            map[string]any{"instance_name": "sg-test"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, enumor.IaCPluginTaskStatusFailed, failedNoDrift.Status)
+	assert.Nil(t, failedNoDrift.State)
 }

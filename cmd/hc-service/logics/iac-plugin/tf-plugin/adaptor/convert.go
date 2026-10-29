@@ -23,6 +23,9 @@ package adaptor
 import (
 	"encoding/base64"
 	"fmt"
+	"math"
+	"math/big"
+	"reflect"
 	"strings"
 
 	"hcm/cmd/hc-service/logics/tfruntime/codec"
@@ -204,7 +207,7 @@ func convertReplacePaths(paths []*tfplugin5.AttributePath) []string {
 }
 
 // nullifyUnknowns 递归遍历状态树（map[string]any 与 []any），将底层解码出的 codec.Unknown 哨兵值置为 nil，
-// 并返回原状态树中是否包含 codec.Unknown。
+// 同时将 *big.Float 归一化为标准 JSON 数值类型（int64、uint64 或 float64），并返回原状态树中是否包含 codec.Unknown。
 func nullifyUnknowns(state map[string]any) (map[string]any, bool) {
 	if state == nil {
 		return nil, false
@@ -219,6 +222,8 @@ func nullifyUnknownValue(val any) (any, bool) {
 		return nil, true
 	}
 	switch typed := val.(type) {
+	case *big.Float:
+		return normalizeBigFloat(typed), false
 	case map[string]any:
 		if typed == nil {
 			return nil, false
@@ -249,5 +254,105 @@ func nullifyUnknownValue(val any) (any, bool) {
 		return out, anyUnknown
 	default:
 		return val, false
+	}
+}
+
+// normalizeBigFloat 将底层解码出的 *big.Float 转换为标准 JSON 数值类型（int64、uint64 或 float64），
+// 避免 encoding/json 因 *big.Float 实现 encoding.TextMarshaler 而将其序列化为带引号的字符串。
+func normalizeBigFloat(f *big.Float) any {
+	if f == nil {
+		return nil
+	}
+	if f.IsInt() {
+		if i64, acc := f.Int64(); acc == big.Exact {
+			return i64
+		}
+		if u64, acc := f.Uint64(); acc == big.Exact {
+			return normalizeUint64(u64)
+		}
+	}
+	f64, _ := f.Float64()
+	return f64
+}
+
+func normalizeUint64(u uint64) any {
+	if u <= math.MaxInt64 {
+		return int64(u)
+	}
+	return u
+}
+
+// stateEqual 递归比较两份状态树在结构与数值上是否相等，抹平 JSON 反序列化的 float64 与插件解码的 *big.Float 类型差异。
+func stateEqual(a, b any) bool {
+	if na, ok := normalizeNumeric(a); ok {
+		nb, okB := normalizeNumeric(b)
+		return okB && na == nb
+	}
+	switch va := a.(type) {
+	case map[string]any:
+		vb, ok := b.(map[string]any)
+		if !ok || (va == nil) != (vb == nil) || len(va) != len(vb) {
+			return false
+		}
+		for k, elemA := range va {
+			elemB, exists := vb[k]
+			if !exists || !stateEqual(elemA, elemB) {
+				return false
+			}
+		}
+		return true
+	case []any:
+		vb, ok := b.([]any)
+		if !ok || (va == nil) != (vb == nil) || len(va) != len(vb) {
+			return false
+		}
+		for i := range va {
+			if !stateEqual(va[i], vb[i]) {
+				return false
+			}
+		}
+		return true
+	default:
+		return reflect.DeepEqual(a, b)
+	}
+}
+
+func normalizeNumeric(v any) (any, bool) {
+	switch n := v.(type) {
+	case *big.Float:
+		if n == nil {
+			return nil, false
+		}
+		return normalizeBigFloat(n), true
+	case float64:
+		if !math.IsNaN(n) && !math.IsInf(n, 0) && math.Trunc(n) == n &&
+			n >= float64(math.MinInt64) && n < float64(1<<63) {
+			return int64(n), true
+		}
+		return n, true
+	case float32:
+		return normalizeNumeric(float64(n))
+	case int:
+		return int64(n), true
+	case int8:
+		return int64(n), true
+	case int16:
+		return int64(n), true
+	case int32:
+		return int64(n), true
+	case int64:
+		return n, true
+	case uint:
+		return normalizeUint64(uint64(n)), true
+	case uint8:
+		return int64(n), true
+	case uint16:
+		return int64(n), true
+	case uint32:
+		return int64(n), true
+	case uint64:
+		return normalizeUint64(n), true
+	default:
+		return nil, false
 	}
 }

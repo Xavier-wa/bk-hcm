@@ -21,7 +21,6 @@ package adaptor
 
 import (
 	"errors"
-	"reflect"
 	"sync"
 
 	iacplugin "hcm/cmd/hc-service/logics/iac-plugin"
@@ -36,6 +35,7 @@ import (
 	"hcm/pkg/kit"
 	"hcm/pkg/logs"
 	"hcm/pkg/plugin/tfplugin5"
+	cvt "hcm/pkg/tools/converter"
 )
 
 // TFPluginAdaptor 封装单次北向请求内本地 tf_provider 插件的进程池租约与多步 gRPC 串行编排。
@@ -144,7 +144,7 @@ func resolveDriftOutcome(priorState, config, refreshedState map[string]any, refr
 		}
 		return false, true, nil, nil
 	}
-	return false, !reflect.DeepEqual(priorState, refreshedState), refreshedState, refreshedPrivate
+	return false, !stateEqual(priorState, refreshedState), refreshedState, refreshedPrivate
 }
 
 // prepareChangeContext 在同一进程 Lease 上串行执行 Execute 与 Plan 共用的前置步骤：
@@ -218,11 +218,15 @@ func (a *TFPluginAdaptor) prepareChangeContext(kt *kit.Kit, in changeParams) (*c
 func (a *TFPluginAdaptor) refreshPriorState(kt *kit.Kit, in changeParams, priorPrivate []byte,
 	ctx *changeContext) (*changeContext, error) {
 
+	if ctx == nil {
+		return nil, errf.New(errf.InvalidParameter, "change context is nil")
+	}
+
 	readResp, readErr := a.lease.ReadResource(kt.Ctx, in.typeName, in.priorState, priorPrivate)
 	if err := a.classifyRPCError(kt, in.typeName, readErr); err != nil {
 		return nil, err
 	}
-	next := *ctx
+	next := cvt.PtrToVal(ctx)
 	var newState map[string]any
 	var newPrivate []byte
 	if readResp != nil {
@@ -232,12 +236,12 @@ func (a *TFPluginAdaptor) refreshPriorState(kt *kit.Kit, in changeParams, priorP
 	}
 	if readErr != nil {
 		next.validateFailed = true
-		return &next, nil
+		return cvt.ValToPtr(next), nil
 	}
 
 	next.shortCircuitDelete, next.drifted, next.currentState, next.currentPrivate = resolveDriftOutcome(
 		in.priorState, in.config, newState, newPrivate)
-	return &next, nil
+	return cvt.ValToPtr(next), nil
 }
 
 // Execute 在同一进程 Lease 上串行编排前置校验/漂移刷新、PlanResourceChange 与 ApplyResourceChange，
