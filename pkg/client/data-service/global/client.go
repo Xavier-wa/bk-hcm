@@ -80,6 +80,10 @@ type Client struct {
 	IaCPlugin         *IaCPluginClient
 	IacPluginInstance *IacPluginInstanceClient
 	IacPluginSchema   *IacPluginSchemaClient
+	IacRepository     *IacRepositoryClient
+	IacSpec           *IacSpecClient
+	IacSpecNode       *IacSpecNodeClient
+	IacState          *IacStateClient
 }
 
 type restClient struct {
@@ -136,5 +140,9 @@ func NewClient(client rest.ClientInterface) *Client {
 		IaCPlugin:               NewIaCPluginClient(client),
 		IacPluginInstance:       NewIacPluginInstanceClient(client),
 		IacPluginSchema:         NewIacPluginSchemaClient(client),
+		IacRepository:           NewIacRepositoryClient(client),
+		IacSpec:                 NewIacSpecClient(client),
+		IacSpecNode:             NewIacSpecNodeClient(client),
+		IacState:                NewIacStateClient(client),
 	}
 }

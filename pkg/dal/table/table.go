@@ -228,6 +228,14 @@ const (
 	IacPluginInstanceTable Name = "iac_plugin_instance"
 	// IacPluginSchemaTable iac_plugin_schema 表名。
 	IacPluginSchemaTable Name = "iac_plugin_schema"
+	// IacRepositoryTable iac_repository 表名。
+	IacRepositoryTable Name = "iac_repository"
+	// IacSpecTable iac_spec 表名。
+	IacSpecTable Name = "iac_spec"
+	// IacSpecNodeTable iac_spec_node 表名。
+	IacSpecNodeTable Name = "iac_spec_node"
+	// IacStateTable iac_state 表名。
+	IacStateTable Name = "iac_state"
 )
 
 // Validate whether the table name is valid or not.
@@ -353,6 +361,10 @@ var TableMap = map[Name]TableConfig{
 	IaCPluginTable:         {},
 	IacPluginInstanceTable: {EnableTenant: true},
 	IacPluginSchemaTable:   {},
+	IacRepositoryTable:     {EnableTenant: true},
+	IacSpecTable:           {EnableTenant: true},
+	IacSpecNodeTable:       {EnableTenant: true},
+	IacStateTable:          {EnableTenant: true},
 }
 
 // Register 注册表名

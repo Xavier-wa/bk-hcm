@@ -62,6 +62,7 @@ import (
 	daosync "hcm/pkg/dal/dao/cloud/sync"
 	"hcm/pkg/dal/dao/cloud/zone"
 	globalconfig "hcm/pkg/dal/dao/global-config"
+	daoiac "hcm/pkg/dal/dao/iac"
 	idgenerator "hcm/pkg/dal/dao/id-generator"
 	"hcm/pkg/dal/dao/orm"
 	daoplugin "hcm/pkg/dal/dao/plugin"
@@ -158,6 +159,10 @@ type Set interface {
 	IaCPlugin() daoplugin.IaCPlugin
 	IacPluginInstance() daoplugin.IacPluginInstance
 	IacPluginSchema() daoplugin.IacPluginSchema
+	IacRepository() daoiac.IacRepository
+	IacSpec() daoiac.IacSpec
+	IacSpecNode() daoiac.IacSpecNode
+	IacState() daoiac.IacState
 
 	Txn() *Txn
 }
