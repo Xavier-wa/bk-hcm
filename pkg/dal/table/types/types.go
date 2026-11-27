@@ -38,6 +38,11 @@ func (f JsonField) IsEmpty() bool {
 	return len(f) == 0 || f == "{}"
 }
 
+// IsNull 判断 JsonField 是否表示 JSON null 字面量。
+func (f JsonField) IsNull() bool {
+	return f == "null"
+}
+
 // Scan is used to decode raw message which is read from db into ShareData.
 func (f *JsonField) Scan(raw interface{}) error {
 	return Scan(raw, f)

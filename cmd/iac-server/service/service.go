@@ -30,6 +30,7 @@ import (
 
 	logicaudit "hcm/cmd/iac-server/logics/audit"
 	"hcm/cmd/iac-server/service/capability"
+	"hcm/cmd/iac-server/service/state"
 	"hcm/pkg/cc"
 	"hcm/pkg/client"
 	"hcm/pkg/criteria/errf"
@@ -160,6 +161,8 @@ func (s *Service) apiSet() *restful.Container {
 		Authorizer: s.authorizer,
 		Audit:      s.audit,
 	}
+
+	state.InitService(c)
 
 	return restful.NewContainer().Add(c.WebService)
 }

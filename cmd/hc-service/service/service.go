@@ -29,6 +29,7 @@ import (
 	"time"
 
 	cloudadaptor "hcm/cmd/hc-service/logics/cloud-adaptor"
+	pluginschema "hcm/cmd/hc-service/logics/plugin/schema"
 	ressync "hcm/cmd/hc-service/logics/res-sync"
 	"hcm/cmd/hc-service/service/account"
 	argstpl "hcm/cmd/hc-service/service/argument-template"
@@ -41,6 +42,7 @@ import (
 	"hcm/cmd/hc-service/service/disk"
 	"hcm/cmd/hc-service/service/eip"
 	"hcm/cmd/hc-service/service/firewall"
+	iacplugin "hcm/cmd/hc-service/service/iac-plugin"
 	"hcm/cmd/hc-service/service/image"
 	instancetype "hcm/cmd/hc-service/service/instance-type"
 	loadbalancer "hcm/cmd/hc-service/service/load-balancer"
@@ -73,9 +75,10 @@ import (
 
 // Service do all the hc service's work
 type Service struct {
-	serve        *http.Server
-	clientSet    *client.ClientSet
-	cloudAdaptor *cloudadaptor.CloudAdaptorClient
+	serve           *http.Server
+	clientSet       *client.ClientSet
+	cloudAdaptor    *cloudadaptor.CloudAdaptorClient
+	pluginSchemaMgr *pluginschema.SchemaManager
 }
 
 // NewService create a service instance.
@@ -99,8 +102,9 @@ func NewService(sd serviced.ServiceDiscover) (*Service, error) {
 	}
 
 	svr := &Service{
-		clientSet:    cliSet,
-		cloudAdaptor: cloudAdaptor,
+		clientSet:       cliSet,
+		cloudAdaptor:    cloudAdaptor,
+		pluginSchemaMgr: pluginschema.NewSchemaManager(cliSet.DataService(), pluginschema.DefaultSchemaCacheTTL),
 	}
 
 	return svr, nil
@@ -140,6 +144,9 @@ func (s *Service) ListenAndServeRest() error {
 			defer notifier.Done()
 
 			logs.Infof("start shutdown restful server gracefully...")
+			if s.pluginSchemaMgr != nil {
+				s.pluginSchemaMgr.Close()
+			}
 
 			ctx, cancel := context.WithTimeout(context.TODO(), 20*time.Second)
 			defer cancel()
@@ -170,10 +177,11 @@ func (s *Service) apiSet() *restful.Container {
 	ws.Produces(restful.MIME_JSON)
 
 	c := &capability.Capability{
-		WebService:   ws,
-		ClientSet:    s.clientSet,
-		CloudAdaptor: s.cloudAdaptor,
-		ResSyncCli:   ressync.NewClient(s.cloudAdaptor, s.clientSet.DataService()),
+		WebService:      ws,
+		ClientSet:       s.clientSet,
+		CloudAdaptor:    s.cloudAdaptor,
+		ResSyncCli:      ressync.NewClient(s.cloudAdaptor, s.clientSet.DataService()),
+		PluginSchemaMgr: s.pluginSchemaMgr,
 	}
 
 	account.InitAccountService(c)
@@ -199,6 +207,7 @@ func (s *Service) apiSet() *restful.Container {
 	cos.InitCosService(c)
 	monitoring.InitMonitoringService(c)
 	permissiontemplate.InitService(c)
+	iacplugin.InitService(c)
 
 	return restful.NewContainer().Add(c.WebService)
 }
