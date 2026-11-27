@@ -131,8 +131,9 @@ func TestMaskStateObject_RecursiveNestedTypesAndBlocks(t *testing.T) {
 	orig := &iacstate.StateObject{
 		Plugin:         "tcloud",
 		Type:           "tencentcloud_instance",
-		SchemaVersion:  1,
+		DependsOn:      []string{"tencentcloud_vpc.main"},
 		Private:        "base64-private-data",
+		Identity:       map[string]any{"instance_id": "ins-123"},
 		ProviderConfig: map[string]any{"region": "ap-guangzhou"},
 		State: map[string]any{
 			"id":       "ins-123",
@@ -188,13 +189,20 @@ func TestMaskStateObject_RecursiveNestedTypesAndBlocks(t *testing.T) {
 		t.Fatalf("unexpected data_disks: %+v", disk0)
 	}
 
-	// 验证 provider_config 原样保留且序列化不包含 private 字段
+	// 验证 depends_on、identity、provider_config 原样保留且序列化不包含 private 与 schema_version 字段
+	if len(masked.DependsOn) != 1 || masked.DependsOn[0] != "tencentcloud_vpc.main" {
+		t.Fatalf("expected depends_on preserved, got %+v", masked.DependsOn)
+	}
+	if masked.Identity["instance_id"] != "ins-123" {
+		t.Fatalf("expected identity preserved, got %+v", masked.Identity)
+	}
 	if masked.ProviderConfig["region"] != "ap-guangzhou" {
 		t.Fatalf("expected provider_config preserved, got %+v", masked.ProviderConfig)
 	}
 	rawJSON, _ := json.Marshal(masked)
-	if strings.Contains(string(rawJSON), "private") || strings.Contains(string(rawJSON), "base64-private-data") {
-		t.Fatalf("masked json must not contain private field: %s", string(rawJSON))
+	if strings.Contains(string(rawJSON), "private") || strings.Contains(string(rawJSON), "base64-private-data") ||
+		strings.Contains(string(rawJSON), "schema_version") {
+		t.Fatalf("masked json must not contain private or schema_version field: %s", string(rawJSON))
 	}
 }
 

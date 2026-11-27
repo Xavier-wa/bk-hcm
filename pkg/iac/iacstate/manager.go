@@ -250,11 +250,17 @@ func (m *StateManager) updateAppliedState(kt *kit.Kit, req *UpsertAppliedReq, bl
 		upd.ImportFromSpecID = converter.ValToPtr("")
 	}
 
-	// 先建后删：旧 current 挂到 deposed_key 下，新对象写进 current。
+	// 先建后删：若 deposed_key 已存在说明上游分配不唯一，直接拒绝覆盖；否则将旧 current 挂到 deposed_key 下。
 	if req.DeposedKey != "" {
 		deposedMap := blockState.Deposed
 		if deposedMap == nil {
 			deposedMap = make(map[string]*StateObject)
+		}
+		if _, exists := deposedMap[req.DeposedKey]; exists {
+			logs.Errorf("upsert iac state failed, deposed key %s already exists, id: %s, block_id: %s, rid: %s",
+				req.DeposedKey, blockState.ID, blockState.BlockID, kt.Rid)
+			return errf.Newf(errf.RecordDuplicated, "deposed_key %q already exists for block %q",
+				req.DeposedKey, blockState.BlockID)
 		}
 		if blockState.Current != nil {
 			deposedMap[req.DeposedKey] = blockState.Current

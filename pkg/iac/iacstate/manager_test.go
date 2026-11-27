@@ -378,16 +378,18 @@ func TestStateManager_UpsertImportAndCreateBeforeDestroyLifecycle(t *testing.T) 
 		t.Fatalf("NewStateManager failed: %v", err)
 	}
 
-	// 1. import. 前缀剥离并强制 kind=resource
+	// 1. import. 前缀剥离并强制 kind=resource，同时验证 depends_on 与 identity 落库还原
 	if err := mgr.UpsertAppliedState(kt, &UpsertAppliedReq{
 		RepositoryID:     "repo-1",
 		BlockID:          "import.tencentcloud_instance.web",
 		PluginInstanceID: "inst-1",
 		Kind:             enumor.IacStateKindData,
 		Object: &StateObject{
-			Plugin: "tcloud",
-			Type:   "tencentcloud_instance",
-			State:  map[string]any{"id": "ins-v1"},
+			Plugin:    "tcloud",
+			Type:      "tencentcloud_instance",
+			State:     map[string]any{"id": "ins-v1"},
+			DependsOn: []string{"tencentcloud_vpc.main"},
+			Identity:  map[string]any{"instance_id": "ins-v1"},
 		},
 		FlowID: "flow-import",
 	}); err != nil {
@@ -400,6 +402,10 @@ func TestStateManager_UpsertImportAndCreateBeforeDestroyLifecycle(t *testing.T) 
 	}
 	if states[0].BlockID != "tencentcloud_instance.web" || states[0].Kind != enumor.IacStateKindResource {
 		t.Fatalf("expected stripped block_id and resource kind, got %+v", states[0])
+	}
+	if len(states[0].Current.DependsOn) != 1 || states[0].Current.DependsOn[0] != "tencentcloud_vpc.main" ||
+		states[0].Current.Identity["instance_id"] != "ins-v1" {
+		t.Fatalf("expected depends_on and identity preserved, got %+v", states[0].Current)
 	}
 
 	// 2. 先建后删轮转：旧 current 转入 deposed["a1b2c3d4"]，新对象写入 current
@@ -417,6 +423,24 @@ func TestStateManager_UpsertImportAndCreateBeforeDestroyLifecycle(t *testing.T) 
 		FlowID: "flow-cbd",
 	}); err != nil {
 		t.Fatalf("cbd upsert failed: %v", err)
+	}
+
+	// 2.1 重复传入已存在的 deposed_key 必须报错拒绝覆盖
+	dupErr := mgr.UpsertAppliedState(kt, &UpsertAppliedReq{
+		RepositoryID:     "repo-1",
+		BlockID:          "tencentcloud_instance.web",
+		PluginInstanceID: "inst-1",
+		Kind:             enumor.IacStateKindResource,
+		DeposedKey:       "a1b2c3d4",
+		Object: &StateObject{
+			Plugin: "tcloud",
+			Type:   "tencentcloud_instance",
+			State:  map[string]any{"id": "ins-v3"},
+		},
+		FlowID: "flow-cbd-dup",
+	})
+	if dupErr == nil {
+		t.Fatal("expected error when deposed_key already exists")
 	}
 
 	states, _ = mgr.GetRepositoryStates(kt, "repo-1")

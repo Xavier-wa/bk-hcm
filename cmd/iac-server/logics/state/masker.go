@@ -20,6 +20,8 @@
 package state
 
 import (
+	"slices"
+
 	iacproto "hcm/pkg/api/iac-server"
 	"hcm/pkg/criteria/constant"
 	"hcm/pkg/criteria/errf"
@@ -28,7 +30,8 @@ import (
 	tfjson "github.com/hashicorp/terraform-json"
 )
 
-// MaskStateObject 基于 tfjson.SchemaBlock 对单个实例状态执行递归脱敏，剔除 private 字段并原样保留 provider_config。
+// MaskStateObject 基于 tfjson.SchemaBlock 对单个实例状态执行递归脱敏，剔除 private 字段，
+// 原样保留 depends_on、identity 与 provider_config。
 func MaskStateObject(obj *iacstate.StateObject, block *tfjson.SchemaBlock) (*iacproto.MaskedStateObject, error) {
 	if obj == nil {
 		return nil, nil
@@ -41,8 +44,9 @@ func MaskStateObject(obj *iacstate.StateObject, block *tfjson.SchemaBlock) (*iac
 	return &iacproto.MaskedStateObject{
 		Plugin:         obj.Plugin,
 		Type:           obj.Type,
-		SchemaVersion:  obj.SchemaVersion,
 		State:          maskedState,
+		DependsOn:      slices.Clone(obj.DependsOn),
+		Identity:       cloneAnyMap(obj.Identity),
 		ProviderConfig: cloneAnyMap(obj.ProviderConfig),
 	}, nil
 }

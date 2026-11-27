@@ -75,11 +75,12 @@ type GetStateResp struct {
 	UpdatedAt        string                        `json:"updated_at"`
 }
 
-// MaskedStateObject 脱敏后的单个实例状态对象，不包含内部 private 字段，provider_config 原样保留。
+// MaskedStateObject 脱敏后的单个实例状态对象，不包含内部 private 字段，depends_on、identity、provider_config 原样保留。
 type MaskedStateObject struct {
 	Plugin         string         `json:"plugin"`
 	Type           string         `json:"type"`
-	SchemaVersion  int64          `json:"schema_version"`
 	State          map[string]any `json:"state"`
+	DependsOn      []string       `json:"depends_on,omitempty"`
+	Identity       map[string]any `json:"identity,omitempty"`
 	ProviderConfig map[string]any `json:"provider_config,omitempty"`
 }

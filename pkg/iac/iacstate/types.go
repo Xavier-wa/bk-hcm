@@ -54,9 +54,10 @@ func (r *StateRecord) CurrentOrNil() *StateObject {
 type StateObject struct {
 	Plugin         string         `json:"plugin"`
 	Type           string         `json:"type"`
-	SchemaVersion  int64          `json:"schema_version"`
 	State          map[string]any `json:"state"`
+	DependsOn      []string       `json:"depends_on,omitempty"`
 	Private        string         `json:"private,omitempty"`
+	Identity       map[string]any `json:"identity,omitempty"`
 	ProviderConfig map[string]any `json:"provider_config,omitempty"`
 }
 

@@ -171,11 +171,11 @@ func addTestHeaders(req *http.Request) {
 }
 
 func TestListStateAndGetStateHandlers(t *testing.T) {
-	curJSON := tabletypes.JsonField(`{"plugin":"tcloud","type":"tencentcloud_instance","schema_version":1,` +
-		`"state":{"id":"ins-1","password":"secret-pwd"},"private":"priv-blob",` +
-		`"provider_config":{"az":"gz-1"}}`)
+	curJSON := tabletypes.JsonField(`{"plugin":"tcloud","type":"tencentcloud_instance",` +
+		`"state":{"id":"ins-1","password":"secret-pwd"},"depends_on":["tencentcloud_vpc.main"],` +
+		`"private":"priv-blob","identity":{"id":"ins-1"},"provider_config":{"az":"gz-1"}}`)
 	depJSON := tabletypes.JsonField(`{"a1b2c3d4":{"plugin":"tcloud","type":"tencentcloud_instance",` +
-		`"schema_version":1,"state":{"id":"ins-old","password":"old-pwd"},"private":"old-priv"}}`)
+		`"state":{"id":"ins-old","password":"old-pwd"},"private":"old-priv"}}`)
 
 	backend := &mockBackend{
 		repos: map[string]bool{"repo-1": true},
