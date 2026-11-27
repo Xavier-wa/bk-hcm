@@ -129,12 +129,13 @@ func TestMaskStateObject_RecursiveNestedTypesAndBlocks(t *testing.T) {
 	}
 
 	orig := &iacstate.StateObject{
-		Plugin:         "tcloud",
-		Type:           "tencentcloud_instance",
-		DependsOn:      []string{"tencentcloud_vpc.main"},
-		Private:        "base64-private-data",
-		Identity:       map[string]any{"instance_id": "ins-123"},
-		ProviderConfig: map[string]any{"region": "ap-guangzhou"},
+		Plugin:           "tcloud",
+		PluginInstanceID: "inst-1",
+		Type:             "tencentcloud_instance",
+		DependsOn:        []string{"tencentcloud_vpc.main"},
+		Private:          "base64-private-data",
+		Identity:         map[string]any{"instance_id": "ins-123"},
+		ProviderConfig:   map[string]any{"region": "ap-guangzhou"},
 		State: map[string]any{
 			"id":       "ins-123",
 			"password": "plain-password",
@@ -189,7 +190,10 @@ func TestMaskStateObject_RecursiveNestedTypesAndBlocks(t *testing.T) {
 		t.Fatalf("unexpected data_disks: %+v", disk0)
 	}
 
-	// 验证 depends_on、identity、provider_config 原样保留且序列化不包含 private 与 schema_version 字段
+	// 验证 plugin_instance_id、depends_on、identity、provider_config 原样保留且序列化不包含 private 与 schema_version 字段
+	if masked.PluginInstanceID != "inst-1" {
+		t.Fatalf("expected plugin_instance_id preserved, got %q", masked.PluginInstanceID)
+	}
 	if len(masked.DependsOn) != 1 || masked.DependsOn[0] != "tencentcloud_vpc.main" {
 		t.Fatalf("expected depends_on preserved, got %+v", masked.DependsOn)
 	}

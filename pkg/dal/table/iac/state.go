@@ -37,7 +37,6 @@ var IacStateTableColumnDescriptors = utils.ColumnDescriptors{
 	{Column: "id", NamedC: "id", Type: enumor.String},
 	{Column: "repository_id", NamedC: "repository_id", Type: enumor.String},
 	{Column: "block_id", NamedC: "block_id", Type: enumor.String},
-	{Column: "plugin_instance_id", NamedC: "plugin_instance_id", Type: enumor.String},
 	{Column: "kind", NamedC: "kind", Type: enumor.String},
 	{Column: "current", NamedC: "current", Type: enumor.Json},
 	{Column: "deposed", NamedC: "deposed", Type: enumor.Json},
@@ -54,7 +53,6 @@ type IacStateTable struct {
 	ID               string              `db:"id" json:"id" validate:"lte=64"`
 	RepositoryID     string              `db:"repository_id" json:"repository_id" validate:"lte=64"`
 	BlockID          string              `db:"block_id" json:"block_id" validate:"lte=512"`
-	PluginInstanceID string              `db:"plugin_instance_id" json:"plugin_instance_id" validate:"lte=64"`
 	Kind             enumor.IacStateKind `db:"kind" json:"kind" validate:"lte=32"`
 	Current          types.JsonField     `db:"current" json:"current"`
 	Deposed          types.JsonField     `db:"deposed" json:"deposed"`

@@ -34,7 +34,6 @@ type StateRecord struct {
 	ID               string                  `json:"id"`
 	RepositoryID     string                  `json:"repository_id"`
 	BlockID          string                  `json:"block_id"`
-	PluginInstanceID string                  `json:"plugin_instance_id"`
 	Kind             enumor.IacStateKind     `json:"kind"`
 	Current          *StateObject            `json:"current"`
 	Deposed          map[string]*StateObject `json:"deposed"`
@@ -52,24 +51,24 @@ func (r *StateRecord) CurrentOrNil() *StateObject {
 
 // StateObject 对应单个实例状态对象（current 字段或 deposed 中的单个元素）。
 type StateObject struct {
-	Plugin         string         `json:"plugin"`
-	Type           string         `json:"type"`
-	State          map[string]any `json:"state"`
-	DependsOn      []string       `json:"depends_on,omitempty"`
-	Private        string         `json:"private,omitempty"`
-	Identity       map[string]any `json:"identity,omitempty"`
-	ProviderConfig map[string]any `json:"provider_config,omitempty"`
+	Plugin           string         `json:"plugin"`
+	PluginInstanceID string         `json:"plugin_instance_id"`
+	Type             string         `json:"type"`
+	State            map[string]any `json:"state"`
+	DependsOn        []string       `json:"depends_on,omitempty"`
+	Private          string         `json:"private,omitempty"`
+	Identity         map[string]any `json:"identity,omitempty"`
+	ProviderConfig   map[string]any `json:"provider_config,omitempty"`
 }
 
 // UpsertAppliedReq 执行阶段写回资源或数据源实例状态的请求参数。
 type UpsertAppliedReq struct {
-	RepositoryID     string              `json:"repository_id" validate:"required"`
-	BlockID          string              `json:"block_id" validate:"required"`
-	PluginInstanceID string              `json:"plugin_instance_id"`
-	Kind             enumor.IacStateKind `json:"kind"`
-	Object           *StateObject        `json:"object" validate:"required"`
-	DeposedKey       string              `json:"deposed_key,omitempty"`
-	FlowID           string              `json:"flow_id"`
+	RepositoryID string              `json:"repository_id" validate:"required"`
+	BlockID      string              `json:"block_id" validate:"required"`
+	Kind         enumor.IacStateKind `json:"kind"`
+	Object       *StateObject        `json:"object" validate:"required"`
+	DeposedKey   string              `json:"deposed_key,omitempty"`
+	FlowID       string              `json:"flow_id"`
 }
 
 // Validate 校验 UpsertAppliedReq 参数。

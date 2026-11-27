@@ -121,9 +121,8 @@ func TestIacStateTable_ValidateAndJsonFieldIsNull(t *testing.T) {
 	valid := IacStateTable{
 		RepositoryID:     "repo-1",
 		BlockID:          "tencentcloud_instance.web",
-		PluginInstanceID: "inst-1",
 		Kind:             enumor.IacStateKindResource,
-		Current:          types.JsonField(`{"state":{"id":"ins-1"}}`),
+		Current:          types.JsonField(`{"plugin_instance_id":"inst-1","state":{"id":"ins-1"}}`),
 		Deposed:          types.JsonField(`{}`),
 		ImportFromSpecID: &emptySpecID,
 		Creator:          "admin",

@@ -73,7 +73,6 @@ func (svc *service) BatchCreateIacState(cts *rest.Contexts) (any, error) {
 		models = append(models, tableiac.IacStateTable{
 			RepositoryID:     item.RepositoryID,
 			BlockID:          item.BlockID,
-			PluginInstanceID: item.PluginInstanceID,
 			Kind:             item.Kind,
 			Current:          current,
 			Deposed:          deposed,
@@ -122,7 +121,6 @@ func (svc *service) BatchUpdateIacState(cts *rest.Contexts) (any, error) {
 		for _, item := range req.Items {
 			model := &tableiac.IacStateTable{
 				BlockID:          item.BlockID,
-				PluginInstanceID: item.PluginInstanceID,
 				Kind:             item.Kind,
 				Current:          item.Current,
 				Deposed:          item.Deposed,
@@ -228,7 +226,6 @@ func convertTableToIacState(row *tableiac.IacStateTable) coreiac.IacState {
 		ID:               row.ID,
 		RepositoryID:     row.RepositoryID,
 		BlockID:          row.BlockID,
-		PluginInstanceID: row.PluginInstanceID,
 		Kind:             row.Kind,
 		Current:          currentPtr,
 		Deposed:          deposed,

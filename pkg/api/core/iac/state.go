@@ -31,7 +31,6 @@ type IacState struct {
 	ID               string              `json:"id"`
 	RepositoryID     string              `json:"repository_id"`
 	BlockID          string              `json:"block_id"`
-	PluginInstanceID string              `json:"plugin_instance_id"`
 	Kind             enumor.IacStateKind `json:"kind"`
 	Current          *types.JsonField    `json:"current"`
 	Deposed          types.JsonField     `json:"deposed"`

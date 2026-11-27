@@ -107,7 +107,6 @@ CREATE TABLE IF NOT EXISTS `iac_state`
     `id`                  varchar(64)  NOT NULL COMMENT '主键ID（由 id_generator 分配，即 state_id）',
     `repository_id`       varchar(64)  NOT NULL COMMENT '所属IaC仓库ID，关联 iac_repository.id',
     `block_id`            varchar(512) NOT NULL COMMENT 'Terraform标准格式的全局实例地址（如 tencentcloud_subnet.app[0]）',
-    `plugin_instance_id`  varchar(64)  NOT NULL DEFAULT '' COMMENT '插件实例ID，归属整行记录，current 与 deposed 共用',
     `kind`                varchar(32)  NOT NULL COMMENT '实例类别，固定为 resource 或 data',
     `current`             json                  DEFAULT NULL COMMENT '当前对外生效的 StateObject JSON，主实例已删但 deposed 仍有残留时为 NULL',
     `deposed`             json         NOT NULL COMMENT '先建后删过程中暂存的待销毁旧实例字典（map[DeposedKey]StateObject，平时为空对象 {}）',

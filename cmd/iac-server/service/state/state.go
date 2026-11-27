@@ -214,16 +214,15 @@ func (svc *service) GetState(cts *rest.Contexts) (any, error) {
 	}
 
 	return &iacproto.GetStateResp{
-		ID:               row.ID,
-		RepositoryID:     row.RepositoryID,
-		BlockID:          row.BlockID,
-		PluginInstanceID: row.PluginInstanceID,
-		Kind:             row.Kind,
-		Current:          maskedCurrent,
-		Deposed:          maskedDeposed,
-		LastFlowID:       row.LastFlowID,
-		CreatedAt:        createdAt,
-		UpdatedAt:        updatedAt,
+		ID:           row.ID,
+		RepositoryID: row.RepositoryID,
+		BlockID:      row.BlockID,
+		Kind:         row.Kind,
+		Current:      maskedCurrent,
+		Deposed:      maskedDeposed,
+		LastFlowID:   row.LastFlowID,
+		CreatedAt:    createdAt,
+		UpdatedAt:    updatedAt,
 	}, nil
 }
 
@@ -265,10 +264,11 @@ func mergeFilterExpr(baseRules []filter.RuleFactory, userFilter *filter.Expressi
 
 // stateObjectSummary 是列表接口从 current 或 deposed 的状态 JSON 中抽取的展示字段。
 // 完整状态对象还包含 state、private、provider_config 等载荷；反序列化到该结构时这些字段会被忽略。
-// current 有内容时用它填充列表的 plugin、type；current 为空时改取 deposed 中 key 字典序的第一条。
+// current 有内容时用它填充列表的 plugin、plugin_instance_id、type；current 为空时改取 deposed 中 key 字典序的第一条。
 type stateObjectSummary struct {
-	Plugin string `json:"plugin"`
-	Type   string `json:"type"`
+	Plugin           string `json:"plugin"`
+	PluginInstanceID string `json:"plugin_instance_id"`
+	Type             string `json:"type"`
 }
 
 func buildStateListItem(row *coreiac.IacState) (iacproto.StateListItem, error) {
@@ -300,9 +300,10 @@ func buildStateListItem(row *coreiac.IacState) (iacproto.StateListItem, error) {
 		primary = deposedSummaries[keys[0]]
 	}
 
-	var pluginName, typeName string
+	var pluginName, pluginInstanceID, typeName string
 	if primary != nil {
 		pluginName = primary.Plugin
+		pluginInstanceID = primary.PluginInstanceID
 		typeName = primary.Type
 	}
 
@@ -314,7 +315,7 @@ func buildStateListItem(row *coreiac.IacState) (iacproto.StateListItem, error) {
 	return iacproto.StateListItem{
 		ID:               row.ID,
 		BlockID:          row.BlockID,
-		PluginInstanceID: row.PluginInstanceID,
+		PluginInstanceID: pluginInstanceID,
 		Kind:             row.Kind,
 		Plugin:           pluginName,
 		Type:             typeName,

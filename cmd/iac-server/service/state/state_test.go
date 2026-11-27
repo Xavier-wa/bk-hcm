@@ -171,11 +171,11 @@ func addTestHeaders(req *http.Request) {
 }
 
 func TestListStateAndGetStateHandlers(t *testing.T) {
-	curJSON := tabletypes.JsonField(`{"plugin":"tcloud","type":"tencentcloud_instance",` +
+	curJSON := tabletypes.JsonField(`{"plugin":"tcloud","plugin_instance_id":"inst-2","type":"tencentcloud_instance",` +
 		`"state":{"id":"ins-1","password":"secret-pwd"},"depends_on":["tencentcloud_vpc.main"],` +
 		`"private":"priv-blob","identity":{"id":"ins-1"},"provider_config":{"az":"gz-1"}}`)
-	depJSON := tabletypes.JsonField(`{"a1b2c3d4":{"plugin":"tcloud","type":"tencentcloud_instance",` +
-		`"state":{"id":"ins-old","password":"old-pwd"},"private":"old-priv"}}`)
+	depJSON := tabletypes.JsonField(`{"a1b2c3d4":{"plugin":"tcloud","plugin_instance_id":"inst-1",` +
+		`"type":"tencentcloud_instance","state":{"id":"ins-old","password":"old-pwd"},"private":"old-priv"}}`)
 
 	backend := &mockBackend{
 		repos: map[string]bool{"repo-1": true},
@@ -271,9 +271,13 @@ func TestListStateAndGetStateHandlers(t *testing.T) {
 	if listResp.Code != errf.OK || len(listResp.Data.Details) != 2 {
 		t.Fatalf("expected 2 active items, got %+v", listResp)
 	}
+	if listResp.Data.Details[0].PluginInstanceID != "inst-2" {
+		t.Fatalf("expected active item plugin_instance_id=inst-2, got %+v", listResp.Data.Details[0])
+	}
 	if listResp.Data.Details[1].HasCurrent || listResp.Data.Details[1].Plugin != "tcloud" ||
-		listResp.Data.Details[1].DeposedCount != 1 {
-		t.Fatalf("expected deposed-only item fallback plugin=tcloud, got %+v", listResp.Data.Details[1])
+		listResp.Data.Details[1].PluginInstanceID != "inst-1" || listResp.Data.Details[1].DeposedCount != 1 {
+		t.Fatalf("expected deposed-only item fallback plugin=tcloud, plugin_instance_id=inst-1, got %+v",
+			listResp.Data.Details[1])
 	}
 
 	// 3. GetState 脱敏详情：password 替换为占位符、private 剔除、provider_config 原样保留
@@ -301,6 +305,11 @@ func TestListStateAndGetStateHandlers(t *testing.T) {
 	}
 	if getResp.Data.Deposed["a1b2c3d4"].State["password"] != constant.IacStateSensitiveValueMask {
 		t.Fatalf("expected deposed password masked, got %v", getResp.Data.Deposed["a1b2c3d4"].State["password"])
+	}
+	if getResp.Data.Current.PluginInstanceID != "inst-2" ||
+		getResp.Data.Deposed["a1b2c3d4"].PluginInstanceID != "inst-1" {
+		t.Fatalf("expected current inst-2 and deposed inst-1, got current=%+v deposed=%+v",
+			getResp.Data.Current, getResp.Data.Deposed["a1b2c3d4"])
 	}
 	if getResp.Data.Current.ProviderConfig["az"] != "gz-1" {
 		t.Fatalf("expected provider_config preserved, got %+v", getResp.Data.Current.ProviderConfig)

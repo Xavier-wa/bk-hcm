@@ -42,12 +42,13 @@ func MaskStateObject(obj *iacstate.StateObject, block *tfjson.SchemaBlock) (*iac
 
 	maskedState := maskBlockMap(obj.State, block)
 	return &iacproto.MaskedStateObject{
-		Plugin:         obj.Plugin,
-		Type:           obj.Type,
-		State:          maskedState,
-		DependsOn:      slices.Clone(obj.DependsOn),
-		Identity:       cloneAnyMap(obj.Identity),
-		ProviderConfig: cloneAnyMap(obj.ProviderConfig),
+		Plugin:           obj.Plugin,
+		PluginInstanceID: obj.PluginInstanceID,
+		Type:             obj.Type,
+		State:            maskedState,
+		DependsOn:        slices.Clone(obj.DependsOn),
+		Identity:         cloneAnyMap(obj.Identity),
+		ProviderConfig:   cloneAnyMap(obj.ProviderConfig),
 	}, nil
 }
 

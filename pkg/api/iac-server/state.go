@@ -63,24 +63,24 @@ type StateListItem struct {
 
 // GetStateResp 查询单条受管资源状态脱敏详情响应数据。
 type GetStateResp struct {
-	ID               string                        `json:"id"`
-	RepositoryID     string                        `json:"repository_id"`
-	BlockID          string                        `json:"block_id"`
-	PluginInstanceID string                        `json:"plugin_instance_id"`
-	Kind             enumor.IacStateKind           `json:"kind"`
-	Current          *MaskedStateObject            `json:"current"`
-	Deposed          map[string]*MaskedStateObject `json:"deposed"`
-	LastFlowID       string                        `json:"last_flow_id"`
-	CreatedAt        string                        `json:"created_at"`
-	UpdatedAt        string                        `json:"updated_at"`
+	ID           string                        `json:"id"`
+	RepositoryID string                        `json:"repository_id"`
+	BlockID      string                        `json:"block_id"`
+	Kind         enumor.IacStateKind           `json:"kind"`
+	Current      *MaskedStateObject            `json:"current"`
+	Deposed      map[string]*MaskedStateObject `json:"deposed"`
+	LastFlowID   string                        `json:"last_flow_id"`
+	CreatedAt    string                        `json:"created_at"`
+	UpdatedAt    string                        `json:"updated_at"`
 }
 
 // MaskedStateObject 脱敏后的单个实例状态对象，不包含内部 private 字段，depends_on、identity、provider_config 原样保留。
 type MaskedStateObject struct {
-	Plugin         string         `json:"plugin"`
-	Type           string         `json:"type"`
-	State          map[string]any `json:"state"`
-	DependsOn      []string       `json:"depends_on,omitempty"`
-	Identity       map[string]any `json:"identity,omitempty"`
-	ProviderConfig map[string]any `json:"provider_config,omitempty"`
+	Plugin           string         `json:"plugin"`
+	PluginInstanceID string         `json:"plugin_instance_id"`
+	Type             string         `json:"type"`
+	State            map[string]any `json:"state"`
+	DependsOn        []string       `json:"depends_on,omitempty"`
+	Identity         map[string]any `json:"identity,omitempty"`
+	ProviderConfig   map[string]any `json:"provider_config,omitempty"`
 }

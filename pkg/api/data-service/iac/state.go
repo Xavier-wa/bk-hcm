@@ -58,7 +58,6 @@ func (req *IacStateBatchCreateReq) Validate() error {
 type IacStateCreateField struct {
 	RepositoryID     string              `json:"repository_id" validate:"required,lte=64"`
 	BlockID          string              `json:"block_id" validate:"required,lte=512"`
-	PluginInstanceID string              `json:"plugin_instance_id" validate:"omitempty,lte=64"`
 	Kind             enumor.IacStateKind `json:"kind" validate:"required,lte=32"`
 	Current          types.JsonField     `json:"current,omitempty"`
 	Deposed          types.JsonField     `json:"deposed,omitempty"`
@@ -100,7 +99,6 @@ func (req *IacStateBatchUpdateReq) Validate() error {
 type IacStateUpdateField struct {
 	ID               string              `json:"id" validate:"required,lte=64"`
 	BlockID          string              `json:"block_id" validate:"omitempty,lte=512"`
-	PluginInstanceID string              `json:"plugin_instance_id" validate:"omitempty,lte=64"`
 	Kind             enumor.IacStateKind `json:"kind" validate:"omitempty,lte=32"`
 	Current          types.JsonField     `json:"current,omitempty"`
 	Deposed          types.JsonField     `json:"deposed,omitempty"`
@@ -113,7 +111,7 @@ func (req *IacStateUpdateField) Validate() error {
 	if err := validator.Validate.Struct(req); err != nil {
 		return err
 	}
-	if req.BlockID == "" && req.PluginInstanceID == "" && req.Kind == "" && req.Current == "" &&
+	if req.BlockID == "" && req.Kind == "" && req.Current == "" &&
 		req.Deposed == "" && req.LastFlowID == "" && req.ImportFromSpecID == nil {
 		return errors.New("at least one updatable field must be set")
 	}

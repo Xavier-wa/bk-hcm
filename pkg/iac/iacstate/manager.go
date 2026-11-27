@@ -60,13 +60,20 @@ func (m *StateManager) ensureClient() error {
 	return nil
 }
 
-// GetRepositoryStates 全量分页拉取仓库下已生效的受管状态记录（默认排除暂存态记录）。
-func (m *StateManager) GetRepositoryStates(kt *kit.Kit, repositoryID string) ([]*StateRecord, error) {
+// GetRepositoryStates 查询仓库下已生效的受管状态记录（默认排除暂存态记录）。
+// 当 blockIDs 为空时全量分页拉取，非空时按 block_id 分批定向拉取；无匹配记录时返回 (nil, nil)。
+func (m *StateManager) GetRepositoryStates(kt *kit.Kit, repositoryID string, blockIDs []string) (
+	[]*StateRecord, error) {
+
 	if err := m.ensureClient(); err != nil {
 		return nil, err
 	}
 	if len(repositoryID) == 0 {
 		return nil, errf.New(errf.InvalidParameter, "repository_id is required")
+	}
+
+	if len(blockIDs) > 0 {
+		return m.listRepositoryStatesByBlockIDs(kt, repositoryID, blockIDs)
 	}
 
 	// import_from_spec_id 非空是导入中的暂存行，编排只读已生效的。
@@ -116,23 +123,11 @@ func (m *StateManager) GetRepositoryStates(kt *kit.Kit, repositoryID string) ([]
 	return result, nil
 }
 
-// GetDependencyStates 按 blockIDs 定向拉取依赖资源的已生效状态，任意缺失或 current 为空时返回错误。
-func (m *StateManager) GetDependencyStates(kt *kit.Kit, repositoryID string, blockIDs []string) (
-	map[string]*StateRecord, error) {
+func (m *StateManager) listRepositoryStatesByBlockIDs(kt *kit.Kit, repositoryID string, blockIDs []string) (
+	[]*StateRecord, error) {
 
-	if err := m.ensureClient(); err != nil {
-		return nil, err
-	}
-	if len(repositoryID) == 0 {
-		return nil, errf.New(errf.InvalidParameter, "repository_id is required")
-	}
-	if len(blockIDs) == 0 {
-		return map[string]*StateRecord{}, nil
-	}
-
-	// 去重后按 IN 上限分批，暂存行同样排除。
 	uniqueIDs := slice.Unique(blockIDs)
-	found := make(map[string]*StateRecord, len(uniqueIDs))
+	result := make([]*StateRecord, 0, len(uniqueIDs))
 	for _, batch := range slice.Split(uniqueIDs, int(filter.DefaultMaxInLimit)) {
 		expr := tools.ExpressionAnd(tools.RuleEqual("repository_id", repositoryID),
 			tools.RuleEqual("import_from_spec_id", ""), tools.RuleIn("block_id", batch))
@@ -141,10 +136,12 @@ func (m *StateManager) GetDependencyStates(kt *kit.Kit, repositoryID string, blo
 			Page: &core.BasePage{
 				Start: 0,
 				Limit: core.DefaultMaxPageLimit,
+				Sort:  "id",
+				Order: core.Ascending,
 			},
 		})
 		if err != nil {
-			logs.Errorf("list dependency iac states failed, repository_id: %s, err: %v, rid: %s",
+			logs.Errorf("list iac states by block_ids failed, repository_id: %s, err: %v, rid: %s",
 				repositoryID, err, kt.Rid)
 			return nil, err
 		}
@@ -152,28 +149,64 @@ func (m *StateManager) GetDependencyStates(kt *kit.Kit, repositoryID string, blo
 		for idx := range resp.Details {
 			rec, convErr := decodeStateRecord(&resp.Details[idx])
 			if convErr != nil {
-				logs.Errorf("decode dependency iac state failed, id: %s, err: %v, rid: %s",
+				logs.Errorf("decode iac state failed, id: %s, err: %v, rid: %s",
 					resp.Details[idx].ID, convErr, kt.Rid)
 				return nil, convErr
 			}
-			found[rec.BlockID] = rec
+			result = append(result, rec)
 		}
 	}
 
+	if len(result) == 0 {
+		return nil, nil
+	}
+
+	return result, nil
+}
+
+// GetDependencyStates 按 blockIDs 定向拉取依赖资源的已生效 Current.State，任意缺失或 current 为空时返回错误。
+func (m *StateManager) GetDependencyStates(kt *kit.Kit, repositoryID string, blockIDs []string) (
+	map[string]map[string]any, error) {
+
+	if err := m.ensureClient(); err != nil {
+		return nil, err
+	}
+	if len(repositoryID) == 0 {
+		return nil, errf.New(errf.InvalidParameter, "repository_id is required")
+	}
+	if len(blockIDs) == 0 {
+		return map[string]map[string]any{}, nil
+	}
+
+	uniqueIDs := slice.Unique(blockIDs)
+	records, err := m.GetRepositoryStates(kt, repositoryID, uniqueIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	found := make(map[string]*StateRecord, len(records))
+	for _, rec := range records {
+		found[rec.BlockID] = rec
+	}
+
 	// 行不存在，或 current 为空（只剩 deposed），依赖都用不了。
+	result := make(map[string]map[string]any, len(uniqueIDs))
 	var missing []string
 	for _, blockID := range uniqueIDs {
 		rec, ok := found[blockID]
-		if !ok || rec.CurrentOrNil() == nil {
+		cur := rec.CurrentOrNil()
+		if !ok || cur == nil {
 			missing = append(missing, blockID)
+			continue
 		}
+		result[blockID] = cur.State
 	}
 	if len(missing) > 0 {
 		return nil, errf.Newf(errf.RecordNotFound,
 			"dependency states missing or current is null: %s", strings.Join(missing, ", "))
 	}
 
-	return found, nil
+	return result, nil
 }
 
 // UpsertAppliedState 写回已执行的资源或数据源实例状态，支持先建后删轮转、import 前缀剥离与半成品状态落库。
@@ -218,7 +251,6 @@ func (m *StateManager) createAppliedState(kt *kit.Kit, req *UpsertAppliedReq, ta
 			{
 				RepositoryID:     req.RepositoryID,
 				BlockID:          targetBlockID,
-				PluginInstanceID: req.PluginInstanceID,
 				Kind:             kind,
 				Current:          currentJSON,
 				Deposed:          tabletypes.JsonField(constant.IacStateEmptyDeposedJSON),
@@ -239,11 +271,10 @@ func (m *StateManager) updateAppliedState(kt *kit.Kit, req *UpsertAppliedReq, bl
 	kind enumor.IacStateKind, currentJSON tabletypes.JsonField) error {
 
 	upd := dataiac.IacStateUpdateField{
-		ID:               blockState.ID,
-		PluginInstanceID: req.PluginInstanceID,
-		Kind:             kind,
-		Current:          currentJSON,
-		LastFlowID:       req.FlowID,
+		ID:         blockState.ID,
+		Kind:       kind,
+		Current:    currentJSON,
+		LastFlowID: req.FlowID,
 	}
 	// 暂存行被正式写回后，清掉 import_from_spec_id。
 	if blockState.ImportFromSpecID != "" {
@@ -395,7 +426,6 @@ func decodeStateRecord(raw *coreiac.IacState) (*StateRecord, error) {
 		ID:               raw.ID,
 		RepositoryID:     raw.RepositoryID,
 		BlockID:          raw.BlockID,
-		PluginInstanceID: raw.PluginInstanceID,
 		Kind:             raw.Kind,
 		Deposed:          make(map[string]*StateObject),
 		LastFlowID:       raw.LastFlowID,

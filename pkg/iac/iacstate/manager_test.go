@@ -135,7 +135,6 @@ func (f *fakeStateDataClient) BatchCreate(_ *kit.Kit, req *dataiac.IacStateBatch
 			ID:               id,
 			RepositoryID:     item.RepositoryID,
 			BlockID:          item.BlockID,
-			PluginInstanceID: item.PluginInstanceID,
 			Kind:             item.Kind,
 			Current:          curPtr,
 			Deposed:          dep,
@@ -159,9 +158,6 @@ func (f *fakeStateDataClient) BatchUpdate(_ *kit.Kit, req *dataiac.IacStateBatch
 		}
 		if item.BlockID != "" {
 			row.BlockID = item.BlockID
-		}
-		if item.PluginInstanceID != "" {
-			row.PluginInstanceID = item.PluginInstanceID
 		}
 		if item.Kind != "" {
 			row.Kind = item.Kind
@@ -302,7 +298,7 @@ func TestStateManager_GetRepositoryAndDependencyStates(t *testing.T) {
 	}
 
 	// 空仓库返回 nil
-	empty, err := mgr.GetRepositoryStates(kt, "repo-1")
+	empty, err := mgr.GetRepositoryStates(kt, "repo-1", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -310,17 +306,26 @@ func TestStateManager_GetRepositoryAndDependencyStates(t *testing.T) {
 		t.Fatalf("expected nil for empty repository, got %v", empty)
 	}
 
-	// 写入正常态记录与暂存态记录
+	// 写入两条正常态记录与一条暂存态记录
 	if err := mgr.UpsertAppliedState(kt, &UpsertAppliedReq{
-		RepositoryID:     "repo-1",
-		BlockID:          "tencentcloud_vpc.main",
-		PluginInstanceID: "inst-1",
-		Kind:             enumor.IacStateKindResource,
-		Object: &StateObject{Plugin: "tcloud", Type: "tencentcloud_vpc",
+		RepositoryID: "repo-1",
+		BlockID:      "tencentcloud_vpc.main",
+		Kind:         enumor.IacStateKindResource,
+		Object: &StateObject{Plugin: "tcloud", PluginInstanceID: "inst-1", Type: "tencentcloud_vpc",
 			State: map[string]any{"id": "vpc-1"}},
 		FlowID: "flow-1",
 	}); err != nil {
 		t.Fatalf("upsert failed: %v", err)
+	}
+	if err := mgr.UpsertAppliedState(kt, &UpsertAppliedReq{
+		RepositoryID: "repo-1",
+		BlockID:      "tencentcloud_subnet.app",
+		Kind:         enumor.IacStateKindResource,
+		Object: &StateObject{Plugin: "tcloud", PluginInstanceID: "inst-1", Type: "tencentcloud_subnet",
+			State: map[string]any{"id": "sub-app"}},
+		FlowID: "flow-1",
+	}); err != nil {
+		t.Fatalf("upsert subnet failed: %v", err)
 	}
 
 	// 插入一条 import 暂存记录，应被默认过滤
@@ -338,24 +343,44 @@ func TestStateManager_GetRepositoryAndDependencyStates(t *testing.T) {
 		},
 	})
 
-	states, err := mgr.GetRepositoryStates(kt, "repo-1")
+	// blockIDs 为空时返回全部已生效记录
+	states, err := mgr.GetRepositoryStates(kt, "repo-1", nil)
 	if err != nil {
 		t.Fatalf("GetRepositoryStates failed: %v", err)
 	}
-	if len(states) != 1 || states[0].BlockID != "tencentcloud_vpc.main" {
-		t.Fatalf("expected only 1 active state, got %+v", states)
+	if len(states) != 2 || states[0].BlockID != "tencentcloud_vpc.main" {
+		t.Fatalf("expected 2 active states, got %+v", states)
 	}
 	if states[0].CurrentOrNil() == nil || states[0].CurrentOrNil().State["id"] != "vpc-1" {
 		t.Fatalf("unexpected current state: %+v", states[0].CurrentOrNil())
 	}
 
-	// 定向依赖查询成功
+	// blockIDs 非空时仅返回指定 block_id 的已生效记录，且排除暂存记录
+	filtered, err := mgr.GetRepositoryStates(kt, "repo-1",
+		[]string{"tencentcloud_vpc.main", "tencentcloud_subnet.staging", "missing.block"})
+	if err != nil {
+		t.Fatalf("GetRepositoryStates with blockIDs failed: %v", err)
+	}
+	if len(filtered) != 1 || filtered[0].BlockID != "tencentcloud_vpc.main" {
+		t.Fatalf("expected only tencentcloud_vpc.main, got %+v", filtered)
+	}
+
+	// blockIDs 均未命中时返回 nil
+	noMatch, err := mgr.GetRepositoryStates(kt, "repo-1", []string{"missing.block"})
+	if err != nil {
+		t.Fatalf("GetRepositoryStates with missing blockIDs failed: %v", err)
+	}
+	if noMatch != nil {
+		t.Fatalf("expected nil when no blockIDs matched, got %+v", noMatch)
+	}
+
+	// 定向依赖查询成功，直接返回 Current.State 字典
 	deps, err := mgr.GetDependencyStates(kt, "repo-1", []string{"tencentcloud_vpc.main"})
 	if err != nil {
 		t.Fatalf("GetDependencyStates failed: %v", err)
 	}
-	if len(deps) != 1 {
-		t.Fatalf("expected 1 dependency, got %d", len(deps))
+	if len(deps) != 1 || deps["tencentcloud_vpc.main"]["id"] != "vpc-1" {
+		t.Fatalf("expected dependency state vpc-1, got %+v", deps)
 	}
 
 	// 缺失依赖或暂存态依赖应报错并包含缺失 block_id
@@ -378,47 +403,48 @@ func TestStateManager_UpsertImportAndCreateBeforeDestroyLifecycle(t *testing.T) 
 		t.Fatalf("NewStateManager failed: %v", err)
 	}
 
-	// 1. import. 前缀剥离并强制 kind=resource，同时验证 depends_on 与 identity 落库还原
+	// 1. import. 前缀剥离并强制 kind=resource，同时验证 plugin_instance_id、depends_on 与 identity 落库还原
 	if err := mgr.UpsertAppliedState(kt, &UpsertAppliedReq{
-		RepositoryID:     "repo-1",
-		BlockID:          "import.tencentcloud_instance.web",
-		PluginInstanceID: "inst-1",
-		Kind:             enumor.IacStateKindData,
+		RepositoryID: "repo-1",
+		BlockID:      "import.tencentcloud_instance.web",
+		Kind:         enumor.IacStateKindData,
 		Object: &StateObject{
-			Plugin:    "tcloud",
-			Type:      "tencentcloud_instance",
-			State:     map[string]any{"id": "ins-v1"},
-			DependsOn: []string{"tencentcloud_vpc.main"},
-			Identity:  map[string]any{"instance_id": "ins-v1"},
+			Plugin:           "tcloud",
+			PluginInstanceID: "inst-1",
+			Type:             "tencentcloud_instance",
+			State:            map[string]any{"id": "ins-v1"},
+			DependsOn:        []string{"tencentcloud_vpc.main"},
+			Identity:         map[string]any{"instance_id": "ins-v1"},
 		},
 		FlowID: "flow-import",
 	}); err != nil {
 		t.Fatalf("import upsert failed: %v", err)
 	}
 
-	states, err := mgr.GetRepositoryStates(kt, "repo-1")
+	states, err := mgr.GetRepositoryStates(kt, "repo-1", nil)
 	if err != nil || len(states) != 1 {
 		t.Fatalf("expected 1 state after import, got %v, err=%v", states, err)
 	}
 	if states[0].BlockID != "tencentcloud_instance.web" || states[0].Kind != enumor.IacStateKindResource {
 		t.Fatalf("expected stripped block_id and resource kind, got %+v", states[0])
 	}
-	if len(states[0].Current.DependsOn) != 1 || states[0].Current.DependsOn[0] != "tencentcloud_vpc.main" ||
+	if states[0].Current.PluginInstanceID != "inst-1" ||
+		len(states[0].Current.DependsOn) != 1 || states[0].Current.DependsOn[0] != "tencentcloud_vpc.main" ||
 		states[0].Current.Identity["instance_id"] != "ins-v1" {
-		t.Fatalf("expected depends_on and identity preserved, got %+v", states[0].Current)
+		t.Fatalf("expected plugin_instance_id, depends_on and identity preserved, got %+v", states[0].Current)
 	}
 
-	// 2. 先建后删轮转：旧 current 转入 deposed["a1b2c3d4"]，新对象写入 current
+	// 2. 先建后删轮转：旧 current(inst-1) 转入 deposed["a1b2c3d4"]，新对象(inst-2) 写入 current
 	if err := mgr.UpsertAppliedState(kt, &UpsertAppliedReq{
-		RepositoryID:     "repo-1",
-		BlockID:          "tencentcloud_instance.web",
-		PluginInstanceID: "inst-1",
-		Kind:             enumor.IacStateKindResource,
-		DeposedKey:       "a1b2c3d4",
+		RepositoryID: "repo-1",
+		BlockID:      "tencentcloud_instance.web",
+		Kind:         enumor.IacStateKindResource,
+		DeposedKey:   "a1b2c3d4",
 		Object: &StateObject{
-			Plugin: "tcloud",
-			Type:   "tencentcloud_instance",
-			State:  map[string]any{"id": "ins-v2"},
+			Plugin:           "tcloud",
+			PluginInstanceID: "inst-2",
+			Type:             "tencentcloud_instance",
+			State:            map[string]any{"id": "ins-v2"},
 		},
 		FlowID: "flow-cbd",
 	}); err != nil {
@@ -427,15 +453,15 @@ func TestStateManager_UpsertImportAndCreateBeforeDestroyLifecycle(t *testing.T) 
 
 	// 2.1 重复传入已存在的 deposed_key 必须报错拒绝覆盖
 	dupErr := mgr.UpsertAppliedState(kt, &UpsertAppliedReq{
-		RepositoryID:     "repo-1",
-		BlockID:          "tencentcloud_instance.web",
-		PluginInstanceID: "inst-1",
-		Kind:             enumor.IacStateKindResource,
-		DeposedKey:       "a1b2c3d4",
+		RepositoryID: "repo-1",
+		BlockID:      "tencentcloud_instance.web",
+		Kind:         enumor.IacStateKindResource,
+		DeposedKey:   "a1b2c3d4",
 		Object: &StateObject{
-			Plugin: "tcloud",
-			Type:   "tencentcloud_instance",
-			State:  map[string]any{"id": "ins-v3"},
+			Plugin:           "tcloud",
+			PluginInstanceID: "inst-3",
+			Type:             "tencentcloud_instance",
+			State:            map[string]any{"id": "ins-v3"},
 		},
 		FlowID: "flow-cbd-dup",
 	})
@@ -443,12 +469,13 @@ func TestStateManager_UpsertImportAndCreateBeforeDestroyLifecycle(t *testing.T) 
 		t.Fatal("expected error when deposed_key already exists")
 	}
 
-	states, _ = mgr.GetRepositoryStates(kt, "repo-1")
-	if states[0].Current.State["id"] != "ins-v2" {
-		t.Fatalf("expected new current ins-v2, got %+v", states[0].Current)
+	states, _ = mgr.GetRepositoryStates(kt, "repo-1", nil)
+	if states[0].Current.State["id"] != "ins-v2" || states[0].Current.PluginInstanceID != "inst-2" {
+		t.Fatalf("expected new current ins-v2 with inst-2, got %+v", states[0].Current)
 	}
-	if states[0].Deposed["a1b2c3d4"] == nil || states[0].Deposed["a1b2c3d4"].State["id"] != "ins-v1" {
-		t.Fatalf("expected old instance ins-v1 in deposed, got %+v", states[0].Deposed)
+	if states[0].Deposed["a1b2c3d4"] == nil || states[0].Deposed["a1b2c3d4"].State["id"] != "ins-v1" ||
+		states[0].Deposed["a1b2c3d4"].PluginInstanceID != "inst-1" {
+		t.Fatalf("expected old instance ins-v1 with inst-1 in deposed, got %+v", states[0].Deposed)
 	}
 
 	// 3. 销毁 current 但 deposed 非空：只置 current = SQL NULL，保留整行
@@ -464,7 +491,7 @@ func TestStateManager_UpsertImportAndCreateBeforeDestroyLifecycle(t *testing.T) 
 	if !lastUpd.Current.IsNull() {
 		t.Fatalf("expected Current == \"null\" in BatchUpdate, got %q", lastUpd.Current)
 	}
-	states, _ = mgr.GetRepositoryStates(kt, "repo-1")
+	states, _ = mgr.GetRepositoryStates(kt, "repo-1", nil)
 	if len(states) != 1 || states[0].CurrentOrNil() != nil || len(states[0].Deposed) != 1 {
 		t.Fatalf("expected row preserved with nil current and 1 deposed, got %+v", states)
 	}
@@ -484,7 +511,7 @@ func TestStateManager_UpsertImportAndCreateBeforeDestroyLifecycle(t *testing.T) 
 		t.Fatalf("remove deposed failed: %v", err)
 	}
 
-	states, _ = mgr.GetRepositoryStates(kt, "repo-1")
+	states, _ = mgr.GetRepositoryStates(kt, "repo-1", nil)
 	if states != nil {
 		t.Fatalf("expected row deleted after all instances destroyed, got %+v", states)
 	}
